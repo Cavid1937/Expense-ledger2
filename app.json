@@ -1,0 +1,110 @@
+{
+  "expo": {
+    "name": "Expense Ledger",
+    "slug": "expense-ledger",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "expenseledger",
+    "userInterfaceStyle": "light",
+
+    "icon": "./assets/icon.png",
+
+    "splash": {
+      "image":           "./assets/splash.png",
+      "resizeMode":      "contain",
+      "backgroundColor": "#F7F4EE"
+    },
+
+    "assetBundlePatterns": ["**/*"],
+
+    "ios": {
+      "supportsTablet":      false,
+      "bundleIdentifier":    "com.ledger.app",
+      "buildNumber":         "1",
+      "infoPlist": {
+        "NSCameraUsageDescription":            "Expense Ledger uses your camera to photograph receipts.",
+        "NSPhotoLibraryUsageDescription":      "Expense Ledger accesses your photo library to attach receipt images to transactions.",
+        "NSPhotoLibraryAddUsageDescription":   "Expense Ledger saves receipts to your photo library.",
+        "UIBackgroundModes":                   ["fetch", "remote-notification"]
+      }
+    },
+
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage":    "./assets/adaptive-icon.png",
+        "backgroundColor":    "#F7F4EE"
+      },
+      "package":             "com.ledger.app",
+      "versionCode":         1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ],
+      "googleServicesFile":  "./google-services.json"
+    },
+
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "node_modules/@expo-google-fonts/playfair-display/PlayfairDisplay_700Bold.ttf",
+            "node_modules/@expo-google-fonts/playfair-display/PlayfairDisplay_900Black.ttf",
+            "node_modules/@expo-google-fonts/dm-sans/DMSans_400Regular.ttf",
+            "node_modules/@expo-google-fonts/dm-sans/DMSans_500Medium.ttf",
+            "node_modules/@expo-google-fonts/dm-sans/DMSans_600SemiBold.ttf",
+            "node_modules/@expo-google-fonts/dm-sans/DMSans_700Bold.ttf"
+          ]
+        }
+      ],
+
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Expense Ledger accesses your photos to attach receipts to transactions.",
+          "cameraPermission": "Expense Ledger uses your camera to photograph receipts."
+        }
+      ],
+
+      [
+        "expo-notifications",
+        {
+          "icon":             "./assets/notification-icon.png",
+          "color":            "#F7F4EE",
+          "defaultChannel":   "budget_alerts",
+          "sounds":           ["./assets/notification.wav"]
+        }
+      ],
+
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Expense Ledger uses your camera to photograph receipts."
+        }
+      ]
+    ],
+
+    "experiments": {
+      "typedRoutes": true
+    },
+
+    "extra": {
+      "eas": {
+        "projectId": "YOUR_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

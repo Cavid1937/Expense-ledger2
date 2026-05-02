@@ -1,0 +1,77 @@
+{
+  "cli": {
+    "version": ">= 10.0.0",
+    "appVersionSource": "local"
+  },
+
+  "build": {
+
+    "development": {
+      "developmentClient": true,
+      "distribution":      "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development"
+      },
+      "ios": {
+        "simulator":     false,
+        "buildConfiguration": "Debug"
+      },
+      "android": {
+        "buildType":     "apk",
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "cache": {
+        "key": "development-v1"
+      }
+    },
+
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "preview"
+      },
+      "ios": {
+        "buildConfiguration": "Release",
+        "simulator":          false
+      },
+      "android": {
+        "buildType":          "apk",
+        "gradleCommand":      ":app:assembleRelease"
+      },
+      "cache": {
+        "key": "preview-v1"
+      }
+    },
+
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production"
+      },
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "cache": {
+        "key": "production-v1"
+      }
+    }
+
+  },
+
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId":          "YOUR_APPLE_ID@example.com",
+        "ascAppId":         "YOUR_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId":      "YOUR_APPLE_TEAM_ID"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track":                 "internal"
+      }
+    }
+  }
+}
