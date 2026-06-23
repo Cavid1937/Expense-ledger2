@@ -1,87 +1,117 @@
 import { useState } from "react";
 
-const KEYS = [
-  "expense_ledger_v4",
-  "expense_ledger_v3",
-  "expense_ledger_v2",
-  "expense_ledger_v1",
-  "expense_ledger",
-];
-
 export default function App() {
-  const [output, setOutput] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [found,  setFound]  = useState(null); // key name that had data
+  const [entries, setEntries] = useState(null); // array of { key, size, preview, full, copied }
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [expandedKey, setExpandedKey] = useState(null);
+  const [copiedKey, setCopiedKey] = useState(null);
 
-  function exportData() {
-    // Try every known key, use whichever has data
-    let raw = null;
-    let foundKey = null;
-    for (const key of KEYS) {
-      const val = localStorage.getItem(key);
-      if (val) { raw = val; foundKey = key; break; }
-    }
-
-    if (!raw) {
-      setOutput("Nothing found in localStorage under any known key.\n\nKnown keys tried:\n" + KEYS.join("\n"));
-      setFound(null);
+  function dump() {
+    const keys = Object.keys(localStorage);
+    if (keys.length === 0) {
+      setEntries([]);
       return;
     }
-
-    // Pretty-print if valid JSON, otherwise dump raw
-    try {
-      const parsed = JSON.parse(raw);
-      setOutput(JSON.stringify(parsed, null, 2));
-    } catch {
-      setOutput(raw);
-    }
-    setFound(foundKey);
+    const result = keys.map(key => {
+      const raw = localStorage.getItem(key);
+      let pretty = raw;
+      try { pretty = JSON.stringify(JSON.parse(raw), null, 2); } catch {}
+      return {
+        key,
+        size: new Blob([raw]).size,
+        full: pretty,
+        preview: pretty.slice(0, 120).replace(/\n/g, " ") + (pretty.length > 120 ? "…" : ""),
+      };
+    // Largest first — most likely to be the real data
+    }).sort((a, b) => b.size - a.size);
+    setEntries(result);
+    setExpandedKey(result[0]?.key ?? null); // auto-expand the biggest
   }
 
-  function copyToClipboard() {
-    if (!output) return;
-    navigator.clipboard.writeText(output).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  function copyOne(key, text) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
     });
   }
 
-  function selectAll(e) {
-    e.target.select();
+  function copyAll() {
+    if (!entries) return;
+    const blob = entries.map(e => `=== KEY: ${e.key} (${fmt(e.size)}) ===\n${e.full}`).join("\n\n");
+    navigator.clipboard.writeText(blob).then(() => {
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 2000);
+    });
+  }
+
+  function fmt(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
   }
 
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <h1 style={s.title}>Expense Ledger</h1>
-        <p style={s.sub}>Data exporter — open this on your phone, tap Export, then copy the text.</p>
+        <h1 style={s.title}>localStorage Inspector</h1>
+        <p style={s.sub}>
+          Open this on your phone. Tap Scan — every key in storage appears, sorted largest first.
+          Expand the one that looks like your transaction history and copy it.
+        </p>
 
-        <button style={s.exportBtn} onClick={exportData}>
-          Export data from this device
+        <button style={s.scanBtn} onClick={dump}>
+          Scan all localStorage
         </button>
 
-        {found && (
-          <p style={s.foundNote}>Found data under key: <strong>{found}</strong></p>
+        {/* Empty storage */}
+        {entries !== null && entries.length === 0 && (
+          <div style={s.empty}>
+            localStorage is completely empty on this device / browser.
+          </div>
         )}
 
-        {output && (
+        {/* Results */}
+        {entries && entries.length > 0 && (
           <>
-            <div style={s.textareaWrap}>
-              <textarea
-                style={s.textarea}
-                value={output}
-                readOnly
-                onClick={selectAll}
-                spellCheck={false}
-              />
+            <div style={s.summary}>
+              Found <strong>{entries.length}</strong> key{entries.length !== 1 ? "s" : ""} —
+              sorted by size, largest first.
             </div>
-            <button style={s.copyBtn} onClick={copyToClipboard}>
-              {copied ? "Copied ✓" : "Copy all to clipboard"}
+
+            <button style={s.copyAllBtn} onClick={copyAll}>
+              {copiedAll ? "Copied ✓" : `Copy everything (all ${entries.length} keys)`}
             </button>
-            <p style={s.hint}>
-              Tap inside the box to select all, or use the Copy button above.
-              Paste this text somewhere safe (Notes, email to yourself, etc.)
-            </p>
+
+            {entries.map(entry => (
+              <div key={entry.key} style={s.entry}>
+                {/* Key header row */}
+                <div style={s.entryHeader} onClick={() => setExpandedKey(expandedKey === entry.key ? null : entry.key)}>
+                  <div style={s.entryMeta}>
+                    <span style={s.keyName}>{entry.key}</span>
+                    <span style={s.keySize}>{fmt(entry.size)}</span>
+                  </div>
+                  <span style={s.chevron}>{expandedKey === entry.key ? "▲" : "▼"}</span>
+                </div>
+
+                {/* Preview always visible */}
+                <p style={s.preview}>{entry.preview}</p>
+
+                {/* Full content when expanded */}
+                {expandedKey === entry.key && (
+                  <>
+                    <textarea
+                      style={s.textarea}
+                      value={entry.full}
+                      readOnly
+                      onClick={e => e.target.select()}
+                      spellCheck={false}
+                    />
+                    <button style={s.copyOneBtn} onClick={() => copyOne(entry.key, entry.full)}>
+                      {copiedKey === entry.key ? "Copied ✓" : `Copy "${entry.key}"`}
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
           </>
         )}
       </div>
@@ -94,18 +124,13 @@ const s = {
     minHeight: "100vh",
     background: "#F7F4EE",
     display: "flex",
-    alignItems: "flex-start",
     justifyContent: "center",
-    padding: "40px 20px",
+    padding: "32px 16px 80px",
     fontFamily: "system-ui, -apple-system, sans-serif",
   },
   card: {
-    background: "#fff",
-    borderRadius: 12,
-    padding: "32px 28px",
     width: "100%",
-    maxWidth: 600,
-    boxShadow: "0 2px 16px rgba(0,0,0,0.07)",
+    maxWidth: 620,
   },
   title: {
     fontSize: 22,
@@ -114,62 +139,122 @@ const s = {
     marginBottom: 6,
   },
   sub: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#6B6B6B",
-    marginBottom: 28,
-    lineHeight: 1.5,
+    lineHeight: 1.6,
+    marginBottom: 24,
   },
-  exportBtn: {
+  scanBtn: {
     width: "100%",
     background: "#141414",
     color: "#fff",
     border: "none",
     borderRadius: 8,
-    padding: "16px",
+    padding: "15px",
     fontSize: 16,
-    fontWeight: 600,
+    fontWeight: 700,
     cursor: "pointer",
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  foundNote: {
-    fontSize: 12,
+  empty: {
+    background: "#fff",
+    borderRadius: 10,
+    padding: "24px",
+    fontSize: 14,
     color: "#6B6B6B",
-    marginBottom: 16,
+    textAlign: "center",
   },
-  textareaWrap: {
-    marginBottom: 12,
+  summary: {
+    fontSize: 13,
+    color: "#6B6B6B",
+    marginBottom: 10,
   },
-  textarea: {
-    width: "100%",
-    height: 320,
-    background: "#F7F4EE",
-    border: "1px solid #E5E5E5",
-    borderRadius: 8,
-    padding: 14,
-    fontSize: 12,
-    fontFamily: "monospace",
-    color: "#141414",
-    resize: "vertical",
-    lineHeight: 1.5,
-    boxSizing: "border-box",
-  },
-  copyBtn: {
+  copyAllBtn: {
     width: "100%",
     background: "#2D6A4F",
     color: "#fff",
     border: "none",
     borderRadius: 8,
-    padding: "14px",
-    fontSize: 15,
+    padding: "13px",
+    fontSize: 14,
     fontWeight: 600,
     cursor: "pointer",
-    marginBottom: 12,
-    transition: "opacity 0.15s",
+    marginBottom: 20,
   },
-  hint: {
-    fontSize: 12,
+  entry: {
+    background: "#fff",
+    borderRadius: 10,
+    padding: "14px 16px",
+    marginBottom: 12,
+    boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+  },
+  entryHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    cursor: "pointer",
+    marginBottom: 6,
+  },
+  entryMeta: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  keyName: {
+    fontFamily: "monospace",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#141414",
+    wordBreak: "break-all",
+  },
+  keySize: {
+    fontSize: 11,
+    background: "#F0EDE7",
+    color: "#6B6B6B",
+    padding: "2px 7px",
+    borderRadius: 4,
+    fontWeight: 600,
+  },
+  chevron: {
+    fontSize: 10,
     color: "#A8A8A8",
-    lineHeight: 1.6,
-    textAlign: "center",
+    flexShrink: 0,
+    marginLeft: 8,
+  },
+  preview: {
+    fontSize: 11,
+    color: "#A8A8A8",
+    fontFamily: "monospace",
+    lineHeight: 1.4,
+    wordBreak: "break-all",
+    marginBottom: 0,
+  },
+  textarea: {
+    width: "100%",
+    height: 260,
+    background: "#F7F4EE",
+    border: "1px solid #E5E5E5",
+    borderRadius: 6,
+    padding: 12,
+    fontSize: 11,
+    fontFamily: "monospace",
+    color: "#141414",
+    resize: "vertical",
+    lineHeight: 1.5,
+    boxSizing: "border-box",
+    marginTop: 10,
+  },
+  copyOneBtn: {
+    width: "100%",
+    background: "#141414",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+    padding: "11px",
+    fontSize: 13,
+    fontWeight: 600,
+    cursor: "pointer",
+    marginTop: 8,
   },
 };
