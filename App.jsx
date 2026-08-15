@@ -47,14 +47,63 @@ function migrateAndLoad() {
   return buildState(merged, bestSettings);
 }
 
+// Maps any old category name or ID → current category ID
+const CATEGORY_MAP = {
+  // Current IDs pass through unchanged
+  "food":"food","sport":"sport","personal":"personal","culture":"culture",
+  "transport":"transport","housing":"housing","digital":"digital",
+  "edu":"edu","other":"other","salary":"salary","freelance":"freelance",
+  // Food
+  "food & dining":"food","groceries & dining":"food","groceries":"food",
+  "dining":"food","food and dining":"food","restaurant":"food",
+  "restaurants":"food","coffee":"food","cafe":"food","lunch":"food","snacks":"food",
+  // Sport
+  "sport & fitness":"sport","sport and fitness":"sport","sports":"sport",
+  "fitness":"sport","gym":"sport","football":"sport","health & sport":"sport","exercise":"sport",
+  // Personal
+  "personal care":"personal","skincare":"personal","health":"personal",
+  "grooming":"personal","pharmacy":"personal","personal & health":"personal","beauty":"personal",
+  // Culture / style
+  "style & culture":"culture","culture & style":"culture","fashion":"culture",
+  "style":"culture","clothing":"culture","clothes":"culture",
+  "fragrance":"culture","entertainment":"culture","shopping":"culture",
+  // Transport
+  "transportation":"transport","travel":"transport","bus":"transport",
+  "taxi":"transport","uber":"transport","fuel":"transport","petrol":"transport","metro":"transport",
+  // Housing
+  "rent":"housing","home":"housing","utilities":"housing","bills":"housing","household":"housing",
+  // Digital / subs
+  "digital & subs":"digital","digital and subs":"digital","subscriptions":"digital",
+  "subs":"digital","streaming":"digital","software":"digital","apps":"digital","tech":"digital",
+  // Education
+  "education":"edu","books":"edu","courses":"edu","tuition":"edu","university":"edu","school":"edu",
+  // Income
+  "salary & income":"salary","salary and income":"salary","income":"salary",
+  "wage":"salary","wages":"salary","paycheck":"salary","pay":"salary",
+  // Freelance
+  "side income":"freelance","commission":"freelance","consulting":"freelance","gig":"freelance",
+};
+
+function resolveCategory(raw) {
+  if (!raw) return "other";
+  const key = String(raw).toLowerCase().trim();
+  // Direct match
+  if (CATEGORY_MAP[key]) return CATEGORY_MAP[key];
+  // Partial match — check if any map key is contained in the raw value
+  for (const [k, v] of Object.entries(CATEGORY_MAP)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  return "other";
+}
+
 function normaliseTxn(t) {
   return {
     id:        t.id || Date.now() + Math.random(),
-    type:      t.type || "expense",
+    type:      (t.type || "expense").toLowerCase().includes("inc") ? "income" : "expense",
     amount:    Math.abs(parseFloat(t.amount || t.amt || 0)),
-    category:  t.category || t.catId || t.cat || "other",
+    category:  resolveCategory(t.category || t.catId || t.cat),
     note:      t.note || t.description || t.name || "",
-    date:      t.date || new Date().toISOString().slice(0, 10),
+    date:      (t.date || new Date().toISOString().slice(0, 10)).slice(0, 10),
     recurring: t.recurring || false,
     recurFreq: t.recurFreq || t.frequency || null,
   };
