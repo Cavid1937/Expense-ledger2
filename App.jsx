@@ -470,19 +470,106 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const parsed = JSON.parse(e.target.result);
-        const txns = parsed.transactions || parsed.entries || [];
-        if (!txns.length) { showToast("No transactions found"); return; }
-        if (!window.confirm(`Restore ${txns.length} transactions? Will merge with existing data.`)) return;
+        const raw = e.target.result;
+        const isCSV = file.name?.toLowerCase().endsWith(".csv") || raw.trimStart().startsWith("Date,") || raw.trimStart().startsWith("date,");
+
+        let txns = [];
+        let parsed = null;
+
+        if (isCSV) {
+          // ── Parse CSV ──────────────────────────────────────────────────────
+          const lines = raw.trim().split(/\r?\n/);
+          const headers = lines[0].toLowerCase().split(",").map(h => h.replace(/"/g,"").trim());
+          txns = lines.slice(1).filter(l => l.trim()).map((line, i) => {
+            // Handle quoted fields
+            const fields = [];
+            let cur = "", inQuote = false;
+            for (const ch of line) {
+              if (ch === '"') { inQuote = !inQuote; }
+              else if (ch === "," && !inQuote) { fields.push(cur.trim()); cur = ""; }
+              else cur += ch;
+            }
+            fields.push(cur.trim());
+
+            const get = (keys) => {
+              for (const k of keys) {
+                const idx = headers.indexOf(k);
+                if (idx !== -1 && fields[idx]) return fields[idx].replace(/^"|"$/g,"").trim();
+              }
+              return "";
+            };
+
+            const amount = Math.abs(parseFloat(get(["amount","amt","value"])) || 0);
+            const type   = get(["type"]) || (amount >= 0 ? "expense" : "income");
+            const date   = get(["date"]) || new Date().toISOString().slice(0,10);
+
+            return {
+              id:        Date.now() + i + Math.random(),
+              type:      type.toLowerCase().includes("inc") ? "income" : "expense",
+              amount,
+              category:  get(["category","cat"]) || "other",
+              note:      get(["note","description","notes","memo"]) || "",
+              date:      date.slice(0,10),
+              recurring: get(["recurring","recur"])?.toLowerCase() === "yes" || false,
+              recurFreq: get(["recurfreq","frequency","freq"]) || null,
+            };
+          }).filter(t => t.amount > 0);
+
+        } else {
+          // ── Parse JSON — handle every known shape ──────────────────────────
+          parsed = JSON.parse(raw);
+
+          // Shape 1: { transactions: [...] }
+          if (Array.isArray(parsed.transactions)) txns = parsed.transactions;
+          // Shape 2: { entries: [...] }
+          else if (Array.isArray(parsed.entries))     txns = parsed.entries;
+          // Shape 3: { data: { transactions: [...] } }
+          else if (Array.isArray(parsed.data?.transactions)) txns = parsed.data.transactions;
+          // Shape 4: raw array at root
+          else if (Array.isArray(parsed))             txns = parsed;
+          // Shape 5: object with numeric keys (some export formats)
+          else {
+            const vals = Object.values(parsed);
+            const arrVal = vals.find(v => Array.isArray(v) && v.length > 0 && v[0]?.amount !== undefined);
+            if (arrVal) txns = arrVal;
+          }
+        }
+
+        if (!txns.length) {
+          showToast("No transactions found in this file");
+          alert(
+            "Could not find transactions in this file.\n\n" +
+            "For JSON: the file should contain a 'transactions' array.\n" +
+            "For CSV: the file should have columns: Date, Type, Amount, Category, Note.\n\n" +
+            "If you exported from this app, use the JSON backup file (not the CSV)."
+          );
+          return;
+        }
+
+        const normalisedTxns = txns.map(normaliseTxn).filter(t => t.amount > 0);
+
+        if (!window.confirm(`Found ${normalisedTxns.length} transactions. Restore them? This will merge with your current data — nothing existing will be deleted.`)) return;
+
         setState(s => {
           const existingIds = new Set(s.transactions.map(t => String(t.id)));
-          const newTxns = txns.map(normaliseTxn).filter(t => !existingIds.has(String(t.id)));
-          return { ...s, transactions: [...newTxns, ...s.transactions].sort((a,b) => b.date.localeCompare(a.date)),
-            budgets: parsed.budgets || s.budgets, categories: parsed.categories || s.categories,
-            templates: parsed.templates || s.templates, currency: parsed.currency || s.currency };
+          const newTxns = normalisedTxns.filter(t => !existingIds.has(String(t.id)));
+          const merged  = [...newTxns, ...s.transactions].sort((a,b) => b.date.localeCompare(a.date));
+          return {
+            ...s,
+            transactions: merged,
+            budgets:    parsed?.budgets    || s.budgets,
+            categories: parsed?.categories || s.categories,
+            templates:  parsed?.templates  || s.templates,
+            currency:   parsed?.currency   || s.currency,
+          };
         });
-        showToast(`Restored ${txns.length} transactions`);
-      } catch { showToast("Could not read backup file"); }
+
+        showToast(`Restored ${normalisedTxns.length} transactions`);
+      } catch (err) {
+        console.error("Import error:", err);
+        showToast("Could not read file");
+        alert("Import failed: " + err.message + "\n\nMake sure you're uploading the JSON backup file downloaded from this app.");
+      }
     };
     reader.readAsText(file);
   }, [showToast]);
