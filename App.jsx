@@ -1062,7 +1062,7 @@ function TxnRow({ txn, categories, currency, onDelete, onEdit }) {
           {isInc?"+":"−"}{fmt(txn.amount,currency)}
         </div>
         {(onEdit || onDelete) && (
-          <div style={{display:"flex",gap:8"}}>
+          <div style={{display:"flex",gap:8}}>
             {onEdit && <button className="txn-edit-btn" onClick={e=>{e.stopPropagation();onEdit(txn);}}>edit</button>}
             {onDelete && <button className="txn-edit-btn" style={{color:"var(--neg)"}} onClick={e=>{e.stopPropagation();onDelete(txn.id);}}>delete</button>}
           </div>
