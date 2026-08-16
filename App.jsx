@@ -60,23 +60,28 @@ const CATEGORY_MAP = {
   // Sport
   "sport & fitness":"sport","sport and fitness":"sport","sports":"sport",
   "fitness":"sport","gym":"sport","football":"sport","health & sport":"sport","exercise":"sport",
-  // Personal
+  // Personal / health — your CSV uses "health"
   "personal care":"personal","skincare":"personal","health":"personal",
   "grooming":"personal","pharmacy":"personal","personal & health":"personal","beauty":"personal",
-  // Culture / style
+  "medical":"personal","doctor":"personal",
+  // Culture / style / entertainment / shopping — your CSV uses both
   "style & culture":"culture","culture & style":"culture","fashion":"culture",
   "style":"culture","clothing":"culture","clothes":"culture",
   "fragrance":"culture","entertainment":"culture","shopping":"culture",
+  "games":"culture","gaming":"culture","cinema":"culture","movies":"culture",
   // Transport
   "transportation":"transport","travel":"transport","bus":"transport",
-  "taxi":"transport","uber":"transport","fuel":"transport","petrol":"transport","metro":"transport",
+  "taxi":"transport","uber":"transport","fuel":"transport","petrol":"transport",
+  "metro":"transport","benzin":"transport",
   // Housing
   "rent":"housing","home":"housing","utilities":"housing","bills":"housing","household":"housing",
-  // Digital / subs
+  // Digital / subs — your CSV uses "subscriptions"
   "digital & subs":"digital","digital and subs":"digital","subscriptions":"digital",
-  "subs":"digital","streaming":"digital","software":"digital","apps":"digital","tech":"digital",
+  "subscription":"digital","subs":"digital","streaming":"digital",
+  "software":"digital","apps":"digital","tech":"digital","mobile":"digital","internet":"digital",
   // Education
-  "education":"edu","books":"edu","courses":"edu","tuition":"edu","university":"edu","school":"edu",
+  "education":"edu","books":"edu","courses":"edu","tuition":"edu",
+  "university":"edu","school":"edu",
   // Income
   "salary & income":"salary","salary and income":"salary","income":"salary",
   "wage":"salary","wages":"salary","paycheck":"salary","pay":"salary",
@@ -87,9 +92,7 @@ const CATEGORY_MAP = {
 function resolveCategory(raw) {
   if (!raw) return "other";
   const key = String(raw).toLowerCase().trim();
-  // Direct match
   if (CATEGORY_MAP[key]) return CATEGORY_MAP[key];
-  // Partial match — check if any map key is contained in the raw value
   for (const [k, v] of Object.entries(CATEGORY_MAP)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
@@ -549,15 +552,17 @@ export default function App() {
             };
 
             const amount = Math.abs(parseFloat(get(["amount","amt","value"])) || 0);
-            const type   = get(["type"]) || (amount >= 0 ? "expense" : "income");
+            const type   = get(["type"]) || "expense";
             const date   = get(["date"]) || new Date().toISOString().slice(0,10);
+            const cat    = get(["category","cat"]);
+            const note   = get(["note","notes","description","memo"]);
 
             return {
               id:        Date.now() + i + Math.random(),
               type:      type.toLowerCase().includes("inc") ? "income" : "expense",
               amount,
-              category:  get(["category","cat"]) || "other",
-              note:      get(["note","description","notes","memo"]) || "",
+              category:  resolveCategory(cat),
+              note,
               date:      date.slice(0,10),
               recurring: get(["recurring","recur"])?.toLowerCase() === "yes" || false,
               recurFreq: get(["recurfreq","frequency","freq"]) || null,
