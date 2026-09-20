@@ -73,6 +73,8 @@ function normaliseTxn(t) {
     date:      (t.date || new Date().toISOString().slice(0,10)).slice(0,10),
     recurring: t.recurring || false,
     recurFreq: t.recurFreq || t.frequency || null,
+    // isActive defaults to true for all existing data — never undefined
+    isActive:  t.isActive !== undefined ? t.isActive : true,
     createdAt: t.createdAt || new Date().toISOString(),
   };
 }
@@ -471,10 +473,9 @@ input[type=number]{-moz-appearance:textfield}
 /* Month bars */
 .month-bars{display:flex;align-items:flex-end;gap:4px;height:80px;padding-top:8px}
 .m-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;cursor:pointer;position:relative}
-.m-col:hover .m-tip{display:block}
-.m-bar{width:100%;border-radius:2px 2px 0 0;transition:height 0.5s ease;min-height:2px}
+.m-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;cursor:pointer;position:relative}
+.m-bar{width:100%;border-radius:2px 2px 0 0;transition:height 0.5s ease,background 150ms;min-height:2px}
 .m-lbl{font-size:9px;font-weight:700;letter-spacing:0.3px}
-.m-tip{display:none;position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-size:10px;padding:4px 8px;border-radius:4px;white-space:nowrap;z-index:10;font-family:'DM Sans',sans-serif;font-weight:600;pointer-events:none}
 
 /* Heatmap */
 .heatmap{display:grid;grid-template-columns:22px repeat(7,1fr);gap:2px}
@@ -518,6 +519,56 @@ input[type=number]{-moz-appearance:textfield}
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT
 // ─────────────────────────────────────────────────────────────────────────────
+// ─── Shared financial calculations ───────────────────────────────────────────
+// Single source of truth consumed by HomePage, AnalyticsPage, and RecurringHub.
+// Pass transactions + optional month override; default = current month.
+function calcMonthSummary(transactions, mon = curMon(), prv = prevMon()) {
+  const expenses = transactions.filter(t => t.type === "expense");
+  const curExp   = expenses.filter(t => t.date.startsWith(mon)).reduce((s,t) => s+t.amount, 0);
+  const curInc   = transactions.filter(t => t.type==="income" && t.date.startsWith(mon)).reduce((s,t) => s+t.amount, 0);
+  const prevExp  = expenses.filter(t => t.date.startsWith(prv)).reduce((s,t) => s+t.amount, 0);
+  const momDiff  = prevExp > 0 ? curExp - prevExp : null;
+  const savingsRate = curInc > 0 ? Math.max(0, Math.round(((curInc-curExp)/curInc)*100)) : null;
+  return { curExp, curInc, prevExp, momDiff, savingsRate };
+}
+
+function calcCategorySpend(transactions, mon = curMon()) {
+  const catSpend = {};
+  transactions.filter(t => t.type==="expense" && t.date.startsWith(mon))
+    .forEach(t => { catSpend[t.category] = (catSpend[t.category]||0) + t.amount; });
+  return catSpend;
+}
+
+function calcSpendingPace(curExp, mon = curMon()) {
+  const daysPassed = new Date().getDate();
+  const totalDays  = daysInMonth(mon);
+  const dailyAvg   = daysPassed > 0 ? curExp / daysPassed : 0;
+  const projected  = dailyAvg * totalDays;
+  const paceRatio  = totalDays > 0 ? daysPassed / totalDays : 0;
+  const spendRatio = projected > 0 ? curExp / projected : 0;
+  const onTrack    = spendRatio <= paceRatio + 0.05;
+  return { daysPassed, totalDays, dailyAvg, projected, onTrack };
+}
+
+function calcBudgetStatus(budgets, catSpend) {
+  return Object.entries(budgets).filter(([,v]) => v > 0).map(([catId, limit]) => {
+    const spent = catSpend[catId] || 0;
+    const pct   = Math.min((spent/limit)*100, 100);
+    const over  = spent > limit;
+    const warn  = pct >= 80 && !over;
+    return { catId, limit, spent, pct, over, warn };
+  });
+}
+
+function calcTxnStats(transactions, mon = curMon()) {
+  const amounts = transactions.filter(t => t.type==="expense" && t.date.startsWith(mon)).map(t => t.amount);
+  const avgTxn  = amounts.length ? amounts.reduce((s,a) => s+a, 0)/amounts.length : 0;
+  const medTxn  = median(amounts);
+  const weekdayExp = transactions.filter(t => t.type==="expense" && t.date.startsWith(mon) && ![0,6].includes(new Date(t.date+"T00:00:00").getDay())).reduce((s,t)=>s+t.amount,0);
+  const weekendExp = transactions.filter(t => t.type==="expense" && t.date.startsWith(mon) && [0,6].includes(new Date(t.date+"T00:00:00").getDay())).reduce((s,t)=>s+t.amount,0);
+  return { count: amounts.length, avgTxn, medTxn, weekdayExp, weekendExp };
+}
+
 export default function App() {
   const [state,    setState]    = useState(() => migrateAndLoad());
   const [tab,      setTab]      = useState("home");
@@ -525,9 +576,11 @@ export default function App() {
   const [showAdd,  setShowAdd]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [toast,    setToast]    = useState(null);
-  const [snackbar, setSnackbar] = useState(null); // { msg, onUndo }
+  const [snackbar, setSnackbar] = useState(null);
   const [prefill,  setPrefill]  = useState(null);
   const [editId,   setEditId]   = useState(null);
+  const [viewTxn,  setViewTxn]  = useState(null);   // transaction detail sheet
+  const [importPending, setImportPending] = useState(null); // staged import confirm
   const [showBackupBanner, setShowBackupBanner] = useState(() => {
     const s = readRaw(KEY);
     if (!s?.lastBackup) return true;
@@ -535,7 +588,42 @@ export default function App() {
   });
   const snackTimer = useRef(null);
 
-  useEffect(() => { writeRaw(KEY, state); }, [state]);
+  // Inject PWA manifest so the app is installable from the browser
+  useEffect(() => {
+    if (document.getElementById("pwa-manifest")) return;
+    const manifest = {
+      name: "Expense Ledger",
+      short_name: "Ledger",
+      start_url: "/",
+      display: "standalone",
+      background_color: "#F7F4EE",
+      theme_color: "#1A1814",
+      orientation: "portrait",
+      icons: [
+        { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%231A1814'/%3E%3Ctext x='96' y='130' font-family='Georgia,serif' font-size='100' font-weight='700' fill='%23F7F4EE' text-anchor='middle'%3E%E2%82%BC%3C/text%3E%3C/svg%3E", sizes: "192x192", type: "image/svg+xml" },
+        { src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%231A1814'/%3E%3Ctext x='256' y='346' font-family='Georgia,serif' font-size='260' font-weight='700' fill='%23F7F4EE' text-anchor='middle'%3E%E2%82%BC%3C/text%3E%3C/svg%3E", sizes: "512x512", type: "image/svg+xml" }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], { type: "application/json" });
+    const url  = URL.createObjectURL(blob);
+    const link = document.createElement("link");
+    link.id   = "pwa-manifest";
+    link.rel  = "manifest";
+    link.href = url;
+    document.head.appendChild(link);
+
+    // Also set meta tags for iOS home screen
+    const addMeta = (name, content) => {
+      if (document.querySelector(`meta[name="${name}"]`)) return;
+      const m = document.createElement("meta");
+      m.name = name; m.content = content;
+      document.head.appendChild(m);
+    };
+    addMeta("apple-mobile-web-app-capable", "yes");
+    addMeta("apple-mobile-web-app-status-bar-style", "black-translucent");
+    addMeta("apple-mobile-web-app-title", "Expense Ledger");
+    addMeta("theme-color", "#1A1814");
+  }, []);
 
   const showToast = useCallback((msg) => {
     setToast(msg); setTimeout(() => setToast(null), 1800);
@@ -572,7 +660,14 @@ export default function App() {
     });
   }, [showSnackbar]);
 
-  const openAdd = useCallback((prefillData=null, existingId=null) => {
+  const toggleRecurringActive = useCallback((id) => {
+    setState(s => ({
+      ...s,
+      transactions: s.transactions.map(t =>
+        t.id === id ? { ...t, isActive: t.isActive === false ? true : false } : t
+      )
+    }));
+  }, []);
     setPrefill(prefillData); setEditId(existingId); setShowAdd(true);
   }, []);
   const closeAdd = useCallback(() => { setShowAdd(false); setPrefill(null); setEditId(null); }, []);
@@ -597,6 +692,7 @@ export default function App() {
     showToast(`Backup saved — ${state.transactions.length} transactions`);
   }, [state, showToast]);
 
+  // Parse file → stage for confirmation (never mutates state here)
   const importFile = useCallback((file) => {
     if (!file) return;
     const reader = new FileReader();
@@ -624,18 +720,32 @@ export default function App() {
           else{const v=Object.values(parsed).find(v=>Array.isArray(v)&&v.length>0&&v[0]?.amount!==undefined);if(v)txns=v;}
         }
         if(!txns.length){showToast("No transactions found in file");return;}
-        const normalised=txns.map(normaliseTxn).filter(t=>t.amount>0);
-        setState(s=>{
-          const existingIds=new Set(s.transactions.map(t=>String(t.id)));
-          const newTxns=normalised.filter(t=>!existingIds.has(String(t.id)));
-          return{...s,transactions:[...newTxns,...s.transactions].sort((a,b)=>b.date.localeCompare(a.date)),
-            budgets:parsed?.budgets||s.budgets,templates:parsed?.templates||s.templates,currency:parsed?.currency||s.currency};
-        });
-        showToast(`Restored ${normalised.length} transactions`);
+        const normalised = txns.map(normaliseTxn).filter(t=>t.amount>0);
+        // Stage for explicit user confirmation — never mutate silently
+        setImportPending({ normalised, parsed, filename: file.name });
       } catch(err){showToast("Import failed: "+err.message);}
     };
     reader.readAsText(file);
   }, [showToast]);
+
+  // Called only after user explicitly chooses merge or replace
+  const commitImport = useCallback((mode) => {
+    if (!importPending) return;
+    const { normalised, parsed } = importPending;
+    setState(s => {
+      if (mode === "replace") {
+        return { ...s, transactions: normalised.sort((a,b)=>b.date.localeCompare(a.date)),
+          budgets: parsed?.budgets||s.budgets, templates: parsed?.templates||s.templates, currency: parsed?.currency||s.currency };
+      }
+      // merge — deduplicate by id
+      const existingIds = new Set(s.transactions.map(t=>String(t.id)));
+      const newTxns = normalised.filter(t=>!existingIds.has(String(t.id)));
+      return { ...s, transactions: [...newTxns,...s.transactions].sort((a,b)=>b.date.localeCompare(a.date)),
+        budgets: parsed?.budgets||s.budgets, templates: parsed?.templates||s.templates, currency: parsed?.currency||s.currency };
+    });
+    showToast(mode==="replace" ? `Replaced with ${normalised.length} transactions` : `Merged ${normalised.length} transactions`);
+    setImportPending(null);
+  }, [importPending, showToast]);
 
   const { transactions, budgets, templates, currency } = state;
 
@@ -672,9 +782,10 @@ export default function App() {
         </header>
 
         <main className="page" key={tabKey}>
-          {tab==="home"      && <HomePage transactions={transactions} budgets={budgets} templates={templates} currency={currency} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,note:tpl.note||tpl.name,recurring:false,recurFreq:null})} />}
-          {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onAdd={()=>openAdd()} />}
-          {tab==="analytics" && <AnalyticsPage transactions={transactions} currency={currency} />}
+          {tab==="home"      && <HomePage transactions={transactions} budgets={budgets} templates={templates} currency={currency} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} />}
+          {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()} />}
+          {tab==="analytics" && <AnalyticsPage transactions={transactions} currency={currency} budgets={budgets} />}
+          {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleActive={toggleRecurringActive} />}
         </main>
 
         <button className="fab" onClick={()=>openAdd()} aria-label="Add transaction">
@@ -682,7 +793,7 @@ export default function App() {
         </button>
 
         <nav className="tabbar" role="navigation" aria-label="Main navigation">
-          {[{id:"home",label:"Home",icon:"home"},{id:"ledger",label:"Ledger",icon:"list"},{id:"analytics",label:"Analytics",icon:"chart"}].map(t=>(
+          {[{id:"home",label:"Home",icon:"home"},{id:"ledger",label:"Ledger",icon:"list"},{id:"analytics",label:"Analytics",icon:"chart"},{id:"recurring",label:"Recurring",icon:"repeat"}].map(t=>(
             <button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>switchTab(t.id)} aria-label={t.label} aria-current={tab===t.id?"page":undefined}>
               <Icon name={t.icon} size={18} />
               <span className="tab-lbl">{t.label}</span>
@@ -712,6 +823,42 @@ export default function App() {
             showToast={showToast}
           />
         )}
+
+        {/* Import confirm modal — explicit user choice, never silent */}
+        {importPending && (
+          <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setImportPending(null)}>
+            <div className="sheet" role="dialog" aria-modal="true" aria-label="Confirm import">
+              <div className="sheet-handle"/>
+              <div className="sheet-title">Restore Backup</div>
+              <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"12px 14px",marginBottom:16}}>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",marginBottom:4}}>{importPending.filename}</div>
+                <div style={{fontSize:12,color:"var(--ink-3)"}}>{importPending.normalised.length} transactions found</div>
+              </div>
+              <div style={{fontSize:13,color:"var(--ink-2)",lineHeight:1.6,marginBottom:20}}>
+                How would you like to restore this data?
+              </div>
+              <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>commitImport("merge")}>
+                Merge — add new transactions, keep existing
+              </button>
+              <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>
+                Replace — overwrite all current data
+              </button>
+              <button className="btn btn-ghost btn-full" onClick={()=>setImportPending(null)}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {/* Transaction detail + duplicate sheet */}
+        {viewTxn && (
+          <TxnDetailSheet
+            txn={viewTxn}
+            currency={currency}
+            onClose={()=>setViewTxn(null)}
+            onEdit={()=>{ openAdd(viewTxn, viewTxn.id); setViewTxn(null); }}
+            onDuplicate={()=>{ openAdd({...viewTxn, date: today(), id: undefined}, null); setViewTxn(null); }}
+            onDelete={()=>{ deleteTransaction(viewTxn.id); setViewTxn(null); }}
+          />
+        )}
       </div>
     </>
   );
@@ -720,36 +867,16 @@ export default function App() {
 // ─────────────────────────────────────────────────────────────────────────────
 // HOME PAGE
 // ─────────────────────────────────────────────────────────────────────────────
-function HomePage({ transactions, budgets, templates, currency, onAdd, onTemplate }) {
+function HomePage({ transactions, budgets, templates, currency, onAdd, onTemplate, onView }) {
   const now  = curMon();
   const prev = prevMon();
 
-  const curTxns = transactions.filter(t=>t.date.startsWith(now));
-  const curExp  = curTxns.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
-  const curInc  = curTxns.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
-  const prevExp = transactions.filter(t=>t.date.startsWith(prev)&&t.type==="expense").reduce((s,t)=>s+t.amount,0);
-
-  // Absolute MoM comparison — not misleading percentages
-  const momDiff = prevExp > 0 ? curExp - prevExp : null;
-  const momPct  = prevExp > 0 && prevExp > 5 ? (curExp-prevExp)/prevExp*100 : null;
-
-  // Spending pace
-  const daysPassed = new Date().getDate();
-  const totalDays  = daysInMonth(now);
-  const dailyAvg   = daysPassed > 0 ? curExp / daysPassed : 0;
-  const projected  = dailyAvg * totalDays;
-  const paceRatio  = totalDays > 0 ? daysPassed / totalDays : 0;
-  const spendRatio = projected > 0 ? curExp / projected : 0;
-  const onTrack    = spendRatio <= paceRatio + 0.05;
-
-  const catSpend = {};
-  curTxns.filter(t=>t.type==="expense").forEach(t=>{catSpend[t.category]=(catSpend[t.category]||0)+t.amount;});
-  const activeBudgets = Object.entries(budgets).filter(([,v])=>v>0);
-  const recent = transactions.slice(0,7);
-
-  // Hero stat 3: savings rate if income tracked, else balance
-  const hasIncome = curInc > 0;
-  const savingsRate = hasIncome ? Math.max(0,Math.round(((curInc-curExp)/curInc)*100)) : null;
+  const { curExp, curInc, prevExp, momDiff, savingsRate } = calcMonthSummary(transactions, now, prev);
+  const catSpend    = calcCategorySpend(transactions, now);
+  const paceInfo    = calcSpendingPace(curExp, now);
+  const budgetItems = calcBudgetStatus(budgets, catSpend);
+  const hasIncome   = curInc > 0;
+  const recent      = transactions.slice(0, 7);
 
   return (
     <div>
@@ -799,15 +926,15 @@ function HomePage({ transactions, budgets, templates, currency, onAdd, onTemplat
               <Icon name="pace" size={12} color="var(--ink-3)" />
               Spending Pace
             </span>
-            <span style={{fontSize:11,color:"var(--ink-3)"}}>Day {daysPassed} of {totalDays}</span>
+            <span style={{fontSize:11,color:"var(--ink-3)"}}>Day {paceInfo.daysPassed} of {paceInfo.totalDays}</span>
           </div>
           <div className="pace-track">
-            <div className={`pace-fill ${onTrack?"on-track":"over-pace"}`} style={{width:`${Math.min(spendRatio*100,100)}%`}} />
+            <div className={`pace-fill ${paceInfo.onTrack?"on-track":"over-pace"}`} style={{width:`${Math.min((paceInfo.projected>0?curExp/paceInfo.projected:0)*100,100)}%`}} />
           </div>
           <div className="pace-sub">
-            <span style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(dailyAvg,currency)}/day avg</span>
-            <span style={{fontSize:11,color:projected>0?(onTrack?"var(--pos)":"var(--neg)"):"var(--ink-3)",fontWeight:600}}>
-              ~{fmt(projected,currency)} projected
+            <span style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(paceInfo.dailyAvg,currency)}/day avg</span>
+            <span style={{fontSize:11,color:paceInfo.projected>0?(paceInfo.onTrack?"var(--pos)":"var(--neg)"):"var(--ink-3)",fontWeight:600}}>
+              ~{fmt(paceInfo.projected,currency)} projected
             </span>
           </div>
         </div>
@@ -830,14 +957,11 @@ function HomePage({ transactions, budgets, templates, currency, onAdd, onTemplat
       )}
 
       {/* Budget bars */}
-      {activeBudgets.length > 0 && (
+      {budgetItems.length > 0 && (
         <div style={{marginBottom:20}}>
           <div className="label-sm" style={{marginBottom:10}}>Budgets</div>
-          {activeBudgets.map(([catId,limit])=>{
+          {budgetItems.map(({catId,limit,spent,pct,over,warn})=>{
             const cat=DEFAULT_CATEGORIES.find(c=>c.id===catId);
-            const spent=catSpend[catId]||0;
-            const pct=Math.min((spent/limit)*100,100);
-            const over=spent>limit,warn=pct>=80&&!over;
             return (
               <div key={catId} className="budget-item">
                 <div className="budget-hdr">
@@ -860,7 +984,7 @@ function HomePage({ transactions, budgets, templates, currency, onAdd, onTemplat
       {recent.length > 0 ? (
         <>
           <div className="label-sm" style={{marginBottom:10}}>Recent Activity</div>
-          <GroupedTxns txns={recent} currency={currency} compact />
+          <GroupedTxns txns={recent} currency={currency} onView={onView} compact />
         </>
       ) : (
         <div className="empty">
@@ -877,7 +1001,7 @@ function HomePage({ transactions, budgets, templates, currency, onAdd, onTemplat
 // ─────────────────────────────────────────────────────────────────────────────
 // LEDGER PAGE
 // ─────────────────────────────────────────────────────────────────────────────
-function LedgerPage({ transactions, currency, onDelete, onEdit, onAdd }) {
+function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd }) {
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [catFilter,  setCatFilter]  = useState("all");
@@ -996,7 +1120,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onAdd }) {
           <div className="empty-body">Try adjusting your search or clearing filters.</div>
         </div>
       ) : (
-        <GroupedTxns txns={filtered} currency={currency} onDelete={onDelete} onEdit={onEdit}/>
+        <GroupedTxns txns={filtered} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView}/>
       )}
 
       {/* Category filter sheet */}
@@ -1033,7 +1157,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onAdd }) {
   );
 }
 
-function GroupedTxns({ txns, currency, onDelete, onEdit, compact }) {
+function GroupedTxns({ txns, currency, onDelete, onEdit, onView, compact }) {
   const groups = useMemo(()=>{
     const g={}; txns.forEach(t=>{(g[t.date]=g[t.date]||[]).push(t);});
     return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));
@@ -1050,7 +1174,7 @@ function GroupedTxns({ txns, currency, onDelete, onEdit, compact }) {
               {dayTotal>0&&<span className="txn-date-total">{fmt(dayTotal,currency)}</span>}
             </div>
             <div className="txn-list">
-              {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} compact={compact}/>)}
+              {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} compact={compact}/>)}
             </div>
           </div>
         );
@@ -1059,11 +1183,11 @@ function GroupedTxns({ txns, currency, onDelete, onEdit, compact }) {
   );
 }
 
-function TxnRow({ txn, currency, onDelete, onEdit, compact }) {
+function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
   const cat=DEFAULT_CATEGORIES.find(c=>c.id===txn.category)||{id:"other",name:txn.category,color:"#8A8A8A"};
   const isInc=txn.type==="income";
   return (
-    <div className="txn-row">
+    <div className="txn-row" onClick={()=>onView?.(txn)} style={{cursor:onView?"pointer":"default"}}>
       <div className="txn-ico" style={{background:cat.color+"18"}}>
         <CatIcon catId={cat.id} size={16} color={cat.color}/>
       </div>
@@ -1079,7 +1203,8 @@ function TxnRow({ txn, currency, onDelete, onEdit, compact }) {
         <div className={`txn-amt ${isInc?"inc":"exp"}`}>
           {isInc?"+":"−"}{fmt(txn.amount,currency)}
         </div>
-        {(onEdit||onDelete)&&(
+        {/* Edit/delete only shown explicitly in Ledger, not on Home recent list */}
+        {(onEdit||onDelete)&&!onView&&(
           <div className="txn-actions">
             {onEdit&&<button className="txn-act" onClick={e=>{e.stopPropagation();onEdit(txn);}} aria-label="Edit" title="Edit"><Icon name="edit" size={13}/></button>}
             {onDelete&&<button className="txn-act del" onClick={e=>{e.stopPropagation();onDelete(txn.id);}} aria-label="Delete" title="Delete"><Icon name="trash" size={13}/></button>}
@@ -1093,50 +1218,29 @@ function TxnRow({ txn, currency, onDelete, onEdit, compact }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // ANALYTICS PAGE
 // ─────────────────────────────────────────────────────────────────────────────
-function AnalyticsPage({ transactions, currency }) {
+function AnalyticsPage({ transactions, currency, budgets }) {
   const now  = curMon();
   const prev = prevMon();
-  const expenses = transactions.filter(t=>t.type==="expense");
-  const curExp   = expenses.filter(t=>t.date.startsWith(now)).reduce((s,t)=>s+t.amount,0);
-  const prevExp  = expenses.filter(t=>t.date.startsWith(prev)).reduce((s,t)=>s+t.amount,0);
-  const curInc   = transactions.filter(t=>t.type==="income"&&t.date.startsWith(now)).reduce((s,t)=>s+t.amount,0);
+  const { curExp, curInc, prevExp, momDiff } = calcMonthSummary(transactions, now, prev);
+  const catSpend   = calcCategorySpend(transactions, now);
+  const paceInfo   = calcSpendingPace(curExp, now);
+  const txnStats   = calcTxnStats(transactions, now);
+  const budgetItems = calcBudgetStatus(budgets||{}, catSpend);
+  const expenses   = transactions.filter(t=>t.type==="expense");
 
-  const momDiff = prevExp > 0 ? curExp - prevExp : null;
-  const daysPassed = new Date().getDate();
-  const totalDays  = daysInMonth(now);
-  const dailyAvg   = daysPassed>0?curExp/daysPassed:0;
-  const projected  = dailyAvg*totalDays;
+  // Tap state for charts — works on touch without CSS :hover
+  const [activeBar,  setActiveBar]  = useState(null); // index into monthlyData
+  const [activeCell, setActiveCell] = useState(null); // {wi, di}
 
-  // Category breakdown
-  const catSpend={};
-  expenses.filter(t=>t.date.startsWith(now)).forEach(t=>{catSpend[t.category]=(catSpend[t.category]||0)+t.amount;});
   const catData=Object.entries(catSpend).map(([id,amt])=>({...DEFAULT_CATEGORIES.find(c=>c.id===id)||{id,name:id,color:"#8A8A8A"},amt})).sort((a,b)=>b.amt-a.amt);
   const maxCat=catData[0]?.amt||1;
+  const topExpenses=expenses.filter(t=>t.date.startsWith(now)).sort((a,b)=>b.amount-a.amount).slice(0,5);
 
-  // Top 5 individual expenses this month
-  const topExpenses = expenses.filter(t=>t.date.startsWith(now)).sort((a,b)=>b.amount-a.amount).slice(0,5);
-
-  // Transaction stats
-  const curAmounts = expenses.filter(t=>t.date.startsWith(now)).map(t=>t.amount);
-  const avgTxn  = curAmounts.length ? curAmounts.reduce((s,a)=>s+a,0)/curAmounts.length : 0;
-  const medTxn  = median(curAmounts);
-  const txnCount = curAmounts.length;
-
-  // Spending pattern: weekday vs weekend
-  const weekdayExp = expenses.filter(t=>t.date.startsWith(now)&&![0,6].includes(new Date(t.date+"T00:00:00").getDay())).reduce((s,t)=>s+t.amount,0);
-  const weekendExp = expenses.filter(t=>t.date.startsWith(now)&&[0,6].includes(new Date(t.date+"T00:00:00").getDay())).reduce((s,t)=>s+t.amount,0);
-
-  // 6-month bars
-  const months6 = Array.from({length:6},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-(5-i));return d.toISOString().slice(0,7);});
-  const monthlyData = months6.map(m=>({
-    label:monthShort(m),
-    exp:expenses.filter(t=>t.date.startsWith(m)).reduce((s,t)=>s+t.amount,0),
-    isCur:m===now,ym:m,
-  }));
+  const months6=Array.from({length:6},(_,i)=>{const d=new Date();d.setMonth(d.getMonth()-(5-i));return d.toISOString().slice(0,7);});
+  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(t=>t.date.startsWith(m)).reduce((s,t)=>s+t.amount,0),isCur:m===now,ym:m}));
   const maxMonth=Math.max(...monthlyData.map(m=>m.exp),1);
   const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
 
-  // Heatmap
   const DAY_LBLS=["M","T","W","T","F","S","S"];
   const heatRows=[];
   const now_=new Date();
@@ -1156,6 +1260,10 @@ function AnalyticsPage({ transactions, currency }) {
   }
   const maxHeat=Math.max(...heatRows.flat().map(c=>c.amt),1);
 
+  // Days remaining in month for budget pace
+  const daysInMon  = daysInMonth(now);
+  const daysLeft   = daysInMon - new Date().getDate();
+
   if (expenses.length===0) return (
     <div className="empty">
       <div className="empty-icon"><Icon name="chart" size={30}/></div>
@@ -1165,7 +1273,7 @@ function AnalyticsPage({ transactions, currency }) {
   );
 
   return (
-    <div>
+    <div onClick={()=>{setActiveBar(null);setActiveCell(null);}}>
       <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,marginBottom:18}}>Analytics</div>
 
       {/* Summary */}
@@ -1179,13 +1287,13 @@ function AnalyticsPage({ transactions, currency }) {
               <Icon name={momDiff<=0?"arrowDown":"arrowUp"} size={10}/>
               {fmt(Math.abs(momDiff),currency)} {momDiff<=0?"less":"more"} than {monthShort(prev)}
             </span>
-            {prevExp>0&&<span style={{color:"var(--ink-3)"}}>({prevExp>0?fmt(prevExp,currency):""} last month)</span>}
+            {prevExp>0&&<span style={{color:"var(--ink-3)"}}>({fmt(prevExp,currency)} last month)</span>}
           </div>
         )}
-        {dailyAvg>0&&(
+        {paceInfo.dailyAvg>0&&(
           <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--rule)",display:"flex",justifyContent:"space-between",fontSize:12}}>
-            <span style={{color:"var(--ink-3)"}}>Daily average: <strong style={{color:"var(--ink)",fontFamily:"'Playfair Display',serif"}}>{fmt(dailyAvg,currency)}</strong></span>
-            <span style={{color:"var(--ink-3)"}}>Projected: <strong style={{color:projected>prevExp+20?"var(--neg)":"var(--ink)",fontFamily:"'Playfair Display',serif"}}>{fmt(projected,currency)}</strong></span>
+            <span style={{color:"var(--ink-3)"}}>Daily avg: <strong style={{color:"var(--ink)",fontFamily:"'Playfair Display',serif"}}>{fmt(paceInfo.dailyAvg,currency)}</strong></span>
+            <span style={{color:"var(--ink-3)"}}>Projected: <strong style={{color:paceInfo.projected>prevExp+20?"var(--neg)":"var(--ink)",fontFamily:"'Playfair Display',serif"}}>{fmt(paceInfo.projected,currency)}</strong></span>
           </div>
         )}
         {curInc>0&&(
@@ -1196,24 +1304,63 @@ function AnalyticsPage({ transactions, currency }) {
       </div>
 
       {/* Transaction stats */}
-      {txnCount>0&&(
+      {txnStats.count>0&&(
         <div className="stat-row">
+          <div className="stat-cell"><div className="stat-val">{txnStats.count}</div><div className="stat-lbl">Transactions</div></div>
+          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.avgTxn,currency)}</div><div className="stat-lbl">Avg per txn</div></div>
+          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.medTxn,currency)}</div><div className="stat-lbl">Median</div></div>
           <div className="stat-cell">
-            <div className="stat-val">{txnCount}</div>
-            <div className="stat-lbl">Transactions</div>
+            <div className="stat-val">{fmt(txnStats.weekendExp>txnStats.weekdayExp?txnStats.weekendExp:txnStats.weekdayExp,currency)}</div>
+            <div className="stat-lbl">{txnStats.weekendExp>txnStats.weekdayExp?"Weekends":"Weekdays"} heavier</div>
           </div>
-          <div className="stat-cell">
-            <div className="stat-val">{fmt(avgTxn,currency)}</div>
-            <div className="stat-lbl">Avg per txn</div>
-          </div>
-          <div className="stat-cell">
-            <div className="stat-val">{fmt(medTxn,currency)}</div>
-            <div className="stat-lbl">Median</div>
-          </div>
-          <div className="stat-cell">
-            <div className="stat-val">{fmt(weekendExp>weekdayExp?weekendExp:weekdayExp,currency)}</div>
-            <div className="stat-lbl">{weekendExp>weekdayExp?"Weekends":"Weekdays"} heavier</div>
-          </div>
+        </div>
+      )}
+
+      {/* Budget insights — uses shared calcBudgetStatus */}
+      {budgetItems.length>0&&(
+        <div className="a-card">
+          <div className="a-card-title">Budget Status — {monthName(now)}</div>
+          {budgetItems.map(({catId,limit,spent,pct,over,warn})=>{
+            const cat=DEFAULT_CATEGORIES.find(c=>c.id===catId);
+            const remaining=limit-spent;
+            // Budget pace: what % of budget should be used given days elapsed
+            const budgetPace=Math.round((paceInfo.daysPassed/daysInMon)*100);
+            const aheadOfBudget=Math.round(pct)>budgetPace+10;
+            return (
+              <div key={catId} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid var(--rule)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"var(--ink)",display:"flex",alignItems:"center",gap:6}}>
+                    <CatIcon catId={catId} size={13}/>
+                    {cat?.name}
+                  </div>
+                  <div style={{fontSize:11,color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:600}}>
+                    {Math.round(pct)}% used
+                  </div>
+                </div>
+                <div style={{height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden",marginBottom:5}}>
+                  <div style={{height:"100%",width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)"),borderRadius:99,transition:"width 0.5s ease"}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>
+                    {over
+                      ? <span style={{color:"var(--neg)",fontWeight:600}}>{fmt(Math.abs(remaining),currency)} over limit</span>
+                      : warn
+                      ? <span style={{color:"var(--warn)",fontWeight:600}}>{fmt(remaining,currency)} remaining</span>
+                      : <span>{fmt(remaining,currency)} remaining</span>
+                    }
+                  </span>
+                  <span style={{color:"var(--ink-4)"}}>
+                    {over ? "exceeded" : `${daysLeft}d left`}
+                  </span>
+                </div>
+                {aheadOfBudget&&!over&&(
+                  <div style={{fontSize:10,color:"var(--warn)",fontWeight:600,marginTop:3}}>
+                    Spending pace is ahead of budget pace
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -1254,18 +1401,35 @@ function AnalyticsPage({ transactions, currency }) {
         </div>
       )}
 
-      {/* 6-month comparison */}
+      {/* 6-month bar chart — tap interaction, no CSS hover dependency */}
       <div className="a-card">
         <div className="a-card-title">6-Month Spending</div>
-        {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>6-month average: <strong style={{color:"var(--ink)",fontFamily:"'Playfair Display',serif"}}>{fmt(monthAvg,currency)}</strong></div>}
+        {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>6-month avg: <strong style={{color:"var(--ink)",fontFamily:"'Playfair Display',serif"}}>{fmt(monthAvg,currency)}</strong></div>}
+
+        {/* Active bar tooltip — renders above chart, never overflows */}
+        {activeBar!==null&&monthlyData[activeBar]&&(
+          <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>{new Date(monthlyData[activeBar].ym+"-02").toLocaleDateString("en-GB",{month:"long",year:"numeric"})}</span>
+            <span style={{fontFamily:"'Playfair Display',serif",fontSize:14}}>{fmt(monthlyData[activeBar].exp,currency)}</span>
+          </div>
+        )}
+
         <div className="month-bars">
           {monthlyData.map((m,i)=>(
-            <div key={i} className="m-col">
-              <div className="m-tip">{m.label}: {fmt(m.exp,currency)}</div>
+            <div key={i} className="m-col"
+              onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);setActiveCell(null);}}
+              style={{cursor:"pointer"}}
+            >
               <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
-                <div className="m-bar" style={{height:m.exp>0?`${Math.max(5,(m.exp/maxMonth)*100)}%`:"3px",background:m.isCur?"var(--accent)":"var(--ink-4)",width:"100%"}}/>
+                <div className="m-bar" style={{
+                  height:m.exp>0?`${Math.max(5,(m.exp/maxMonth)*100)}%`:"3px",
+                  background:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",
+                  width:"100%",
+                  outline:activeBar===i?"2px solid var(--accent)":"none",
+                  outlineOffset:"1px",
+                }}/>
               </div>
-              <div className="m-lbl" style={{color:m.isCur?"var(--accent)":"var(--ink-4)",fontWeight:m.isCur?700:600}}>{m.label}</div>
+              <div className="m-lbl" style={{color:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",fontWeight:m.isCur||activeBar===i?700:600}}>{m.label}</div>
             </div>
           ))}
         </div>
@@ -1279,10 +1443,26 @@ function AnalyticsPage({ transactions, currency }) {
         </div>
       </div>
 
-      {/* Heatmap */}
+      {/* Heatmap — tap interaction, tooltip rendered inline above grid */}
       <div className="a-card">
         <div className="a-card-title">Weekly Spending — Last 8 Weeks</div>
-        <div className="heatmap">
+
+        {/* Active cell tooltip — inline, never clips */}
+        {activeCell!==null&&(()=>{
+          const cell=heatRows[activeCell.wi]?.[activeCell.di];
+          if(!cell) return null;
+          return (
+            <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:cell.cats?4:0}}>
+                <span>{fmtDate(cell.date)}</span>
+                <span style={{fontFamily:"'Playfair Display',serif",fontSize:14}}>{cell.amt>0?fmt(cell.amt,currency):"No spending"}</span>
+              </div>
+              {cell.cats&&<div style={{fontSize:10,color:"rgba(247,244,238,0.7)"}}>{cell.cats}</div>}
+            </div>
+          );
+        })()}
+
+        <div className="heatmap" onClick={e=>e.stopPropagation()}>
           <div className="hm-corner"/>
           {DAY_LBLS.map((d,i)=><div key={i} className="hm-day-hdr">{d}</div>)}
           {heatRows.map((row,wi)=>(
@@ -1290,10 +1470,17 @@ function AnalyticsPage({ transactions, currency }) {
               <div key={`w${wi}`} className="hm-wk-lbl">{wi===7?<span style={{color:"var(--accent)",fontWeight:700,fontSize:7}}>now</span>:""}</div>
               {row.map((cell,di)=>{
                 const intensity=cell.amt>0?Math.max(0.1,(cell.amt/maxHeat)*0.9):0;
-                const tip=cell.amt>0?`${fmtDate(cell.date)}: ${fmt(cell.amt,currency)}${cell.cats?` (${cell.cats})`:""}`:fmtDate(cell.date);
+                const isActive=activeCell?.wi===wi&&activeCell?.di===di;
                 return (
-                  <div key={`${wi}-${di}`} className="hm-cell" title={tip}
-                    style={{background:cell.amt>0?`rgba(107,31,42,${intensity})`:"var(--bg-inset)",outline:cell.isToday?"1.5px solid var(--ink)":"none",outlineOffset:"1px"}}/>
+                  <div key={`${wi}-${di}`} className="hm-cell"
+                    onClick={e=>{e.stopPropagation();setActiveCell(isActive?null:{wi,di});setActiveBar(null);}}
+                    style={{
+                      background:cell.amt>0?`rgba(107,31,42,${intensity})`:"var(--bg-inset)",
+                      outline:isActive?"2px solid var(--ink)":cell.isToday?"1.5px solid var(--ink-3)":"none",
+                      outlineOffset:"1px",
+                      cursor:"pointer",
+                    }}
+                  />
                 );
               })}
             </>
@@ -1304,6 +1491,7 @@ function AnalyticsPage({ transactions, currency }) {
           {[0.1,0.3,0.6,0.9].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(107,31,42,${o})`}}/>)}
           <span style={{fontSize:9,color:"var(--ink-4)"}}>More</span>
         </div>
+        <div style={{fontSize:10,color:"var(--ink-4)",marginTop:6,textAlign:"center"}}>Tap a cell to see details</div>
       </div>
     </div>
   );
@@ -1586,6 +1774,284 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
 
         <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:18}}>Close</button>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRANSACTION DETAIL SHEET
+// Tap any transaction → see full details, edit, duplicate, or delete
+// ─────────────────────────────────────────────────────────────────────────────
+function TxnDetailSheet({ txn, currency, onClose, onEdit, onDuplicate, onDelete }) {
+  const cat   = DEFAULT_CATEGORIES.find(c=>c.id===txn.category)||{id:"other",name:txn.category,color:"#8A8A8A"};
+  const isInc = txn.type==="income";
+
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label="Transaction detail">
+        <div className="sheet-handle"/>
+
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
+          <div style={{width:44,height:44,borderRadius:12,background:cat.color+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <CatIcon catId={cat.id} size={22} color={cat.color}/>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,color:"var(--ink)",marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+              {txn.note||cat.name}
+            </div>
+            <div style={{fontSize:12,color:"var(--ink-3)"}}>{cat.name} · {fmtDate(txn.date)}</div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}>
+            <Icon name="close" size={13}/>
+          </button>
+        </div>
+
+        {/* Amount */}
+        <div style={{textAlign:"center",padding:"16px 0 18px",borderTop:"1px solid var(--rule)",borderBottom:"1px solid var(--rule)",marginBottom:18}}>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:44,fontWeight:900,letterSpacing:-2,color:isInc?"var(--pos)":"var(--ink)"}}>
+            {isInc?"+":"−"}{fmt(txn.amount,currency)}
+          </div>
+          <div style={{fontSize:12,color:"var(--ink-3)",marginTop:4}}>
+            {txn.type==="income"?"Income":"Expense"}
+          </div>
+        </div>
+
+        {/* Meta details */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+          {[
+            ["Date",       fmtDate(txn.date)],
+            ["Category",   cat.name],
+            ["Type",       txn.type==="income"?"Income":"Expense"],
+            ["Recurring",  txn.recurring ? (txn.recurFreq?.charAt(0).toUpperCase()+txn.recurFreq?.slice(1)||"Yes") : "No"],
+          ].map(([lbl,val])=>(
+            <div key={lbl} style={{background:"var(--bg-warm)",borderRadius:7,padding:"10px 12px"}}>
+              <div style={{fontSize:9,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--ink-4)",marginBottom:4}}>{lbl}</div>
+              <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Actions */}
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
+          <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onEdit}>
+            <Icon name="edit" size={14}/>Edit
+          </button>
+          <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onDuplicate}>
+            <Icon name="repeat" size={14}/>Duplicate
+          </button>
+        </div>
+        <button className="btn btn-ghost btn-full" style={{color:"var(--neg)",borderColor:"var(--neg-bg)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:0}} onClick={onDelete}>
+          <Icon name="trash" size={14}/>Delete
+        </button>
+        <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:6}}>Close</button>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RECURRING HUB
+// All recurring transactions in one place — sorted by next due date
+// Shows upcoming payments, monthly total, and annual commitment
+// ─────────────────────────────────────────────────────────────────────────────
+function nextDueDate(txn) {
+  // Find the most recent occurrence and compute next from there
+  const refDate = txn.date;
+  const freq    = txn.recurFreq;
+  let d = new Date(refDate + "T00:00:00");
+  const now = new Date();
+  now.setHours(0,0,0,0);
+  while (d <= now) {
+    if (freq==="weekly")    d.setDate(d.getDate()+7);
+    else if (freq==="biweekly") d.setDate(d.getDate()+14);
+    else if (freq==="monthly")  d.setMonth(d.getMonth()+1);
+    else if (freq==="yearly")   d.setFullYear(d.getFullYear()+1);
+    else break;
+  }
+  return d;
+}
+
+function toMonthlyAmount(txn) {
+  if (!txn.recurFreq) return txn.amount;
+  if (txn.recurFreq==="weekly")    return txn.amount * 4.33;
+  if (txn.recurFreq==="biweekly")  return txn.amount * 2.17;
+  if (txn.recurFreq==="monthly")   return txn.amount;
+  if (txn.recurFreq==="yearly")    return txn.amount / 12;
+  return txn.amount;
+}
+
+function RecurringHub({ transactions, currency, onView, onToggleActive }) {
+  const allRecurring = useMemo(() =>
+    transactions
+      .filter(t => t.recurring && t.recurFreq)
+      .map(t => ({ ...t, isActive: t.isActive !== false, nextDue: nextDueDate(t) }))
+      .sort((a,b) => {
+        // Active first, then by next due date
+        if (a.isActive && !b.isActive) return -1;
+        if (!a.isActive && b.isActive) return 1;
+        return a.nextDue - b.nextDue;
+      }),
+    [transactions]
+  );
+
+  const active   = allRecurring.filter(t => t.isActive);
+  const inactive = allRecurring.filter(t => !t.isActive);
+
+  // Only active entries contribute to financial totals
+  const monthlyTotal = active.filter(t=>t.type==="expense").reduce((s,t) => s + toMonthlyAmount(t), 0);
+  const annualTotal  = monthlyTotal * 12;
+  const incomeRecur  = active.filter(t=>t.type==="income").reduce((s,t) => s + toMonthlyAmount(t), 0);
+
+  const nowMs   = Date.now();
+  // Only active entries appear in the "due soon" alert
+  const upcoming = active.filter(t => t.nextDue.getTime() - nowMs <= 7*24*60*60*1000);
+
+  if (allRecurring.length === 0) return (
+    <div className="empty">
+      <div className="empty-icon"><Icon name="repeat" size={30}/></div>
+      <div className="empty-title">No recurring transactions</div>
+      <div className="empty-body">When you add a transaction and mark it as recurring, it will appear here. Great for tracking rent, gym, subscriptions.</div>
+    </div>
+  );
+
+  const RecurRow = ({ t }) => {
+    const cat     = DEFAULT_CATEGORIES.find(c=>c.id===t.category)||{id:"other",name:t.category,color:"#8A8A8A"};
+    const isInc   = t.type==="income";
+    const daysLeft = Math.round((t.nextDue.getTime()-nowMs)/86400000);
+    const monthly  = toMonthlyAmount(t);
+    return (
+      <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)",opacity:t.isActive?1:0.5,transition:"opacity 150ms"}}>
+        <div onClick={()=>onView?.(t)} style={{width:36,height:36,borderRadius:9,background:cat.color+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
+          <CatIcon catId={cat.id} size={16} color={cat.color}/>
+        </div>
+        <div onClick={()=>onView?.(t)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
+          <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.note||cat.name}</div>
+          <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+            <span>{cat.name}</span>
+            <span>·</span>
+            <span style={{fontWeight:600,textTransform:"capitalize"}}>{t.recurFreq}</span>
+            {t.isActive && (
+              <span style={{color:daysLeft<=3?"var(--warn)":"var(--ink-4)",fontWeight:daysLeft<=3?700:400}}>
+                · {daysLeft===0?"Due today":daysLeft===1?"Due tomorrow":`Due in ${daysLeft}d`}
+              </span>
+            )}
+            {!t.isActive && (
+              <span style={{color:"var(--ink-4)",fontWeight:600}}>· Inactive</span>
+            )}
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,flexShrink:0}}>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>
+            {isInc?"+":"−"}{fmt(t.amount,currency)}
+          </div>
+          {t.recurFreq!=="monthly"&&t.isActive&&(
+            <div style={{fontSize:10,color:"var(--ink-4)"}}>≈ {fmt(monthly,currency)}/mo</div>
+          )}
+          {/* Deactivate / Reactivate — separate from delete */}
+          <button
+            onClick={e=>{e.stopPropagation();onToggleActive(t.id);}}
+            style={{fontSize:10,fontWeight:700,color:t.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"2px 0",fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}
+          >
+            {t.isActive?"Pause":"Reactivate"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,marginBottom:18}}>Recurring</div>
+
+      {/* Summary strip — active only */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:18}}>
+        <div className="stat-cell">
+          <div className="stat-val" style={{color:"var(--neg)"}}>{fmt(monthlyTotal,currency)}</div>
+          <div className="stat-lbl">Monthly outgoing</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-val">{fmt(annualTotal,currency)}</div>
+          <div className="stat-lbl">Annual commitment</div>
+        </div>
+        {incomeRecur > 0 && (
+          <div className="stat-cell">
+            <div className="stat-val" style={{color:"var(--pos)"}}>{fmt(incomeRecur,currency)}</div>
+            <div className="stat-lbl">Monthly income</div>
+          </div>
+        )}
+        <div className="stat-cell">
+          <div className="stat-val">{active.length}</div>
+          <div className="stat-lbl">Active</div>
+        </div>
+      </div>
+
+      {/* Due soon alert — active only */}
+      {upcoming.length > 0 && (
+        <div style={{background:"var(--warn-bg)",border:"1px solid #D4A82A",borderRadius:8,padding:"12px 14px",marginBottom:16}}>
+          <div style={{fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--warn)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+            <Icon name="calendar" size={12} color="var(--warn)"/>Due within 7 days
+          </div>
+          {upcoming.map(t => {
+            const cat = DEFAULT_CATEGORIES.find(c=>c.id===t.category)||{name:t.category};
+            const daysLeft = Math.round((t.nextDue.getTime()-nowMs)/86400000);
+            return (
+              <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
+                <span style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{t.note||cat.name}</span>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600,color:"var(--neg)"}}>{fmt(t.amount,currency)}</div>
+                  <div style={{fontSize:10,color:"var(--warn)",fontWeight:700}}>{daysLeft===0?"Today":daysLeft===1?"Tomorrow":`In ${daysLeft} days`}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Active list */}
+      {active.length > 0 && (
+        <>
+          <div className="label-sm" style={{marginBottom:10}}>Active</div>
+          <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>
+            {active.map(t => <RecurRow key={t.id} t={t}/>)}
+          </div>
+        </>
+      )}
+
+      {/* Inactive list */}
+      {inactive.length > 0 && (
+        <>
+          <div className="label-sm" style={{marginBottom:10}}>Paused</div>
+          <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>
+            {inactive.map(t => <RecurRow key={t.id} t={t}/>)}
+          </div>
+        </>
+      )}
+
+      {/* Annual breakdown by category — active only */}
+      {monthlyTotal > 0 && (
+        <div className="a-card" style={{marginTop:4}}>
+          <div className="a-card-title">Annual Cost by Category</div>
+          {(() => {
+            const catTotals = {};
+            active.filter(t=>t.type==="expense").forEach(t => {
+              catTotals[t.category] = (catTotals[t.category]||0) + toMonthlyAmount(t);
+            });
+            const sorted = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+            const maxVal = sorted[0]?.[1]||1;
+            return sorted.map(([catId, monthly]) => {
+              const cat = DEFAULT_CATEGORIES.find(c=>c.id===catId)||{id:"other",name:catId,color:"#8A8A8A"};
+              return (
+                <div key={catId} className="cat-bar">
+                  <div className="cat-bar-name"><CatIcon catId={cat.id} size={12} color={cat.color}/>{cat.name}</div>
+                  <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(monthly/maxVal)*100}%`,background:cat.color}}/></div>
+                  <div className="cat-bar-amt">{fmt(monthly*12,currency)}</div>
+                </div>
+              );
+            });
+          })()}
+        </div>
+      )}
     </div>
   );
 }
