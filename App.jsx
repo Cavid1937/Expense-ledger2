@@ -86,12 +86,15 @@ const CATEGORY_MAP = {
 function resolveCategory(raw) {
   if (!raw) return "other";
   const key = String(raw).toLowerCase().trim();
-  if (CATEGORY_MAP[key]) return CATEGORY_MAP[key];
-  // Direct id match
+  // 1. Exact match against current category IDs — always wins
   if (CATEGORIES.find(c => c.id === key)) return key;
+  // 2. Exact legacy map lookup
+  if (CATEGORY_MAP[key]) return CATEGORY_MAP[key];
+  // 3. Controlled substring/alias match
   for (const [k, v] of Object.entries(CATEGORY_MAP)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
+  // 4. Default
   return "other";
 }
 
