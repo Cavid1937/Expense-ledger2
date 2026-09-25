@@ -107,7 +107,7 @@ function normaliseTxn(t) {
     subcategory: t.subcategory || t.subcat || "",
     merchant:  t.merchant || t.merchantName || "",
     note:      t.note || t.description || t.name || "",
-    date:      (t.date || new Date().toISOString().slice(0,10)).slice(0,10),
+    date:      (t.date || localDateStr()).slice(0,10),
     recurring: t.recurring || false,
     recurFreq: t.recurFreq || t.frequency || null,
     isActive:  t.isActive !== undefined ? t.isActive : true,
@@ -122,13 +122,10 @@ function migrateAndLoad() {
     if (!current.currency)   current.currency   = "₼";
     if (!current.goals)      current.goals      = [];
     if (!current.safeToSpend) current.safeToSpend = { savingsTarget: 0, enabled: false };
-    // Migrate old transactions to include merchant/subcategory if missing
-    current.transactions = current.transactions.map(t => ({
-      ...t,
-      merchant:    t.merchant    !== undefined ? t.merchant    : "",
-      subcategory: t.subcategory !== undefined ? t.subcategory : "",
-      isActive:    t.isActive    !== undefined ? t.isActive    : true,
-    }));
+    // Run all existing transactions through normaliseTxn to pick up any new
+    // schema fields (merchant, subcategory, isActive, createdAt) without manual patching.
+    // normaliseTxn preserves all existing values and only fills in missing ones.
+    current.transactions = current.transactions.map(normaliseTxn);
     return current;
   }
   let merged = [], bestSettings = null;
@@ -163,7 +160,7 @@ function buildState(transactions = [], settings = null) {
 }
 
 function SEED_TRANSACTIONS() {
-  const d = n => { const dt = new Date(); dt.setDate(dt.getDate()-n); return dt.toISOString().slice(0,10); };
+  const d = n => { const dt = new Date(); dt.setDate(dt.getDate()-n); return localDateStr(dt); };
   return [
     { id:1001,type:"income", amount:800,  category:"salary",   subcategory:"",        merchant:"",           note:"Monthly stipend",          date:d(5),  recurring:true, recurFreq:"monthly",isActive:true },
     { id:1002,type:"expense",amount:30,   category:"health",   subcategory:"Gym",     merchant:"IdmanYeri",  note:"Gym membership",           date:d(6),  recurring:true, recurFreq:"monthly",isActive:true },
@@ -240,10 +237,24 @@ function CatIcon({ catId, size=16, color }) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const today   = () => new Date().toISOString().slice(0,10);
-const curMon  = () => new Date().toISOString().slice(0,7);
-const prevMon = () => { const d=new Date(); d.setMonth(d.getMonth()-1); return d.toISOString().slice(0,7); };
-const nMon    = (n) => { const d=new Date(); d.setMonth(d.getMonth()-n); return d.toISOString().slice(0,7); };
+// Local date helpers — use device local time, not UTC.
+// toISOString() returns UTC which can be a different calendar day near midnight
+// in Baku (UTC+4). All date strings in this app are YYYY-MM-DD local calendar dates.
+function localDateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function localMonthStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  return `${y}-${m}`;
+}
+const today   = () => localDateStr();
+const curMon  = () => localMonthStr();
+const prevMon = () => { const d=new Date(); d.setMonth(d.getMonth()-1); return localMonthStr(d); };
+const nMon    = (n) => { const d=new Date(); d.setMonth(d.getMonth()-n); return localMonthStr(d); };
 
 function fmt(n, sym="₼") {
   return `${Math.abs(n).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})} ${sym}`;
@@ -256,7 +267,7 @@ function fmtDate(d) {
   if (!d) return "";
   if (d === today()) return "Today";
   const y = new Date(); y.setDate(y.getDate()-1);
-  if (d === y.toISOString().slice(0,10)) return "Yesterday";
+  if (d === localDateStr(y)) return "Yesterday";
   return new Date(d+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short"});
 }
 function monthName(ym) { return new Date(ym+"-02").toLocaleDateString("en-GB",{month:"long",year:"numeric"}); }
@@ -268,7 +279,32 @@ function median(arr) {
   return s.length%2?s[m]:(s[m-1]+s[m])/2;
 }
 
-// ─── Merchant memory ──────────────────────────────────────────────────────────
+// ─── RFC 4180 CSV parser ──────────────────────────────────────────────────────
+// Handles: quoted fields, commas inside quotes, escaped quotes ("")
+function parseCSV(raw) {
+  const rows = [];
+  let row = [], field = "", inQ = false, i = 0;
+  const s = raw.replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+  while (i < s.length) {
+    const ch = s[i];
+    if (inQ) {
+      if (ch==='"' && s[i+1]==='"') { field+='"'; i+=2; }      // escaped quote ""
+      else if (ch==='"') { inQ=false; i++; }                    // closing quote
+      else { field+=ch; i++; }
+    } else {
+      if (ch==='"') { inQ=true; i++; }
+      else if (ch===',') { row.push(field.trim()); field=""; i++; }
+      else if (ch==='\n') {
+        row.push(field.trim()); field="";
+        if (row.some(f=>f!=="")) rows.push(row);
+        row=[]; i++;
+      } else { field+=ch; i++; }
+    }
+  }
+  row.push(field.trim());
+  if (row.some(f=>f!=="")) rows.push(row);
+  return rows;
+}
 // Builds a map of merchant → {category, subcategory} from actual user history.
 // Most recent occurrence wins. Used to suggest on next entry — never forced.
 function buildMerchantMemory(transactions) {
@@ -362,22 +398,25 @@ function calcWhatChanged(transactions, mon=curMon(), prv=prevMon()) {
   return { curExp,prevExp,curInc,prevInc,catChanges,merchantChanges,totalDiff:curExp-prevExp };
 }
 
-function calcSafeToSpend(transactions, safeConfig, budgets) {
+function calcSafeToSpend(transactions, safeConfig) {
   const { savingsTarget=0 } = safeConfig||{};
   const mon = curMon();
   const { curInc, curExp } = calcMonthSummary(transactions, mon);
-  const expenses = transactions.filter(t=>t.type==="expense");
-  // Monthly recurring commitment (active only)
-  const recurringTotal = transactions.filter(t=>t.recurring&&t.recurFreq&&t.isActive!==false&&t.type==="expense")
-    .reduce((s,t)=>s+toMonthlyAmountHelper(t),0);
-  const daysPassed = new Date().getDate();
   const totalDays  = daysInMonth(mon);
+  const daysPassed = new Date().getDate();
   const daysLeft   = totalDays - daysPassed;
-  const disposable = curInc - recurringTotal - savingsTarget;
-  const spent      = curExp;
-  const remaining  = disposable - spent;
-  const dailyAllowance = daysLeft > 0 ? remaining/daysLeft : 0;
-  return { curInc, recurringTotal, savingsTarget, disposable, spent, remaining, daysLeft, dailyAllowance, feasible: curInc > 0 };
+  // Formula: income − savings target − already spent
+  // curExp already includes any recurring transactions that were recorded this
+  // month, so we do NOT subtract recurringTotal separately — that would
+  // double-count rent, gym, subscriptions etc.
+  const disposable       = curInc - savingsTarget;
+  const remaining        = disposable - curExp;
+  const dailyAllowance   = daysLeft > 0 ? remaining / daysLeft : 0;
+  // Recurring commitment shown for information only, not deducted
+  const recurringTotal   = transactions
+    .filter(t=>t.recurring&&t.recurFreq&&t.isActive!==false&&t.type==="expense")
+    .reduce((s,t)=>s+toMonthlyAmountHelper(t),0);
+  return { curInc, recurringTotal, savingsTarget, disposable, spent:curExp, remaining, daysLeft, dailyAllowance, feasible: curInc > 0 };
 }
 
 function calcGoalProgress(goal) {
@@ -809,18 +848,17 @@ export default function App() {
         const isCSV=file.name?.toLowerCase().endsWith(".csv")||raw.trimStart().toLowerCase().startsWith("date,");
         let txns=[],parsed=null;
         if (isCSV) {
-          const lines=raw.trim().split(/\r?\n/);
-          const headers=lines[0].toLowerCase().split(",").map(h=>h.replace(/"/g,"").trim());
-          txns=lines.slice(1).filter(l=>l.trim()).map((line,i)=>{
-            const fields=[]; let cur="",inQ=false;
-            for(const ch of line){if(ch==='"'){inQ=!inQ;}else if(ch===","&&!inQ){fields.push(cur.trim());cur="";}else cur+=ch;}
-            fields.push(cur.trim());
-            const get=(...keys)=>{for(const k of keys){const idx=headers.indexOf(k);if(idx!==-1&&fields[idx]!==undefined)return fields[idx].replace(/^"|"$/g,"").trim();}return "";};
-            const amount=Math.abs(parseFloat(get("amount","amt","value"))||0);
-            return {id:Date.now()+i+Math.random(),type:get("type").toLowerCase().includes("inc")?"income":"expense",
-              amount,category:resolveCategory(get("category","cat")),subcategory:get("subcategory","subcat"),
-              merchant:get("merchant"),note:get("note","notes","description","memo"),
-              date:(get("date")||today()).slice(0,10),recurring:false,recurFreq:null,isActive:true};
+          const allRows=parseCSV(raw);
+          if(allRows.length<2){showToast("No data rows found in CSV");return;}
+          const headers=allRows[0].map(h=>h.toLowerCase().trim());
+          const get=(row,...keys)=>{for(const k of keys){const idx=headers.indexOf(k);if(idx!==-1&&row[idx]!==undefined)return row[idx].trim();}return "";};
+          txns=allRows.slice(1).map((row,i)=>{
+            const amount=Math.abs(parseFloat(get(row,"amount","amt","value"))||0);
+            return {id:Date.now()+i+Math.random(),type:get(row,"type").toLowerCase().includes("inc")?"income":"expense",
+              amount,category:resolveCategory(get(row,"category","cat")),subcategory:get(row,"subcategory","subcat"),
+              merchant:get(row,"merchant"),note:get(row,"note","notes","description","memo"),
+              date:(get(row,"date")||today()).slice(0,10),recurring:false,recurFreq:null,isActive:true,
+              createdAt:new Date().toISOString()};
           }).filter(t=>t.amount>0);
         } else {
           parsed=JSON.parse(raw);
@@ -962,7 +1000,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
   const catSpend    = calcCategorySpend(transactions, now);
   const paceInfo    = calcSpendingPace(curExp, now);
   const budgetItems = calcBudgetStatus(budgets, catSpend);
-  const safeInfo    = calcSafeToSpend(transactions, safeToSpend, budgets);
+  const safeInfo    = calcSafeToSpend(transactions, safeToSpend);
   const hasIncome   = curInc > 0;
   const recent      = transactions.slice(0, 7);
 
@@ -1025,9 +1063,9 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
           {safeInfo.daysLeft>0 && <div className="safe-daily">{fmt(safeInfo.dailyAllowance,currency)}/day for {safeInfo.daysLeft} days remaining</div>}
           <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
             <div className="safe-row"><span className="safe-lbl">Income this month</span><span className="safe-val">{fmt(safeInfo.curInc,currency)}</span></div>
-            <div className="safe-row"><span className="safe-lbl">Recurring commitments</span><span className="safe-val">−{fmt(safeInfo.recurringTotal,currency)}</span></div>
             {safeInfo.savingsTarget>0&&<div className="safe-row"><span className="safe-lbl">Savings target</span><span className="safe-val">−{fmt(safeInfo.savingsTarget,currency)}</span></div>}
             <div className="safe-row"><span className="safe-lbl">Already spent</span><span className="safe-val">−{fmt(safeInfo.spent,currency)}</span></div>
+            {safeInfo.recurringTotal>0&&<div className="safe-row" style={{borderBottom:"none",opacity:0.6}}><span className="safe-lbl">Recurring commitments (incl. in spent)</span><span className="safe-val">{fmt(safeInfo.recurringTotal,currency)}</span></div>}
           </div>
         </div>
       )}
@@ -1328,7 +1366,7 @@ function AnalyticsPage({ transactions, currency, budgets }) {
     const row=[];
     for(let d=0;d<7;d++){
       const dt=new Date(lastMon);dt.setDate(lastMon.getDate()-(w*7)+d);
-      const ds=dt.toISOString().slice(0,10);
+      const ds=localDateStr(dt);
       const amt=expenses.filter(t=>t.date===ds).reduce((s,t)=>s+t.amount,0);
       const cats=expenses.filter(t=>t.date===ds).map(t=>CAT(t.category)?.name||t.category).filter((v,i,a)=>a.indexOf(v)===i).join(", ");
       row.push({date:ds,amt,cats,isToday:ds===today()});
@@ -1743,13 +1781,22 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
     if(isEditing||!amount||!parseFloat(amount)) return false;
     const amt=parseFloat(amount);
     const tenMinAgo=Date.now()-10*60*1000;
-    return transactions.some(t=>t.category===catId&&Math.abs(t.amount-amt)<0.01&&new Date(t.date+"T00:00:00").getTime()>tenMinAgo);
-  },[amount,catId,transactions,isEditing]);
+    // Use createdAt (actual creation timestamp) not t.date (calendar date the user chose)
+    return transactions.some(t=>
+      t.category===catId &&
+      Math.abs(t.amount-amt)<0.01 &&
+      (t.note||"").trim()===(note||"").trim() &&
+      t.createdAt &&
+      new Date(t.createdAt).getTime()>tenMinAgo
+    );
+  },[amount,catId,note,transactions,isEditing]);
 
   const submit=()=>{
     const amt=parseFloat(amount);
     if(!amt||amt<=0){setErr("Please enter a valid amount");return;}
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?freq:null,isActive:true});
+    // Preserve existing isActive when editing — never silently reactivate a paused recurring
+    const isActive = isEditing ? (prefill?.isActive !== undefined ? prefill.isActive : true) : true;
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?freq:null,isActive});
   };
 
   const relevantTpls=!isEditing?templates.filter(t=>!CATEGORIES.find(c=>c.id===t.catId)?.income&&type==="expense"):[];
