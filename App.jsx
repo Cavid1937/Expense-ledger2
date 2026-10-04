@@ -227,22 +227,71 @@ function merchantSuggest(merchant, memory) {
   return null;
 }
 
-// S6: Merchant profile from actual transaction data
-function calcMerchantProfile(merchant, transactions, currency) {
+// S6: Merchant profile — frequency, timing, category stability, recurrence detection
+function calcMerchantProfile(merchant, transactions) {
   if (!merchant) return null;
   const ml=merchant.toLowerCase();
-  const txns=transactions.filter(t=>t.merchant&&t.merchant.toLowerCase()===ml&&t.type==="expense");
+  const txns=transactions
+    .filter(t=>t.merchant&&t.merchant.toLowerCase()===ml&&t.type==="expense")
+    .sort((a,b)=>a.date.localeCompare(b.date));
   if (!txns.length) return null;
+
   const total=txns.reduce((s,t)=>s+t.amount,0);
   const avg=total/txns.length;
+
+  // Last 30 days vs previous 30 days
   const now30=localDateStr(new Date(Date.now()-30*86400000));
   const prev30=localDateStr(new Date(Date.now()-60*86400000));
   const last30=txns.filter(t=>t.date>=now30).reduce((s,t)=>s+t.amount,0);
   const prev30total=txns.filter(t=>t.date>=prev30&&t.date<now30).reduce((s,t)=>s+t.amount,0);
+
+  // Fix 4a: Visit frequency — avg days between consecutive visits
+  let avgDaysBetween=null;
+  if (txns.length>=2) {
+    const gaps=[];
+    for (let i=1;i<txns.length;i++) {
+      const a=parseLocalDate(txns[i-1].date), b=parseLocalDate(txns[i].date);
+      const days=Math.round((b-a)/86400000);
+      if (days>0) gaps.push(days);
+    }
+    if (gaps.length) avgDaysBetween=Math.round(gaps.reduce((s,g)=>s+g,0)/gaps.length);
+  }
+
+  // Fix 4b: Typical day of week (most common)
+  const dayCounts=[0,0,0,0,0,0,0];
+  txns.forEach(t=>{ dayCounts[parseLocalDate(t.date).getDay()]++; });
+  const topDay=dayCounts.indexOf(Math.max(...dayCounts));
+  const DAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const typicalDay=DAY_NAMES[topDay];
+
+  // Fix 4c: Category stability — does this merchant always land in same category?
   const catCounts={};
   txns.forEach(t=>{ catCounts[t.category]=(catCounts[t.category]||0)+1; });
-  const usualCat=Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
-  return { merchant, total, count:txns.length, avg, last30, prev30total, usualCat, diff30:last30-prev30total };
+  const catEntries=Object.entries(catCounts).sort((a,b)=>b[1]-a[1]);
+  const usualCat=catEntries[0]?.[0];
+  const categoryStable=catEntries.length===1; // all visits same category
+
+  // Fix 4c: Most common subcategory
+  const subCounts={};
+  txns.filter(t=>t.subcategory).forEach(t=>{ subCounts[t.subcategory]=(subCounts[t.subcategory]||0)+1; });
+  const usualSub=Object.entries(subCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||null;
+
+  // Fix 4d: Recurrence detection — is any transaction at this merchant marked recurring?
+  const hasRecurring=txns.some(t=>t.recurring);
+
+  // Typical amount stability
+  const amounts=txns.map(t=>t.amount);
+  const minAmt=Math.min(...amounts), maxAmt=Math.max(...amounts);
+  const amountStable=(maxAmt-minAmt)/avg<0.15; // within 15% of average
+
+  return {
+    merchant, total, count:txns.length, avg,
+    last30, prev30total, diff30:last30-prev30total,
+    avgDaysBetween, typicalDay,
+    usualCat, usualSub, categoryStable,
+    hasRecurring, amountStable,
+    firstSeen:txns[0]?.date, lastSeen:txns[txns.length-1]?.date,
+  };
 }
 
 // ─── Shared financial calculation layer ──────────────────────────────────────
@@ -303,31 +352,44 @@ function calcTxnStats(transactions, mon=curMon()) {
   return { count:amts.length, avgTxn:amts.length?amts.reduce((s,a)=>s+a,0)/amts.length:0, medTxn:median(amts), weekdayExp:wkdExp, weekendExp:wkndExp };
 }
 
-// S3: What Changed — category + merchant-level explanation
+// S3: What Changed — category + merchant-level explanation + recurring/one-off flag
 function calcWhatChanged(transactions, mon=curMon(), prv=prevMon()) {
   const catSpendMon=calcCategorySpend(transactions,mon);
   const catSpendPrv=calcCategorySpend(transactions,prv);
   const { curExp,prevExp,curInc,prevInc }=calcMonthSummary(transactions,mon,prv);
+
+  // Build a set of merchant names that have any recurring transaction
+  const recurringMerchants=new Set(
+    transactions.filter(t=>t.recurring&&t.merchant).map(t=>t.merchant.toLowerCase())
+  );
+
   const cats=[...new Set([...Object.keys(catSpendMon),...Object.keys(catSpendPrv)])];
   const catChanges=cats.map(catId=>{
     const cur=catSpendMon[catId]||0,prev=catSpendPrv[catId]||0,diff=cur-prev;
-    // For each changing category, get top merchant contributors
     const merchantMon={},merchantPrv={};
     transactions.filter(t=>t.type==="expense"&&t.category===catId&&t.merchant&&t.date.startsWith(mon)).forEach(t=>{merchantMon[t.merchant]=(merchantMon[t.merchant]||0)+t.amount;});
     transactions.filter(t=>t.type==="expense"&&t.category===catId&&t.merchant&&t.date.startsWith(prv)).forEach(t=>{merchantPrv[t.merchant]=(merchantPrv[t.merchant]||0)+t.amount;});
     const allM=[...new Set([...Object.keys(merchantMon),...Object.keys(merchantPrv)])];
-    const merchantDiffs=allM.map(m=>({ merchant:m, cur:merchantMon[m]||0, prev:merchantPrv[m]||0, diff:(merchantMon[m]||0)-(merchantPrv[m]||0) }))
-      .filter(m=>Math.abs(m.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,3);
+    const merchantDiffs=allM.map(m=>({
+      merchant:m,
+      cur:merchantMon[m]||0,
+      prev:merchantPrv[m]||0,
+      diff:(merchantMon[m]||0)-(merchantPrv[m]||0),
+      // Fix 3: Is this merchant recurring or one-off?
+      isRecurring: recurringMerchants.has(m.toLowerCase()),
+    })).filter(m=>Math.abs(m.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,3);
     return { catId, cur, prev, diff, merchantDiffs };
   }).filter(c=>Math.abs(c.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
 
-  // Global merchant changes (across all categories)
   const merchantMon={},merchantPrv={};
   transactions.filter(t=>t.type==="expense"&&t.merchant&&t.date.startsWith(mon)).forEach(t=>{merchantMon[t.merchant]=(merchantMon[t.merchant]||0)+t.amount;});
   transactions.filter(t=>t.type==="expense"&&t.merchant&&t.date.startsWith(prv)).forEach(t=>{merchantPrv[t.merchant]=(merchantPrv[t.merchant]||0)+t.amount;});
   const allM=[...new Set([...Object.keys(merchantMon),...Object.keys(merchantPrv)])];
-  const merchantChanges=allM.map(m=>({ merchant:m, cur:merchantMon[m]||0, prev:merchantPrv[m]||0, diff:(merchantMon[m]||0)-(merchantPrv[m]||0) }))
-    .filter(c=>Math.abs(c.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,5);
+  const merchantChanges=allM.map(m=>({
+    merchant:m, cur:merchantMon[m]||0, prev:merchantPrv[m]||0,
+    diff:(merchantMon[m]||0)-(merchantPrv[m]||0),
+    isRecurring: recurringMerchants.has(m.toLowerCase()),
+  })).filter(c=>Math.abs(c.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,5);
 
   return { curExp,prevExp,curInc,prevInc,catChanges,merchantChanges,totalDiff:curExp-prevExp };
 }
@@ -1096,95 +1158,54 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
         </div>
       </div>
 
-      {/* LEVEL 2: Trajectory — Safe to Spend + Pace */}
+      {/* LEVEL 2: Available — Safe to Spend (decision-first) */}
       {safeToSpend?.enabled&&safeInfo.feasible&&(
         <div className="safe-card">
-          <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}><Icon name="safe" size={12} color="var(--ink-3)"/>Safe to Spend</div>
-          <div className="safe-amount" style={{color:safeInfo.remaining>=0?"var(--ink)":"var(--neg)"}}>{fmt(safeInfo.remaining,currency)}</div>
-          {safeInfo.daysLeft>0&&<div className="safe-daily">{fmt(safeInfo.dailyAllowance,currency)}/day · {safeInfo.daysLeft} days left</div>}
-          <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
-            <div className="safe-row"><span className="safe-lbl">Income this month</span><span className="safe-val">{fmt(safeInfo.curInc,currency)}</span></div>
-            {safeInfo.savingsTarget>0&&<div className="safe-row"><span className="safe-lbl">Savings target</span><span className="safe-val">−{fmt(safeInfo.savingsTarget,currency)}</span></div>}
-            <div className="safe-row"><span className="safe-lbl">Already spent</span><span className="safe-val">−{fmt(safeInfo.curExp,currency)}</span></div>
-            {safeInfo.futureCommitments>0&&<div className="safe-row"><span className="safe-lbl">Upcoming commitments</span><span className="safe-val">−{fmt(safeInfo.futureCommitments,currency)}</span></div>}
+          <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
+            <Icon name="safe" size={12} color="var(--ink-3)"/>Safe to Spend
           </div>
-        </div>
-      )}
-
-      {curExp>0&&(
-        <div className="pace-card">
-          <div className="pace-row">
-            <span className="label-sm" style={{display:"flex",alignItems:"center",gap:5}}><Icon name="pace" size={12} color="var(--ink-3)"/>Spending Pace</span>
-            <span style={{fontSize:11,color:"var(--ink-3)"}}>Day {paceInfo.daysPassed} of {paceInfo.totalDays}</span>
+          <div className="safe-amount" style={{color:safeInfo.remaining>=0?"var(--ink)":"var(--neg)"}}>
+            {fmt(safeInfo.remaining,currency)}
           </div>
-          <div className="pace-track">
-            <div className={`pace-fill ${paceInfo.onTrack?"on-track":"over-pace"}`} style={{width:`${Math.min((paceInfo.projected>0?curExp/paceInfo.projected:0)*100,100)}%`}}/>
-          </div>
-          <div className="pace-sub">
-            <span style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(paceInfo.dailyAvg,currency)}/day avg</span>
-            <span style={{fontSize:11,color:paceInfo.onTrack?"var(--pos)":"var(--neg)",fontWeight:600}}>~{fmt(paceInfo.projected,currency)} projected</span>
-          </div>
-          {!paceInfo.onTrack&&paceInfo.diff>0&&(
-            <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
-              {fmt(paceInfo.diff,currency)} above expected pace for today
+          {safeInfo.daysLeft>0&&(
+            <div className="safe-daily">
+              {safeInfo.remaining>0?`${fmt(safeInfo.dailyAllowance,currency)}/day · `:""}
+              {safeInfo.daysLeft} days left in {monthShort(now)}
             </div>
           )}
-        </div>
-      )}
-
-      {/* LEVEL 3: What changed — compact on home */}
-      {wc.catChanges.length>0&&prevExp>0&&(
-        <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
-          <div className="label-sm" style={{marginBottom:10}}>What Changed vs {monthShort(prv)}</div>
-          {wc.catChanges.slice(0,3).map(({catId,diff})=>{
-            const cat=CAT(catId);
-            return (
-              <div key={catId} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid var(--rule)"}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--ink)"}}><CatIcon catId={catId} size={13} color={cat?.color}/>{cat?.name}</div>
-                <div style={{fontSize:12,fontFamily:"'Playfair Display',serif",fontWeight:700,color:diff<=0?"var(--pos)":"var(--neg)"}}>{diff>0?"+":""}{fmt(diff,currency)}</div>
+          {/* Fix 2: All four lines always shown — planning engine, not just a number */}
+          <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
+            <div className="safe-row">
+              <span className="safe-lbl">Income this month</span>
+              <span className="safe-val">{fmt(safeInfo.curInc,currency)}</span>
+            </div>
+            {safeInfo.savingsTarget>0&&(
+              <div className="safe-row">
+                <span className="safe-lbl">Savings target</span>
+                <span className="safe-val" style={{color:"var(--ink-3)"}}>−{fmt(safeInfo.savingsTarget,currency)}</span>
               </div>
-            );
-          })}
+            )}
+            <div className="safe-row">
+              <span className="safe-lbl">Recorded spend</span>
+              <span className="safe-val" style={{color:"var(--neg)"}}>−{fmt(safeInfo.curExp,currency)}</span>
+            </div>
+            <div className="safe-row" style={{opacity:safeInfo.futureCommitments>0?1:0.4}}>
+              <span className="safe-lbl">Upcoming commitments</span>
+              <span className="safe-val" style={{color:safeInfo.futureCommitments>0?"var(--warn)":"var(--ink-4)"}}>
+                {safeInfo.futureCommitments>0?`−${fmt(safeInfo.futureCommitments,currency)}`:"none this month"}
+              </span>
+            </div>
+            <div className="safe-row" style={{borderBottom:"none",paddingTop:6,marginTop:2,borderTop:"1px solid var(--rule)"}}>
+              <span className="safe-lbl" style={{fontWeight:700,color:"var(--ink)"}}>Discretionary remaining</span>
+              <span className="safe-val" style={{color:safeInfo.remaining>=0?"var(--pos)":"var(--neg)",fontSize:13}}>
+                {safeInfo.remaining>=0?"+":""}{fmt(safeInfo.remaining,currency)}
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* LEVEL 4: Upcoming commitments */}
-      {activeRecurring.length>0&&(
-        <div style={{background:"var(--warn-bg)",border:"1px solid #D4A82A",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
-          <div className="label-sm" style={{marginBottom:8,display:"flex",alignItems:"center",gap:5,color:"var(--warn)"}}>
-            <Icon name="calendar" size={12} color="var(--warn)"/>Due within 7 days
-          </div>
-          {activeRecurring.slice(0,3).map(t=>{
-            const cat=CAT(t.category);
-            const daysLeft=Math.round((t.nextDue.getTime()-Date.now())/86400000);
-            return (
-              <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
-                <span style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{t.merchant||t.note||cat?.name}</span>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:12,fontWeight:600,color:"var(--neg)"}}>{fmt(t.amount,currency)}</div>
-                  <div style={{fontSize:10,color:"var(--warn)",fontWeight:700}}>{daysLeft===0?"Today":daysLeft===1?"Tomorrow":`In ${daysLeft}d`}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Quick-add templates */}
-      {templates.length>0&&(
-        <>
-          <div className="label-sm" style={{marginBottom:8}}>Quick Add</div>
-          <div className="tpl-strip">
-            {templates.map(tpl=>(
-              <button key={tpl.id} className="tpl-card" onClick={()=>onTemplate(tpl)}>
-                <CatIcon catId={tpl.catId} size={13}/><span className="tpl-name">{tpl.name}</span><span className="tpl-amt">{fmt(tpl.amount,currency)}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* LEVEL 5: Goals */}
+      {/* LEVEL 3: Goals — trajectory */}
       {goals?.length>0&&(
         <div style={{marginBottom:16}}>
           <div className="label-sm" style={{marginBottom:10}}>Goals</div>
@@ -1208,7 +1229,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
         </div>
       )}
 
-      {/* Budget bars */}
+      {/* LEVEL 4: Budget status */}
       {budgetItems.length>0&&(
         <div style={{marginBottom:16}}>
           <div className="label-sm" style={{marginBottom:10}}>Budgets</div>
@@ -1230,7 +1251,78 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
         </div>
       )}
 
-      {/* LEVEL 6: Recent activity */}
+      {/* LEVEL 5: Upcoming recurring commitments */}
+      {activeRecurring.length>0&&(
+        <div style={{background:"var(--warn-bg)",border:"1px solid #D4A82A",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+          <div className="label-sm" style={{marginBottom:8,display:"flex",alignItems:"center",gap:5,color:"var(--warn)"}}>
+            <Icon name="calendar" size={12} color="var(--warn)"/>Due within 7 days
+          </div>
+          {activeRecurring.slice(0,3).map(t=>{
+            const cat=CAT(t.category);
+            const daysLeft=Math.round((t.nextDue.getTime()-Date.now())/86400000);
+            return (
+              <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
+                <span style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{t.merchant||t.note||cat?.name}</span>
+                <div style={{textAlign:"right"}}>
+                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:12,fontWeight:600,color:"var(--neg)"}}>{fmt(t.amount,currency)}</div>
+                  <div style={{fontSize:10,color:"var(--warn)",fontWeight:700}}>{daysLeft===0?"Today":daysLeft===1?"Tomorrow":`In ${daysLeft}d`}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* LEVEL 6: What changed — compact signal */}
+      {wc.catChanges.length>0&&prevExp>0&&(
+        <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+          <div className="label-sm" style={{marginBottom:10}}>What Changed vs {monthShort(prv)}</div>
+          {wc.catChanges.slice(0,3).map(({catId,diff,merchantDiffs})=>{
+            const cat=CAT(catId);
+            // Show top merchant driver if available
+            const topM=merchantDiffs?.[0];
+            return (
+              <div key={catId} style={{padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--ink)"}}><CatIcon catId={catId} size={13} color={cat?.color}/>{cat?.name}</div>
+                  <div style={{fontSize:12,fontFamily:"'Playfair Display',serif",fontWeight:700,color:diff<=0?"var(--pos)":"var(--neg)"}}>{diff>0?"+":""}{fmt(diff,currency)}</div>
+                </div>
+                {topM&&(
+                  <div style={{fontSize:11,color:"var(--ink-3)",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
+                    <Icon name="merchant" size={10} color="var(--ink-4)"/>
+                    {topM.merchant}
+                    <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,background:topM.isRecurring?"var(--warn-bg)":"var(--bg-inset)",color:topM.isRecurring?"var(--warn)":"var(--ink-4)"}}>
+                      {topM.isRecurring?"recurring":"one-off"}
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Spending pace — trajectory context */}
+      {curExp>0&&(
+        <div className="pace-card">
+          <div className="pace-row">
+            <span className="label-sm" style={{display:"flex",alignItems:"center",gap:5}}><Icon name="pace" size={12} color="var(--ink-3)"/>Spending Pace</span>
+            <span style={{fontSize:11,color:"var(--ink-3)"}}>Day {paceInfo.daysPassed} of {paceInfo.totalDays}</span>
+          </div>
+          <div className="pace-track">
+            <div className={`pace-fill ${paceInfo.onTrack?"on-track":"over-pace"}`} style={{width:`${Math.min((paceInfo.projected>0?curExp/paceInfo.projected:0)*100,100)}%`}}/>
+          </div>
+          <div className="pace-sub">
+            <span style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(paceInfo.dailyAvg,currency)}/day avg</span>
+            <span style={{fontSize:11,color:paceInfo.onTrack?"var(--pos)":"var(--neg)",fontWeight:600}}>~{fmt(paceInfo.projected,currency)} projected</span>
+          </div>
+          {!paceInfo.onTrack&&paceInfo.diff>0&&(
+            <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmt(paceInfo.diff,currency)} above expected pace for today</div>
+          )}
+        </div>
+      )}
+
+      {/* LEVEL 7: Recent activity */}
       {recent.length>0?(
         <>
           <div className="label-sm" style={{marginBottom:10}}>Recent Activity</div>
@@ -1519,8 +1611,17 @@ function AnalyticsPage({ transactions, currency, budgets }) {
                   <div className="wc-merchants">
                     {merchantDiffs.map(m=>(
                       <div key={m.merchant} className="wc-m-row">
-                        <span style={{display:"flex",alignItems:"center",gap:4}}><Icon name="merchant" size={10} color="var(--ink-4)"/>{m.merchant}</span>
-                        <span className={m.diff<=0?"":""}style={{color:m.diff<=0?"var(--pos)":"var(--neg)",fontWeight:600}}>{m.diff>0?"+":""}{fmt(m.diff,currency)}</span>
+                        <span style={{display:"flex",alignItems:"center",gap:4}}>
+                          <Icon name="merchant" size={10} color="var(--ink-4)"/>
+                          {m.merchant}
+                          {/* Fix 3: recurring vs one-off label */}
+                          <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,
+                            background:m.isRecurring?"var(--warn-bg)":"var(--bg-inset)",
+                            color:m.isRecurring?"var(--warn)":"var(--ink-4)"}}>
+                            {m.isRecurring?"recurring":"one-off"}
+                          </span>
+                        </span>
+                        <span style={{color:m.diff<=0?"var(--pos)":"var(--neg)",fontWeight:600}}>{m.diff>0?"+":""}{fmt(m.diff,currency)}</span>
                       </div>
                     ))}
                   </div>
@@ -2006,7 +2107,7 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
 function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplicate, onDelete }) {
   const cat=CAT(txn.category)||{id:"other",name:txn.category,color:"#8A8A8A"};
   const isInc=txn.type==="income";
-  const profile=useMemo(()=>txn.merchant?calcMerchantProfile(txn.merchant,transactions,currency):null,[txn.merchant,transactions]);
+  const profile=useMemo(()=>txn.merchant?calcMerchantProfile(txn.merchant,transactions):null,[txn.merchant,transactions]);
 
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -2046,11 +2147,17 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
 
         {txn.note&&<div style={{fontSize:13,color:"var(--ink-2)",background:"var(--bg-warm)",borderRadius:7,padding:"10px 12px",marginBottom:16}}>{txn.note}</div>}
 
-        {/* S6: Merchant profile */}
+        {/* S6: Merchant profile — frequency, timing, category stability */}
         {profile&&profile.count>1&&(
           <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"13px 14px",marginBottom:16}}>
-            <div className="label-sm" style={{marginBottom:10}}>Merchant Profile — {profile.merchant}</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+              <div className="label-sm">Merchant Profile</div>
+              {profile.hasRecurring&&(
+                <span style={{fontSize:10,fontWeight:700,color:"var(--warn)",background:"var(--warn-bg)",padding:"2px 7px",borderRadius:4}}>Recurring</span>
+              )}
+            </div>
+            {/* Stats grid */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
               <div style={{textAlign:"center"}}>
                 <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>{profile.count}</div>
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>Visits</div>
@@ -2064,15 +2171,42 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>Total</div>
               </div>
             </div>
-            {profile.last30>0&&profile.prev30total>0&&(
-              <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--rule)",fontSize:11,color:"var(--ink-3)",display:"flex",justifyContent:"space-between"}}>
-                <span>Last 30 days</span>
-                <span style={{fontFamily:"'Playfair Display',serif",fontWeight:600,color:profile.diff30<=0?"var(--pos)":"var(--neg)"}}>
-                  {fmt(profile.last30,currency)}
-                  {profile.diff30!==0&&<span style={{fontSize:10,marginLeft:4}}>{profile.diff30>0?"↑":"↓"}{fmt(Math.abs(profile.diff30),currency)} vs prev 30d</span>}
-                </span>
-              </div>
-            )}
+            {/* Behaviour rows */}
+            <div style={{borderTop:"1px solid var(--rule)",paddingTop:10,display:"flex",flexDirection:"column",gap:5}}>
+              {profile.avgDaysBetween&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>Visit frequency</span>
+                  <span style={{fontWeight:600,color:"var(--ink)"}}>every ~{profile.avgDaysBetween} days</span>
+                </div>
+              )}
+              {profile.typicalDay&&profile.count>=3&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>Typical day</span>
+                  <span style={{fontWeight:600,color:"var(--ink)"}}>{profile.typicalDay}</span>
+                </div>
+              )}
+              {profile.usualSub&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>Usually for</span>
+                  <span style={{fontWeight:600,color:"var(--ink)"}}>{profile.usualSub}</span>
+                </div>
+              )}
+              {profile.amountStable&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>Amount</span>
+                  <span style={{fontWeight:600,color:"var(--pos)"}}>Consistent</span>
+                </div>
+              )}
+              {profile.last30>0&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>Last 30 days</span>
+                  <span style={{fontWeight:600,color:profile.diff30<=0?"var(--pos)":"var(--neg)"}}>
+                    {fmt(profile.last30,currency)}
+                    {profile.prev30total>0&&profile.diff30!==0&&<span style={{fontSize:10,marginLeft:4,fontWeight:400}}>{profile.diff30>0?"↑":"↓"}{fmt(Math.abs(profile.diff30),currency)} vs prev</span>}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
