@@ -227,70 +227,118 @@ function merchantSuggest(merchant, memory) {
   return null;
 }
 
-// S6: Merchant profile — frequency, timing, category stability, recurrence detection
+// S6: Full merchant profile per spec — frequency, timing, recurrence detection, forecasting
+function detectRecurrence(txns) {
+  if (txns.length < 3) return { isRecurring: false, recurringFreq: "irregular", recurringConfidence: 0, avgDaysBetween: null };
+  const gaps = [];
+  for (let i = 1; i < txns.length; i++) {
+    const days = Math.round((parseLocalDate(txns[i].date) - parseLocalDate(txns[i-1].date)) / 86400000);
+    if (days > 0) gaps.push(days);
+  }
+  if (!gaps.length) return { isRecurring: false, recurringFreq: "irregular", recurringConfidence: 0, avgDaysBetween: null };
+  const avgGap = gaps.reduce((s,g)=>s+g,0) / gaps.length;
+  const stdDev = Math.sqrt(gaps.reduce((s,g)=>s+Math.pow(g-avgGap,2),0) / gaps.length);
+  const coefficient = avgGap > 0 ? stdDev / avgGap : 1;
+  const confidence = Math.max(0, Math.round((1 - coefficient) * 100) / 100);
+  let freq = "irregular";
+  if (avgGap >= 5  && avgGap <= 9)   freq = "weekly";
+  if (avgGap >= 12 && avgGap <= 16)  freq = "biweekly";
+  if (avgGap >= 25 && avgGap <= 35)  freq = "monthly";
+  if (avgGap >= 300 && avgGap <= 400) freq = "yearly";
+  return { isRecurring: confidence > 0.7, recurringFreq: freq, recurringConfidence: confidence, avgDaysBetween: Math.round(avgGap) };
+}
+
 function calcMerchantProfile(merchant, transactions) {
   if (!merchant) return null;
-  const ml=merchant.toLowerCase();
-  const txns=transactions
-    .filter(t=>t.merchant&&t.merchant.toLowerCase()===ml&&t.type==="expense")
-    .sort((a,b)=>a.date.localeCompare(b.date));
+  const ml = merchant.toLowerCase();
+  const txns = transactions
+    .filter(t => t.merchant && t.merchant.toLowerCase() === ml && t.type === "expense")
+    .sort((a,b) => a.date.localeCompare(b.date));
   if (!txns.length) return null;
 
-  const total=txns.reduce((s,t)=>s+t.amount,0);
-  const avg=total/txns.length;
+  const amounts = txns.map(t => t.amount);
+  const total = amounts.reduce((s,a)=>s+a, 0);
+  const avg = total / amounts.length;
+  const minSpend = Math.min(...amounts);
+  const maxSpend = Math.max(...amounts);
+  const stdDevSpend = parseFloat(Math.sqrt(amounts.reduce((s,a)=>s+Math.pow(a-avg,2),0)/amounts.length).toFixed(2));
 
-  // Last 30 days vs previous 30 days
-  const now30=localDateStr(new Date(Date.now()-30*86400000));
-  const prev30=localDateStr(new Date(Date.now()-60*86400000));
-  const last30=txns.filter(t=>t.date>=now30).reduce((s,t)=>s+t.amount,0);
-  const prev30total=txns.filter(t=>t.date>=prev30&&t.date<now30).reduce((s,t)=>s+t.amount,0);
+  // Last 30 / previous 30 days
+  const now30 = localDateStr(new Date(Date.now()-30*86400000));
+  const prev30 = localDateStr(new Date(Date.now()-60*86400000));
+  const last30 = txns.filter(t=>t.date>=now30).reduce((s,t)=>s+t.amount,0);
+  const prev30total = txns.filter(t=>t.date>=prev30&&t.date<now30).reduce((s,t)=>s+t.amount,0);
 
-  // Fix 4a: Visit frequency — avg days between consecutive visits
-  let avgDaysBetween=null;
-  if (txns.length>=2) {
-    const gaps=[];
-    for (let i=1;i<txns.length;i++) {
-      const a=parseLocalDate(txns[i-1].date), b=parseLocalDate(txns[i].date);
-      const days=Math.round((b-a)/86400000);
-      if (days>0) gaps.push(days);
-    }
-    if (gaps.length) avgDaysBetween=Math.round(gaps.reduce((s,g)=>s+g,0)/gaps.length);
+  // Visit frequency
+  const gaps = [];
+  for (let i=1;i<txns.length;i++) {
+    const days = Math.round((parseLocalDate(txns[i].date)-parseLocalDate(txns[i-1].date))/86400000);
+    if (days>0) gaps.push(days);
+  }
+  const avgDaysBetween = gaps.length ? Math.round(gaps.reduce((s,g)=>s+g,0)/gaps.length) : null;
+
+  // Day of week (most common)
+  const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const dayCounts = [0,0,0,0,0,0,0];
+  txns.forEach(t=>{ dayCounts[parseLocalDate(t.date).getDay()]++; });
+  const typicalDay = DAY_NAMES[dayCounts.indexOf(Math.max(...dayCounts))];
+
+  // Category stability
+  const catCounts = {};
+  txns.forEach(t=>{ catCounts[t.category]=(catCounts[t.category]||0)+1; });
+  const catEntries = Object.entries(catCounts).sort((a,b)=>b[1]-a[1]);
+  const usualCat = catEntries[0]?.[0];
+  const categoryConsistency = catEntries[0] ? catEntries[0][1]/txns.length : 0;
+  const categoryStable = categoryConsistency > 0.9;
+
+  // Subcategory
+  const subCounts = {};
+  txns.filter(t=>t.subcategory).forEach(t=>{ subCounts[t.subcategory]=(subCounts[t.subcategory]||0)+1; });
+  const usualSub = Object.entries(subCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||null;
+
+  // Amount stability
+  const amountStable = avg > 0 && (maxSpend-minSpend)/avg < 0.15;
+
+  // Recurrence detection
+  const hasRecurringFlag = txns.some(t=>t.recurring);
+  const recurrence = detectRecurrence(txns);
+
+  // Estimated next visit
+  let estimatedNextVisit = null;
+  if (avgDaysBetween && txns.length >= 2) {
+    const lastDate = parseLocalDate(txns[txns.length-1].date);
+    const nextDate = new Date(lastDate.getTime() + avgDaysBetween*86400000);
+    estimatedNextVisit = localDateStr(nextDate);
   }
 
-  // Fix 4b: Typical day of week (most common)
-  const dayCounts=[0,0,0,0,0,0,0];
-  txns.forEach(t=>{ dayCounts[parseLocalDate(t.date).getDay()]++; });
-  const topDay=dayCounts.indexOf(Math.max(...dayCounts));
-  const DAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const typicalDay=DAY_NAMES[topDay];
+  // Spending trend (compare last 3 txns to previous 3)
+  let spendingTrend = "stable";
+  if (txns.length >= 6) {
+    const recent3 = txns.slice(-3).reduce((s,t)=>s+t.amount,0)/3;
+    const prev3   = txns.slice(-6,-3).reduce((s,t)=>s+t.amount,0)/3;
+    if (prev3 > 0) {
+      const delta = (recent3-prev3)/prev3*100;
+      if (delta > 10) spendingTrend = "increasing";
+      else if (delta < -10) spendingTrend = "decreasing";
+    }
+  }
 
-  // Fix 4c: Category stability — does this merchant always land in same category?
-  const catCounts={};
-  txns.forEach(t=>{ catCounts[t.category]=(catCounts[t.category]||0)+1; });
-  const catEntries=Object.entries(catCounts).sort((a,b)=>b[1]-a[1]);
-  const usualCat=catEntries[0]?.[0];
-  const categoryStable=catEntries.length===1; // all visits same category
-
-  // Fix 4c: Most common subcategory
-  const subCounts={};
-  txns.filter(t=>t.subcategory).forEach(t=>{ subCounts[t.subcategory]=(subCounts[t.subcategory]||0)+1; });
-  const usualSub=Object.entries(subCounts).sort((a,b)=>b[1]-a[1])[0]?.[0]||null;
-
-  // Fix 4d: Recurrence detection — is any transaction at this merchant marked recurring?
-  const hasRecurring=txns.some(t=>t.recurring);
-
-  // Typical amount stability
-  const amounts=txns.map(t=>t.amount);
-  const minAmt=Math.min(...amounts), maxAmt=Math.max(...amounts);
-  const amountStable=(maxAmt-minAmt)/avg<0.15; // within 15% of average
+  // Visit count this month and last 30 days
+  const mon = curMon();
+  const visitCountThisMonth = txns.filter(t=>t.date.startsWith(mon)).length;
+  const visitCount30 = txns.filter(t=>t.date>=now30).length;
 
   return {
-    merchant, total, count:txns.length, avg,
-    last30, prev30total, diff30:last30-prev30total,
-    avgDaysBetween, typicalDay,
-    usualCat, usualSub, categoryStable,
-    hasRecurring, amountStable,
-    firstSeen:txns[0]?.date, lastSeen:txns[txns.length-1]?.date,
+    merchant, total: parseFloat(total.toFixed(2)), count: txns.length,
+    avg: parseFloat(avg.toFixed(2)), minSpend, maxSpend, stdDevSpend,
+    last30: parseFloat(last30.toFixed(2)), prev30total: parseFloat(prev30total.toFixed(2)), diff30: parseFloat((last30-prev30total).toFixed(2)),
+    avgDaysBetween, typicalDay, categoryConsistency: parseFloat(categoryConsistency.toFixed(2)),
+    usualCat, usualSub, categoryStable, amountStable,
+    hasRecurring: hasRecurringFlag || recurrence.isRecurring,
+    isRecurring: recurrence.isRecurring, recurringFreq: recurrence.recurringFreq, recurringConfidence: recurrence.recurringConfidence,
+    estimatedNextVisit, spendingTrend,
+    visitCountThisMonth, visitCount30Days: visitCount30,
+    firstSeen: txns[0]?.date, lastSeen: txns[txns.length-1]?.date,
   };
 }
 
@@ -450,7 +498,13 @@ function calcGoalProgress(goal) {
     daysToTarget=Math.round((td-new Date())/86400000);
     if (monthsNeeded&&monthsNeeded>Math.ceil(daysToTarget/30)) behindSchedule=true;
   }
-  return { pct,remaining,monthsNeeded,estCompletion,whatIf,daysToTarget,behindSchedule };
+  // Milestones: 25 / 50 / 75 / 100%
+  const milestones=[25,50,75,100].map(p=>({
+    pct:p, amount:parseFloat(((target*p)/100).toFixed(2)),
+    completed:(saved||0)>=(target*p)/100,
+  }));
+
+  return { pct,remaining,monthsNeeded,estCompletion,whatIf,daysToTarget,behindSchedule,milestones };
 }
 
 function toMonthlyAmountHelper(t) {
@@ -462,36 +516,37 @@ function toMonthlyAmountHelper(t) {
   return t.amount;
 }
 
-// S5: Financial patterns — deterministic, data-only, no invented explanations
-function calcPatterns(transactions) {
-  const patterns=[];
-  const expenses=transactions.filter(t=>t.type==="expense");
-  if (expenses.length<10) return patterns; // need enough data
+// S5: Full financial patterns engine — deterministic, data-only
+// Returns { insights, anomalies, dayOfWeek, categoryTrends, correlations }
 
-  // Weekend vs weekday (last 60 days)
-  const cutoff=localDateStr(new Date(Date.now()-60*86400000));
-  const recent=expenses.filter(t=>t.date>=cutoff);
+function calcPatterns(transactions) {
+  const expenses = transactions.filter(t=>t.type==="expense");
+  const mon = curMon(), prv = prevMon();
+  const insights = []; // text-based patterns for display
+
+  if (expenses.length < 5) return { insights, anomalies:[], dayOfWeek:{}, categoryTrends:[], correlations:[] };
+
+  // ── Weekend vs weekday ───────────────────────────────────────────────────
+  const cutoff = localDateStr(new Date(Date.now()-60*86400000));
+  const recent = expenses.filter(t=>t.date>=cutoff);
   if (recent.length>=8) {
-    const isWkend=d=>[0,6].includes(parseLocalDate(d).getDay());
-    const wkend=recent.filter(t=>isWkend(t.date));
-    const wkday=recent.filter(t=>!isWkend(t.date));
+    const isWkend = d=>[0,6].includes(parseLocalDate(d).getDay());
+    const wkend = recent.filter(t=>isWkend(t.date));
+    const wkday  = recent.filter(t=>!isWkend(t.date));
     if (wkend.length>=3&&wkday.length>=3) {
-      const wkendDaily=wkend.reduce((s,t)=>s+t.amount,0)/(wkend.length/7*2);
-      const wkdayDaily=wkday.reduce((s,t)=>s+t.amount,0)/(wkday.length/7*5);
+      const wkendDaily = wkend.reduce((s,t)=>s+t.amount,0)/(wkend.length/7*2);
+      const wkdayDaily = wkday.reduce((s,t)=>s+t.amount,0)/(wkday.length/7*5);
       if (wkendDaily>0&&wkdayDaily>0) {
-        const pct=Math.round(((wkendDaily-wkdayDaily)/wkdayDaily)*100);
-        if (Math.abs(pct)>=15) {
-          patterns.push({ id:"weekend", text: pct>0
-            ? `Weekend spending is ${pct}% higher than weekdays on average (last 60 days)`
-            : `Weekday spending is ${Math.abs(pct)}% higher than weekends (last 60 days)` });
-        }
+        const pct = Math.round(((wkendDaily-wkdayDaily)/wkdayDaily)*100);
+        if (Math.abs(pct)>=15) insights.push({ id:"weekend",
+          text: pct>0?`Weekend spending is ${pct}% higher than weekdays (last 60 days)`
+                     :`Weekday spending is ${Math.abs(pct)}% higher than weekends (last 60 days)` });
       }
     }
   }
 
-  // Category concentration (current month)
-  const mon=curMon();
-  const monExp=expenses.filter(t=>t.date.startsWith(mon));
+  // ── Category concentration ───────────────────────────────────────────────
+  const monExp = expenses.filter(t=>t.date.startsWith(mon));
   if (monExp.length>=5) {
     const catTotals={};
     monExp.forEach(t=>{ catTotals[t.category]=(catTotals[t.category]||0)+t.amount; });
@@ -500,43 +555,132 @@ function calcPatterns(transactions) {
     const total=monExp.reduce((s,t)=>s+t.amount,0);
     if (topCat&&total>0) {
       const pct=Math.round((topCat[1]/total)*100);
-      if (pct>=40) {
-        patterns.push({ id:"catconc", text:`${CAT(topCat[0])?.name} accounts for ${pct}% of spending this month` });
-      }
+      if (pct>=40) insights.push({ id:"catconc", text:`${CAT(topCat[0])?.name} accounts for ${pct}% of spending this month` });
+    }
+    // Merchant concentration
+    const mTotals={};
+    monExp.filter(t=>t.merchant).forEach(t=>{ mTotals[t.merchant]=(mTotals[t.merchant]||0)+t.amount; });
+    const top3m=Object.entries(mTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const top3total=top3m.reduce((s,[,v])=>s+v,0);
+    if (top3m.length>=2&&total>0) {
+      const pct=Math.round((top3total/total)*100);
+      if (pct>=60) insights.push({ id:"merchant", text:`${top3m.map(([m])=>m).join(", ")} account for ${pct}% of spending this month` });
     }
   }
 
-  // Avg transaction change vs previous month
-  const prv=prevMon();
-  const curAmts=expenses.filter(t=>t.date.startsWith(curMon())).map(t=>t.amount);
+  // ── Avg transaction change ───────────────────────────────────────────────
+  const curAmts=expenses.filter(t=>t.date.startsWith(mon)).map(t=>t.amount);
   const prvAmts=expenses.filter(t=>t.date.startsWith(prv)).map(t=>t.amount);
   if (curAmts.length>=4&&prvAmts.length>=4) {
     const curAvg=curAmts.reduce((s,a)=>s+a,0)/curAmts.length;
     const prvAvg=prvAmts.reduce((s,a)=>s+a,0)/prvAmts.length;
     if (prvAvg>0) {
       const pct=Math.round(((curAvg-prvAvg)/prvAvg)*100);
-      if (Math.abs(pct)>=20) {
-        patterns.push({ id:"avgtxn", text:`Average transaction is ${Math.abs(pct)}% ${pct>0?"higher":"lower"} than last month` });
-      }
+      if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:`Average transaction is ${Math.abs(pct)}% ${pct>0?"higher":"lower"} than last month` });
     }
   }
 
-  // Merchant concentration (top 3 merchants as % of total)
-  if (monExp.length>=5) {
-    const mTotals={};
-    monExp.filter(t=>t.merchant).forEach(t=>{ mTotals[t.merchant]=(mTotals[t.merchant]||0)+t.amount; });
-    const top3=Object.values(mTotals).sort((a,b)=>b-a).slice(0,3);
-    const total=monExp.reduce((s,t)=>s+t.amount,0);
-    const top3total=top3.reduce((s,a)=>s+a,0);
-    if (top3.length>=2&&total>0) {
-      const pct=Math.round((top3total/total)*100);
-      if (pct>=60) {
-        patterns.push({ id:"merchant", text:`Top ${top3.length} merchants account for ${pct}% of spending this month` });
-      }
+  // ── Day of week patterns ─────────────────────────────────────────────────
+  const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const dayOfWeek = {};
+  DAY_NAMES.forEach(d=>{ dayOfWeek[d]={ avg:0, count:0, total:0 }; });
+  monExp.forEach(t=>{
+    const d = DAY_NAMES[parseLocalDate(t.date).getDay()];
+    dayOfWeek[d].count++;
+    dayOfWeek[d].total += t.amount;
+  });
+  DAY_NAMES.forEach(d=>{ if (dayOfWeek[d].count>0) dayOfWeek[d].avg = parseFloat((dayOfWeek[d].total/dayOfWeek[d].count).toFixed(2)); });
+  // Insight: highest spending day
+  const topDay = DAY_NAMES.filter(d=>dayOfWeek[d].count>0).sort((a,b)=>dayOfWeek[b].avg-dayOfWeek[a].avg)[0];
+  if (topDay&&monExp.length>=7) {
+    const lowDay = DAY_NAMES.filter(d=>dayOfWeek[d].count>0).sort((a,b)=>dayOfWeek[a].avg-dayOfWeek[b].avg)[0];
+    if (topDay!==lowDay&&dayOfWeek[topDay].avg>0&&dayOfWeek[lowDay].avg>0) {
+      const pct=Math.round(((dayOfWeek[topDay].avg-dayOfWeek[lowDay].avg)/dayOfWeek[lowDay].avg)*100);
+      if (pct>=30) insights.push({ id:"dayofweek", text:`${topDay}s average ${pct}% more per transaction than ${lowDay}s this month` });
     }
   }
 
-  return patterns;
+  // ── Category trends (6-month linear regression) ──────────────────────────
+  const categoryTrends = [];
+  const usedCats = [...new Set(expenses.map(t=>t.category))];
+  usedCats.forEach(catId=>{
+    const months6 = Array.from({length:6},(_,i)=>nMon(5-i));
+    const data = months6.map((m,i)=>({
+      x:i,
+      y:expenses.filter(t=>t.category===catId&&t.date.startsWith(m)).reduce((s,t)=>s+t.amount,0)
+    }));
+    const nonZero = data.filter(d=>d.y>0);
+    if (nonZero.length<3) return;
+    const n=data.length, sumX=data.reduce((s,d)=>s+d.x,0), sumY=data.reduce((s,d)=>s+d.y,0);
+    const sumXY=data.reduce((s,d)=>s+d.x*d.y,0), sumX2=data.reduce((s,d)=>s+d.x*d.x,0);
+    const denom=n*sumX2-sumX*sumX;
+    if (denom===0) return;
+    const slope=(n*sumXY-sumX*sumY)/denom;
+    const avgY=sumY/n;
+    let trend="stable";
+    if (slope>avgY*0.05) trend="increasing";
+    if (slope<-avgY*0.05) trend="decreasing";
+    const last=data[data.length-1].y, prev=data[data.length-2].y;
+    const trendPct=prev>0?Math.round(((last-prev)/prev)*100):0;
+    categoryTrends.push({ catId, trend, trendPct, slope:parseFloat(slope.toFixed(2)), monthlyData:data });
+    if (trend!=="stable"&&Math.abs(trendPct)>=15) {
+      insights.push({ id:`trend-${catId}`,
+        text:`${CAT(catId)?.name} spending has been ${trend} — ${Math.abs(trendPct)}% ${trend==="increasing"?"up":"down"} vs last month` });
+    }
+  });
+
+  // ── Anomaly detection (IQR method) ───────────────────────────────────────
+  const anomalies = [];
+  const catHistAmounts = {};
+  expenses.forEach(t=>{
+    if (!catHistAmounts[t.category]) catHistAmounts[t.category]=[];
+    catHistAmounts[t.category].push(t.amount);
+  });
+  monExp.forEach(t=>{
+    const hist=[...(catHistAmounts[t.category]||[])].sort((a,b)=>a-b);
+    if (hist.length<5) return;
+    const q1=hist[Math.floor(hist.length/4)];
+    const q3=hist[Math.floor(3*hist.length/4)];
+    const iqr=q3-q1;
+    if (t.amount>q3+1.5*iqr) {
+      anomalies.push({ date:t.date, amount:t.amount, category:t.category, merchant:t.merchant||"",
+        reason:`${(t.amount/((q1+q3)/2)).toFixed(1)}x normal for ${CAT(t.category)?.name}`, severity:"high" });
+    }
+  });
+  anomalies.sort((a,b)=>b.amount-a.amount).splice(10); // top 10
+  if (anomalies.length>0) {
+    insights.push({ id:"anomaly", text:`${anomalies.length} unusually large transaction${anomalies.length>1?"s":""} detected this month` });
+  }
+
+  // ── Correlation detection ────────────────────────────────────────────────
+  const correlations = [];
+  const catByDay = {};
+  monExp.forEach(t=>{ if (!catByDay[t.date]) catByDay[t.date]=[]; catByDay[t.date].push(t.category); });
+  const pairCounts={};
+  Object.values(catByDay).forEach(cats=>{
+    const unique=[...new Set(cats)];
+    for (let i=0;i<unique.length;i++) for (let j=i+1;j<unique.length;j++) {
+      const pair=[unique[i],unique[j]].sort().join("__");
+      pairCounts[pair]=(pairCounts[pair]||0)+1;
+    }
+  });
+  const totalDays=Object.keys(catByDay).length;
+  if (totalDays>=5) {
+    Object.entries(pairCounts)
+      .filter(([,c])=>c>=totalDays*0.3)
+      .sort((a,b)=>b[1]-a[1]).slice(0,3)
+      .forEach(([pair,count])=>{
+        const [c1,c2]=pair.split("__");
+        correlations.push({ category1:c1, category2:c2, frequency:count, correlation:parseFloat((count/totalDays).toFixed(2)) });
+      });
+    if (correlations.length>0) {
+      const top=correlations[0];
+      insights.push({ id:"correlation",
+        text:`${CAT(top.category1)?.name} and ${CAT(top.category2)?.name} tend to appear on the same day (${Math.round(top.correlation*100)}% of spending days)` });
+    }
+  }
+
+  return { insights, anomalies, dayOfWeek, categoryTrends, correlations };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1519,7 +1663,11 @@ function AnalyticsPage({ transactions, currency, budgets }) {
   const txnStats   =calcTxnStats(transactions,now);
   const budgetItems=calcBudgetStatus(budgets||{},catSpend,now);
   const wc         =calcWhatChanged(transactions,now,prv);
-  const patterns   =useMemo(()=>calcPatterns(transactions),[transactions]);
+  const patternsData=useMemo(()=>calcPatterns(transactions),[transactions]);
+  const patterns    =patternsData.insights;
+  const anomalies   =patternsData.anomalies;
+  const dayOfWeek   =patternsData.dayOfWeek;
+  const correlations=patternsData.correlations;
   const expenses   =transactions.filter(t=>t.type==="expense");
   const [activeBar,  setActiveBar]  = useState(null);
   const [activeCell, setActiveCell] = useState(null);
@@ -1645,14 +1793,79 @@ function AnalyticsPage({ transactions, currency, budgets }) {
         </div>
       )}
 
-      {/* S5: Financial patterns */}
+      {/* S5: Financial patterns — insights */}
       {patterns.length>0&&(
         <div className="a-card">
-          <div className="a-card-title">Patterns</div>
+          <div className="a-card-title">Patterns & Insights</div>
           {patterns.map(p=>(
             <div key={p.id} className="pattern-item">
               <Icon name="pattern" size={14} color="var(--ink-3)"/>
               <span>{p.text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* S5: Day of week breakdown */}
+      {Object.values(dayOfWeek).some(d=>d.count>0)&&(
+        <div className="a-card">
+          <div className="a-card-title">Spending by Day of Week — {monthName(now)}</div>
+          {["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].map(day=>{
+            const d=dayOfWeek[day];
+            if (!d||d.count===0) return null;
+            const allAvgs=Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.avg);
+            const maxAvg=Math.max(...allAvgs,1);
+            return (
+              <div key={day} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                <div style={{width:28,fontSize:11,color:"var(--ink-3)",fontWeight:600,flexShrink:0}}>{day.slice(0,3)}</div>
+                <div style={{flex:1,height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${(d.avg/maxAvg)*100}%`,background:"var(--accent)",borderRadius:99}}/>
+                </div>
+                <div style={{width:60,textAlign:"right",fontSize:11,fontFamily:"'Playfair Display',serif",fontWeight:600,color:"var(--ink)",flexShrink:0}}>{fmt(d.avg,currency)}</div>
+                <div style={{width:24,textAlign:"right",fontSize:10,color:"var(--ink-4)",flexShrink:0}}>{d.count}×</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* S5: Anomalies */}
+      {anomalies.length>0&&(
+        <div className="a-card">
+          <div className="a-card-title">Unusual Transactions This Month</div>
+          {anomalies.slice(0,5).map((a,i)=>{
+            const cat=CAT(a.category)||{color:"#8A8A8A",name:a.category};
+            return (
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<Math.min(anomalies.length,5)-1?"1px solid var(--rule)":"none"}}>
+                <div style={{width:30,height:30,borderRadius:7,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <CatIcon catId={a.category} size={14} color={cat.color}/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{a.merchant||cat.name}</div>
+                  <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(a.date)} · {a.reason}</div>
+                </div>
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:"var(--neg)",flexShrink:0}}>−{fmt(a.amount,currency)}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* S5: Category correlations */}
+      {correlations.length>0&&(
+        <div className="a-card">
+          <div className="a-card-title">Category Correlations This Month</div>
+          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>Categories that tend to appear on the same day</div>
+          {correlations.map((c,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:i<correlations.length-1?"1px solid var(--rule)":"none"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:600,color:"var(--ink)"}}>
+                <CatIcon catId={c.category1} size={13}/>
+                {CAT(c.category1)?.name}
+                <span style={{color:"var(--ink-4)",fontWeight:400}}>+</span>
+                <CatIcon catId={c.category2} size={13}/>
+                {CAT(c.category2)?.name}
+              </div>
+              <div style={{fontSize:11,color:"var(--ink-3)",flexShrink:0}}>{Math.round(c.correlation*100)}% of days</div>
             </div>
           ))}
         </div>
@@ -2030,6 +2243,25 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
             onChange={e=>{setMerchant(e.target.value);setShowMerchantSugs(true);}}
             onBlur={()=>setTimeout(()=>setShowMerchantSugs(false),150)}
             onFocus={()=>setShowMerchantSugs(true)}/>
+          {/* Merchant intelligence hint — shown when merchant is recognised */}
+          {merchant.trim()&&!showMerchantSugs&&(()=>{
+            const ml=merchant.trim().toLowerCase();
+            const match=Object.values(merchantMemory).find(m=>m.merchant.toLowerCase()===ml);
+            if (!match||match.count<2) return null;
+            const profile=calcMerchantProfile(merchant.trim(),transactions);
+            if (!profile) return null;
+            const hints=[];
+            if (profile.avg>0) hints.push(`Usually ${fmt(profile.avg,currency)}`);
+            if (profile.typicalDay&&profile.count>=3) hints.push(`typically ${profile.typicalDay}`);
+            if (profile.estimatedNextVisit) hints.push(`next ~${fmtDate(profile.estimatedNextVisit)}`);
+            if (!hints.length) return null;
+            return (
+              <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4,display:"flex",alignItems:"center",gap:5}}>
+                <Icon name="merchant" size={11} color="var(--ink-4)"/>
+                {hints.join(" · ")}
+              </div>
+            );
+          })()}
           {showMerchantSugs&&merchantMatches.length>0&&(
             <div className="merchant-suggestions">
               {merchantMatches.map((m,i)=>{
@@ -2194,7 +2426,27 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
               {profile.amountStable&&(
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
                   <span style={{color:"var(--ink-3)"}}>Amount</span>
-                  <span style={{fontWeight:600,color:"var(--pos)"}}>Consistent</span>
+                  <span style={{fontWeight:600,color:"var(--pos)"}}>Consistent (±15%)</span>
+                </div>
+              )}
+              {profile.spendingTrend&&profile.spendingTrend!=="stable"&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>Trend</span>
+                  <span style={{fontWeight:600,color:profile.spendingTrend==="increasing"?"var(--neg)":"var(--pos)"}}>
+                    {profile.spendingTrend==="increasing"?"↑ Increasing":"↓ Decreasing"}
+                  </span>
+                </div>
+              )}
+              {profile.estimatedNextVisit&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>Next expected visit</span>
+                  <span style={{fontWeight:600,color:"var(--ink)"}}>{fmtDate(profile.estimatedNextVisit)}</span>
+                </div>
+              )}
+              {profile.isRecurring&&profile.recurringFreq&&profile.recurringFreq!=="irregular"&&(
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                  <span style={{color:"var(--ink-3)"}}>Detected pattern</span>
+                  <span style={{fontWeight:600,color:"var(--warn)",textTransform:"capitalize"}}>{profile.recurringFreq}</span>
                 </div>
               )}
               {profile.last30>0&&(
@@ -2386,7 +2638,7 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
           )}
           {goals.length===0&&!showNewGoal&&<div style={{fontSize:12,color:"var(--ink-3)"}}>No goals yet.</div>}
           {goals.map(goal=>{
-            const {pct,remaining,estCompletion,whatIf,daysToTarget,behindSchedule}=calcGoalProgress(goal);
+            const {pct,remaining,estCompletion,whatIf,daysToTarget,behindSchedule,milestones}=calcGoalProgress(goal);
             return (
               <div key={goal.id} style={{padding:"12px 0",borderBottom:"1px solid var(--rule)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
@@ -2408,6 +2660,21 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
                   <span>{Math.round(pct)}% · {remaining>0?`${fmt(remaining,currency)} to go`:""}</span>
                 </div>
                 {estCompletion&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:5}}>At {fmt(goal.monthlyTarget||0,currency)}/mo → est. {estCompletion}</div>}
+                {/* Milestones */}
+                {milestones&&(
+                  <div style={{marginTop:8,display:"flex",gap:6}}>
+                    {milestones.map(m=>(
+                      <div key={m.pct} style={{flex:1,textAlign:"center",padding:"4px 2px",borderRadius:5,
+                        background:m.completed?"var(--pos-bg)":"var(--bg-inset)",
+                        border:`1px solid ${m.completed?"var(--pos)":"var(--rule)"}`}}>
+                        <div style={{fontSize:10,fontWeight:700,color:m.completed?"var(--pos)":"var(--ink-4)"}}>{m.pct}%</div>
+                        <div style={{fontSize:9,color:m.completed?"var(--pos)":"var(--ink-4)"}}>
+                          {m.completed?"✓":fmt(m.amount-Math.min(goal.saved||0,m.amount),currency)+" to go"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {/* S1: What-if scenarios */}
                 {whatIf.length>1&&(
                   <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid var(--rule)"}}>
