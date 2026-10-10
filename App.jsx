@@ -353,8 +353,8 @@ function calcMonthSummary(transactions, mon=curMon(), prv=prevMon()) {
   const prevExp=transactions.filter(t=>isExp(t)&&t.date.startsWith(prv)).reduce((s,t)=>s+t.amount,0);
   const prevInc=transactions.filter(t=>isInc(t)&&t.date.startsWith(prv)).reduce((s,t)=>s+t.amount,0);
   const momDiff=prevExp>0?curExp-prevExp:null;
-  const savingsRate=curInc>0?Math.max(0,Math.round(((curInc-curExp)/curInc)*100)):null;
-  return { curExp,curInc,prevExp,prevInc,momDiff,savingsRate };
+  const surplusRate=curInc>0?Math.max(0,Math.round(((curInc-curExp)/curInc)*100)):null;
+  return { curExp,curInc,prevExp,prevInc,momDiff,surplusRate };
 }
 
 function calcCategorySpend(transactions, mon=curMon()) {
@@ -446,15 +446,15 @@ function calcWhatChanged(transactions, mon=curMon(), prv=prevMon()) {
 }
 
 // S4: Safe to Spend — distinguishes available, future commitments, savings
-function calcSafeToSpend(transactions, safeConfig) {
+function calcSafeToSpend(transactions, safeConfig, goals=[]) {
   const { savingsTarget=0 }=safeConfig||{};
   const mon=curMon();
   const { curInc,curExp }=calcMonthSummary(transactions,mon);
   const totalDays=daysInMonth(mon);
   const daysPassed=new Date().getDate();
   const daysLeft=totalDays-daysPassed;
+
   // Future unrecorded recurring commitments this month
-  // A recurring transaction is "already recorded" if it has a transaction in the current month
   const activeRecurring=transactions.filter(t=>t.recurring&&t.recurFreq&&t.isActive!==false&&t.type==="expense");
   const alreadyRecordedIds=new Set(
     transactions.filter(t=>t.recurring&&t.date.startsWith(mon)).map(t=>t.recurFreq+"|"+t.category+"|"+t.amount)
@@ -462,12 +462,32 @@ function calcSafeToSpend(transactions, safeConfig) {
   const futureCommitments=activeRecurring
     .filter(t=>!alreadyRecordedIds.has(t.recurFreq+"|"+t.category+"|"+t.amount))
     .reduce((s,t)=>s+t.amount,0);
-  // Show recurring total for information (already recorded, not deducted again)
   const recurringMonthly=activeRecurring.reduce((s,t)=>s+toMonthlyAmountHelper(t),0);
-  const disposable=curInc-savingsTarget;
+
+  // Fix 4: Goal contributions — sum of active goal monthlyTargets
+  // These represent planned savings allocations, separate from the savings target field.
+  // We only count them if they are not already covered by savingsTarget to avoid double-deduction.
+  // If the user has set a manual savingsTarget, we use that. If they have goals with monthlyTargets
+  // and no manual savingsTarget, we use the sum of goal contributions instead.
+  const goalContributions=(goals||[])
+    .filter(g=>g.monthlyTarget>0)
+    .reduce((s,g)=>s+g.monthlyTarget,0);
+  // Use the larger of: manual savings target vs goal contributions
+  // This prevents double-deduction while respecting explicit user intent
+  const effectiveSavingsTarget=Math.max(savingsTarget, goalContributions);
+  const goalContributionActive=goalContributions>savingsTarget&&goalContributions>0;
+
+  const disposable=curInc-effectiveSavingsTarget;
   const remaining=disposable-curExp-futureCommitments;
   const dailyAllowance=daysLeft>0?remaining/daysLeft:0;
-  return { curInc,curExp,savingsTarget,futureCommitments,recurringMonthly,disposable,remaining,daysLeft,dailyAllowance,feasible:curInc>0 };
+
+  return {
+    curInc, curExp, savingsTarget, effectiveSavingsTarget,
+    goalContributions, goalContributionActive,
+    futureCommitments, recurringMonthly,
+    disposable, remaining, daysLeft, dailyAllowance,
+    feasible:curInc>0,
+  };
 }
 
 // S1: Goals — full funding plan with target date and what-if
@@ -679,8 +699,8 @@ function calcPatterns(transactions) {
       });
     if (correlations.length>0) {
       const top=correlations[0];
-      insights.push({ id:"correlation",
-        text:`${CAT(top.category1)?.name} and ${CAT(top.category2)?.name} tend to appear on the same day (${Math.round(top.correlation*100)}% of spending days)` });
+      insights.push({ id:"same-day",
+        text:`${CAT(top.category1)?.name} and ${CAT(top.category2)?.name} are often recorded on the same day (${Math.round(top.correlation*100)}% of spending days this month)` });
     }
   }
 
@@ -1283,11 +1303,11 @@ export default function App() {
 // ─────────────────────────────────────────────────────────────────────────────
 function HomePage({ transactions, budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView }) {
   const now=curMon(), prv=prevMon();
-  const { curExp,curInc,prevExp,momDiff,savingsRate }=calcMonthSummary(transactions,now,prv);
+  const { curExp,curInc,prevExp,momDiff,surplusRate }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
   const paceInfo    =calcSpendingPace(curExp,now);
   const budgetItems =calcBudgetStatus(budgets,catSpend,now);
-  const safeInfo    =calcSafeToSpend(transactions,safeToSpend);
+  const safeInfo    =calcSafeToSpend(transactions,safeToSpend,goals);
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curInc>0;
   const recent      =transactions.slice(0,6);
@@ -1326,7 +1346,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
           </div>
           <div className="hero-stat">
             {hasIncome?(
-              <><div className={`hero-stat-val${(savingsRate||0)>=20?" pos":""}`}>{savingsRate??0}%</div><div className="hero-stat-lbl">Saved</div></>
+              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":""}`}>{surplusRate??0}%</div><div className="hero-stat-lbl">Surplus</div></>
             ):(
               <><div className={`hero-stat-val${curInc-curExp>=0?" pos":" neg"}`}>{fmtShort(Math.abs(curInc-curExp),currency)}</div><div className="hero-stat-lbl">Balance</div></>
             )}
@@ -1352,16 +1372,22 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
               {safeInfo.daysLeft} days left in {monthShort(now)}
             </div>
           )}
-          {/* Fix 2: All four lines always shown — planning engine, not just a number */}
+          {/* Four explicit lines — planning engine, not just a number */}
           <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
             <div className="safe-row">
               <span className="safe-lbl">Income this month</span>
               <span className="safe-val">{fmt(safeInfo.curInc,currency)}</span>
             </div>
-            {safeInfo.savingsTarget>0&&(
+            {/* Fix 4: Show goal contributions if they exceed manual savings target */}
+            {safeInfo.goalContributionActive?(
+              <div className="safe-row">
+                <span className="safe-lbl">Goal contributions</span>
+                <span className="safe-val" style={{color:"var(--ink-3)"}}>−{fmt(safeInfo.goalContributions,currency)}</span>
+              </div>
+            ):safeInfo.effectiveSavingsTarget>0&&(
               <div className="safe-row">
                 <span className="safe-lbl">Savings target</span>
-                <span className="safe-val" style={{color:"var(--ink-3)"}}>−{fmt(safeInfo.savingsTarget,currency)}</span>
+                <span className="safe-val" style={{color:"var(--ink-3)"}}>−{fmt(safeInfo.effectiveSavingsTarget,currency)}</span>
               </div>
             )}
             <div className="safe-row">
@@ -1380,6 +1406,12 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
                 {safeInfo.remaining>=0?"+":""}{fmt(safeInfo.remaining,currency)}
               </span>
             </div>
+            {/* Explain which is driving the deduction */}
+            {safeInfo.goalContributionActive&&safeInfo.savingsTarget>0&&(
+              <div style={{fontSize:10,color:"var(--ink-4)",marginTop:4,fontStyle:"italic"}}>
+                Goal contributions (₼{safeInfo.goalContributions}) exceed manual savings target (₼{safeInfo.savingsTarget}) — using the higher amount
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1765,7 +1797,7 @@ function AnalyticsPage({ transactions, currency, budgets }) {
             <span style={{color:"var(--ink-3)"}}>Projected: <strong style={{fontFamily:"'Playfair Display',serif",color:paceInfo.projected>prevExp+20?"var(--neg)":"var(--ink)"}}>{fmt(paceInfo.projected,currency)}</strong></span>
           </div>
         )}
-        {curInc>0&&<div style={{marginTop:6,fontSize:12,color:"var(--ink-3)"}}>Savings rate: <strong style={{fontFamily:"'Playfair Display',serif",color:curInc>curExp?"var(--pos)":"var(--neg)"}}>{Math.max(0,Math.round(((curInc-curExp)/curInc)*100))}%</strong></div>}
+        {curInc>0&&<div style={{marginTop:6,fontSize:12,color:"var(--ink-3)"}}>Surplus rate: <strong style={{fontFamily:"'Playfair Display',serif",color:curInc>curExp?"var(--pos)":"var(--neg)"}}>{Math.max(0,Math.round(((curInc-curExp)/curInc)*100))}%</strong></div>}
       </div>
 
       {/* S3: What Changed — with merchant-level explanation */}
@@ -1886,11 +1918,11 @@ function AnalyticsPage({ transactions, currency, budgets }) {
         </div>
       )}
 
-      {/* S5: Category correlations */}
+      {/* S5: Same-day category patterns */}
       {correlations.length>0&&(
         <div className="a-card">
-          <div className="a-card-title">Category Correlations This Month</div>
-          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>Categories that tend to appear on the same day</div>
+          <div className="a-card-title">Often Appear Together</div>
+          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>Categories recorded on the same day this month</div>
           {correlations.map((c,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:i<correlations.length-1?"1px solid var(--rule)":"none"}}>
               <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:600,color:"var(--ink)"}}>
@@ -2291,7 +2323,7 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
             if (profile.estimatedNextVisit) hints.push(`next ~${fmtDate(profile.estimatedNextVisit)}`);
             if (!hints.length) return null;
             return (
-              <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4,display:"flex",alignItems:"center",gap:5}}>
+              <div style={{fontSize:11,color:"var(--ink-4)",marginTop:4,display:"flex",alignItems:"center",gap:5,fontStyle:"italic"}}>
                 <Icon name="merchant" size={11} color="var(--ink-4)"/>
                 {hints.join(" · ")}
               </div>
@@ -2474,10 +2506,10 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
               )}
               {profile.estimatedNextVisit&&(
                 <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>Next expected visit</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>
-                    {fmtDate(profile.estimatedNextVisit)}
-                    {profile.estimatedNextSpend&&<span style={{color:"var(--ink-3)",fontWeight:400,marginLeft:6}}>~{fmt(profile.estimatedNextSpend,currency)}</span>}
+                  <span style={{color:"var(--ink-3)"}}>Est. next visit</span>
+                  <span style={{fontStyle:"italic",color:"var(--ink-3)"}}>
+                    ~{fmtDate(profile.estimatedNextVisit)}
+                    {profile.estimatedNextSpend&&<span style={{marginLeft:6}}>· ~{fmt(profile.estimatedNextSpend,currency)}</span>}
                   </span>
                 </div>
               )}
@@ -2576,7 +2608,10 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
         </div>
         {safeToSpend.enabled&&(
           <div className="settings-row" style={{flexDirection:"column",alignItems:"flex-start",gap:8}}>
-            <div><div className="settings-row-title">Monthly savings target</div><div className="settings-row-sub">Deducted from available income</div></div>
+            <div>
+              <div className="settings-row-title">Monthly savings floor</div>
+              <div className="settings-row-sub">Minimum reserved from income — if your goal contributions exceed this, the higher amount is used automatically</div>
+            </div>
             <div style={{display:"flex",gap:8,width:"100%"}}>
               <input className="field-input" type="number" min="0" step="1" placeholder="0.00" value={savingsT} onChange={e=>setSavingsT(e.target.value)} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
               <button className="btn btn-sm btn-sm-primary" onClick={()=>{onSafeToSpendChange({savingsTarget:parseFloat(savingsT)||0});showToast("Saved");}}>Save</button>
@@ -2829,7 +2864,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           <div className="month-stat-val" style={{color:"var(--pos)"}}>{fmt(curInc,currency)}</div>
           <div className="month-stat-lbl">Income</div>
           {curInc>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
-            {Math.max(0,Math.round(((curInc-curExp)/curInc)*100))}% saved
+            {Math.max(0,Math.round(((curInc-curExp)/curInc)*100))}% surplus
           </div>}
         </div>
         <div className="month-stat" style={{gridColumn:"1 / -1"}}>
@@ -2932,7 +2967,7 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
   const catSpend = calcCategorySpend(transactions, mon);
   const paceInfo = calcSpendingPace(curExp, mon);
   const budgetItems = calcBudgetStatus(budgets||{}, catSpend, mon);
-  const safeInfo = calcSafeToSpend(transactions, safeToSpend);
+  const safeInfo = calcSafeToSpend(transactions, safeToSpend, goals);
 
   // 1. Spending pace — over pace with days left
   if (!paceInfo.onTrack && paceInfo.daysLeft > 0 && curExp > 0) {
