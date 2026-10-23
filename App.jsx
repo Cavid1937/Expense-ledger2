@@ -19,7 +19,131 @@ const KEYS_LEGACY = [
 ];
 
 function readRaw(k) { try { const r=localStorage.getItem(k); return r?JSON.parse(r):null; } catch { return null; } }
-function writeRaw(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} }
+function writeRaw(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); return true; } catch { return false; } }
+
+// Set when stored data needed recovery on load; the App shows it once.
+let LOAD_NOTICE = null;
+// True when a recovery copy could not be written: saving is then paused so the original data is never overwritten.
+let SAVE_BLOCKED = false;
+
+// ─── Money grammar ────────────────────────────────────────────────────────────
+// Text typed by the user or read from a CSV cell: digits with an optional decimal point and at most 2 decimals,
+// up to 9 integer digits. Accepted: "12" "12.5" "12.50" ".5" "0.05".
+// Rejected: "" "12." "-5" "+5" "1e3" "0x10" "1,5" "1 000" "NaN" "Infinity" "25abc", and anything above MAX_AMOUNT.
+// JSON numbers (stored data and backups) may carry any finite value; their sign and range are still enforced.
+const MAX_AMOUNT = 999999999.99;
+const MONEY_TEXT_RE = /^(?:\d{1,9}|\d{0,9}\.\d{1,2})$/;
+
+function strictNum(v) {
+  if (typeof v==="number") return Number.isFinite(v) ? v : NaN;
+  if (typeof v==="string") { const s=v.trim(); return MONEY_TEXT_RE.test(s) ? Number(s) : NaN; }
+  return NaN;
+}
+
+// Why a money value is not acceptable (null when it is). {positive:true} → must be > 0, otherwise ≥ 0.
+function moneyReason(v, { positive=false } = {}) {
+  if (v===undefined || v===null || (typeof v==="string" && v.trim()==="")) return "missing amount";
+  if (typeof v==="number") { if (!Number.isFinite(v)) return "invalid amount"; }
+  else if (typeof v==="string") {
+    const t=v.trim();
+    if (t.startsWith("-") && MONEY_TEXT_RE.test(t.slice(1))) return "negative amount";
+    if (!MONEY_TEXT_RE.test(t)) return "invalid amount";
+  } else return "invalid amount";
+  const n=strictNum(v);
+  if (n<0) return "negative amount";
+  if (positive && n===0) return "zero amount";
+  if (n>MAX_AMOUNT) return "amount too large";
+  return null;
+}
+
+// Money typed by the user: a finite number > 0 ({positive:true}) or ≥ 0; anything else → null (never silently 0).
+function parseMoney(v, opts) { return moneyReason(v,opts)===null ? strictNum(v) : null; }
+
+function isPlainObject(x) { return x!==null && typeof x==="object" && !Array.isArray(x); }
+const isTrue = (v) => v===true || v==="true";
+const txt = (v) => typeof v==="string" ? v : (typeof v==="number" && Number.isFinite(v) ? String(v) : "");
+const norm = (v) => txt(v).trim().toLowerCase().replace(/\s+/g," ");
+
+// Keep a recoverable copy of anything we cannot use, so the next save never overwrites it.
+function preserveRaw(label, raw) {
+  try { localStorage.setItem(`${"expense_ledger_v5"}__${label}_${Date.now()}`, typeof raw==="string"?raw:JSON.stringify(raw)); return true; }
+  catch { return false; }
+}
+
+function isValidDateStr(s) {
+  if (typeof s!=="string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y,m,d]=s.split("-").map(Number);
+  const dt=new Date(y,m-1,d);
+  return dt.getFullYear()===y && dt.getMonth()===m-1 && dt.getDate()===d;
+}
+
+// ─── Transaction record contract ──────────────────────────────────────────────
+// A record is stored only if it can be stored exactly as it means. Nothing is repaired or guessed:
+// a missing/invalid date, a non-positive amount or an unsupported type is rejected with a reason (never abs()'d, never today).
+const TXN_TYPES = { income:"income", inc:"income", incomes:"income", expense:"expense", exp:"expense", expenses:"expense" };
+const RECUR_FREQS = new Set(["weekly","biweekly","monthly","yearly"]);
+const DATE_TEXT_RE = /^\d{4}-\d{2}-\d{2}(?:[T ].*)?$/;
+function normType(v) { if (v===undefined||v===null||v==="") return "expense"; return TXN_TYPES[String(v).trim().toLowerCase()] || null; }
+
+function checkRawTxn(t) {
+  if (!isPlainObject(t)) return "not a transaction record";
+  if (t.date===undefined || t.date===null || (typeof t.date==="string" && t.date.trim()==="")) return "missing date";
+  if (typeof t.date!=="string") return "invalid date";
+  const d=t.date.trim();
+  if (!DATE_TEXT_RE.test(d) || !isValidDateStr(d.slice(0,10))) return "invalid date";
+  const r=moneyReason(t.amount ?? t.amt, { positive:true });
+  if (r) return r;
+  if (normType(t.type)===null) return "unsupported type";
+  if (isTrue(t.recurring) && !RECUR_FREQS.has(t.recurFreq||t.frequency)) return "invalid recurrence";
+  return null;
+}
+function isUsableRawTxn(t) { return checkRawTxn(t)===null; }
+
+// Several load/import events can each add a line; they are joined, never overwritten.
+function noteLoad(msg) { LOAD_NOTICE = LOAD_NOTICE ? `${LOAD_NOTICE} · ${msg}` : msg; }
+
+function summariseReasons(items) {
+  const c={}; items.forEach(b=>{ c[b.reason]=(c[b.reason]||0)+1; });
+  return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(([r,n])=>`${n} ${r}`).join(", ");
+}
+
+function setAside(label, records, detail="") {
+  if (!records.length) return;
+  const kept=preserveRaw(label, records);
+  const n=`${records.length} unreadable record${records.length>1?"s":""}`;
+  const why=detail ? ` (${detail})` : "";
+  if (kept) noteLoad(`${n} set aside${why} — the rest of your data is intact`);
+  else { SAVE_BLOCKED=true; noteLoad(`${n}${why} found but a recovery copy could not be made (storage may be full) — saving is paused so nothing is overwritten`); }
+}
+
+// Two records with the same id would be edited or deleted together: keep the first, give later ones a fresh id.
+function ensureUniqueIds(list) {
+  const seen=new Set(); let rekeyed=0;
+  const out=list.map(t=>{
+    if (!seen.has(String(t.id))) { seen.add(String(t.id)); return t; }
+    let id; do { id=Date.now()+Math.random(); } while (seen.has(String(id)));
+    seen.add(String(id)); rekeyed++; return { ...t, id };
+  });
+  return { list:out, rekeyed };
+}
+
+function partitionTransactions(list) {
+  const good=[], bad=[];
+  list.forEach(t=>{
+    const reason=checkRawTxn(t);
+    if (reason) { bad.push({ record:t, reason }); return; }
+    good.push(normaliseTxn(t));
+  });
+  const u=ensureUniqueIds(good);
+  return { good:u.list, bad, rekeyed:u.rekeyed };
+}
+
+function sanitizeTransactions(list, label) {
+  const { good, bad, rekeyed }=partitionTransactions(list);
+  setAside(label, bad.map(b=>b.record), summariseReasons(bad));
+  if (rekeyed) noteLoad(`${rekeyed} duplicate id${rekeyed>1?"s":""} re-assigned`);
+  return good;
+}
 
 // ─── Local date helpers (S0: all UTC bugs eliminated) ────────────────────────
 function localDateStr(d=new Date()) {
@@ -34,40 +158,47 @@ function parseLocalDate(s) {
   const [y,m,d] = s.split("-").map(Number);
   return new Date(y, m-1, d);
 }
+// Add whole months without overflowing: Jan 31 + 1 month = Feb 28/29 (never Mar 3).
+function addMonths(d, n) {
+  const r=new Date(d.getFullYear(), d.getMonth()+n, 1);
+  const dim=new Date(r.getFullYear(), r.getMonth()+1, 0).getDate();
+  r.setDate(Math.min(d.getDate(), dim));
+  return r;
+}
 const today   = () => localDateStr();
 const curMon  = () => localMonthStr();
-const prevMon = () => { const d=new Date(); d.setMonth(d.getMonth()-1); return localMonthStr(d); };
-const nMon    = (n) => { const d=new Date(); d.setMonth(d.getMonth()-n); return localMonthStr(d); };
+const prevMon = () => { const n=new Date(); const d=new Date(n.getFullYear(),n.getMonth()-1,1); return localMonthStr(d); };
+const nMon    = (n) => { const now=new Date(); const d=new Date(now.getFullYear(),now.getMonth()-n,1); return localMonthStr(d); };
 
 // ─── Category system ──────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id:"food",     name:"Food & Dining",        color:"#5C7A6E", income:false,
+  { id:"food",     name:"Food & Dining",        tile:"Food",      color:"#5C7A6E", income:false,
     subs:["Restaurants","Fast Food","Coffee","Groceries","Delivery","Snacks","Other"] },
-  { id:"transport",name:"Transport",             color:"#4A6A7A", income:false,
+  { id:"transport",name:"Transport",             tile:"Transport", color:"#4A6A7A", income:false,
     subs:["Metro","Bus","Taxi / Ride-hailing","Fuel","Parking","Car Maintenance","Intercity","Other"] },
-  { id:"shopping", name:"Shopping",              color:"#7A6652", income:false,
+  { id:"shopping", name:"Shopping",              tile:"Shopping",  color:"#7A6652", income:false,
     subs:["Clothing","Electronics","Personal Items","Home","Accessories","Online Shopping","Other"] },
-  { id:"gifts",    name:"Gifts & Personal",      color:"#7A5C7A", income:false,
+  { id:"gifts",    name:"Gifts & Personal",      tile:"Gifts",     color:"#7A5C7A", income:false,
     subs:["Gifts","Donations","Personal Care","Barber / Hair","Cosmetics","Other"] },
-  { id:"entertain",name:"Entertainment",         color:"#5C6A7A", income:false,
+  { id:"entertain",name:"Entertainment",         tile:"Entertainment",   color:"#5C6A7A", income:false,
     subs:["Cinema","Games","Events","Sports","Hobbies","Other"] },
-  { id:"digital",  name:"Bills & Subscriptions", color:"#3A6A5A", income:false,
+  { id:"digital",  name:"Bills & Subscriptions", tile:"Bills & subs",     color:"#3A6A5A", income:false,
     subs:["Mobile","Internet","Streaming","Software","Cloud Storage","Other Subs","Other"] },
-  { id:"health",   name:"Health & Fitness",      color:"#4A5C7A", income:false,
+  { id:"health",   name:"Health & Fitness",      tile:"Health",    color:"#4A5C7A", income:false,
     subs:["Gym","Sports Equipment","Pharmacy","Doctor / Dentist","Supplements","Other"] },
-  { id:"edu",      name:"Education",             color:"#4A4A7A", income:false,
+  { id:"edu",      name:"Education",             tile:"Education", color:"#4A4A7A", income:false,
     subs:["University","Books","Courses","Exams","Stationery","Other"] },
-  { id:"travel",   name:"Travel",                color:"#6A5A4A", income:false,
+  { id:"travel",   name:"Travel",                tile:"Travel",    color:"#6A5A4A", income:false,
     subs:["Flights","Hotels","Visa","Travel Food","Travel Transport","Activities","Other"] },
-  { id:"housing",  name:"Home",                  color:"#5A5A5A", income:false,
+  { id:"housing",  name:"Home",                  tile:"Home",      color:"#5A5A5A", income:false,
     subs:["Rent","Utilities","Household","Repairs","Other"] },
-  { id:"finance",  name:"Finance",               color:"#4A6A4A", income:false,
+  { id:"finance",  name:"Finance",               tile:"Finance",   color:"#4A6A4A", income:false,
     subs:["Bank Fees","Transfers","Taxes","Insurance","Investments","Other"] },
-  { id:"other",    name:"Other",                 color:"#8A8A8A", income:false,
+  { id:"other",    name:"Other",                 tile:"Other",     color:"#8A8A8A", income:false,
     subs:["Miscellaneous"] },
-  { id:"salary",   name:"Salary",                color:"#2D6A4F", income:true, subs:[] },
-  { id:"freelance",name:"Freelance",             color:"#2D6A4F", income:true, subs:[] },
-  { id:"income",   name:"Other Income",          color:"#3D7A5F", income:true, subs:[] },
+  { id:"salary",   name:"Salary",                tile:"Salary",    color:"#2D6A4F", income:true, subs:[] },
+  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#2D6A4F", income:true, subs:[] },
+  { id:"income",   name:"Other Income",          tile:"Other income",    color:"#3D7A5F", income:true, subs:[] },
 ];
 const CAT = (id) => CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==="other");
 
@@ -101,6 +232,7 @@ function resolveCategory(raw) {
   if (!raw) return "other";
   const key = String(raw).toLowerCase().trim();
   if (CATEGORIES.find(c=>c.id===key)) return key;  // exact id wins first
+  const byName=CATEGORIES.find(c=>c.name.toLowerCase()===key); if (byName) return byName.id;  // exact display name (CSV round-trip)
   if (CATEGORY_MAP[key]) return CATEGORY_MAP[key];
   for (const [k,v] of Object.entries(CATEGORY_MAP)) {
     if (key.includes(k)||k.includes(key)) return v;
@@ -108,65 +240,172 @@ function resolveCategory(raw) {
   return "other";
 }
 
-// S0: Robust normaliseTxn — preserves valid IDs, never drops data
+// Callers validate with checkRawTxn() first (see partitionTransactions). normaliseTxn never takes abs(),
+// never defaults a date and never turns an unknown type into an expense.
 function normaliseTxn(t) {
-  const id = (t.id !== undefined && t.id !== null && !Number.isNaN(Number(t.id)))
-    ? t.id : Date.now()+Math.random();
-  const amount = Math.abs(parseFloat(t.amount||t.amt||0));
-  if (amount <= 0 && t.type !== "income") {} // allow zero-amount income edge case
+  const rawId=t.id;
+  const id=(rawId!==undefined && rawId!==null && rawId!=="" && !Number.isNaN(Number(rawId))) ? rawId : Date.now()+Math.random();
+  const f=t.recurFreq||t.frequency;
   return {
     id,
-    type:        (t.type||"expense").toLowerCase().includes("inc") ? "income" : "expense",
-    amount:      Math.abs(parseFloat(t.amount||t.amt||0)),
+    type:        normType(t.type)==="income" ? "income" : "expense",
+    amount:      strictNum(t.amount ?? t.amt),
     category:    resolveCategory(t.category||t.catId||t.cat),
-    subcategory: t.subcategory||t.subcat||"",
-    merchant:    t.merchant||t.merchantName||"",
-    note:        t.note||t.description||t.name||"",
-    date:        (t.date||localDateStr()).slice(0,10),
-    recurring:   !!t.recurring,
-    recurFreq:   t.recurFreq||t.frequency||null,
+    subcategory: txt(t.subcategory||t.subcat),
+    merchant:    txt(t.merchant||t.merchantName),
+    note:        txt(t.note||t.description||t.name),
+    date:        String(t.date).trim().slice(0,10),
+    recurring:   isTrue(t.recurring),
+    recurFreq:   RECUR_FREQS.has(f) ? f : null,
     isActive:    t.isActive!==undefined ? !!t.isActive : true,
     createdAt:   t.createdAt||new Date().toISOString(),
   };
 }
 
-function migrateAndLoad() {
-  const current = readRaw(KEY);
-  if (current?.transactions) {
-    if (!current.templates)   current.templates   = DEFAULT_TEMPLATES;
-    if (!current.currency)    current.currency    = "₼";
-    if (!current.goals)       current.goals       = [];
-    if (!current.safeToSpend) current.safeToSpend = { savingsTarget:0, enabled:false };
-    if (!current.budgets)     current.budgets     = {};
-    // S0: Run through normaliseTxn for any missing fields
-    current.transactions = current.transactions.map(normaliseTxn);
-    return current;
+// ─── Settings contract (used for stored data AND imported backups) ───────────
+// Each section is validated on its own. Invalid entries are skipped and reported; a section whose entries are ALL
+// invalid is rejected so your current value is kept. Sections absent from the source are simply not returned.
+const BACKUP_VERSION = 9;
+const EXPENSE_CAT_IDS = () => CATEGORIES.filter(c=>!c.income).map(c=>c.id);
+function budgetKey(k) {
+  const ids=EXPENSE_CAT_IDS();
+  if (ids.includes(k)) return k;
+  const m=CATEGORY_MAP[String(k).toLowerCase()];            // exact legacy id only — no fuzzy guessing for budgets
+  return m && ids.includes(m) ? m : null;
+}
+function validateSettings(src) {
+  const settings={}, problems=[], warnings=[];
+  const has=(k)=>src[k]!==undefined && src[k]!==null;
+  const plural=(n,a,b)=>n>1?b:a;
+  const ids=EXPENSE_CAT_IDS();
+
+  if (has("budgets")) {
+    if (!isPlainObject(src.budgets)) problems.push("Budgets are not a valid list — your current budgets were kept.");
+    else {
+      const out={}; let bad=0; const entries=Object.entries(src.budgets);
+      entries.forEach(([k,v])=>{ const id=budgetKey(k), n=parseMoney(v); if (!id||n===null) bad++; else if (out[id]===undefined) out[id]=n; });
+      if (entries.length && !Object.keys(out).length) problems.push(`All ${entries.length} budget entries were invalid — your current budgets were kept.`);
+      else { settings.budgets=out; if (bad) problems.push(`${bad} invalid budget ${plural(bad,"entry was","entries were")} skipped.`); }
+    }
   }
+  if (has("templates")) {
+    if (!Array.isArray(src.templates)) problems.push("Templates are not a valid list — your current templates were kept.");
+    else {
+      const out=[], used=new Set(); let bad=0;
+      src.templates.forEach((t,i)=>{
+        if (!isPlainObject(t)) { bad++; return; }
+        const name=typeof t.name==="string" ? t.name.trim() : "";
+        const amount=parseMoney(t.amount,{positive:true});
+        const catId=typeof t.catId==="string" && ids.includes(t.catId) ? t.catId : null;
+        if (!name || name.length>60 || amount===null || !catId) { bad++; return; }
+        let id=typeof t.id==="string" && t.id ? t.id : `t${Date.now()}_${i}`;
+        while (used.has(id)) id+="_"; used.add(id);
+        out.push({ id, name, amount, catId, subcat:txt(t.subcat).slice(0,40), merchant:txt(t.merchant).slice(0,80), note:txt(t.note).slice(0,120) });
+      });
+      if (src.templates.length && !out.length) problems.push(`All ${src.templates.length} templates were invalid — your current templates were kept.`);
+      else { settings.templates=out; if (bad) problems.push(`${bad} invalid ${plural(bad,"template was","templates were")} skipped.`); }
+    }
+  }
+  if (has("goals")) {
+    if (!Array.isArray(src.goals)) problems.push("Goals are not a valid list — your current goals were kept.");
+    else {
+      const out=[], used=new Set(); let bad=0;
+      src.goals.forEach((g,i)=>{
+        if (!isPlainObject(g)) { bad++; return; }
+        const name=typeof g.name==="string" ? g.name.trim() : "";
+        const target=parseMoney(g.target,{positive:true});
+        const saved=(g.saved===undefined||g.saved===null||g.saved==="") ? 0 : parseMoney(g.saved);
+        const monthly=(g.monthlyTarget===undefined||g.monthlyTarget===null||g.monthlyTarget==="") ? 0 : parseMoney(g.monthlyTarget);
+        const hasDate=!(g.targetDate===undefined||g.targetDate===null||g.targetDate==="");
+        if (!name || name.length>80 || target===null || saved===null || monthly===null || (hasDate && !isValidDateStr(g.targetDate))) { bad++; return; }
+        let id=typeof g.id==="string" && g.id ? g.id : `g${Date.now()}_${i}`;
+        while (used.has(id)) id+="_"; used.add(id);
+        out.push({ id, name, target, saved, monthlyTarget:monthly, targetDate:hasDate?g.targetDate:null });
+      });
+      if (src.goals.length && !out.length) problems.push(`All ${src.goals.length} goals were invalid — your current goals were kept.`);
+      else { settings.goals=out; if (bad) problems.push(`${bad} invalid ${plural(bad,"goal was","goals were")} skipped.`); }
+    }
+  }
+  if (has("currency")) {
+    const c=typeof src.currency==="string" ? src.currency.trim() : "";
+    if (c && c.length<=3 && !/[\u0000-\u001f]/.test(c)) settings.currency=c;
+    else problems.push("The currency symbol was not valid — your current symbol was kept.");
+  }
+  if (has("safeToSpend")) {
+    const sts=src.safeToSpend;
+    const target=(isPlainObject(sts) && (sts.savingsTarget===undefined||sts.savingsTarget===null||sts.savingsTarget==="")) ? 0 : (isPlainObject(sts) ? parseMoney(sts.savingsTarget) : null);
+    const enabledOk=isPlainObject(sts) && (sts.enabled===undefined || typeof sts.enabled==="boolean");
+    if (isPlainObject(sts) && enabledOk && target!==null) settings.safeToSpend={ savingsTarget:target, enabled:!!sts.enabled };
+    else problems.push("The Safe to Spend settings were not valid — your current settings were kept.");
+  }
+  return { settings, problems, warnings };
+}
+
+function migrateAndLoad() {
+  let rawStr=null;
+  try { rawStr=localStorage.getItem(KEY); } catch {}
+  let current=null;
+  if (rawStr) { try { current=JSON.parse(rawStr); } catch { current=null; } }
+
+  if (isPlainObject(current) && Array.isArray(current.transactions)) {
+    const v=validateSettings(current);
+    if (v.problems.length) {
+      const kept=preserveRaw("settings_rejected",{ budgets:current.budgets, templates:current.templates, currency:current.currency, goals:current.goals, safeToSpend:current.safeToSpend });
+      if (!kept) SAVE_BLOCKED=true;
+      noteLoad(`Some saved settings were not valid and were reset${kept?" (the originals were kept)":" — saving is paused because they could not be copied"}`);
+    }
+    const lastBackup=(typeof current.lastBackup==="string" && !Number.isNaN(Date.parse(current.lastBackup))) ? current.lastBackup : null;
+    return {
+      transactions: sanitizeTransactions(current.transactions, "rejected"),
+      budgets:      v.settings.budgets     ?? {},
+      templates:    v.settings.templates   ?? DEFAULT_TEMPLATES,
+      currency:     v.settings.currency    ?? "₼",
+      goals:        v.settings.goals       ?? [],
+      safeToSpend:  v.settings.safeToSpend ?? { savingsTarget:0, enabled:false },
+      lastBackup,
+    };
+  }
+
+  // Something is stored under the current key but we cannot use it: keep a copy before anything overwrites it.
+  if (rawStr) {
+    if (preserveRaw("corrupt", rawStr)) noteLoad("Saved data could not be read — a recovery copy was kept");
+    else { SAVE_BLOCKED=true; noteLoad("Saved data could not be read and a recovery copy could not be made (storage may be full) — saving is paused so nothing is overwritten"); }
+  }
+
   // Legacy key migration
   let merged=[], bestSettings=null;
+  const seenIds=new Set();   // de-duplicate on the ORIGINAL id, before normalisation may replace it
   for (const k of KEYS_LEGACY) {
-    const d=readRaw(k); if (!d) continue;
-    const txns=d.transactions||d.entries||[];
-    const existingIds=new Set(merged.map(t=>String(t.id)));
-    txns.forEach(t=>{
-      if (!existingIds.has(String(t.id))) { merged.push(normaliseTxn(t)); existingIds.add(String(t.id)); }
+    const d=readRaw(k); if (!isPlainObject(d)) continue;
+    const list=Array.isArray(d.transactions)?d.transactions:Array.isArray(d.entries)?d.entries:[];
+    const bad=[];
+    list.forEach(t=>{
+      const reason=checkRawTxn(t);
+      if (reason) { bad.push({ record:t, reason }); return; }
+      const rid=(t.id!==undefined && t.id!==null && t.id!=="") ? String(t.id) : null;
+      if (rid!==null && seenIds.has(rid)) return;
+      if (rid!==null) seenIds.add(rid);
+      merged.push(normaliseTxn(t));
     });
+    setAside(`legacy_${k}_rejected`, bad.map(b=>b.record), summariseReasons(bad));
     if (d.currency||d.budgets) bestSettings=d;
   }
+  merged=ensureUniqueIds(merged).list;
   merged.sort((a,b)=>b.date.localeCompare(a.date));
   return buildState(merged, bestSettings);
 }
 
 function buildState(transactions=[], settings=null) {
   // No seed data — real users start empty
+  const v=isPlainObject(settings) ? validateSettings(settings) : { settings:{}, problems:[] };
   return {
     transactions,
-    budgets:     settings?.budgets     || {},
-    templates:   settings?.templates   || DEFAULT_TEMPLATES,
-    currency:    settings?.currency    || "₼",
-    goals:       settings?.goals       || [],
-    safeToSpend: settings?.safeToSpend || { savingsTarget:0, enabled:false },
-    lastBackup:  settings?.lastBackup  || null,
+    budgets:     v.settings.budgets     ?? {},
+    templates:   v.settings.templates   ?? DEFAULT_TEMPLATES,
+    currency:    v.settings.currency    ?? "₼",
+    goals:       v.settings.goals       ?? [],
+    safeToSpend: v.settings.safeToSpend ?? { savingsTarget:0, enabled:false },
+    lastBackup:  null,
   };
 }
 
@@ -200,16 +439,145 @@ function parseCSV(raw) {
   }
   row.push(field.trim());
   if (row.some(f=>f!=="")) rows.push(row);
+  rows.unterminated=inQ;   // an opening quote that never closes would silently merge rows
   return rows;
 }
 
+
+// Browser download. Starting a download is all the page can know: it cannot confirm the file was kept.
+function downloadFile(content, mime, filename) {
+  const url=URL.createObjectURL(new Blob([content],{type:mime}));
+  const a=document.createElement("a"); a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+// Keep only the newest recovery copy with this label (older ones are removed once a newer one is safely stored).
+function pruneRecoveryCopies(label) {
+  try {
+    const prefix=`${KEY}__${label}_`, keys=[];
+    for (let i=0;i<localStorage.length;i++) { const k=localStorage.key(i); if (k && k.startsWith(prefix)) keys.push(k); }
+    keys.sort().slice(0,-1).forEach(k=>localStorage.removeItem(k));
+  } catch {}
+}
+
+// ─── Import / export pipeline (pure: no React, no storage) ───────────────────
+const CSV_COLUMNS = { date:["date"], amount:["amount","amt","value"], type:["type"], category:["category","cat"],
+  categoryId:["categoryid","category id","category_id"], subcategory:["subcategory","subcat"], merchant:["merchant"],
+  note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"] };
+
+function parseCsvImport(raw) {
+  const rows=parseCSV(String(raw).replace(/^\uFEFF/,""));
+  if (rows.unterminated) return { error:"This CSV has an opening quote that is never closed, so rows could be merged or lost. Nothing was imported." };
+  if (rows.length<2) return { error:"No data rows were found in the CSV." };
+  const headers=rows[0].map(h=>h.replace(/^\uFEFF/,"").trim().toLowerCase());
+  const idx={}; Object.entries(CSV_COLUMNS).forEach(([k,names])=>{ idx[k]=names.map(n=>headers.indexOf(n)).find(i=>i!==-1) ?? -1; });
+  const missing=["date","amount"].filter(k=>idx[k]===-1);
+  if (missing.length) return { error:`The CSV needs a ${missing.join(" and ")} column. Found: ${rows[0].map(h=>h.trim()).filter(Boolean).join(", ")||"no headers"}. Nothing was imported.` };
+  const cell=(row,k)=>idx[k]===-1 ? "" : String(row[idx[k]] ?? "").trim();
+  const records=rows.slice(1).map((row,i)=>{
+    const rec=cell(row,"recurring").toLowerCase();
+    const isRec=!!rec && !["no","false","0","none"].includes(rec);
+    return { id:Date.now()+i+Math.random(), type:cell(row,"type"), amount:cell(row,"amount"),
+      category:cell(row,"categoryId")||cell(row,"category"), subcategory:cell(row,"subcategory"), merchant:cell(row,"merchant"),
+      note:cell(row,"note"), date:cell(row,"date"), recurring:isRec, recurFreq:isRec?rec:null, isActive:true, createdAt:new Date().toISOString() };
+  });
+  return { records };
+}
+
+// Reads a file's text into a plan. Nothing is applied here; the user reviews the plan first.
+function planImport(raw, filename="") {
+  const text=String(raw).replace(/^\uFEFF/,"");
+  const isCSV=/\.csv$/i.test(filename) || text.trimStart().toLowerCase().startsWith("date,");
+  let list=[], settings={}, problems=[], warnings=[];
+  if (isCSV) {
+    const r=parseCsvImport(text);
+    if (r.error) return { ok:false, error:r.error };
+    list=r.records;
+  } else {
+    let parsed;
+    try { parsed=JSON.parse(text); } catch { return { ok:false, error:"This file is not valid JSON or CSV, so nothing was imported." }; }
+    if (Array.isArray(parsed)) list=parsed;
+    else if (isPlainObject(parsed)) {
+      if (parsed.version!==undefined) {
+        if (!Number.isInteger(parsed.version) || parsed.version<1) return { ok:false, error:"The backup's version number is not valid, so it was not imported." };
+        if (parsed.version>BACKUP_VERSION) return { ok:false, error:`This backup was made by a newer version of the app (v${parsed.version}). Update the app before importing it.` };
+      }
+      if (Array.isArray(parsed.transactions)) list=parsed.transactions;
+      else if (Array.isArray(parsed.entries)) list=parsed.entries;
+      else { const v=Object.values(parsed).find(v=>Array.isArray(v) && v.length>0 && isPlainObject(v[0]) && v[0].amount!==undefined); if (v) list=v; }
+      const v=validateSettings(parsed); settings=v.settings; problems=v.problems; warnings=v.warnings.slice();
+      if (parsed.exportedAt!==undefined && !(typeof parsed.exportedAt==="string" && !Number.isNaN(Date.parse(parsed.exportedAt)))) warnings.push("The backup's export date is not valid and was ignored.");
+      if (isPlainObject(parsed.meta) && Number.isInteger(parsed.meta.transactionCount) && parsed.meta.transactionCount!==list.length)
+        warnings.push(`The file says it holds ${parsed.meta.transactionCount} transactions but contains ${list.length} — it may be incomplete.`);
+    } else return { ok:false, error:"This file does not look like a ledger backup." };
+  }
+  const { good, bad, rekeyed }=partitionTransactions(list);
+  if (!good.length && !Object.keys(settings).length)
+    return { ok:false, error: bad.length ? `Nothing could be imported — ${summariseReasons(bad)}.` : "No transactions or settings were found in this file." };
+  const unknownCat=list.filter(t=>checkRawTxn(t)===null).filter(t=>{ const c=txt(t.category||t.catId||t.cat).trim(); return c && resolveCategory(c)==="other" && !/^(other|miscellaneous)$/i.test(c); }).length;
+  if (unknownCat) warnings.push(`${unknownCat} transaction${unknownCat>1?"s have":" has"} a category the app does not recognise and ${unknownCat>1?"were":"was"} filed under Other.`);
+  if (rekeyed) warnings.push(`${rekeyed} duplicate id${rekeyed>1?"s were":" was"} re-assigned.`);
+  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings };
+}
+
+function txnFingerprint(t) { return [t.date,t.type,Number(t.amount).toFixed(2),t.category,norm(t.merchant),norm(t.note),norm(t.subcategory)].join("|"); }
+function countSuspectedDuplicates(existing, incoming) { const fp=new Set(existing.map(txnFingerprint)); return incoming.filter(t=>fp.has(txnFingerprint(t))).length; }
+
+// What each mode does with each part of a backup (shown to the user in the import sheet):
+//   Merge   transactions: added unless the id exists (optionally also skipping look-alikes) · budgets: combined, imported categories win ·
+//           templates/goals: new ones added · currency and Safe to Spend: YOUR current values stay.
+//   Replace transactions: replaced · budgets/templates/goals/currency/Safe to Spend: replaced ONLY if the file contains a valid section.
+function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
+  const sortDesc=(l)=>[...l].sort((a,b)=>b.date.localeCompare(a.date));
+  const S=plan.settings||{};
+  if (mode==="replace") {
+    const next={ ...state, transactions:sortDesc(plan.transactions) };
+    ["budgets","templates","currency","goals","safeToSpend"].forEach(k=>{ if (S[k]!==undefined) next[k]=S[k]; });
+    return next;
+  }
+  const ids=new Set(state.transactions.map(t=>String(t.id)));
+  const fps=new Set(state.transactions.map(txnFingerprint));
+  const add=plan.transactions.filter(t=>!ids.has(String(t.id)) && !(skipDuplicates && fps.has(txnFingerprint(t))));
+  const next={ ...state, transactions:sortDesc([...add, ...state.transactions]) };
+  const fresh=(prefix)=>`${prefix}${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+  if (S.budgets) next.budgets={ ...state.budgets, ...S.budgets };
+  if (S.templates) {
+    const key=(t)=>`${norm(t.name)}|${Number(t.amount).toFixed(2)}|${t.catId}`; const have=new Set(state.templates.map(key));
+    next.templates=[...state.templates, ...S.templates.filter(t=>!have.has(key(t))).map(t=>state.templates.some(x=>x.id===t.id)?{...t,id:fresh("t")}:t)];
+  }
+  if (S.goals) {
+    const key=(g)=>`${norm(g.name)}|${Number(g.target).toFixed(2)}`; const have=new Set(state.goals.map(key));
+    next.goals=[...state.goals, ...S.goals.filter(g=>!have.has(key(g))).map(g=>state.goals.some(x=>x.id===g.id)?{...g,id:fresh("g")}:g)];
+  }
+  return next;
+}
+
+function buildBackup(state, now=new Date().toISOString()) {
+  const { transactions,budgets,templates,currency,goals,safeToSpend }=state;
+  return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
+    transactions, budgets, templates, currency, goals, safeToSpend, lastBackup:now };
+}
+
+function buildCsv(transactions) {
+  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId"]];
+  transactions.forEach(t=>rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category]));
+  return "\uFEFF"+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+}
+
 // ─── Merchant memory ──────────────────────────────────────────────────────────
+// Memory is keyed by type + merchant, so a merchant used as both income and expense
+// keeps a separate category/subcategory for each. The most recent choice per type wins.
+function memKey(type, merchant) { return `${type==="income"?"income":"expense"}|${String(merchant).trim().toLowerCase()}`; }
+
 function buildMerchantMemory(transactions) {
   const mem={};
   [...transactions].sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>{
-    if (t.merchant&&t.merchant.trim()) {
-      const key=t.merchant.trim().toLowerCase();
-      if (!mem[key]) mem[key]={ category:t.category, subcategory:t.subcategory||"", merchant:t.merchant.trim(), count:0, totalSpent:0 };
+    if (t.merchant&&String(t.merchant).trim()) {
+      const type=t.type==="income"?"income":"expense";
+      const key=memKey(type,t.merchant);
+      if (!mem[key]) mem[key]={ type, merchant:String(t.merchant).trim(), count:0, totalSpent:0 };
+      mem[key].category=t.category;
+      mem[key].subcategory=t.subcategory||"";
       mem[key].count++;
       mem[key].totalSpent+=(t.amount||0);
     }
@@ -217,14 +585,12 @@ function buildMerchantMemory(transactions) {
   return mem;
 }
 
-function merchantSuggest(merchant, memory) {
+function merchantSuggest(merchant, memory, type="expense") {
   if (!merchant||!merchant.trim()) return null;
-  const key=merchant.trim().toLowerCase();
-  if (memory[key]) return memory[key];
-  for (const [k,v] of Object.entries(memory)) {
-    if (k.startsWith(key)||key.startsWith(k)) return v;
-  }
-  return null;
+  const exact=memory[memKey(type,merchant)];
+  if (exact) return exact;
+  const q=merchant.trim().toLowerCase();
+  return Object.values(memory).find(v=>v.type===(type==="income"?"income":"expense")&&v.merchant.toLowerCase().startsWith(q))||null;
 }
 
 // S6: Full merchant profile per spec — frequency, timing, recurrence detection, forecasting
@@ -346,6 +712,11 @@ function calcMerchantProfile(merchant, transactions) {
 }
 
 // ─── Shared financial calculation layer ──────────────────────────────────────
+// Shared label so every screen agrees: positive=Surplus, zero=Break-even, negative=Deficit
+function surplusLabel(inc, exp) { return inc>exp ? "Surplus" : inc<exp ? "Deficit" : "Break-even"; }
+
+function surplusColor(inc, exp) { return inc>exp ? "var(--pos)" : inc<exp ? "var(--neg)" : "var(--ink)"; }
+
 function calcMonthSummary(transactions, mon=curMon(), prv=prevMon()) {
   const isExp=t=>t.type==="expense", isInc=t=>t.type==="income";
   const curExp =transactions.filter(t=>isExp(t)&&t.date.startsWith(mon)).reduce((s,t)=>s+t.amount,0);
@@ -353,7 +724,8 @@ function calcMonthSummary(transactions, mon=curMon(), prv=prevMon()) {
   const prevExp=transactions.filter(t=>isExp(t)&&t.date.startsWith(prv)).reduce((s,t)=>s+t.amount,0);
   const prevInc=transactions.filter(t=>isInc(t)&&t.date.startsWith(prv)).reduce((s,t)=>s+t.amount,0);
   const momDiff=prevExp>0?curExp-prevExp:null;
-  const surplusRate=curInc>0?Math.max(0,Math.round(((curInc-curExp)/curInc)*100)):null;
+  // Negative when expenses exceed income — don't clamp, show the deficit
+  const surplusRate=curInc>0?Math.round(((curInc-curExp)/curInc)*100):null;
   return { curExp,curInc,prevExp,prevInc,momDiff,surplusRate };
 }
 
@@ -364,34 +736,49 @@ function calcCategorySpend(transactions, mon=curMon()) {
   return out;
 }
 
-function calcSpendingPace(curExp, mon=curMon()) {
-  const now=new Date();
-  const daysPassed=now.getDate();
-  const totalDays=daysInMonth(mon);
-  const daysLeft=totalDays-daysPassed;
-  const dailyAvg=daysPassed>0?curExp/daysPassed:0;
-  const projected=dailyAvg*totalDays;
-  // Expected spend by today = (daysPassed/totalDays) of projected
-  // "on track" means actual is within 5% of expected pace
-  const expectedByToday=projected*(daysPassed/totalDays);
-  const diff=curExp-expectedByToday;
-  const paceRatio=totalDays>0?daysPassed/totalDays:0;
-  const spendRatio=projected>0?curExp/projected:0;
-  const onTrack=spendRatio<=paceRatio+0.05;
-  return { daysPassed,totalDays,daysLeft,dailyAvg,projected,expectedByToday,diff,onTrack };
+// Where a month sits relative to today. "daysLeft" counts the days AFTER today; "daysRemaining" counts today as well,
+// because today's spending is still open. Every screen that shows "days left" or a per-day figure uses daysRemaining.
+function daysBetween(a, b) {   // calendar days from a to b, ignoring time of day and DST
+  return Math.round((Date.UTC(b.getFullYear(),b.getMonth(),b.getDate())-Date.UTC(a.getFullYear(),a.getMonth(),a.getDate()))/86400000);
+}
+function monthProgress(mon, now=new Date()) {
+  const totalDays=daysInMonth(mon), cur=localMonthStr(now);
+  if (mon===cur) { const d=now.getDate(); return { state:"current", totalDays, daysPassed:d, daysLeft:totalDays-d, daysRemaining:totalDays-d+1 }; }
+  if (mon<cur)   return { state:"past",   totalDays, daysPassed:totalDays, daysLeft:0, daysRemaining:0 };
+  return           { state:"future", totalDays, daysPassed:0, daysLeft:totalDays, daysRemaining:totalDays };
+}
+// Spending that has actually happened by today (entries dated later this month are planned, not yet spent).
+function calcSpentToDate(transactions, mon=curMon(), now=new Date()) {
+  const p=monthProgress(mon,now); if (p.state==="future") return 0;
+  const todayStr=localDateStr(now);
+  return transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&(p.state==="past"||t.date<=todayStr)).reduce((s,t)=>s+t.amount,0);
 }
 
-function calcBudgetStatus(budgets, catSpend, mon=curMon()) {
-  const daysInMon=daysInMonth(mon);
-  const daysPassed=new Date().getDate();
-  const budgetPacePct=Math.round((daysPassed/daysInMon)*100);
+function calcSpendingPace(spent, mon=curMon(), budgetTotal=0, now=new Date()) {
+  const p=monthProgress(mon,now);
+  const dailyAvg=p.daysPassed>0 ? spent/p.daysPassed : 0;
+  const projected=p.state==="current" ? dailyAvg*p.totalDays : spent;
+  // A projection from very few days is noise: say so instead of presenting it as a forecast.
+  const projectionReliable=p.state!=="current" || p.daysPassed>=5;
+  // "On track" only means something against an external benchmark (a budget); otherwise it stays null.
+  let onTrack=null, expectedByToday=null, diff=null;
+  if (budgetTotal>0 && p.state!=="future") {
+    expectedByToday = p.state==="past" ? budgetTotal : (budgetTotal/p.totalDays)*p.daysPassed;
+    diff=spent-expectedByToday;
+    onTrack = p.state==="past" ? spent<=budgetTotal : spent<=expectedByToday*1.05;
+  }
+  return { state:p.state, daysPassed:p.daysPassed, totalDays:p.totalDays, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAvg, projected, projectionReliable, expectedByToday, diff, onTrack };
+}
+
+function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
+  const p=monthProgress(mon,now);
+  const pacePct=p.totalDays ? Math.round((p.daysPassed/p.totalDays)*100) : 0;
   return Object.entries(budgets).filter(([,v])=>v>0).map(([catId,limit])=>{
     const spent=catSpend[catId]||0;
     const pct=Math.min((spent/limit)*100,100);
     const over=spent>limit, warn=pct>=80&&!over;
-    const aheadOfPace=Math.round(pct)>budgetPacePct+10;
-    const daysLeft=daysInMon-daysPassed;
-    return { catId,limit,spent,pct,over,warn,aheadOfPace,daysLeft };
+    const aheadOfPace=p.state==="current" && Math.round(pct)>pacePct+10;   // pace only means something while the month is under way
+    return { catId,limit,spent,pct,over,warn,aheadOfPace,daysLeft:p.daysRemaining,daysRemaining:p.daysRemaining,state:p.state };
   });
 }
 
@@ -446,89 +833,143 @@ function calcWhatChanged(transactions, mon=curMon(), prv=prevMon()) {
 }
 
 // S4: Safe to Spend — distinguishes available, future commitments, savings
-function calcSafeToSpend(transactions, safeConfig, goals=[]) {
+// ─── Recurring model: a SCHEDULE (the repeating commitment) vs its OCCURRENCES (individual dated payments) ───
+// Transactions flagged "recurring" are grouped into schedules by what they are — type, category, merchant (or note) and
+// frequency — so recording the same rent three months running is ONE schedule with three occurrences, not three commitments.
+// Unnamed entries also split by amount so two different unnamed bills never merge.
+function scheduleKey(t) {
+  const who=norm(t.merchant)||norm(t.note);
+  const tail=who ? "" : `${norm(t.subcategory)}|${Number(t.amount).toFixed(2)}`;
+  return [t.type,t.category,who,t.recurFreq,tail].join("|");
+}
+function buildSchedules(transactions) {
+  const groups=new Map();
+  transactions.forEach(t=>{ if (t.recurring && RECUR_FREQS.has(t.recurFreq)) { const k=scheduleKey(t); if (!groups.has(k)) groups.set(k,[]); groups.get(k).push(t); } });
+  return [...groups.entries()].map(([key,members])=>{
+    const sorted=[...members].sort((a,b)=>a.date.localeCompare(b.date)||String(a.createdAt).localeCompare(String(b.createdAt)));
+    const latest=sorted[sorted.length-1];
+    return { key, type:latest.type, category:latest.category, subcategory:latest.subcategory, merchant:latest.merchant, note:latest.note,
+      freq:latest.recurFreq, amount:latest.amount, isActive:latest.isActive!==false, occurrences:sorted.map(t=>t.date), memberIds:sorted.map(t=>t.id), latest };
+  }).sort((a,b)=>a.key.localeCompare(b.key));
+}
+const scheduleMonthly = (s) => toMonthlyAmountHelper({ amount:s.amount, recurFreq:s.freq });   // an ESTIMATE of a typical month
+
+// Dates a schedule is expected to fall on inside month `mon`, projected from its latest occurrence (month-end safe).
+function scheduleOccurrences(s, mon) {
+  const [y,mo]=mon.split("-").map(Number);
+  const first=new Date(y,mo-1,1), last=new Date(y,mo,0);
+  const anchor=parseLocalDate(s.occurrences[s.occurrences.length-1]), start=parseLocalDate(s.occurrences[0]);
+  if (mon<localMonthStr(start)) return [];                       // the commitment did not exist yet
+  const out=[];
+  if (s.freq==="weekly" || s.freq==="biweekly") {
+    const step=s.freq==="weekly" ? 7 : 14;
+    for (let k=Math.ceil(daysBetween(anchor,first)/step); ; k++) {
+      const d=new Date(anchor.getFullYear(),anchor.getMonth(),anchor.getDate()+k*step);
+      if (d>last) break;
+      if (d>=first && d>=start) out.push(d);
+    }
+  } else if (s.freq==="monthly") out.push(addMonths(anchor,(y-anchor.getFullYear())*12+(mo-1-anchor.getMonth())));
+  else if (s.freq==="yearly" && anchor.getMonth()===mo-1) out.push(new Date(y,mo-1,Math.min(anchor.getDate(),last.getDate())));
+  return out;
+}
+
+// Which expected occurrences in `mon` have no recorded payment yet. Monthly/yearly: any payment of the schedule in that month
+// settles it. Weekly/biweekly: each payment settles at most one expected date within ±3 / ±6 days.
+function scheduleMonthStatus(s, transactions, mon, now=new Date()) {
+  const todayStr=localDateStr(now);
+  const expected=scheduleOccurrences(s,mon).map(localDateStr);
+  const recorded=transactions.filter(t=>t.recurring&&scheduleKey(t)===s.key&&t.date.startsWith(mon)).map(t=>t.date).sort();
+  let remaining=[];
+  if (s.freq==="monthly" || s.freq==="yearly") remaining = recorded.length ? [] : expected;
+  else {
+    const tol=s.freq==="weekly" ? 3 : 6, used=new Set();
+    expected.forEach(e=>{
+      const i=recorded.findIndex((r,ix)=>!used.has(ix) && Math.abs(daysBetween(parseLocalDate(r),parseLocalDate(e)))<=tol);
+      if (i>=0) used.add(i); else remaining.push(e);
+    });
+  }
+  return { expected, recorded, remaining, upcoming:remaining.filter(d=>d>=todayStr), overdue:remaining.filter(d=>d<todayStr) };
+}
+
+// Next date (today or later) with no payment recorded yet, or null.
+function scheduleNextDue(s, transactions, now=new Date()) {
+  const todayStr=localDateStr(now);
+  for (let i=0;i<14;i++) {
+    const mon=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i));
+    const c=scheduleMonthStatus(s,transactions,mon,now).remaining.filter(d=>d>=todayStr);
+    if (c.length) return parseLocalDate(c[0]);
+  }
+  return null;
+}
+
+// S4: Safe to Spend = income recorded so far − savings reserve − spending recorded this month − commitments still to come.
+// "Commitments still to come" = every expected payment of an active schedule this month that has no matching recorded payment:
+// both upcoming ones and earlier ones that were never recorded (counted so the figure is never optimistic).
+// Recurring monthly estimates (recurringMonthly) are informational and are NOT part of this month's subtraction.
+function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
   const { savingsTarget=0 }=safeConfig||{};
-  const mon=curMon();
+  const mon=localMonthStr(now);
   const { curInc,curExp }=calcMonthSummary(transactions,mon);
-  const totalDays=daysInMonth(mon);
-  const daysPassed=new Date().getDate();
-  const daysLeft=totalDays-daysPassed;
+  const p=monthProgress(mon,now);
 
-  // Future unrecorded recurring commitments this month
-  const activeRecurring=transactions.filter(t=>t.recurring&&t.recurFreq&&t.isActive!==false&&t.type==="expense");
-  const alreadyRecordedIds=new Set(
-    transactions.filter(t=>t.recurring&&t.date.startsWith(mon)).map(t=>t.recurFreq+"|"+t.category+"|"+t.amount)
-  );
-  const futureCommitments=activeRecurring
-    .filter(t=>!alreadyRecordedIds.has(t.recurFreq+"|"+t.category+"|"+t.amount))
-    .reduce((s,t)=>s+t.amount,0);
-  const recurringMonthly=activeRecurring.reduce((s,t)=>s+toMonthlyAmountHelper(t),0);
+  const schedules=buildSchedules(transactions).filter(s=>s.isActive && s.type==="expense");
+  let upcomingCommitments=0, unrecordedCommitments=0, upcomingCount=0, unrecordedCount=0;
+  schedules.forEach(s=>{
+    const st=scheduleMonthStatus(s,transactions,mon,now);
+    upcomingCommitments+=s.amount*st.upcoming.length;  upcomingCount+=st.upcoming.length;
+    unrecordedCommitments+=s.amount*st.overdue.length; unrecordedCount+=st.overdue.length;
+  });
+  const futureCommitments=upcomingCommitments+unrecordedCommitments;
+  const recurringMonthly=schedules.reduce((sum,s)=>sum+scheduleMonthly(s),0);
 
-  // Fix 4: Goal contributions — sum of active goal monthlyTargets
-  // These represent planned savings allocations, separate from the savings target field.
-  // We only count them if they are not already covered by savingsTarget to avoid double-deduction.
-  // If the user has set a manual savingsTarget, we use that. If they have goals with monthlyTargets
-  // and no manual savingsTarget, we use the sum of goal contributions instead.
-  const goalContributions=(goals||[])
-    .filter(g=>g.monthlyTarget>0)
-    .reduce((s,g)=>s+g.monthlyTarget,0);
-  // Use the larger of: manual savings target vs goal contributions
-  // This prevents double-deduction while respecting explicit user intent
-  const effectiveSavingsTarget=Math.max(savingsTarget, goalContributions);
-  const goalContributionActive=goalContributions>savingsTarget&&goalContributions>0;
+  // Goal reserve: only goals that still need money and have a monthly contribution. The reserve is the LARGER of the manual
+  // savings floor and the goal contributions (the floor is treated as an overall minimum that already includes them).
+  const goalContributions=(goals||[]).filter(g=>g.monthlyTarget>0 && g.target>0 && (g.saved||0)<g.target).reduce((sum,g)=>sum+g.monthlyTarget,0);
+  const effectiveSavingsTarget=Math.max(savingsTarget,goalContributions);
+  const goalContributionActive=goalContributions>savingsTarget && goalContributions>0;
 
   const disposable=curInc-effectiveSavingsTarget;
   const remaining=disposable-curExp-futureCommitments;
-  const dailyAllowance=daysLeft>0?remaining/daysLeft:0;
+  const dailyAllowance=p.daysRemaining>0 ? remaining/p.daysRemaining : 0;
 
   return {
-    curInc, curExp, savingsTarget, effectiveSavingsTarget,
-    goalContributions, goalContributionActive,
-    futureCommitments, recurringMonthly,
-    disposable, remaining, daysLeft, dailyAllowance,
+    curInc, curExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
+    futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount,
+    scheduleCount:schedules.length, recurringMonthly,
+    disposable, remaining, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAllowance,
     feasible:curInc>0,
   };
 }
 
 // S1: Goals — full funding plan with target date and what-if
-function calcGoalProgress(goal) {
-  const { target=0, saved=0, monthlyTarget=0, targetDate }=goal;
-  const pct=target>0?Math.min((saved/target)*100,100):0;
+function calcGoalProgress(goal, now=new Date()) {
+  const num=(v)=>Number.isFinite(Number(v)) && Number(v)>0 ? Number(v) : 0;      // malformed values become 0, never NaN
+  const target=num(goal.target), saved=num(goal.saved), monthlyTarget=num(goal.monthlyTarget);
+  const pct=target>0 ? Math.min((saved/target)*100,100) : 0;
   const remaining=Math.max(target-saved,0);
-  // Estimated completion from monthlyTarget
-  let estCompletion=null, monthsNeeded=null;
-  if (monthlyTarget>0&&remaining>0) {
-    monthsNeeded=Math.ceil(remaining/monthlyTarget);
-    const d=new Date();
-    d.setMonth(d.getMonth()+monthsNeeded);
-    estCompletion=d.toLocaleDateString("en-GB",{month:"long",year:"numeric"});
-  }
-  // What-if scenarios — guard against monthlyTarget=0
+  const complete=target>0 && saved>=target;
+  const td=(goal.targetDate && isValidDateStr(String(goal.targetDate))) ? parseLocalDate(goal.targetDate) : null;
+  const monthLabel=(d,style)=>d.toLocaleDateString("en-GB",{month:style,year:"numeric"});
+
+  let monthsNeeded=null, estCompletion=null, estDate=null;
+  if (monthlyTarget>0 && remaining>0) { monthsNeeded=Math.ceil(remaining/monthlyTarget); estDate=addMonths(now,monthsNeeded); estCompletion=monthLabel(estDate,"long"); }
+
+  const daysToTarget = td ? daysBetween(now,td) : null;                      // calendar days, not 24-hour blocks
+  const overdue = !!td && !complete && daysToTarget<0;
+  const behindSchedule = !!td && !complete && !overdue && !!estDate && daysBetween(td,estDate)>0;   // projected finish is after the target date
+  const onTrack = !!td && !complete && !overdue && !!estDate && !behindSchedule;
+  const noContribution = !complete && remaining>0 && monthlyTarget===0;
+
   const whatIf=[];
-  const baseRate = monthlyTarget>0 ? monthlyTarget : 50; // default to 50 if unset
   if (remaining>0) {
-    const rates=[baseRate*0.6, baseRate, baseRate*1.4].filter(r=>r>0);
-    const unique=[...new Set(rates.map(r=>Math.round(r)))].filter(r=>r>0).slice(0,3);
-    unique.forEach(r=>{
+    const baseRate = monthlyTarget>0 ? monthlyTarget : 50;
+    [...new Set([baseRate*0.6,baseRate,baseRate*1.4].map(r=>Math.round(r)))].filter(r=>r>0).slice(0,3).forEach(r=>{
       const months=Math.ceil(remaining/r);
-      const d=new Date(); d.setMonth(d.getMonth()+months);
-      whatIf.push({ monthly:r, months, completion:d.toLocaleDateString("en-GB",{month:"short",year:"numeric"}) });
+      whatIf.push({ monthly:r, months, completion:monthLabel(addMonths(now,months),"short") });
     });
   }
-  // Days to target date
-  let daysToTarget=null, behindSchedule=false;
-  if (targetDate) {
-    const td=parseLocalDate(targetDate);
-    daysToTarget=Math.round((td-new Date())/86400000);
-    if (monthsNeeded&&monthsNeeded>Math.ceil(daysToTarget/30)) behindSchedule=true;
-  }
-  // Milestones: 25 / 50 / 75 / 100%
-  const milestones=[25,50,75,100].map(p=>({
-    pct:p, amount:parseFloat(((target*p)/100).toFixed(2)),
-    completed:(saved||0)>=(target*p)/100,
-  }));
-
-  return { pct,remaining,monthsNeeded,estCompletion,whatIf,daysToTarget,behindSchedule,milestones };
+  const milestones=[25,50,75,100].map(pp=>({ pct:pp, amount:parseFloat(((target*pp)/100).toFixed(2)), completed:target>0 && saved>=(target*pp)/100 }));
+  return { pct, remaining, complete, monthsNeeded, estCompletion, estDate, whatIf, daysToTarget, overdue, behindSchedule, onTrack, noContribution, milestones };
 }
 
 function toMonthlyAmountHelper(t) {
@@ -543,167 +984,108 @@ function toMonthlyAmountHelper(t) {
 // S5: Full financial patterns engine — deterministic, data-only
 // Returns { insights, anomalies, dayOfWeek, categoryTrends, correlations }
 
-function calcPatterns(transactions) {
-  const expenses = transactions.filter(t=>t.type==="expense");
-  const mon = curMon(), prv = prevMon();
-  const insights = []; // text-based patterns for display
+function calcPatterns(transactions, currency="₼", now=new Date()) {
+  const expenses=transactions.filter(t=>t.type==="expense");
+  const monBack=(k)=>localMonthStr(new Date(now.getFullYear(),now.getMonth()-k,1));
+  const mon=monBack(0), prv=monBack(1), todayStr=localDateStr(now);
+  const insights=[];
+  const empty={ insights, anomalies:[], dayOfWeek:{}, categoryTrends:[], correlations:[] };
+  if (expenses.length<5) return empty;
+  const sumOf=(l)=>l.reduce((a,t)=>a+t.amount,0);
+  const pctChange=(a,b)=>Math.round(((a-b)/b)*100);                       // only called with b>0
+  const isWeekend=(d)=>[0,6].includes(parseLocalDate(d).getDay());
+  const DAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-  if (expenses.length < 5) return { insights, anomalies:[], dayOfWeek:{}, categoryTrends:[], correlations:[] };
-
-  // ── Weekend vs weekday ───────────────────────────────────────────────────
-  const cutoff = localDateStr(new Date(Date.now()-60*86400000));
-  const recent = expenses.filter(t=>t.date>=cutoff);
-  if (recent.length>=8) {
-    const isWkend = d=>[0,6].includes(parseLocalDate(d).getDay());
-    const wkend = recent.filter(t=>isWkend(t.date));
-    const wkday  = recent.filter(t=>!isWkend(t.date));
-    if (wkend.length>=3&&wkday.length>=3) {
-      const wkendDaily = wkend.reduce((s,t)=>s+t.amount,0)/(wkend.length/7*2);
-      const wkdayDaily = wkday.reduce((s,t)=>s+t.amount,0)/(wkday.length/7*5);
-      if (wkendDaily>0&&wkdayDaily>0) {
-        const pct = Math.round(((wkendDaily-wkdayDaily)/wkdayDaily)*100);
-        if (Math.abs(pct)>=15) insights.push({ id:"weekend",
-          text: pct>0?`Weekend spending is ${pct}% higher than weekdays (last 60 days)`
-                     :`Weekday spending is ${Math.abs(pct)}% higher than weekends (last 60 days)` });
-      }
+  // ── Weekend vs weekday: spending PER CALENDAR DAY over up to 56 days (never before the first recorded expense).
+  //    Totals and per-transaction figures are not compared: a window holds ~2.5× more weekdays than weekend days.
+  const earliest=expenses.reduce((m,t)=>t.date<m?t.date:m,todayStr);
+  const winStartLimit=new Date(now.getFullYear(),now.getMonth(),now.getDate()-55);
+  const startD=parseLocalDate(earliest)>winStartLimit ? parseLocalDate(earliest) : winStartLimit;
+  const startStr=localDateStr(startD);
+  let weDays=0, wdDays=0;
+  for (let d=new Date(startD); localDateStr(d)<=todayStr; d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1)) { if ([0,6].includes(d.getDay())) weDays++; else wdDays++; }
+  const win=expenses.filter(t=>t.date>=startStr && t.date<=todayStr);
+  if (win.length>=10 && weDays>=8 && wdDays>=20) {
+    const weAvg=sumOf(win.filter(t=>isWeekend(t.date)))/weDays, wdAvg=sumOf(win.filter(t=>!isWeekend(t.date)))/wdDays;
+    if (weAvg>0 && wdAvg>0) {
+      const pct=pctChange(weAvg,wdAvg);
+      if (Math.abs(pct)>=20) insights.push({ id:"weekend", text:`Per day, you spend ${Math.abs(pct)}% ${pct>0?"more":"less"} on weekends than on weekdays (${fmt(weAvg,currency)} vs ${fmt(wdAvg,currency)} a day, last ${weDays+wdDays} days)` });
     }
   }
 
-  // ── Category concentration ───────────────────────────────────────────────
-  const monExp = expenses.filter(t=>t.date.startsWith(mon));
-  if (monExp.length>=5) {
-    const catTotals={};
-    monExp.forEach(t=>{ catTotals[t.category]=(catTotals[t.category]||0)+t.amount; });
-    const sorted=Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
-    const topCat=sorted[0];
-    const total=monExp.reduce((s,t)=>s+t.amount,0);
-    if (topCat&&total>0) {
-      const pct=Math.round((topCat[1]/total)*100);
-      if (pct>=40) insights.push({ id:"catconc", text:`${CAT(topCat[0])?.name} accounts for ${pct}% of spending this month` });
-    }
-    // Merchant concentration
-    const mTotals={};
-    monExp.filter(t=>t.merchant).forEach(t=>{ mTotals[t.merchant]=(mTotals[t.merchant]||0)+t.amount; });
-    const top3m=Object.entries(mTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    const top3total=top3m.reduce((s,[,v])=>s+v,0);
-    if (top3m.length>=2&&total>0) {
-      const pct=Math.round((top3total/total)*100);
-      if (pct>=60) insights.push({ id:"merchant", text:`${top3m.map(([m])=>m).join(", ")} account for ${pct}% of spending this month` });
-    }
+  // ── Concentration this month
+  const monExp=expenses.filter(t=>t.date.startsWith(mon));
+  const monTotal=sumOf(monExp);
+  if (monExp.length>=5 && monTotal>0) {
+    const catTotals={}; monExp.forEach(t=>{ catTotals[t.category]=(catTotals[t.category]||0)+t.amount; });
+    const topCat=Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
+    const pct=Math.round((topCat[1]/monTotal)*100);
+    if (pct>=40) insights.push({ id:"catconc", text:`${CAT(topCat[0])?.name} accounts for ${pct}% of spending this month` });
+    const mTotals={}; monExp.filter(t=>t.merchant).forEach(t=>{ mTotals[t.merchant]=(mTotals[t.merchant]||0)+t.amount; });
+    const top3=Object.entries(mTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>a+v,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", text:`${top3.map(([m])=>m).join(", ")} account for ${pc}% of spending this month` }); }
   }
 
-  // ── Avg transaction change ───────────────────────────────────────────────
-  const curAmts=expenses.filter(t=>t.date.startsWith(mon)).map(t=>t.amount);
-  const prvAmts=expenses.filter(t=>t.date.startsWith(prv)).map(t=>t.amount);
-  if (curAmts.length>=4&&prvAmts.length>=4) {
-    const curAvg=curAmts.reduce((s,a)=>s+a,0)/curAmts.length;
-    const prvAvg=prvAmts.reduce((s,a)=>s+a,0)/prvAmts.length;
-    if (prvAvg>0) {
-      const pct=Math.round(((curAvg-prvAvg)/prvAvg)*100);
-      if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:`Average transaction is ${Math.abs(pct)}% ${pct>0?"higher":"lower"} than last month` });
-    }
+  // ── Average transaction vs last month (a per-transaction average, so a part-month is comparable)
+  const curAmts=expenses.filter(t=>t.date.startsWith(mon)).map(t=>t.amount), prvAmts=expenses.filter(t=>t.date.startsWith(prv)).map(t=>t.amount);
+  if (curAmts.length>=4 && prvAmts.length>=4) {
+    const curAvg=curAmts.reduce((a,b)=>a+b,0)/curAmts.length, prvAvg=prvAmts.reduce((a,b)=>a+b,0)/prvAmts.length;
+    if (prvAvg>0) { const pct=pctChange(curAvg,prvAvg); if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:`Average transaction is ${Math.abs(pct)}% ${pct>0?"higher":"lower"} than last month (${curAmts.length} vs ${prvAmts.length} transactions)` }); }
   }
 
-  // ── Day of week patterns ─────────────────────────────────────────────────
-  const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-  const dayOfWeek = {};
-  DAY_NAMES.forEach(d=>{ dayOfWeek[d]={ avg:0, count:0, total:0 }; });
-  monExp.forEach(t=>{
-    const d = DAY_NAMES[parseLocalDate(t.date).getDay()];
-    dayOfWeek[d].count++;
-    dayOfWeek[d].total += t.amount;
-  });
-  DAY_NAMES.forEach(d=>{ if (dayOfWeek[d].count>0) dayOfWeek[d].avg = parseFloat((dayOfWeek[d].total/dayOfWeek[d].count).toFixed(2)); });
-  // Insight: highest spending day
-  const topDay = DAY_NAMES.filter(d=>dayOfWeek[d].count>0).sort((a,b)=>dayOfWeek[b].avg-dayOfWeek[a].avg)[0];
-  if (topDay&&monExp.length>=7) {
-    const lowDay = DAY_NAMES.filter(d=>dayOfWeek[d].count>0).sort((a,b)=>dayOfWeek[a].avg-dayOfWeek[b].avg)[0];
-    if (topDay!==lowDay&&dayOfWeek[topDay].avg>0&&dayOfWeek[lowDay].avg>0) {
-      const pct=Math.round(((dayOfWeek[topDay].avg-dayOfWeek[lowDay].avg)/dayOfWeek[lowDay].avg)*100);
-      if (pct>=30) insights.push({ id:"dayofweek", text:`${topDay}s average ${pct}% more per transaction than ${lowDay}s this month` });
-    }
+  // ── Day of week (average per transaction; only days with at least 3 transactions are compared)
+  const dayOfWeek={}; DAY_NAMES.forEach(d=>{ dayOfWeek[d]={ avg:0, count:0, total:0 }; });
+  monExp.forEach(t=>{ const d=DAY_NAMES[parseLocalDate(t.date).getDay()]; dayOfWeek[d].count++; dayOfWeek[d].total+=t.amount; });
+  DAY_NAMES.forEach(d=>{ if (dayOfWeek[d].count>0) dayOfWeek[d].avg=parseFloat((dayOfWeek[d].total/dayOfWeek[d].count).toFixed(2)); });
+  const eligible=DAY_NAMES.filter(d=>dayOfWeek[d].count>=3);
+  if (eligible.length>=2) {
+    const byAvg=[...eligible].sort((a,b)=>dayOfWeek[b].avg-dayOfWeek[a].avg), hi=byAvg[0], lo=byAvg[byAvg.length-1];
+    if (dayOfWeek[lo].avg>0) { const pct=pctChange(dayOfWeek[hi].avg,dayOfWeek[lo].avg); if (pct>=30) insights.push({ id:"dayofweek", text:`${hi}s average ${pct}% more per transaction than ${lo}s this month (${dayOfWeek[hi].count} vs ${dayOfWeek[lo].count} transactions)` }); }
   }
 
-  // ── Category trends (6-month linear regression) ──────────────────────────
-  const categoryTrends = [];
-  const usedCats = [...new Set(expenses.map(t=>t.category))];
-  usedCats.forEach(catId=>{
-    const months6 = Array.from({length:6},(_,i)=>nMon(5-i));
-    const data = months6.map((m,i)=>({
-      x:i,
-      y:expenses.filter(t=>t.category===catId&&t.date.startsWith(m)).reduce((s,t)=>s+t.amount,0)
-    }));
-    const nonZero = data.filter(d=>d.y>0);
-    if (nonZero.length<3) return;
-    const n=data.length, sumX=data.reduce((s,d)=>s+d.x,0), sumY=data.reduce((s,d)=>s+d.y,0);
-    const sumXY=data.reduce((s,d)=>s+d.x*d.y,0), sumX2=data.reduce((s,d)=>s+d.x*d.x,0);
-    const denom=n*sumX2-sumX*sumX;
+  // ── Category trends over the last 6 COMPLETED months (the current part-month would distort a trend)
+  const categoryTrends=[];
+  const months6=[6,5,4,3,2,1].map(monBack);
+  [...new Set(expenses.map(t=>t.category))].forEach(catId=>{
+    const data=months6.map((m,i)=>({ x:i, y:sumOf(expenses.filter(t=>t.category===catId&&t.date.startsWith(m))) }));
+    if (data.filter(d=>d.y>0).length<3) return;
+    const n=data.length, sumX=data.reduce((a,d)=>a+d.x,0), sumY=data.reduce((a,d)=>a+d.y,0);
+    const sumXY=data.reduce((a,d)=>a+d.x*d.y,0), sumX2=data.reduce((a,d)=>a+d.x*d.x,0), denom=n*sumX2-sumX*sumX;
     if (denom===0) return;
-    const slope=(n*sumXY-sumX*sumY)/denom;
-    const avgY=sumY/n;
-    let trend="stable";
-    if (slope>avgY*0.05) trend="increasing";
-    if (slope<-avgY*0.05) trend="decreasing";
-    const last=data[data.length-1].y, prev=data[data.length-2].y;
-    const trendPct=prev>0?Math.round(((last-prev)/prev)*100):0;
+    const slope=(n*sumXY-sumX*sumY)/denom, avgY=sumY/n;
+    const trend=slope>avgY*0.05 ? "increasing" : slope<-avgY*0.05 ? "decreasing" : "stable";
+    const last=data[n-1].y, prev=data[n-2].y;
+    const trendPct=prev>0 ? pctChange(last,prev) : 0;
     categoryTrends.push({ catId, trend, trendPct, slope:parseFloat(slope.toFixed(2)), monthlyData:data });
-    if (trend!=="stable"&&Math.abs(trendPct)>=15) {
-      insights.push({ id:`trend-${catId}`,
-        text:`${CAT(catId)?.name} spending has been ${trend} — ${Math.abs(trendPct)}% ${trend==="increasing"?"up":"down"} vs last month` });
-    }
+    if (trend!=="stable" && prev>0 && last>0 && Math.abs(trendPct)>=20)
+      insights.push({ id:`trend-${catId}`, text:`${CAT(catId)?.name} spending has been ${trend} over recent months (${trendPct>0?"+":""}${trendPct}% last month vs the month before)` });
   });
 
-  // ── Anomaly detection (IQR method) ───────────────────────────────────────
-  const anomalies = [];
-  const catHistAmounts = {};
-  expenses.forEach(t=>{
-    if (!catHistAmounts[t.category]) catHistAmounts[t.category]=[];
-    catHistAmounts[t.category].push(t.amount);
-  });
+  // ── Unusually large transactions this month: above Q3 + 1.5×IQR of that category's history AND at least 1.5× its median
+  const quantile=(sorted,q)=>{ const i=(sorted.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); };
+  const hist={}; expenses.forEach(t=>{ (hist[t.category]=hist[t.category]||[]).push(t.amount); });
+  const anomalies=[];
   monExp.forEach(t=>{
-    const hist=[...(catHistAmounts[t.category]||[])].sort((a,b)=>a-b);
-    if (hist.length<5) return;
-    const q1=hist[Math.floor(hist.length/4)];
-    const q3=hist[Math.floor(3*hist.length/4)];
-    const iqr=q3-q1;
-    if (t.amount>q3+1.5*iqr) {
-      anomalies.push({ date:t.date, amount:t.amount, category:t.category, merchant:t.merchant||"",
-        reason:`${(t.amount/((q1+q3)/2)).toFixed(1)}x normal for ${CAT(t.category)?.name}`, severity:"high" });
-    }
+    const h=[...(hist[t.category]||[])].sort((a,b)=>a-b);
+    if (h.length<8) return;
+    const q1=quantile(h,0.25), q3=quantile(h,0.75), med=quantile(h,0.5);
+    if (t.amount>q3+1.5*(q3-q1) && med>0 && t.amount>=1.5*med)
+      anomalies.push({ date:t.date, amount:t.amount, category:t.category, merchant:t.merchant||"", reason:`${(t.amount/med).toFixed(1)}× the usual ${CAT(t.category)?.name} amount (median ${fmt(med,currency)})`, severity:"high" });
   });
-  anomalies.sort((a,b)=>b.amount-a.amount).splice(10); // top 10
-  if (anomalies.length>0) {
-    insights.push({ id:"anomaly", text:`${anomalies.length} unusually large transaction${anomalies.length>1?"s":""} detected this month` });
-  }
+  anomalies.sort((a,b)=>b.amount-a.amount).splice(10);
+  if (anomalies.length) insights.push({ id:"anomaly", text:`${anomalies.length} unusually large transaction${anomalies.length>1?"s":""} this month` });
 
-  // ── Correlation detection ────────────────────────────────────────────────
-  const correlations = [];
-  const catByDay = {};
-  monExp.forEach(t=>{ if (!catByDay[t.date]) catByDay[t.date]=[]; catByDay[t.date].push(t.category); });
-  const pairCounts={};
-  Object.values(catByDay).forEach(cats=>{
-    const unique=[...new Set(cats)];
-    for (let i=0;i<unique.length;i++) for (let j=i+1;j<unique.length;j++) {
-      const pair=[unique[i],unique[j]].sort().join("__");
-      pairCounts[pair]=(pairCounts[pair]||0)+1;
-    }
-  });
-  const totalDays=Object.keys(catByDay).length;
-  if (totalDays>=5) {
-    Object.entries(pairCounts)
-      .filter(([,c])=>c>=totalDays*0.3)
-      .sort((a,b)=>b[1]-a[1]).slice(0,3)
-      .forEach(([pair,count])=>{
-        const [c1,c2]=pair.split("__");
-        correlations.push({ category1:c1, category2:c2, frequency:count, correlation:parseFloat((count/totalDays).toFixed(2)) });
-      });
-    if (correlations.length>0) {
-      const top=correlations[0];
-      insights.push({ id:"same-day",
-        text:`${CAT(top.category1)?.name} and ${CAT(top.category2)?.name} are often recorded on the same day (${Math.round(top.correlation*100)}% of spending days this month)` });
-    }
+  // ── Categories recorded on the same day (co-occurrence — it does not mean one causes the other)
+  const correlations=[];
+  const catByDay={}; monExp.forEach(t=>{ (catByDay[t.date]=catByDay[t.date]||new Set()).add(t.category); });
+  const days=Object.keys(catByDay).length, pairCounts={};
+  Object.values(catByDay).forEach(set=>{ const u=[...set]; for (let i=0;i<u.length;i++) for (let j=i+1;j<u.length;j++) { const k=[u[i],u[j]].sort().join("__"); pairCounts[k]=(pairCounts[k]||0)+1; } });
+  if (days>=8) {
+    Object.entries(pairCounts).filter(([,c])=>c>=Math.max(3,Math.ceil(days*0.3))).sort((a,b)=>b[1]-a[1]).slice(0,3).forEach(([k,c])=>{
+      const [c1,c2]=k.split("__"); correlations.push({ category1:c1, category2:c2, frequency:c, correlation:parseFloat((c/days).toFixed(2)) });
+    });
+    if (correlations.length) { const t=correlations[0]; insights.push({ id:"same-day", text:`${CAT(t.category1)?.name} and ${CAT(t.category2)?.name} are often recorded on the same day (${Math.round(t.correlation*100)}% of spending days this month)` }); }
   }
-
   return { insights, anomalies, dayOfWeek, categoryTrends, correlations };
 }
 
@@ -713,7 +1095,7 @@ function fmt(n, sym="₼") {
 }
 function fmtShort(n, sym="₼") {
   const a=Math.abs(n||0);
-  return a>=1000?`${(a/1000).toFixed(1)}k ${sym}`:`${a.toFixed(2)} ${sym}`;
+  return a>=1e6?`${(a/1e6).toFixed(1)}M ${sym}`:a>=1000?`${(a/1000).toFixed(1)}k ${sym}`:`${a.toFixed(2)} ${sym}`;
 }
 function fmtDate(d) {
   if (!d) return "";
@@ -734,7 +1116,7 @@ function median(arr) {
 
 // ─── SVG icon system ──────────────────────────────────────────────────────────
 const ICONS = {
-  food:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>`,
+  food:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v7"/><path d="M7 2v7"/><path d="M10 2v7"/><path d="M4 7a3 3 0 0 0 6 0"/><path d="M7 10v12"/><path d="M17 2c-2.2 2-3 4.5-3 7v2h6V9c0-2.5-.8-5-3-7Z"/><path d="M17 11v11"/></svg>`,
   transport:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>`,
   shopping:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>`,
   gifts:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>`,
@@ -742,12 +1124,12 @@ const ICONS = {
   digital:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>`,
   health:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
   edu:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>`,
-  travel:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.67A2 2 0 012.18 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 8.14a16 16 0 006 6l1.5-1.5a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>`,
+  travel:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5a2.1 2.1 0 0 0-3-3L13 8l-8.2-1.8a.5.5 0 0 0-.5.8L9 12l-4 4-2.1-.7a.5.5 0 0 0-.6.6L4 19l3.1 1.7a.5.5 0 0 0 .6-.6L7 18l4-4 4 4.7a.5.5 0 0 0 .8-.5Z"/></svg>`,
   housing:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
   finance:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>`,
   other:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>`,
   salary:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>`,
-  freelance:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
+  freelance:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/><path d="M10 12v2h4v-2"/></svg>`,
   income:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>`,
   add:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   close:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
@@ -770,8 +1152,8 @@ const ICONS = {
   pace:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   goal:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
   safe:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`,
-  merchant:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><path d="M9 22V12h6v10"/></svg>`,
-  pattern:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><path d="M11 18H8a2 2 0 01-2-2V9"/></svg>`,
+  merchant:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18"/><path d="M4 10V20h16V10"/><path d="M2 10l2-7h16l2 7"/><path d="M2 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M9 20v-5h6v5"/></svg>`,
+  pattern:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.2 14.5A7 7 0 1 1 15.8 14.5c-.9.6-1.3 1.3-1.5 2.5h-4.6c-.2-1.2-.6-1.9-1.5-2.5Z"/></svg>`,
   compare:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`,
 };
 
@@ -803,23 +1185,24 @@ button{font-family:inherit;cursor:pointer}
 html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 .app{max-width:430px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
 .topbar{position:sticky;top:0;z-index:60;background:rgba(247,244,238,0.94);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid var(--rule);padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.wordmark{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-0.1px}
-.topbar-right{display:flex;gap:4px}
+.wordmark{font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-0.1px}
+.topbar-right{display:flex;align-items:center;gap:7px}
+.topbar-add{width:34px;height:34px;border:1px solid var(--ink);border-radius:9px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(26,24,20,0.12);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent}
+.topbar-add:active{transform:scale(0.92)}
 .topbar-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 120ms,color 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .topbar-btn:hover{background:var(--bg-inset);color:var(--ink)}.topbar-btn:active{transform:scale(0.88)}
 .tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(247,244,238,0.96);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
-.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;border:none;background:transparent;cursor:pointer;color:var(--ink-4);transition:color 150ms,transform 80ms;font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent}
+.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;border:none;background:transparent;cursor:pointer;color:var(--ink-3);transition:color 150ms,transform 80ms;font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent}
 .tab-btn.active{color:var(--ink)}.tab-btn:active{transform:scale(0.88)}
-.tab-lbl{font-size:9px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase}
-.tab-line{width:16px;height:2px;background:var(--accent);border-radius:99px;margin-top:1px;animation:tabLineIn 200ms cubic-bezier(0.34,1.56,0.64,1) both}
-@keyframes tabLineIn{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:1}}
-.page{flex:1;overflow-y:auto;padding:20px 20px 92px;animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) both}
+.tab-lbl{font-size:9.5px;font-weight:700;letter-spacing:0.35px;text-transform:uppercase;line-height:1.15}
+.tab-indicator{position:absolute;top:5px;left:calc((100% / var(--tab-count,5)) * var(--tab-index,0) + (100% / (var(--tab-count,5) * 2)) - 8px);width:16px;height:2px;background:var(--accent);border-radius:99px;pointer-events:none;transition:left 320ms cubic-bezier(0.22,1,0.36,1)}
+.page{flex:1;overflow-y:auto;padding:20px 20px calc(112px + env(safe-area-inset-bottom,0px));animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) both}
 @keyframes pageIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-.label-sm{font-size:9px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--ink-3)}
+.label-sm{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3)}
 /* Hero */
 .hero{padding:16px 0 18px;border-bottom:1px solid var(--rule);margin-bottom:18px}
 .hero-eyebrow{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
-.hero-amount{font-family:'Playfair Display',serif;font-size:48px;font-weight:900;letter-spacing:-2.5px;line-height:1;color:var(--ink);margin-bottom:3px}
+.hero-amount{font-family:'Playfair Display',serif;font-size:clamp(34px,11.5vw,48px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-2px;line-height:1;color:var(--ink);margin-bottom:3px;white-space:nowrap}
 .hero-sub{font-size:12px;color:var(--ink-3);margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mom-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
 .mom-badge.better{background:var(--pos-bg);color:var(--pos)}
@@ -827,9 +1210,9 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .hero-stats{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--bg-card)}
 .hero-stat{padding:11px 10px;position:relative}
 .hero-stat:not(:last-child)::after{content:'';position:absolute;right:0;top:8px;bottom:8px;width:1px;background:var(--rule)}
-.hero-stat-val{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;letter-spacing:-0.3px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-stat-val{font-family:'Playfair Display',serif;font-size:clamp(12px,3.6vw,15px);font-weight:700;letter-spacing:-0.3px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hero-stat-val.pos{color:var(--pos)}.hero-stat-val.neg{color:var(--neg)}
-.hero-stat-lbl{font-size:9px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-4)}
+.hero-stat-lbl{font-size:10px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-4)}
 /* Cards */
 .pace-card{background:var(--bg-card);border:1px solid var(--rule);border-radius:8px;padding:12px 14px;margin-bottom:14px}
 .pace-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
@@ -838,7 +1221,7 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .pace-fill.on-track{background:var(--pos)}.pace-fill.over-pace{background:var(--neg)}
 .pace-sub{display:flex;justify-content:space-between;margin-top:4px}
 .safe-card{background:var(--bg-card);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;margin-bottom:14px}
-.safe-amount{font-family:'Playfair Display',serif;font-size:32px;font-weight:900;letter-spacing:-1.5px;margin:4px 0}
+.safe-amount{font-family:'Playfair Display',serif;font-size:clamp(26px,8.6vw,32px);font-weight:900;letter-spacing:-1.5px;margin:4px 0}
 .safe-daily{font-size:11px;color:var(--ink-3);margin-top:2px}
 .safe-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--rule);font-size:11px}
 .safe-row:last-child{border-bottom:none}
@@ -876,9 +1259,10 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .txn-row:active{background:var(--bg-inset);transform:scale(0.99)}
 .txn-ico{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .txn-body{flex:1;min-width:0}
-.txn-name{font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.txn-sub{font-size:11px;color:var(--ink-3);margin-top:1px;display:flex;gap:4px;align-items:center;flex-wrap:nowrap;overflow:hidden}
+.txn-name{font-size:13px;font-weight:600;color:var(--ink);white-space:normal;overflow-wrap:anywhere;line-height:1.25}
+.txn-sub{font-size:11px;color:var(--ink-3);margin-top:2px;display:flex;gap:4px;align-items:center;flex-wrap:wrap;overflow:visible;line-height:1.3}
 .txn-sub span{white-space:nowrap}
+.txn-sub span:not(.rec-pill){white-space:normal;overflow-wrap:anywhere;min-width:0;max-width:100%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .rec-pill{display:inline-flex;align-items:center;gap:3px;background:var(--warn-bg);color:var(--warn);font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0}
 .txn-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
 .txn-amt{font-family:'Playfair Display',serif;font-size:14px;font-weight:600}
@@ -891,10 +1275,6 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .empty-icon{color:var(--ink-5);margin-bottom:4px}
 .empty-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:600;color:var(--ink)}
 .empty-body{font-size:13px;color:var(--ink-3);line-height:1.65;max-width:240px}
-/* FAB */
-.fab{position:fixed;bottom:calc(68px + env(safe-area-inset-bottom,0px) + 14px);right:calc(max(18px,50vw - 197px));width:50px;height:50px;border-radius:14px;background:var(--ink);color:var(--bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(26,24,20,0.28),0 1px 3px rgba(26,24,20,0.12);z-index:50;transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1),box-shadow 200ms;-webkit-tap-highlight-color:transparent;animation:fabIn 400ms 100ms cubic-bezier(0.34,1.56,0.64,1) both}
-@keyframes fabIn{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
-.fab:active{transform:scale(0.90);box-shadow:0 2px 8px rgba(26,24,20,0.2)}
 /* Add overlay */
 .add-overlay{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;max-width:430px;margin:0 auto;animation:slideUp 340ms cubic-bezier(0.22,1,0.36,1);overflow-y:auto}
 @keyframes slideUp{from{transform:translateY(100%);opacity:0.6}to{transform:translateY(0);opacity:1}}
@@ -904,11 +1284,12 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .add-close:hover{border-color:var(--ink-3);color:var(--ink)}
 .add-body{flex:1;padding:18px 20px 36px;display:flex;flex-direction:column}
 /* Amount */
-.amount-zone{text-align:center;padding:12px 0 16px;border-bottom:1px solid var(--rule);margin-bottom:16px}
-.amount-input{font-family:'Playfair Display',serif;font-size:52px;font-weight:900;letter-spacing:-2.5px;background:transparent;border:none;outline:none;color:var(--ink);width:200px;text-align:center;caret-color:var(--accent);transition:color 120ms}
-.amount-input:focus{color:var(--ink)}
+.amount-zone{display:flex;align-items:center;justify-content:center;padding:18px 0 20px;border-bottom:1px solid var(--rule);margin-bottom:16px}
+.amount-line{display:flex;align-items:baseline;justify-content:center;gap:7px;max-width:100%;min-width:0}
+.amount-input{font-family:'Playfair Display',serif;font-size:clamp(32px,12vw,50px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-1.6px;background:transparent;border:0;border-radius:8px;outline:none;color:var(--ink);min-width:0;max-width:68vw;text-align:right;caret-color:var(--accent);transition:color 160ms,text-shadow 160ms,transform 160ms;appearance:textfield;-moz-appearance:textfield}
+.amount-input:focus{color:var(--ink);text-shadow:0 0 18px rgba(26,24,20,0.07)}
 .amount-input::placeholder{color:var(--ink-5)}
-.amount-cur{font-size:13px;color:var(--ink-3);margin-top:2px}
+.amount-cur{font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;color:var(--ink-3);white-space:nowrap;position:relative;top:-2px}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 /* Type toggle */
@@ -917,10 +1298,10 @@ input[type=number]{-moz-appearance:textfield}
 .type-btn:not(:last-child){border-right:1px solid var(--rule)}.type-btn.active{background:var(--ink);color:var(--bg)}
 /* Cat/sub */
 .cat-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}.cat-scroll::-webkit-scrollbar{display:none}
-.cat-tile{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;width:54px;padding:8px 3px;border:1px solid var(--rule);border-radius:8px;background:var(--bg-card);cursor:pointer;transition:border-color 150ms,background 150ms,transform 80ms;-webkit-tap-highlight-color:transparent}
+.cat-tile{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;width:auto;min-width:68px;padding:9px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--bg-card);cursor:pointer;transition:border-color 150ms,background 150ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .cat-tile.sel{border-color:var(--ink);background:var(--bg-warm)}
 .cat-tile:active{transform:scale(0.93)}
-.cat-tile-name{font-size:9px;font-weight:600;color:var(--ink-3);text-align:center;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%}
+.cat-tile-name{font-size:9.5px;font-weight:600;color:var(--ink-3);text-align:center;line-height:1.2;white-space:nowrap;width:auto;letter-spacing:-0.1px}
 .cat-tile.sel .cat-tile-name{color:var(--ink)}
 .sub-strip{display:flex;gap:5px;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;scrollbar-width:none}.sub-strip::-webkit-scrollbar{display:none}
 .sub-chip{flex-shrink:0;padding:4px 10px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'DM Sans',sans-serif;transition:all 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
@@ -934,7 +1315,7 @@ input[type=number]{-moz-appearance:textfield}
 .merchant-sug-sub{font-size:10px;color:var(--ink-3);margin-top:1px}
 /* Form */
 .field{margin-bottom:12px}
-.field-lbl{font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;display:block}
+.field-lbl{font-size:10px;font-weight:700;letter-spacing:1.05px;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;display:block}
 .field-input{width:100%;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;font-size:14px;color:var(--ink);font-family:'DM Sans',sans-serif;transition:border-color 150ms,box-shadow 150ms}
 .field-input:focus{outline:none;border-color:var(--ink-3);box-shadow:0 0 0 3px rgba(26,24,20,0.06)}
 .field-select{appearance:none;cursor:pointer}
@@ -956,53 +1337,53 @@ input[type=number]{-moz-appearance:textfield}
 /* Search/filter */
 .search-wrap{position:relative;margin-bottom:8px}
 .search-ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-4);pointer-events:none}
-.search-input{width:100%;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;padding:9px 12px 9px 34px;font-size:13px;color:var(--ink);font-family:'DM Sans',sans-serif;transition:border-color 120ms}.search-input:focus{outline:none;border-color:var(--rule-2)}
+.search-input{width:100%;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;padding:9px 12px 9px 34px;font-size:13px;color:var(--ink);font-family:'DM Sans',sans-serif;transition:border-color 120ms}.search-input:focus{outline:none;border-color:var(--rule-2);box-shadow:0 0 0 3px rgba(26,24,20,0.05)}
 .filter-bar{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px}.filter-bar::-webkit-scrollbar{display:none}
 .chip{flex-shrink:0;padding:5px 11px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;transition:all 120ms,transform 80ms;white-space:nowrap;font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent}
 .chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}.chip:hover:not(.on){border-color:var(--rule-2);color:var(--ink)}.chip:active{transform:scale(0.94)}
 .cat-filter-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;transition:all 120ms}
 .cat-filter-btn.active{border-color:var(--ink);color:var(--ink);background:var(--bg-warm)}
+.cat-filter-btn:active{transform:scale(0.94)}
 .date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .date-input-wrap{display:flex;flex-direction:column;gap:3px}
-.date-lbl{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3)}
-.date-input{background:var(--bg-card);border:1px solid var(--rule);border-radius:5px;padding:7px 9px;font-size:12px;color:var(--ink);font-family:'DM Sans',sans-serif;width:100%}.date-input:focus{outline:none;border-color:var(--rule-2)}
+.date-lbl{font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-3)}
+.date-input{background:var(--bg-card);border:1px solid var(--rule);border-radius:5px;padding:7px 9px;font-size:12px;color:var(--ink);font-family:'DM Sans',sans-serif;width:100%}.date-input:focus{outline:none;border-color:var(--rule-2);box-shadow:0 0 0 3px rgba(26,24,20,0.05)}
 /* Sheet */
 .sheet-overlay{position:fixed;inset:0;background:rgba(26,24,20,0.5);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:80;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn 200ms cubic-bezier(0.22,1,0.36,1)}
 @keyframes fadeIn{from{opacity:0;backdrop-filter:blur(0px)}to{opacity:1;backdrop-filter:blur(12px)}}
 .sheet{background:var(--bg);width:100%;max-width:430px;border-radius:20px 20px 0 0;border-top:1px solid var(--rule);max-height:92vh;overflow-y:auto;animation:sheetRise 320ms cubic-bezier(0.22,1,0.36,1);padding:0 20px 48px;box-shadow:0 -4px 32px rgba(26,24,20,0.12)}
 @keyframes sheetRise{from{transform:translateY(100%);opacity:0.8}to{transform:translateY(0);opacity:1}}
-@keyframes sheetRise{from{transform:translateY(32px);opacity:0}to{transform:translateY(0);opacity:1}}
 .sheet-handle{width:32px;height:3px;background:var(--ink-5);border-radius:99px;margin:12px auto 18px}
 .sheet-title{font-family:'Playfair Display',serif;font-size:21px;font-weight:700;margin-bottom:16px}
-.settings-section-lbl{font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-3);padding:14px 0 8px;border-bottom:1px solid var(--rule)}
+.settings-section-lbl{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);padding:14px 0 8px;border-bottom:1px solid var(--rule)}
 .settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--rule);gap:12px}
 .settings-row:last-of-type{border-bottom:none}
 .settings-row-title{font-size:13px;font-weight:600;color:var(--ink)}
 .settings-row-sub{font-size:11px;color:var(--ink-3);margin-top:2px}
 /* Analytics */
 .a-card{background:var(--bg-card);border:1px solid var(--rule);border-radius:8px;padding:15px;margin-bottom:13px}
-.a-card-title{font-size:9px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-3);margin-bottom:12px}
+.a-card-title{font-size:10px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:var(--ink-3);margin-bottom:12px}
 .cat-bar{display:flex;align-items:center;gap:8px;margin-bottom:9px}.cat-bar:last-child{margin-bottom:0}
-.cat-bar-name{font-size:12px;font-weight:500;color:var(--ink-2);width:96px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px}
+.cat-bar-name{font-size:11px;font-weight:600;color:var(--ink-2);width:116px;flex-shrink:0;white-space:normal;overflow:visible;text-overflow:clip;display:flex;align-items:center;gap:5px;line-height:1.25}
 .cat-bar-track{flex:1;height:3px;background:var(--rule);border-radius:99px;overflow:hidden}
 .cat-bar-fill{height:100%;border-radius:99px;transition:width 0.6s ease}
 .cat-bar-amt{font-family:'Playfair Display',serif;font-size:12px;font-weight:600;color:var(--ink);width:68px;text-align:right;flex-shrink:0}
-.cat-bar-pct{font-size:10px;color:var(--ink-4);width:26px;text-align:right;flex-shrink:0}
+.cat-bar-pct{font-size:10px;color:var(--ink-3);width:26px;text-align:right;flex-shrink:0}
 /* Month bars */
 .month-bars{display:flex;align-items:flex-end;gap:4px;height:80px;padding-top:8px}
 .m-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;cursor:pointer;position:relative}
 .m-bar{width:100%;border-radius:2px 2px 0 0;transition:height 0.5s ease,background 150ms;min-height:2px}
-.m-lbl{font-size:9px;font-weight:700;letter-spacing:0.3px}
+.m-lbl{font-size:10px;font-weight:700;letter-spacing:0.2px}
 /* Heatmap */
 .heatmap{display:grid;grid-template-columns:22px repeat(7,1fr);gap:2px}
-.hm-corner{}.hm-day-hdr{font-size:9px;font-weight:700;color:var(--ink-4);text-align:center;padding-bottom:3px}
-.hm-wk-lbl{font-size:8px;color:var(--ink-5);text-align:right;padding-right:3px;display:flex;align-items:center;justify-content:flex-end}
+.hm-corner{}.hm-day-hdr{font-size:10px;font-weight:700;color:var(--ink-4);text-align:center;padding-bottom:3px}
+.hm-wk-lbl{font-size:9px;color:var(--ink-3);text-align:right;padding-right:3px;display:flex;align-items:center;justify-content:flex-end}
 .hm-cell{aspect-ratio:1;border-radius:2px;cursor:pointer}
 /* Stats */
 .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px}
 .stat-cell{background:var(--bg-card);border:1px solid var(--rule);border-radius:7px;padding:11px 12px}
 .stat-val{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;letter-spacing:-0.5px;margin-bottom:2px}
-.stat-lbl{font-size:9px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-4)}
+.stat-lbl{font-size:10px;font-weight:700;letter-spacing:0.65px;text-transform:uppercase;color:var(--ink-3)}
 /* What Changed */
 .wc-row{display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--rule)}
 .wc-row:last-child{border-bottom:none}
@@ -1029,6 +1410,7 @@ input[type=number]{-moz-appearance:textfield}
 .section-enter-5{animation-delay:160ms}
 .section-enter-6{animation-delay:200ms}
 .section-enter-7{animation-delay:240ms}
+.section-enter-8{animation-delay:280ms}
 @keyframes sectionIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .backup-banner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--warn-bg);border-bottom:1px solid #D4A82A;font-size:11px;font-weight:600;color:var(--warn)}
 .backup-banner span{flex:1}
@@ -1044,8 +1426,8 @@ input[type=number]{-moz-appearance:textfield}
 .month-nav-btn:hover{border-color:var(--rule-2);color:var(--ink)}
 .month-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--ink)}
 .month-stat{background:var(--bg-card);border:1px solid var(--rule);border-radius:8px;padding:13px 14px}
-.month-stat-val{font-family:'Playfair Display',serif;font-size:22px;font-weight:900;letter-spacing:-0.5px;margin-bottom:3px}
-.month-stat-lbl{font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-4)}
+.month-stat-val{font-family:'Playfair Display',serif;font-size:clamp(17px,5.8vw,22px);font-weight:900;letter-spacing:-0.5px;margin-bottom:3px}
+.month-stat-lbl{font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-3)}
 /* Smart helper */
 .helper-card{background:var(--bg-card);border:1px solid var(--rule);border-radius:8px;padding:13px 14px;margin-bottom:10px;display:flex;gap:11px;align-items:flex-start}
 .helper-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -1065,6 +1447,21 @@ input[type=number]{-moz-appearance:textfield}
 .goal-fill{transition:width 0.8s cubic-bezier(0.34,1.56,0.64,1)}
 .budget-fill{transition:width 0.8s cubic-bezier(0.34,1.56,0.64,1)}
 .cat-bar-fill{transition:width 0.8s cubic-bezier(0.34,1.56,0.64,1)}
+@media (max-width:360px){
+  .topbar{padding-left:15px;padding-right:15px}
+  .page{padding-left:15px;padding-right:15px}
+  .tab-lbl{font-size:8.5px;letter-spacing:0.1px}
+  .cat-tile{width:70px}
+  .cat-tile-name{font-size:9px}
+  .hero-stat{padding:10px 6px}
+  .hero-stat-val{font-size:12px;letter-spacing:-0.45px}
+  .hero-stat-lbl{font-size:9px;letter-spacing:0.7px}
+  .amount-cur{font-size:14px}
+}
+.topbar-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
+}
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1082,12 +1479,19 @@ export default function App() {
   const [editId,   setEditId]   = useState(null);
   const [viewTxn,  setViewTxn]  = useState(null);
   const [importPending, setImportPending] = useState(null);
+  const [skipDup, setSkipDup] = useState(true);
+  // Recovery messages stay on screen until the user dismisses them; ordinary toasts can never replace them.
+  const [recoveryNotice, setRecoveryNotice] = useState(()=>LOAD_NOTICE);
+  const stateRef = useRef(state);
+  stateRef.current = state;   // always the latest committed state, for callbacks that must not close over a stale copy
   const [showBackupBanner, setShowBackupBanner] = useState(() => {
     const s=readRaw(KEY);
     if (!s?.lastBackup) return true;
     return (Date.now()-new Date(s.lastBackup).getTime())/86400000>=7;
   });
   const snackTimer=useRef(null);
+  const snackActive=useRef(false);   // is an undo window currently open?
+  const undoBuffer=useRef([]);       // everything deleted inside the current undo window
 
   // PWA manifest
   useEffect(() => {
@@ -1107,15 +1511,23 @@ export default function App() {
     addMeta("theme-color","#1A1814");
   },[]);
 
-  useEffect(()=>{ writeRaw(KEY,state); },[state]);
+  const [storageFailed, setStorageFailed] = useState(false);
+  useEffect(()=>{
+    // Never overwrite the original stored data if we could not keep a recovery copy of it.
+    if (SAVE_BLOCKED) { setStorageFailed(true); return; }
+    const ok=writeRaw(KEY,state);
+    setStorageFailed(!ok);
+  },[state]);
 
   const merchantMemory=useMemo(()=>buildMerchantMemory(state.transactions),[state.transactions]);
 
-  const showToast=useCallback((msg)=>{ setToast(msg); setTimeout(()=>setToast(null),1800); },[]);
-  const showSnackbar=useCallback((msg,onUndo)=>{
+  const toastTimer=useRef(null);
+  // A new toast cancels the previous one's timer, so back-to-back messages are never cut short.
+  const showToast=useCallback((msg,ms=1800)=>{ clearTimeout(toastTimer.current); setToast(msg); toastTimer.current=setTimeout(()=>setToast(null),ms); },[]);
+  const showSnackbar=useCallback((msg,onUndo,ms=4000)=>{
     clearTimeout(snackTimer.current);
-    setSnackbar({msg,onUndo});
-    snackTimer.current=setTimeout(()=>setSnackbar(null),4000);
+    setSnackbar({msg,onUndo}); snackActive.current=true;
+    snackTimer.current=setTimeout(()=>{ setSnackbar(null); snackActive.current=false; },ms);
   },[]);
 
   const switchTab=useCallback((t)=>{ setTab(t); setTabKey(k=>k+1); },[]);
@@ -1131,15 +1543,28 @@ export default function App() {
   },[showToast]);
 
   const deleteTransaction=useCallback((id)=>{
-    let removed;
-    setState(s=>{ removed=s.transactions.find(t=>t.id===id); return {...s,transactions:s.transactions.filter(t=>t.id!==id)}; });
-    showSnackbar("Transaction deleted",()=>{
-      if (removed) setState(s=>({...s,transactions:[removed,...s.transactions].sort((a,b)=>b.date.localeCompare(a.date))}));
+    const removed=stateRef.current.transactions.find(t=>t.id===id);
+    if (!removed) return;
+    setState(s=>({...s,transactions:s.transactions.filter(t=>t.id!==id)}));
+    // Deletions made while one undo window is open share it ("2 transactions deleted"), so none of them is lost.
+    if (!snackActive.current) undoBuffer.current=[];
+    undoBuffer.current.push(removed);
+    const batch=[...undoBuffer.current];
+    showSnackbar(batch.length===1?"Transaction deleted":`${batch.length} transactions deleted`,()=>{
+      // Put back exactly the removed records and nothing else: edits and additions made since are left untouched.
+      setState(s=>{
+        const have=new Set(s.transactions.map(t=>String(t.id)));
+        const back=batch.filter(t=>!have.has(String(t.id)));
+        return back.length ? {...s,transactions:[...back,...s.transactions].sort((a,b)=>b.date.localeCompare(a.date))} : s;
+      });
+      undoBuffer.current=[];
     });
   },[showSnackbar]);
 
-  const toggleRecurringActive=useCallback((id)=>{
-    setState(s=>({...s,transactions:s.transactions.map(t=>t.id===id?{...t,isActive:t.isActive===false}:t)}));
+  // Pausing or reactivating applies to the WHOLE schedule (every recorded payment of it), so the state is always consistent.
+  const toggleScheduleActive=useCallback((ids,makeActive)=>{
+    const set=new Set(ids.map(String));
+    setState(s=>({...s,transactions:s.transactions.map(t=>set.has(String(t.id))?{...t,isActive:makeActive}:t)}));
   },[]);
 
   const openAdd=useCallback((prefillData=null,existingId=null)=>{
@@ -1148,89 +1573,75 @@ export default function App() {
   const closeAdd=useCallback(()=>{ setShowAdd(false); setPrefill(null); setEditId(null); },[]);
 
   const exportCSV=useCallback(()=>{
-    const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring"]];
-    state.transactions.forEach(t=>rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",t.amount.toFixed(2),t.note||"",t.recurring?t.recurFreq:""]));
-    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8;"}));
-    a.download=`ledger-${today()}.csv`; a.click();
-    showToast("CSV exported");
+    downloadFile(buildCsv(state.transactions),"text/csv;charset=utf-8;",`ledger-${today()}.csv`);
+    showToast(`CSV file created — ${state.transactions.length} rows`);
   },[state.transactions,showToast]);
 
   const exportJSON=useCallback(()=>{
     const now=new Date().toISOString();
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(new Blob([JSON.stringify({...state,exportedAt:now,version:9},null,2)],{type:"application/json"}));
-    a.download=`ledger-backup-${today()}.json`; a.click();
+    downloadFile(JSON.stringify(buildBackup(state,now),null,2),"application/json",`ledger-backup-${today()}.json`);
+    // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
     setState(s=>({...s,lastBackup:now}));
     setShowBackupBanner(false);
-    showToast(`Backup saved — ${state.transactions.length} transactions`);
+    showToast(`Backup file created — ${state.transactions.length} transactions. Check your Downloads folder: the app can't confirm it was saved.`,5000);
   },[state,showToast]);
 
   const importFile=useCallback((file)=>{
     if (!file) return;
     const reader=new FileReader();
+    reader.onerror=()=>setImportPending({ error:"That file could not be read, so nothing was imported.", filename:file.name });
     reader.onload=e=>{
-      try {
-        const raw=e.target.result;
-        const isCSV=file.name?.toLowerCase().endsWith(".csv")||raw.trimStart().toLowerCase().startsWith("date,");
-        let txns=[],parsed=null;
-        if (isCSV) {
-          const allRows=parseCSV(raw);
-          if (allRows.length<2) { showToast("No data rows found in CSV"); return; }
-          const headers=allRows[0].map(h=>h.toLowerCase().trim());
-          const get=(row,...keys)=>{ for(const k of keys){const idx=headers.indexOf(k);if(idx!==-1&&row[idx]!==undefined)return row[idx].trim();}return ""; };
-          txns=allRows.slice(1).map((row,i)=>{
-            const amount=Math.abs(parseFloat(get(row,"amount","amt","value"))||0);
-            return {id:Date.now()+i+Math.random(),type:get(row,"type").toLowerCase().includes("inc")?"income":"expense",
-              amount,category:resolveCategory(get(row,"category","cat")),subcategory:get(row,"subcategory","subcat"),
-              merchant:get(row,"merchant"),note:get(row,"note","notes","description","memo"),
-              date:(get(row,"date")||today()).slice(0,10),recurring:false,recurFreq:null,isActive:true,createdAt:new Date().toISOString()};
-          }).filter(t=>t.amount>0);
-        } else {
-          parsed=JSON.parse(raw);
-          if (Array.isArray(parsed.transactions)) txns=parsed.transactions;
-          else if (Array.isArray(parsed.entries)) txns=parsed.entries;
-          else if (Array.isArray(parsed)) txns=parsed;
-          else { const v=Object.values(parsed).find(v=>Array.isArray(v)&&v.length>0&&v[0]?.amount!==undefined); if(v) txns=v; }
-        }
-        if (!txns.length) { showToast("No transactions found in file"); return; }
-        const normalised=txns.map(normaliseTxn).filter(t=>t.amount>0);
-        setImportPending({normalised,parsed,filename:file.name});
-      } catch(err) { showToast("Import failed: "+err.message); }
+      const plan=planImport(String(e.target.result||""), file.name||"");
+      if (!plan.ok) { setImportPending({ error:plan.error, filename:file.name }); return; }
+      setSkipDup(true);
+      setImportPending({ ...plan, dupCount:countSuspectedDuplicates(stateRef.current.transactions, plan.transactions) });
     };
     reader.readAsText(file);
-  },[showToast]);
+  },[]);
 
   const commitImport=useCallback((mode)=>{
-    if (!importPending) return;
-    const {normalised,parsed}=importPending;
-    setState(s=>{
-      if (mode==="replace") return {...s,transactions:normalised.sort((a,b)=>b.date.localeCompare(a.date)),
-        budgets:parsed?.budgets||s.budgets,templates:parsed?.templates||s.templates,
-        currency:parsed?.currency||s.currency,goals:parsed?.goals||s.goals,
-        safeToSpend:parsed?.safeToSpend||s.safeToSpend};
-      const existingIds=new Set(s.transactions.map(t=>String(t.id)));
-      const newTxns=normalised.filter(t=>!existingIds.has(String(t.id)));
-      return {...s,transactions:[...newTxns,...s.transactions].sort((a,b)=>b.date.localeCompare(a.date)),
-        budgets:parsed?.budgets||s.budgets,templates:parsed?.templates||s.templates,
-        currency:parsed?.currency||s.currency,goals:parsed?.goals||s.goals};
-    });
-    showToast(mode==="replace"?`Replaced with ${importPending.normalised.length} transactions`:`Merged ${importPending.normalised.length} transactions`);
+    const plan=importPending;
+    if (!plan || plan.error) return;
+    const before=stateRef.current;
+    if (mode==="replace") {
+      // Never overwrite without a recoverable copy of what is being replaced.
+      if (!preserveRaw("before_import", before)) { showToast("Couldn't keep a copy of your current data (storage may be full) — export a backup first. Nothing was changed.",6000); return; }
+      pruneRecoveryCopies("before_import");
+    }
+    const next=applyImport(before, plan, mode, { skipDuplicates:skipDup && plan.dupCount>0 });
+    setState(next);
     setImportPending(null);
-  },[importPending,showToast]);
+    const delta=next.transactions.length-before.transactions.length;
+    showSnackbar(mode==="replace" ? `Replaced with ${plan.transactions.length} transactions` : `Added ${delta} transaction${delta===1?"":"s"}`, ()=>{
+      // Undo only if nothing has changed since; otherwise it would erase newer work.
+      if (stateRef.current!==next) { showToast("Can't undo — your data has changed since the import"); return; }
+      setState(before);
+    }, 8000);
+  },[importPending,skipDup,showToast,showSnackbar]);
 
   const {transactions,budgets,templates,currency,goals,safeToSpend}=state;
 
   return (
     <>
       <style>{CSS}</style>
-      <div className="app">
+      <div className="app" lang="en-GB">
         {toast&&<div className="toast" role="status">{toast}</div>}
         {snackbar&&(
           <div className="snackbar" role="status">
             <span>{snackbar.msg}</span>
-            <button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();setSnackbar(null);clearTimeout(snackTimer.current);}}>Undo</button>
+            <button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();setSnackbar(null);snackActive.current=false;clearTimeout(snackTimer.current);}}>Undo</button>
+          </div>
+        )}
+        {recoveryNotice&&(
+          <div className="backup-banner" role="alert" style={{background:"var(--warn-bg)"}}>
+            <span>{recoveryNotice}</span>
+            <button className="backup-dismiss" onClick={()=>setRecoveryNotice(null)} aria-label="Dismiss notice">×</button>
+          </div>
+        )}
+        {storageFailed&&(
+          <div className="backup-banner" role="alert" style={{background:"var(--neg-bg)",borderBottomColor:"var(--neg)",color:"var(--neg)"}}>
+            <span>{SAVE_BLOCKED?"Saving is paused so your original data is not overwritten (a recovery copy could not be made — storage may be full). Export a backup, free some space, then reload.":"Could not save changes — storage may be full. Back up your data now."}</span>
+            <button className="backup-banner-btn" style={{background:"var(--neg)"}} onClick={exportJSON}>Back up</button>
           </div>
         )}
         {showBackupBanner&&transactions.length>0&&(
@@ -1244,7 +1655,8 @@ export default function App() {
         <header className="topbar">
           <span className="wordmark">Expense Ledger</span>
           <div className="topbar-right">
-            <button className="topbar-btn" onClick={()=>setShowSettings(true)} aria-label="Settings"><Icon name="settings" size={17}/></button>
+            <button className="topbar-add" onClick={()=>openAdd()} aria-label="Add transaction" title="Add transaction"><Icon name="add" size={18} color="var(--bg)"/></button>
+            <button className="topbar-btn" onClick={()=>setShowSettings(true)} aria-label="Settings" title="Settings"><Icon name="settings" size={18}/></button>
           </div>
         </header>
 
@@ -1253,18 +1665,17 @@ export default function App() {
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="analytics" && <AnalyticsPage transactions={transactions} currency={currency} budgets={budgets}/>}
           {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} onView={txn=>setViewTxn(txn)}/>}
-          {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleActive={toggleRecurringActive}/>}
+          {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}/>}
         </main>
 
-        <button className="fab" onClick={()=>openAdd()} aria-label="Add transaction"><Icon name="add" size={20} color="#F7F4EE"/></button>
 
-        <nav className="tabbar" role="navigation">
-          {[{id:"home",label:"Home",icon:"home"},{id:"ledger",label:"Ledger",icon:"list"},{id:"monthly",label:"Monthly",icon:"calendar"},{id:"analytics",label:"Analytics",icon:"chart"}].map(t=>(
+        <nav className="tabbar" role="navigation" style={{"--tab-index":tab==="home"?0:tab==="ledger"?1:tab==="monthly"?2:tab==="analytics"?3:4,"--tab-count":5}}>
+          {[{id:"home",label:"Home",icon:"home"},{id:"ledger",label:"Ledger",icon:"list"},{id:"monthly",label:"Monthly",icon:"calendar"},{id:"analytics",label:"Analytics",icon:"chart"},{id:"recurring",label:"Recurring",icon:"repeat"}].map(t=>(
             <button key={t.id} className={`tab-btn${tab===t.id?" active":""}`} onClick={()=>switchTab(t.id)} aria-label={t.label} aria-current={tab===t.id?"page":undefined}>
               <Icon name={t.icon} size={18}/><span className="tab-lbl">{t.label}</span>
-              {tab===t.id&&<span className="tab-line"/>}
             </button>
           ))}
+          <span className="tab-indicator" aria-hidden="true"/>
         </nav>
 
         {showAdd&&(
@@ -1286,17 +1697,38 @@ export default function App() {
         )}
         {importPending&&(
           <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setImportPending(null)}>
-            <div className="sheet" role="dialog" aria-modal="true">
+            <div className="sheet" role="dialog" aria-modal="true" aria-label="Restore backup">
               <div className="sheet-handle"/>
               <div className="sheet-title">Restore Backup</div>
-              <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"12px 14px",marginBottom:16}}>
-                <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",marginBottom:4}}>{importPending.filename}</div>
-                <div style={{fontSize:12,color:"var(--ink-3)"}}>{importPending.normalised.length} transactions found</div>
-              </div>
-              <div style={{fontSize:13,color:"var(--ink-2)",lineHeight:1.6,marginBottom:18}}>How would you like to restore this data?</div>
-              <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>commitImport("merge")}>Merge — add new, keep existing</button>
-              <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>Replace — overwrite all current data</button>
-              <button className="btn btn-ghost btn-full" onClick={()=>setImportPending(null)}>Cancel</button>
+              {importPending.error?(
+                <>
+                  <div role="alert" style={{background:"var(--neg-bg)",color:"var(--neg)",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:13,lineHeight:1.55}}>{importPending.error}</div>
+                  <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>setImportPending(null)}>OK</button>
+                </>
+              ):(
+                <>
+                  <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+                    <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",marginBottom:4,overflowWrap:"anywhere"}}>{importPending.filename}</div>
+                    <div style={{fontSize:12,color:"var(--ink-3)"}}>{importPending.transactions.length} transaction{importPending.transactions.length===1?"":"s"} ready to import</div>
+                    {importPending.skippedCount>0&&<div style={{fontSize:12,color:"var(--warn)",marginTop:4}}>{importPending.skippedCount} row{importPending.skippedCount>1?"s":""} skipped — {importPending.skippedSummary}</div>}
+                    {importPending.problems.map((m,i)=><div key={"p"+i} style={{fontSize:12,color:"var(--warn)",marginTop:4}}>{m}</div>)}
+                    {importPending.warnings.map((m,i)=><div key={"w"+i} style={{fontSize:12,color:"var(--ink-3)",marginTop:4}}>{m}</div>)}
+                  </div>
+                  <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
+                    <strong>Merge</strong> adds new transactions and keeps everything you have. Budgets are combined (imported categories win), new goals and templates are added, and your currency and Safe to Spend settings stay as they are.<br/>
+                    <strong>Replace</strong> swaps your transactions for the file's. Budgets, goals, templates, currency and Safe to Spend are replaced only if the file has a valid section for them. A recovery copy of your current data is kept first, and you can undo straight after.
+                  </div>
+                  {importPending.dupCount>0&&(
+                    <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12,color:"var(--ink-2)",marginBottom:14,lineHeight:1.45}}>
+                      <input type="checkbox" checked={skipDup} onChange={e=>setSkipDup(e.target.checked)} style={{marginTop:2}}/>
+                      <span>When merging, skip {importPending.dupCount} that look like transactions you already have (same date, amount, merchant and note)</span>
+                    </label>
+                  )}
+                  <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>commitImport("merge")}>Merge — add new, keep existing</button>
+                  <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>Replace — use the file's data</button>
+                  <button className="btn btn-ghost btn-full" onClick={()=>setImportPending(null)}>Cancel</button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -1325,7 +1757,9 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,prevExp,momDiff,surplusRate }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
-  const paceInfo    =calcSpendingPace(curExp,now);
+  const budgetTotal =Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
+  const spentToDate =calcSpentToDate(transactions,now);
+  const paceInfo    =calcSpendingPace(spentToDate,now,budgetTotal);
   const budgetItems =calcBudgetStatus(budgets,catSpend,now);
   const safeInfo    =calcSafeToSpend(transactions,safeToSpend,goals);
   const wc          =calcWhatChanged(transactions,now,prv);
@@ -1333,12 +1767,13 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
   const recent      =transactions.slice(0,6);
 
   // Upcoming recurring (due within 7 days)
-  const activeRecurring=useMemo(()=>
-    transactions.filter(t=>t.recurring&&t.recurFreq&&t.isActive!==false)
-      .map(t=>({...t,nextDue:nextDueDate(t)}))
-      .filter(t=>t.nextDue.getTime()-Date.now()<=7*24*60*60*1000)
-      .sort((a,b)=>a.nextDue-b.nextDue)
-  ,[transactions]);
+  const upcomingSchedules=useMemo(()=>{
+    const nowD=new Date();
+    return buildSchedules(transactions).filter(x=>x.isActive&&x.type==="expense")
+      .map(x=>({...x,nextDue:scheduleNextDue(x,transactions,nowD)}))
+      .filter(x=>x.nextDue&&daysBetween(nowD,x.nextDue)<=7)
+      .sort((a,b)=>a.nextDue-b.nextDue);
+  },[transactions]);
 
   return (
     <div>
@@ -1366,9 +1801,9 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
           </div>
           <div className="hero-stat">
             {hasIncome?(
-              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":""}`}>{surplusRate??0}%</div><div className="hero-stat-lbl">Surplus</div></>
+              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":(surplusRate||0)<0?" neg":""}`}>{surplusRate??0}%</div><div className="hero-stat-lbl">{surplusLabel(curInc,curExp)}</div></>
             ):(
-              <><div className={`hero-stat-val${curInc-curExp>=0?" pos":" neg"}`}>{fmtShort(Math.abs(curInc-curExp),currency)}</div><div className="hero-stat-lbl">Balance</div></>
+              <><div className={`hero-stat-val${curInc>curExp?" pos":curInc<curExp?" neg":""}`}>{fmtShort(Math.abs(curInc-curExp),currency)}</div><div className="hero-stat-lbl">Balance</div></>
             )}
           </div>
         </div>
@@ -1381,17 +1816,17 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
 
       {/* LEVEL 2: Available — Safe to Spend (decision-first) */}
       {safeToSpend?.enabled&&safeInfo.feasible&&(
-        <div className="safe-card">
+        <div className="safe-card section-enter section-enter-2">
           <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
             <Icon name="safe" size={12} color="var(--ink-3)"/>Safe to Spend
           </div>
           <div className="safe-amount" style={{color:safeInfo.remaining>=0?"var(--ink)":"var(--neg)"}}>
             {fmt(safeInfo.remaining,currency)}
           </div>
-          {safeInfo.daysLeft>0&&(
+          {safeInfo.daysRemaining>0&&(
             <div className="safe-daily">
               {safeInfo.remaining>0?`${fmt(safeInfo.dailyAllowance,currency)}/day · `:""}
-              {safeInfo.daysLeft} days left in {monthShort(now)}
+              {safeInfo.daysRemaining} days left in {monthShort(now)} (today included)
             </div>
           )}
           {/* Four explicit lines — planning engine, not just a number */}
@@ -1417,7 +1852,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
               <span className="safe-val" style={{color:"var(--neg)"}}>−{fmt(safeInfo.curExp,currency)}</span>
             </div>
             <div className="safe-row" style={{opacity:safeInfo.futureCommitments>0?1:0.4}}>
-              <span className="safe-lbl">Upcoming commitments</span>
+              <span className="safe-lbl">Upcoming &amp; unrecorded payments</span>
               <span className="safe-val" style={{color:safeInfo.futureCommitments>0?"var(--warn)":"var(--ink-4)"}}>
                 {safeInfo.futureCommitments>0?`−${fmt(safeInfo.futureCommitments,currency)}`:"none this month"}
               </span>
@@ -1431,19 +1866,27 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
             {/* Explain which is driving the deduction */}
             {safeInfo.goalContributionActive&&safeInfo.savingsTarget>0&&(
               <div style={{fontSize:10,color:"var(--ink-4)",marginTop:4,fontStyle:"italic"}}>
-                Goal contributions (₼{safeInfo.goalContributions}) exceed manual savings target (₼{safeInfo.savingsTarget}) — using the higher amount
+                Goal contributions ({fmt(safeInfo.goalContributions,currency)}) exceed the savings floor ({fmt(safeInfo.savingsTarget,currency)}) — using the higher amount
               </div>
             )}
           </div>
         </div>
       )}
 
+      {safeToSpend?.enabled&&safeInfo.feasible&&(
+        <div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic",margin:"-6px 2px 14px",lineHeight:1.5}}>
+          {safeInfo.scheduleCount>0
+            ? `Counts income recorded so far. Includes ${safeInfo.upcomingCount} upcoming and ${safeInfo.unrecordedCount} unrecorded payment${safeInfo.upcomingCount+safeInfo.unrecordedCount===1?"":"s"} from ${safeInfo.scheduleCount} recurring schedule${safeInfo.scheduleCount===1?"":"s"}.`
+            : "Counts income recorded so far. No recurring payments are set up, so upcoming bills are not included."}
+        </div>
+      )}
+
       {/* LEVEL 3: Goals — trajectory */}
       {goals?.length>0&&(
-        <div style={{marginBottom:16}}>
+        <div className="section-enter section-enter-3" style={{marginBottom:16}}>
           <div className="label-sm" style={{marginBottom:10}}>Goals</div>
           {goals.map(goal=>{
-            const {pct,remaining,estCompletion,behindSchedule}=calcGoalProgress(goal);
+            const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion,behindSchedule}=gp;
             return (
               <div key={goal.id} className="goal-card">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
@@ -1453,9 +1896,12 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
                 <div className="goal-progress"><div className="goal-fill" style={{width:`${pct}%`}}/></div>
                 <div className="goal-meta">
                   <span>{fmt(goal.saved||0,currency)} of {fmt(goal.target||0,currency)}</span>
-                  <span>{estCompletion?`Est. ${estCompletion}`:remaining>0?`${fmt(remaining,currency)} to go`:""}</span>
+                  <span>{gp.complete?"Completed":gp.overdue?`Overdue · ${fmt(remaining,currency)} to go`:estCompletion?`Est. ${estCompletion}`:remaining>0?`${fmt(remaining,currency)} to go`:""}</span>
                 </div>
-                {behindSchedule&&<div style={{fontSize:10,color:"var(--neg)",fontWeight:600,marginTop:4}}>Behind target date pace</div>}
+                {gp.behindSchedule&&<div style={{fontSize:10,color:"var(--neg)",fontWeight:600,marginTop:4}}>Projected to finish after the target date</div>}
+                {gp.onTrack&&<div style={{fontSize:10,color:"var(--pos)",fontWeight:600,marginTop:4}}>On track for the target date</div>}
+                {gp.overdue&&<div style={{fontSize:10,color:"var(--neg)",fontWeight:600,marginTop:4}}>Target date passed {-gp.daysToTarget} day{-gp.daysToTarget===1?"":"s"} ago</div>}
+                {gp.noContribution&&<div style={{fontSize:10,color:"var(--ink-4)",marginTop:4}}>No monthly contribution set</div>}
               </div>
             );
           })}
@@ -1464,7 +1910,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
 
       {/* LEVEL 4: Budget status */}
       {budgetItems.length>0&&(
-        <div style={{marginBottom:16}}>
+        <div className="section-enter section-enter-4" style={{marginBottom:16}}>
           <div className="label-sm" style={{marginBottom:10}}>Budgets</div>
           {budgetItems.map(({catId,limit,spent,pct,over,warn})=>{
             const cat=CAT(catId);
@@ -1485,16 +1931,16 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
       )}
 
       {/* LEVEL 5: Upcoming recurring commitments */}
-      {activeRecurring.length>0&&(
-        <div style={{background:"var(--warn-bg)",border:"1px solid #D4A82A",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+      {upcomingSchedules.length>0&&(
+        <div className="section-enter section-enter-5" style={{background:"var(--warn-bg)",border:"1px solid #D4A82A",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
           <div className="label-sm" style={{marginBottom:8,display:"flex",alignItems:"center",gap:5,color:"var(--warn)"}}>
             <Icon name="calendar" size={12} color="var(--warn)"/>Due within 7 days
           </div>
-          {activeRecurring.slice(0,3).map(t=>{
+          {upcomingSchedules.slice(0,3).map(t=>{
             const cat=CAT(t.category);
-            const daysLeft=Math.round((t.nextDue.getTime()-Date.now())/86400000);
+            const daysLeft=daysBetween(new Date(),t.nextDue);
             return (
-              <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
+              <div key={t.key} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
                 <span style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{t.merchant||t.note||cat?.name}</span>
                 <div style={{textAlign:"right"}}>
                   <div style={{fontFamily:"'Playfair Display',serif",fontSize:12,fontWeight:600,color:"var(--neg)"}}>{fmt(t.amount,currency)}</div>
@@ -1508,7 +1954,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
 
       {/* LEVEL 6: What changed — compact signal */}
       {wc.catChanges.length>0&&prevExp>0&&(
-        <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+        <div className="section-enter section-enter-6" style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
           <div className="label-sm" style={{marginBottom:10}}>What Changed vs {monthShort(prv)}</div>
           {wc.catChanges.slice(0,3).map(({catId,diff,merchantDiffs})=>{
             const cat=CAT(catId);
@@ -1536,33 +1982,41 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
       )}
 
       {/* Spending pace — trajectory context */}
-      {curExp>0&&(
-        <div className="pace-card">
+      {spentToDate>0&&(
+        <div className="pace-card section-enter section-enter-7">
           <div className="pace-row">
             <span className="label-sm" style={{display:"flex",alignItems:"center",gap:5}}><Icon name="pace" size={12} color="var(--ink-3)"/>Spending Pace</span>
             <span style={{fontSize:11,color:"var(--ink-3)"}}>Day {paceInfo.daysPassed} of {paceInfo.totalDays}</span>
           </div>
-          <div className="pace-track">
-            <div className={`pace-fill ${paceInfo.onTrack?"on-track":"over-pace"}`} style={{width:`${Math.min((paceInfo.projected>0?curExp/paceInfo.projected:0)*100,100)}%`}}/>
-          </div>
+          {budgetTotal>0&&(
+            <div className="pace-track" style={{position:"relative",height:5}}>
+              <div className={`pace-fill ${paceInfo.onTrack?"on-track":"over-pace"}`} style={{width:`${Math.min((spentToDate/budgetTotal)*100,100)}%`}}/>
+              <span aria-hidden="true" title="Where the month is" style={{position:"absolute",top:0,bottom:0,width:2,background:"var(--ink)",opacity:0.55,left:`${(paceInfo.daysPassed/paceInfo.totalDays)*100}%`}}/>
+            </div>
+          )}
           <div className="pace-sub">
             <span style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(paceInfo.dailyAvg,currency)}/day avg</span>
-            <span style={{fontSize:11,color:paceInfo.onTrack?"var(--pos)":"var(--neg)",fontWeight:600}}>~{fmt(paceInfo.projected,currency)} projected</span>
+            <span style={{fontSize:11,color:paceInfo.onTrack===null?"var(--ink-3)":paceInfo.onTrack?"var(--pos)":"var(--neg)",fontWeight:600}}>
+              {paceInfo.projectionReliable?`~${fmt(paceInfo.projected,currency)} projected`:"Too early to project"}
+            </span>
           </div>
-          {!paceInfo.onTrack&&paceInfo.diff>0&&(
-            <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmt(paceInfo.diff,currency)} above expected pace for today</div>
+          {paceInfo.onTrack===null&&(
+            <div style={{fontSize:10,color:"var(--ink-4)",marginTop:3,fontStyle:"italic"}}>Set a budget to see pace status</div>
+          )}
+          {paceInfo.onTrack===false&&paceInfo.diff>0&&(
+            <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmt(paceInfo.diff,currency)} above budget pace for today</div>
           )}
         </div>
       )}
 
       {/* LEVEL 7: Recent activity */}
       {recent.length>0?(
-        <>
+        <div className="section-enter section-enter-8">
           <div className="label-sm" style={{marginBottom:10}}>Recent Activity</div>
           <GroupedTxns txns={recent} currency={currency} onView={onView} compact/>
-        </>
+        </div>
       ):(
-        <div className="empty">
+        <div className="empty section-enter section-enter-8">
           <div className="empty-icon"><Icon name="list" size={30}/></div>
           <div className="empty-title">Nothing recorded yet</div>
           <div className="empty-body">Tap + to add your first transaction.</div>
@@ -1687,7 +2141,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
       </div>
       <div className="search-wrap">
         <span className="search-ico"><Icon name="search" size={14}/></span>
-        <input className="search-input" placeholder="Search merchant, note, category, amount, date…" value={search} onChange={e=>setSearch(e.target.value)} aria-label="Search"/>
+        <input className="search-input" placeholder="Search merchant, note, amount…" value={search} onChange={e=>setSearch(e.target.value)} aria-label="Search"/>
       </div>
       <div className="filter-bar">
         {["all","expense","income"].map(t=>(
@@ -1707,8 +2161,8 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
       </div>
       {showDates&&(
         <div className="date-inputs">
-          <div className="date-input-wrap"><span className="date-lbl">From</span><input type="date" className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></div>
-          <div className="date-input-wrap"><span className="date-lbl">To</span><input type="date" className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></div>
+          <div className="date-input-wrap"><span className="date-lbl">From</span><input type="date" lang="en-GB" className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></div>
+          <div className="date-input-wrap"><span className="date-lbl">To</span><input type="date" lang="en-GB" className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></div>
         </div>
       )}
       {filtered.length===0?(
@@ -1726,7 +2180,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
             <div className="sheet-handle"/>
             <div className="sheet-title">Filter by Category</div>
             {[{id:"all",name:"All Categories",color:"#8A8A8A"},...usedCats].map(cat=>(
-              <button key={cat.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",borderBottom:"1px solid var(--rule)",background:"none",border:"none",borderBottom:"1px solid var(--rule)",cursor:"pointer",width:"100%",textAlign:"left",font:"inherit"}}
+              <button key={cat.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",background:"none",border:"none",borderBottom:"1px solid var(--rule)",cursor:"pointer",width:"100%",textAlign:"left",font:"inherit"}}
                 onClick={()=>{setCatFilter(cat.id==="all"?"all":cat.id);setShowCatSheet(false);}}>
                 <div style={{width:34,height:34,borderRadius:8,background:(cat.color||"#8A8A8A")+"18",display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <CatIcon catId={cat.id} size={16} color={cat.color}/>
@@ -1748,11 +2202,12 @@ function AnalyticsPage({ transactions, currency, budgets }) {
   const now=curMon(),prv=prevMon();
   const {curExp,curInc,prevExp,momDiff}=calcMonthSummary(transactions,now,prv);
   const catSpend   =calcCategorySpend(transactions,now);
-  const paceInfo   =calcSpendingPace(curExp,now);
+  const budgetTotal=Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
+  const paceInfo   =calcSpendingPace(calcSpentToDate(transactions,now),now,budgetTotal);
   const txnStats   =calcTxnStats(transactions,now);
   const budgetItems=calcBudgetStatus(budgets||{},catSpend,now);
   const wc         =calcWhatChanged(transactions,now,prv);
-  const patternsData=useMemo(()=>calcPatterns(transactions),[transactions]);
+  const patternsData=useMemo(()=>calcPatterns(transactions,currency),[transactions,currency]);
   const patterns    =patternsData.insights;
   const anomalies   =patternsData.anomalies;
   const dayOfWeek   =patternsData.dayOfWeek;
@@ -1802,7 +2257,7 @@ function AnalyticsPage({ transactions, currency, budgets }) {
       {/* Monthly summary */}
       <div className="a-card">
         <div className="a-card-title">{monthName(now)}</div>
-        <div style={{fontFamily:"'Playfair Display',serif",fontSize:36,fontWeight:900,letterSpacing:-1.5,marginBottom:4}}>{fmt(curExp,currency)}</div>
+        <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(28px,9.2vw,36px)",fontWeight:900,letterSpacing:-1.5,marginBottom:4}}>{fmt(curExp,currency)}</div>
         <div style={{fontSize:12,color:"var(--ink-3)",marginBottom:momDiff!==null?8:0}}>total spent</div>
         {momDiff!==null&&(
           <div style={{display:"flex",alignItems:"center",gap:7,fontSize:12,flexWrap:"wrap"}}>
@@ -1819,7 +2274,7 @@ function AnalyticsPage({ transactions, currency, budgets }) {
             <span style={{color:"var(--ink-3)"}}>Projected: <strong style={{fontFamily:"'Playfair Display',serif",color:paceInfo.projected>prevExp+20?"var(--neg)":"var(--ink)"}}>{fmt(paceInfo.projected,currency)}</strong></span>
           </div>
         )}
-        {curInc>0&&<div style={{marginTop:6,fontSize:12,color:"var(--ink-3)"}}>Surplus rate: <strong style={{fontFamily:"'Playfair Display',serif",color:curInc>curExp?"var(--pos)":"var(--neg)"}}>{Math.max(0,Math.round(((curInc-curExp)/curInc)*100))}%</strong></div>}
+        {curInc>0&&<div style={{marginTop:6,fontSize:12,color:"var(--ink-3)"}}>{surplusLabel(curInc,curExp)} rate: <strong style={{fontFamily:"'Playfair Display',serif",color:surplusColor(curInc,curExp)}}>{Math.round(((curInc-curExp)/curInc)*100)}%</strong></div>}
       </div>
 
       {/* S3: What Changed — with merchant-level explanation */}
@@ -2093,68 +2548,54 @@ function AnalyticsPage({ transactions, currency, budgets }) {
 }
 
 // ─── Recurring Hub ────────────────────────────────────────────────────────────
-function nextDueDate(txn) {
-  const freq=txn.recurFreq;
-  let d=parseLocalDate(txn.date);
-  const now=new Date(); now.setHours(0,0,0,0);
-  let safety=0;
-  while (d<=now&&safety++<1000) {
-    if (freq==="weekly")    d.setDate(d.getDate()+7);
-    else if (freq==="biweekly") d.setDate(d.getDate()+14);
-    else if (freq==="monthly")  d.setMonth(d.getMonth()+1);
-    else if (freq==="yearly")   d.setFullYear(d.getFullYear()+1);
-    else break;
-  }
-  return d;
-}
+function RecurringHub({ transactions, currency, onView, onToggleSchedule }) {
+  const schedules=useMemo(()=>{
+    const nowD=new Date();
+    return buildSchedules(transactions).map(x=>{
+      const st=x.isActive ? scheduleMonthStatus(x,transactions,localMonthStr(nowD),nowD) : null;
+      return { ...x, nextDue:scheduleNextDue(x,transactions,nowD), monthly:scheduleMonthly(x), unrecordedThisMonth:st?st.overdue.length:0 };
+    }).sort((a,b)=>{ if (a.isActive!==b.isActive) return a.isActive?-1:1; return (a.nextDue?a.nextDue.getTime():Infinity)-(b.nextDue?b.nextDue.getTime():Infinity); });
+  },[transactions]);
+  const active=schedules.filter(x=>x.isActive), paused=schedules.filter(x=>!x.isActive);
+  const outgoing=active.filter(x=>x.type==="expense");
+  const monthlyOut=outgoing.reduce((a,x)=>a+x.monthly,0);
+  const monthlyIn=active.filter(x=>x.type==="income").reduce((a,x)=>a+x.monthly,0);
+  const nowD=new Date();
+  const upcoming=outgoing.filter(x=>x.nextDue&&daysBetween(nowD,x.nextDue)<=7);
 
-function RecurringHub({ transactions, currency, onView, onToggleActive }) {
-  const allRecurring=useMemo(()=>
-    transactions.filter(t=>t.recurring&&t.recurFreq)
-      .map(t=>({...t,isActive:t.isActive!==false,nextDue:nextDueDate(t)}))
-      .sort((a,b)=>{ if(a.isActive&&!b.isActive) return -1; if(!a.isActive&&b.isActive) return 1; return a.nextDue-b.nextDue; }),
-    [transactions]
-  );
-  const active=allRecurring.filter(t=>t.isActive),inactive=allRecurring.filter(t=>!t.isActive);
-  const monthlyTotal=active.filter(t=>t.type==="expense").reduce((s,t)=>s+toMonthlyAmountHelper(t),0);
-  const annualTotal=monthlyTotal*12;
-  const incomeRecur=active.filter(t=>t.type==="income").reduce((s,t)=>s+toMonthlyAmountHelper(t),0);
-  const nowMs=Date.now();
-  const upcoming=active.filter(t=>t.nextDue.getTime()-nowMs<=7*24*60*60*1000);
-
-  if (allRecurring.length===0) return (
+  if (schedules.length===0) return (
     <div className="empty">
       <div className="empty-icon"><Icon name="repeat" size={30}/></div>
-      <div className="empty-title">No recurring transactions</div>
-      <div className="empty-body">Mark a transaction as recurring when adding it — rent, gym, subscriptions — and they'll appear here.</div>
+      <div className="empty-title">No recurring payments</div>
+      <div className="empty-body">Mark a transaction as recurring when you add it — rent, gym, subscriptions. Entries for the same payment are grouped into one schedule.</div>
     </div>
   );
 
-  const RecurRow=({t})=>{
-    const cat=CAT(t.category)||{id:"other",name:t.category,color:"#8A8A8A"};
-    const isInc=t.type==="income";
-    const daysLeft=Math.round((t.nextDue.getTime()-nowMs)/86400000);
-    const monthly=toMonthlyAmountHelper(t);
+  const dueText=(x)=>{ if (!x.nextDue) return "No upcoming date"; const d=daysBetween(nowD,x.nextDue); return d===0?"Due today":d===1?"Due tomorrow":d<=60?`Due in ${d} days`:`Due ${fmtDate(localDateStr(x.nextDue))}`; };
+  const Row=({x})=>{
+    const cat=CAT(x.category)||{id:"other",name:x.category,color:"#8A8A8A"};
+    const isInc=x.type==="income";
+    const near=x.nextDue && daysBetween(nowD,x.nextDue)<=3;
     return (
-      <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)",opacity:t.isActive?1:0.5}}>
-        <div onClick={()=>onView?.(t)} style={{width:36,height:36,borderRadius:9,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)",opacity:x.isActive?1:0.55}}>
+        <div onClick={()=>onView?.(x.latest)} style={{width:36,height:36,borderRadius:9,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
           <CatIcon catId={cat.id} size={16} color={cat.color}/>
         </div>
-        <div onClick={()=>onView?.(t)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
-          <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.merchant||t.note||cat.name}</div>
-          <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,display:"flex",gap:4,flexWrap:"wrap"}}>
-            <span>{cat.name}{t.subcategory?` / ${t.subcategory}`:""}</span>
-            <span>·</span>
-            <span style={{fontWeight:600,textTransform:"capitalize"}}>{t.recurFreq}</span>
-            {t.isActive&&<span style={{color:daysLeft<=3?"var(--warn)":"var(--ink-4)",fontWeight:daysLeft<=3?700:400}}>· {daysLeft===0?"Due today":daysLeft===1?"Due tomorrow":`Due in ${daysLeft}d`}</span>}
-            {!t.isActive&&<span style={{color:"var(--ink-4)",fontWeight:600}}>· Inactive</span>}
+        <div onClick={()=>onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
+          <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{x.merchant||x.note||cat.name}</div>
+          <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,lineHeight:1.4}}>
+            {cat.name}{x.subcategory?` / ${x.subcategory}`:""} · <span style={{textTransform:"capitalize"}}>{x.freq}</span> · {x.occurrences.length} payment{x.occurrences.length===1?"":"s"} recorded
+          </div>
+          <div style={{fontSize:11,marginTop:1,color:near&&x.isActive?"var(--warn)":"var(--ink-4)",fontWeight:near&&x.isActive?700:400}}>
+            {x.isActive?dueText(x):"Paused"} · last {fmtDate(x.occurrences[x.occurrences.length-1])}
+            {x.unrecordedThisMonth>0&&<span style={{color:"var(--warn)",fontWeight:700}}> · {x.unrecordedThisMonth} not recorded this month</span>}
           </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(t.amount,currency)}</div>
-          {t.recurFreq!=="monthly"&&t.isActive&&<div style={{fontSize:10,color:"var(--ink-4)"}}>≈{fmt(monthly,currency)}/mo</div>}
-          <button onClick={e=>{e.stopPropagation();onToggleActive(t.id);}} style={{fontSize:10,fontWeight:700,color:t.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"1px 0",fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}>
-            {t.isActive?"Pause":"Reactivate"}
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(x.amount,currency)}</div>
+          {x.freq!=="monthly"&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}}>≈{fmt(x.monthly,currency)}/mo</div>}
+          <button onClick={e=>{e.stopPropagation();onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"6px 0",minHeight:32,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}>
+            {x.isActive?"Pause":"Reactivate"}
           </button>
         </div>
       </div>
@@ -2163,66 +2604,47 @@ function RecurringHub({ transactions, currency, onView, onToggleActive }) {
 
   return (
     <div>
-      <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,marginBottom:18}}>Recurring</div>
+      <div style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,marginBottom:6}}>Recurring</div>
+      <div style={{fontSize:11,color:"var(--ink-4)",fontStyle:"italic",marginBottom:14,lineHeight:1.5}}>Each row is one schedule. Monthly figures are estimates (weekly ×4.33, every two weeks ×2.17); Safe to Spend uses the payments actually still to come this month.</div>
       <div className="stat-row">
-        <div className="stat-cell"><div className="stat-val" style={{color:"var(--neg)"}}>{fmt(monthlyTotal,currency)}</div><div className="stat-lbl">Monthly outgoing</div></div>
-        <div className="stat-cell"><div className="stat-val">{fmt(annualTotal,currency)}</div><div className="stat-lbl">Annual commitment</div></div>
-        {incomeRecur>0&&<div className="stat-cell"><div className="stat-val" style={{color:"var(--pos)"}}>{fmt(incomeRecur,currency)}</div><div className="stat-lbl">Monthly income</div></div>}
-        <div className="stat-cell"><div className="stat-val">{active.length}</div><div className="stat-lbl">Active</div></div>
+        <div className="stat-cell"><div className="stat-val" style={{color:"var(--neg)"}}>{fmt(monthlyOut,currency)}</div><div className="stat-lbl">Typical monthly outgoing</div></div>
+        <div className="stat-cell"><div className="stat-val">{fmt(monthlyOut*12,currency)}</div><div className="stat-lbl">Typical yearly</div></div>
+        {monthlyIn>0&&<div className="stat-cell"><div className="stat-val" style={{color:"var(--pos)"}}>{fmt(monthlyIn,currency)}</div><div className="stat-lbl">Typical monthly income</div></div>}
+        <div className="stat-cell"><div className="stat-val">{active.length}</div><div className="stat-lbl">Active schedules</div></div>
       </div>
       {upcoming.length>0&&(
         <div style={{background:"var(--warn-bg)",border:"1px solid #D4A82A",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
           <div style={{fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--warn)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
             <Icon name="calendar" size={12} color="var(--warn)"/>Due within 7 days
           </div>
-          {upcoming.map(t=>{
-            const cat=CAT(t.category)||{name:t.category};
-            const daysLeft=Math.round((t.nextDue.getTime()-nowMs)/86400000);
-            return (
-              <div key={t.id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{t.merchant||t.note||cat.name}</span>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600,color:"var(--neg)"}}>{fmt(t.amount,currency)}</div>
-                  <div style={{fontSize:10,color:"var(--warn)",fontWeight:700}}>{daysLeft===0?"Today":daysLeft===1?"Tomorrow":`In ${daysLeft} days`}</div>
-                </div>
+          {upcoming.map(x=>(
+            <div key={x.key} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
+              <span style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{x.merchant||x.note||CAT(x.category)?.name}</span>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600,color:"var(--neg)"}}>{fmt(x.amount,currency)}</div>
+                <div style={{fontSize:10,color:"var(--warn)",fontWeight:700}}>{dueText(x)}</div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
-      {active.length>0&&(
-        <>
-          <div className="label-sm" style={{marginBottom:8}}>Active</div>
-          <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>
-            {active.map(t=><RecurRow key={t.id} t={t}/>)}
-          </div>
-        </>
-      )}
-      {inactive.length>0&&(
-        <>
-          <div className="label-sm" style={{marginBottom:8}}>Paused</div>
-          <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>
-            {inactive.map(t=><RecurRow key={t.id} t={t}/>)}
-          </div>
-        </>
-      )}
-      {monthlyTotal>0&&(
+      {active.length>0&&(<>
+        <div className="label-sm" style={{marginBottom:8}}>Active</div>
+        <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>{active.map(x=><Row key={x.key} x={x}/>)}</div>
+      </>)}
+      {paused.length>0&&(<>
+        <div className="label-sm" style={{marginBottom:8}}>Paused</div>
+        <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>{paused.map(x=><Row key={x.key} x={x}/>)}</div>
+      </>)}
+      {monthlyOut>0&&(
         <div className="a-card" style={{marginTop:4}}>
-          <div className="a-card-title">Annual Cost by Category</div>
+          <div className="a-card-title">Typical Yearly Cost by Category</div>
           {(()=>{
-            const ct={};
-            active.filter(t=>t.type==="expense").forEach(t=>{ct[t.category]=(ct[t.category]||0)+toMonthlyAmountHelper(t);});
-            const sorted=Object.entries(ct).sort((a,b)=>b[1]-a[1]);
-            const maxV=sorted[0]?.[1]||1;
+            const ct={}; outgoing.forEach(x=>{ ct[x.category]=(ct[x.category]||0)+x.monthly; });
+            const sorted=Object.entries(ct).sort((a,b)=>b[1]-a[1]); const maxV=sorted[0]?.[1]||1;
             return sorted.map(([catId,mo])=>{
               const cat=CAT(catId)||{id:"other",name:catId,color:"#8A8A8A"};
-              return (
-                <div key={catId} className="cat-bar">
-                  <div className="cat-bar-name"><CatIcon catId={cat.id} size={12} color={cat.color}/>{cat.name}</div>
-                  <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(mo/maxV)*100}%`,background:cat.color}}/></div>
-                  <div className="cat-bar-amt">{fmt(mo*12,currency)}</div>
-                </div>
-              );
+              return (<div key={catId} className="cat-bar"><div className="cat-bar-name"><CatIcon catId={cat.id} size={12} color={cat.color}/>{cat.name}</div><div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(mo/maxV)*100}%`,background:cat.color}}/></div><div className="cat-bar-amt">{fmt(mo*12,currency)}</div></div>);
             });
           })()}
         </div>
@@ -2231,7 +2653,6 @@ function RecurringHub({ transactions, currency, onView, onToggleActive }) {
   );
 }
 
-// ─── Add / Edit Transaction ───────────────────────────────────────────────────
 function AddEditOverlay({ templates, currency, transactions, prefill, editId, merchantMemory, onSave, onClose }) {
   const isEditing=!!editId;
   const [type,     setType]     = useState(prefill?.type||"expense");
@@ -2258,8 +2679,12 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
   const merchantMatches=useMemo(()=>{
     if (!merchant.trim()) return [];
     const q=merchant.toLowerCase();
-    return Object.values(merchantMemory).filter(m=>m.merchant.toLowerCase().startsWith(q)).slice(0,4);
-  },[merchant,merchantMemory]);
+    // Only suggest what the user previously recorded as this same transaction type
+    const wantType=type==="income"?"income":"expense";
+    return Object.values(merchantMemory)
+      .filter(m=>m.type===wantType&&m.merchant.toLowerCase().startsWith(q))
+      .slice(0,4);
+  },[merchant,merchantMemory,type]);
 
   const applySuggestion=(sug)=>{
     setMerchant(sug.merchant);
@@ -2270,8 +2695,8 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
 
   // S0: Duplicate detection uses createdAt, not date
   const isDupe=useMemo(()=>{
-    if (isEditing||!amount||!parseFloat(amount)) return false;
-    const amt=parseFloat(amount);
+    const amt=parseMoney(amount,{positive:true});
+    if (isEditing||amt===null) return false;
     const tenMinAgo=Date.now()-10*60*1000;
     return transactions.some(t=>
       t.category===catId &&
@@ -2283,8 +2708,9 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
   },[amount,catId,note,transactions,isEditing]);
 
   const submit=()=>{
-    const amt=parseFloat(amount);
-    if (!amt||amt<=0) { setErr("Please enter a valid amount"); return; }
+    const amt=parseMoney(amount,{positive:true});
+    if (amt===null) { setErr("Please enter a valid amount"); return; }
+    if (!isValidDateStr(String(date||""))) { setErr("Please choose a valid date"); return; }
     // S0: Preserve isActive when editing — never silently reactivate a paused recurring
     const isActive=isEditing?(prefill?.isActive!==undefined?prefill.isActive:true):true;
     onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?freq:null,isActive});
@@ -2304,10 +2730,13 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
           <button className={`type-btn${type==="income"?" active":""}`}  onClick={()=>setType("income")}>Income</button>
         </div>
         <div className="amount-zone">
-          <input ref={amtRef} className="amount-input" type="number" inputMode="decimal"
-            placeholder="0.00" value={amount} onChange={e=>{setAmount(e.target.value);setErr("");}}
-            min="0" step="0.01" aria-label="Amount"/>
-          <div className="amount-cur">{currency}</div>
+          <div className="amount-line">
+            <input ref={amtRef} className="amount-input" type="number" inputMode="decimal"
+              placeholder="0.00" value={amount} onChange={e=>{setAmount(e.target.value);setErr("");}}
+              min="0" step="0.01" aria-label="Amount"
+              style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
+            <span className="amount-cur">{currency}</span>
+          </div>
         </div>
         {err&&<div style={{color:"var(--neg)",fontSize:12,textAlign:"center",marginBottom:10,fontWeight:600}}>{err}</div>}
         {isDupe&&<div className="dupe-warn"><Icon name="other" size={13}/>Similar transaction recorded recently — double entry?</div>}
@@ -2335,7 +2764,7 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
           {/* Merchant intelligence hint — shown when merchant is recognised */}
           {merchant.trim()&&!showMerchantSugs&&(()=>{
             const ml=merchant.trim().toLowerCase();
-            const match=Object.values(merchantMemory).find(m=>m.merchant.toLowerCase()===ml);
+            const match=merchantMemory[memKey(type,ml)];
             if (!match||match.count<2) return null;
             const profile=calcMerchantProfile(merchant.trim(),transactions);
             if (!profile) return null;
@@ -2367,12 +2796,12 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
         </div>
 
         <div className="field">
-          <label className="field-lbl">Category</label>
+          <label className="field-lbl">Category <span style={{fontWeight:600,color:"var(--ink-2)",letterSpacing:0.4}}>· {selectedCat?.name}</span></label>
           <div className="cat-scroll">
             {displayCats.map(cat=>(
               <button key={cat.id} className={`cat-tile${catId===cat.id?" sel":""}`} onClick={()=>{setCatId(cat.id);setSubcat("");}}>
                 <CatIcon catId={cat.id} size={18} color={catId===cat.id?cat.color:undefined}/>
-                <span className="cat-tile-name">{cat.name.split(" ")[0]}</span>
+                <span className="cat-tile-name">{cat.tile||cat.name}</span>
               </button>
             ))}
           </div>
@@ -2397,7 +2826,7 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
         <div className="field-row" style={{marginBottom:14}}>
           <div className="field" style={{marginBottom:0}}>
             <label className="field-lbl">Date</label>
-            <input className="field-input" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+            <input className="field-input" lang="en-GB" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
           </div>
           <div className="field" style={{marginBottom:0}}>
             <label className="field-lbl">Recurring</label>
@@ -2439,7 +2868,7 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
             <CatIcon catId={cat.id} size={22} color={cat.color}/>
           </div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{txn.merchant||txn.note||cat.name}</div>
+            <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,marginBottom:2,lineHeight:1.25,overflowWrap:"anywhere"}}>{txn.merchant||txn.note||cat.name}</div>
             <div style={{fontSize:12,color:"var(--ink-3)"}}>{cat.name}{txn.subcategory?` / ${txn.subcategory}`:""} · {fmtDate(txn.date)}</div>
           </div>
           <button onClick={onClose} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
@@ -2447,7 +2876,7 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
 
         {/* Amount */}
         <div style={{textAlign:"center",padding:"14px 0 16px",borderTop:"1px solid var(--rule)",borderBottom:"1px solid var(--rule)",marginBottom:16}}>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:44,fontWeight:900,letterSpacing:-2,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(txn.amount,currency)}</div>
+          <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(32px,11vw,44px)",fontWeight:900,letterSpacing:-2,overflowWrap:"anywhere",color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(txn.amount,currency)}</div>
           <div style={{fontSize:12,color:"var(--ink-3)",marginTop:3}}>{txn.type==="income"?"Income":"Expense"}</div>
         </div>
 
@@ -2461,7 +2890,7 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
           ].map(([lbl,val])=>(
             <div key={lbl} style={{background:"var(--bg-warm)",borderRadius:7,padding:"10px 12px"}}>
               <div style={{fontSize:9,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--ink-4)",marginBottom:3}}>{lbl}</div>
-              <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{val}</div>
+              <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",lineHeight:1.3,overflowWrap:"anywhere"}}>{val}</div>
             </div>
           ))}
         </div>
@@ -2594,14 +3023,20 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
   const expCats=CATEGORIES.filter(c=>!c.income);
 
   const saveTpl=()=>{
-    if (!tplName.trim()||!parseFloat(tplAmt)) { showToast("Name and amount required"); return; }
-    onAddTemplate({name:tplName.trim(),amount:parseFloat(tplAmt),catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()});
+    const tAmt=parseMoney(tplAmt,{positive:true});
+    if (!tplName.trim()||tAmt===null) { showToast("Name and a positive amount required"); return; }
+    onAddTemplate({name:tplName.trim(),amount:tAmt,catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()});
     setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);
   };
 
   const saveGoal=()=>{
-    if (!goalName.trim()||!parseFloat(goalTarget)) { showToast("Name and target required"); return; }
-    onAddGoal({name:goalName.trim(),target:parseFloat(goalTarget),saved:parseFloat(goalSaved)||0,monthlyTarget:parseFloat(goalMonthly)||0,targetDate:goalDate||null});
+    const gTarget=parseMoney(goalTarget,{positive:true});
+    const gSaved=goalSaved.trim()===""?0:parseMoney(goalSaved);
+    const gMonthly=goalMonthly.trim()===""?0:parseMoney(goalMonthly);
+    if (!goalName.trim()||gTarget===null) { showToast("Name and a positive target required"); return; }
+    if (gSaved===null||gMonthly===null) { showToast("Saved and monthly amounts must be numbers, 0 or more"); return; }
+    if (goalDate && !isValidDateStr(goalDate)) { showToast("Target date is not valid"); return; }
+    onAddGoal({name:goalName.trim(),target:gTarget,saved:gSaved,monthlyTarget:gMonthly,targetDate:goalDate||null});
     setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);
   };
 
@@ -2636,7 +3071,7 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
             </div>
             <div style={{display:"flex",gap:8,width:"100%"}}>
               <input className="field-input" type="number" min="0" step="1" placeholder="0.00" value={savingsT} onChange={e=>setSavingsT(e.target.value)} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-              <button className="btn btn-sm btn-sm-primary" onClick={()=>{onSafeToSpendChange({savingsTarget:parseFloat(savingsT)||0});showToast("Saved");}}>Save</button>
+              <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=savingsT.trim()===""?0:parseMoney(savingsT); if(v===null){showToast("Enter a number, 0 or more");return;} onSafeToSpendChange({savingsTarget:v});showToast("Saved");}}>Save</button>
             </div>
           </div>
         )}
@@ -2644,10 +3079,10 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
         {/* Currency */}
         <div className="settings-section-lbl" style={{marginTop:14}}>Preferences</div>
         <div className="settings-row">
-          <div><div className="settings-row-title">Currency</div><div className="settings-row-sub">Currently: {currency}</div></div>
+          <div><div className="settings-row-title">Currency symbol</div><div className="settings-row-sub">Display only — amounts are not converted. Currently: {currency}</div></div>
           <div style={{display:"flex",gap:7,alignItems:"center"}}>
             <input className="field-input" value={curSym} onChange={e=>setCurSym(e.target.value)} maxLength={3} style={{width:52,textAlign:"center",padding:"7px 8px"}}/>
-            <button className="btn btn-sm btn-sm-primary" onClick={()=>{onCurrencyChange(curSym);showToast("Currency updated");}}>Save</button>
+            <button className="btn btn-sm btn-sm-primary" onClick={()=>{if(!curSym.trim()){showToast("Enter a currency symbol");return;} onCurrencyChange(curSym.trim());showToast("Currency updated");}}>Save</button>
           </div>
         </div>
 
@@ -2701,7 +3136,7 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
                 {editBudget===cat.id&&(
                   <div style={{display:"flex",gap:7,marginTop:7}}>
                     <input className="field-input" type="number" min="0" step="1" placeholder="Monthly limit" value={budgetVal} onChange={e=>setBudgetVal(e.target.value)} autoFocus style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-                    <button className="btn btn-sm btn-sm-primary" onClick={()=>{onSetBudget(cat.id,parseFloat(budgetVal)||0);setEditBudget(null);showToast("Budget saved");}}>Save</button>
+                    <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:parseMoney(budgetVal); if(v===null){showToast("Enter a number, 0 or more");return;} onSetBudget(cat.id,v);setEditBudget(null);showToast("Budget saved");}}>Save</button>
                     <button className="btn btn-sm" onClick={()=>setEditBudget(null)}>✕</button>
                   </div>
                 )}
@@ -2726,25 +3161,35 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
               </div>
               <div className="field-row" style={{marginBottom:10}}>
                 <div className="field" style={{marginBottom:0}}><label className="field-lbl">Monthly contribution</label><input className="field-input" type="number" min="0" step="1" placeholder="Optional" value={goalMonthly} onChange={e=>setGoalMonthly(e.target.value)}/></div>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl">Target date</label><input className="field-input" type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
+                <div className="field" style={{marginBottom:0}}><label className="field-lbl">Target date</label><input className="field-input" lang="en-GB" type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
               </div>
               <button className="btn btn-primary btn-full" style={{marginTop:0,padding:"10px"}} onClick={saveGoal}>Save Goal</button>
             </div>
           )}
           {goals.length===0&&!showNewGoal&&<div style={{fontSize:12,color:"var(--ink-3)"}}>No goals yet.</div>}
           {goals.map(goal=>{
-            const {pct,remaining,estCompletion,whatIf,daysToTarget,behindSchedule,milestones}=calcGoalProgress(goal);
+            const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion,whatIf,milestones}=gp;
             return (
               <div key={goal.id} style={{padding:"12px 0",borderBottom:"1px solid var(--rule)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
                   <div>
                     <div style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>{goal.name}</div>
-                    {goal.targetDate&&<div style={{fontSize:11,color:behindSchedule?"var(--neg)":"var(--ink-3)",marginTop:2}}>{daysToTarget!==null?(daysToTarget>0?`${daysToTarget} days to target`:"Target date reached"):""}  {behindSchedule?"· Behind pace":""}</div>}
+                    {goal.targetDate&&gp.daysToTarget!==null&&(
+                      <div style={{fontSize:11,color:gp.behindSchedule||gp.overdue?"var(--neg)":gp.onTrack?"var(--pos)":"var(--ink-3)",marginTop:2}}>
+                        {gp.complete?"Completed":gp.overdue?`Target date passed ${-gp.daysToTarget} day${-gp.daysToTarget===1?"":"s"} ago`:gp.daysToTarget===0?"Target date is today":`${gp.daysToTarget} day${gp.daysToTarget===1?"":"s"} to target`}
+                        {gp.behindSchedule?" · projected after the target date":gp.onTrack?" · on track":""}
+                      </div>
+                    )}
+                    {!goal.targetDate&&gp.complete&&<div style={{fontSize:11,color:"var(--pos)",marginTop:2}}>Completed</div>}
                   </div>
                   <div style={{display:"flex",gap:7,alignItems:"center"}}>
                     <button className="btn btn-sm" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{
                       const newSaved=prompt(`Update saved amount for "${goal.name}":`,goal.saved||0);
-                      if (newSaved!==null) onUpdateGoal(goal.id,{saved:parseFloat(newSaved)||0});
+                      if (newSaved!==null) {
+                        const v=parseMoney(newSaved);
+                        if (v===null) showToast("Not a valid amount — saved amount unchanged");
+                        else onUpdateGoal(goal.id,{saved:v});
+                      }
                     }}>Update</button>
                     <button className="topbar-btn" style={{color:"var(--ink-4)",width:26,height:26}} onClick={()=>onDeleteGoal(goal.id)}><Icon name="trash" size={13}/></button>
                   </div>
@@ -2805,7 +3250,10 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
           </div>
         </div>
         {state.lastBackup?
-          <div style={{fontSize:11,color:"var(--pos)",fontWeight:600,marginTop:8}}>✓ Last backup: {new Date(state.lastBackup).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}</div>:
+          <div style={{fontSize:11,color:"var(--ink-3)",marginTop:8,lineHeight:1.5}}>
+            <strong style={{color:"var(--ink-2)"}}>Last backup file created:</strong> {new Date(state.lastBackup).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}
+            <div style={{fontStyle:"italic",color:"var(--ink-4)"}}>The app can't tell whether your browser kept the file — check it, and store a copy somewhere safe.</div>
+          </div>:
           <div style={{fontSize:11,color:"var(--neg)",fontWeight:600,marginTop:8}}>No backup yet — export one above</div>
         }
         <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:18}}>Close</button>
@@ -2886,12 +3334,12 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           <div className="month-stat-val" style={{color:"var(--pos)"}}>{fmt(curInc,currency)}</div>
           <div className="month-stat-lbl">Income</div>
           {curInc>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
-            {Math.max(0,Math.round(((curInc-curExp)/curInc)*100))}% surplus
+            {Math.round(((curInc-curExp)/curInc)*100)}% {surplusLabel(curInc,curExp).toLowerCase()}
           </div>}
         </div>
         <div className="month-stat" style={{gridColumn:"1 / -1"}}>
-          <div className="month-stat-val" style={{color:curInc-curExp>=0?"var(--pos)":"var(--neg)"}}>{fmt(Math.abs(curInc-curExp),currency)}</div>
-          <div className="month-stat-lbl">{curInc-curExp>=0?"Net saved":"Net deficit"}</div>
+          <div className="month-stat-val" style={{color:surplusColor(curInc,curExp)}}>{fmt(Math.abs(curInc-curExp),currency)}</div>
+          <div className="month-stat-lbl">{curInc>curExp?"Net surplus":curInc<curExp?"Net deficit":"Break-even"}</div>
           {prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>vs {fmt(prevExp,currency)} spent in {monthShort(prv)}</div>}
         </div>
       </div>
@@ -2987,19 +3435,23 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
   const mon = curMon();
   const { curExp, curInc } = calcMonthSummary(transactions, mon);
   const catSpend = calcCategorySpend(transactions, mon);
-  const paceInfo = calcSpendingPace(curExp, mon);
+  const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
+  const spentToDate = calcSpentToDate(transactions, mon);
+  const paceInfo = calcSpendingPace(spentToDate, mon, budgetTotal);
   const budgetItems = calcBudgetStatus(budgets||{}, catSpend, mon);
   const safeInfo = calcSafeToSpend(transactions, safeToSpend, goals);
 
-  // 1. Spending pace — over pace with days left
-  if (!paceInfo.onTrack && paceInfo.daysLeft > 0 && curExp > 0) {
-    const overage = curExp - paceInfo.expectedByToday;
-    const needed = overage / paceInfo.daysLeft;
+  // 1. Spending pace — only fire when compared against a real budget (onTrack===false)
+  if (paceInfo.onTrack === false && paceInfo.daysRemaining > 0 && spentToDate > 0) {
+    const overage = spentToDate - paceInfo.expectedByToday;
+    const remainingBudget = budgetTotal - curExp;
     cards.push({
       id:"pace", type:"warn", icon:"pace",
       title:"Spending Pace",
-      text:`You are ${fmt(overage,currency)} above expected pace for this point in the month.`,
-      impact:`To stay on track, spend no more than ${fmt(Math.max(0,paceInfo.dailyAvg-needed),currency)}/day for the remaining ${paceInfo.daysLeft} days.`,
+      text:`You are ${fmt(overage,currency)} above budget pace for this point in the month.`,
+      impact: remainingBudget>0
+        ? `Your remaining budget of ${fmt(remainingBudget,currency)} allows about ${fmt(remainingBudget/paceInfo.daysRemaining,currency)}/day for the ${paceInfo.daysRemaining} days left (today included).`
+        : `Your total budget is fully used${remainingBudget<0?` (${fmt(Math.abs(remainingBudget),currency)} over)`:""} with ${paceInfo.daysRemaining} days left (today included).`,
     });
   }
 
@@ -3018,20 +3470,24 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
     });
   });
 
-  // 3. Goal behind pace
+  // 3. Goals that will miss their target date, or whose date has passed
   goals?.forEach(goal=>{
-    const {behindSchedule,remaining,monthsNeeded}=calcGoalProgress(goal);
-    if (behindSchedule && goal.monthlyTarget>0) {
-      const daysToTarget = goal.targetDate ? Math.round((parseLocalDate(goal.targetDate)-new Date())/86400000) : null;
-      const monthsLeft = daysToTarget ? Math.ceil(daysToTarget/30) : null;
-      const neededMonthly = monthsLeft&&monthsLeft>0 ? Math.ceil(remaining/monthsLeft) : null;
+    const gp=calcGoalProgress(goal);
+    if (gp.behindSchedule && goal.monthlyTarget>0) {
+      const monthsLeft=Math.max(1,Math.ceil(gp.daysToTarget/30.44));
+      const neededMonthly=Math.ceil(gp.remaining/monthsLeft);
       cards.push({
         id:`goal-${goal.id}`, type:"warn", icon:"goal",
         title:`Goal: ${goal.name}`,
-        text:`You are behind pace for "${goal.name}". At ${fmt(goal.monthlyTarget,currency)}/mo, completion is ${monthsNeeded} months away.`,
-        impact:neededMonthly&&neededMonthly>goal.monthlyTarget
-          ?`To hit your target date, increase monthly contribution to ${fmt(neededMonthly,currency)}.`
-          :`Consider increasing your monthly contribution to reach this goal sooner.`,
+        text:`At ${fmt(goal.monthlyTarget,currency)}/mo, "${goal.name}" is projected to finish in ${gp.estCompletion}, after its target date.`,
+        impact:`Finishing by the target date would take about ${fmt(neededMonthly,currency)}/mo.`,
+      });
+    } else if (gp.overdue) {
+      cards.push({
+        id:`goal-${goal.id}`, type:"warn", icon:"goal",
+        title:`Goal: ${goal.name}`,
+        text:`The target date for "${goal.name}" has passed with ${fmt(gp.remaining,currency)} still to go.`,
+        impact:gp.estCompletion ? `At ${fmt(goal.monthlyTarget,currency)}/mo it would finish in ${gp.estCompletion}.` : `No monthly contribution is set for this goal.`,
       });
     }
   });
@@ -3046,23 +3502,23 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
     });
   }
 
-  // 5. Recurring audit — active recurring transactions
-  const activeRecurring = transactions.filter(t=>t.recurring&&t.recurFreq&&t.isActive!==false&&t.type==="expense");
-  if (activeRecurring.length >= 3) {
-    const monthlyTotal = activeRecurring.reduce((s,t)=>s+toMonthlyAmountHelper(t),0);
+  // 5. Recurring audit — one line per schedule, not per recorded payment
+  const activeSchedules = buildSchedules(transactions).filter(x=>x.isActive && x.type==="expense");
+  if (activeSchedules.length >= 3) {
+    const monthlyTotal = activeSchedules.reduce((sum,x)=>sum+scheduleMonthly(x),0);
     const pctOfIncome = curInc>0 ? Math.round((monthlyTotal/curInc)*100) : 0;
     if (pctOfIncome >= 30) {
       cards.push({
         id:"recur-audit", type:"info", icon:"repeat",
         title:"Recurring Audit",
-        text:`${activeRecurring.length} active recurring entries total ${fmt(monthlyTotal,currency)}/mo — ${pctOfIncome}% of your income.`,
-        impact:`Review recurring entries in the Recurring tab. Pausing unused subscriptions frees up discretionary budget.`,
+        text:`${activeSchedules.length} active recurring payments come to about ${fmt(monthlyTotal,currency)} in a typical month — ${pctOfIncome}% of the income recorded this month.`,
+        impact:`Review them in the Recurring tab. Pausing ones you no longer use frees up discretionary budget.`,
       });
     }
   }
 
   // 6. High-spend anomaly this month
-  const patternsData = calcPatterns(transactions);
+  const patternsData = calcPatterns(transactions, currency);
   if (patternsData.anomalies.length > 0) {
     const top = patternsData.anomalies[0];
     cards.push({
