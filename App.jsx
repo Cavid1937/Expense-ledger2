@@ -1285,7 +1285,9 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .tab-btn{min-width:0;padding-left:2px;padding-right:2px}
 .tab-lbl{font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;line-height:1.15;max-width:100%;text-align:center}
 .tab-indicator{position:absolute;top:5px;left:calc((100% / var(--tab-count,5)) * var(--tab-index,0) + (100% / (var(--tab-count,5) * 2)) - 8px);width:16px;height:2px;background:var(--accent);border-radius:99px;pointer-events:none;transition:left 320ms cubic-bezier(0.22,1,0.36,1)}
-.page{flex:1;overflow-y:auto;padding:20px 20px calc(112px + env(safe-area-inset-bottom,0px));animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) both}
+.page{flex:1;overflow-y:auto;padding:20px 20px calc(112px + env(safe-area-inset-bottom,0px));animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) backwards}
+/* "backwards", not "both": a transform kept after the animation makes .page the box that position:fixed sheets are placed in,
+   so a sheet opened from a long list landed thousands of pixels below the screen, under the tab bar. */
 @keyframes pageIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .label-sm{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3)}
 /* Hero */
@@ -1619,6 +1621,12 @@ input[type=number]{-moz-appearance:textfield}
 // • Escape closes the top-most layer. Focus moves into a layer when it opens and returns to where it was when it closes;
 //   Tab stays inside the open layer. Reduced-motion users get no spring (the sheet simply closes or resets).
 // Dismissal always goes through the sheet's own close handler (a click on its overlay, or the add form's close button).
+// closeTopLayer() is that dismissal for the top-most layer, shared by Escape and the phone's Back button; false = nothing open.
+function closeTopLayer() {
+  const add=document.querySelector(".add-overlay .add-close"); if (add) { add.click(); return true; }
+  const sheets=document.querySelectorAll(".sheet-overlay"); if (sheets.length) { sheets[sheets.length-1].click(); return true; }
+  return false;
+}
 function useSheetGestures() {
   useEffect(()=>{
     const reduced=()=>!!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -1659,8 +1667,7 @@ function useSheetGestures() {
     };
     const onKey=(e)=>{
       if (e.key==="Escape" && !e.defaultPrevented) {
-        const add=document.querySelector(".add-overlay .add-close"); if (add) { add.click(); e.preventDefault(); return; }
-        const sheets=document.querySelectorAll(".sheet-overlay"); if (sheets.length) { sheets[sheets.length-1].click(); e.preventDefault(); }
+        if (closeTopLayer()) e.preventDefault();
       } else if (e.key==="Tab") {
         const layers=document.querySelectorAll(".add-overlay,.sheet"); const top=layers[layers.length-1]; if (!top) return;
         const f=[...top.querySelectorAll('button,[href],input:not([type=file]),select,textarea,[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled && x.offsetParent!==null);
@@ -1757,6 +1764,61 @@ export default function App() {
   },[]);
 
   const switchTab=useCallback((t)=>{ setTab(t); setTabKey(k=>k+1); },[]);
+  const tabRef=useRef(tab); tabRef.current=tab;
+
+  // Phone Back button (and browser Back). While the app is open one extra history entry guards it: Back first closes the
+  // top sheet, then returns to Home, and on Home with nothing open it only warns; Back again within 2 s leaves the app.
+  // history.state marks the guard entry, so a guard is never pushed twice.
+  const armBack=useRef(()=>{});
+  useEffect(()=>{
+    let rearm=null;
+    const arm=()=>{ if (!(history.state && history.state.ledgerGuard)) history.pushState({ ledgerGuard:true }, ""); };
+    armBack.current=arm;
+    const onPop=()=>{
+      clearTimeout(rearm);
+      if (closeTopLayer()) { arm(); return; }
+      if (tabRef.current!=="home") { switchTab("home"); arm(); return; }
+      if (history.state && history.state.ledgerGuard) return;
+      showToast(t("nav.backAgain"),2000);
+      rearm=setTimeout(arm,2000);
+    };
+    // A sheet opening while the app is unguarded (just after the warning) guards it again.
+    const mo=new MutationObserver(()=>{ if (document.querySelector(".sheet-overlay,.add-overlay")) arm(); });
+    mo.observe(document.body,{ childList:true, subtree:true });
+    arm(); window.addEventListener("popstate",onPop);
+    return ()=>{ clearTimeout(rearm); mo.disconnect(); window.removeEventListener("popstate",onPop); };
+  },[switchTab,showToast]);
+  useEffect(()=>{ if (tab!=="home") armBack.current(); },[tab]);
+
+  // Swipe between the five sections: a quick, clearly sideways swipe on the page. Ignored while a sheet or the add form is
+  // open, on form fields, on rows that scroll sideways (e.g. the filter chips), and from the screen edges (the system's own
+  // back gesture lives there).
+  useEffect(()=>{
+    const ORDER=["home","ledger","monthly","analytics","recurring"];
+    let s=null;
+    const scrollsSideways=(el)=>{ for (;el && el!==document.body;el=el.parentElement) { const ox=getComputedStyle(el).overflowX; if ((ox==="auto"||ox==="scroll") && el.scrollWidth>el.clientWidth+1) return true; } return false; };
+    const onStart=(e)=>{
+      s=null; if (e.touches.length!==1) return;
+      const tg=e.target, p=e.touches[0];
+      if (!tg.closest || !tg.closest(".page") || document.querySelector(".sheet-overlay,.add-overlay")) return;
+      if (tg.closest("input,textarea,select,[contenteditable]") || scrollsSideways(tg)) return;
+      if (p.clientX<24 || p.clientX>window.innerWidth-24) return;
+      s={ x:p.clientX, y:p.clientY, t0:e.timeStamp, dx:0, dy:0 };
+    };
+    const onMove=(e)=>{ if (!s) return; const p=e.touches[0]; s.dx=p.clientX-s.x; s.dy=p.clientY-s.y; };
+    const onEnd=(e)=>{
+      if (!s) return; const { dx, dy, t0 }=s; s=null;
+      if (Math.abs(dx)<70 || Math.abs(dx)<Math.abs(dy)*1.8 || e.timeStamp-t0>700) return;
+      const i=ORDER.indexOf(tabRef.current), j=i+(dx<0?1:-1);
+      if (i<0 || j<0 || j>=ORDER.length) return;
+      switchTab(ORDER[j]); window.scrollTo(0,0);
+    };
+    const reset=()=>{ s=null; };
+    document.addEventListener("touchstart",onStart,{ passive:true }); document.addEventListener("touchmove",onMove,{ passive:true });
+    document.addEventListener("touchend",onEnd,{ passive:true }); document.addEventListener("touchcancel",reset,{ passive:true });
+    return ()=>{ document.removeEventListener("touchstart",onStart); document.removeEventListener("touchmove",onMove);
+      document.removeEventListener("touchend",onEnd); document.removeEventListener("touchcancel",reset); };
+  },[switchTab]);
 
   const addTransaction=useCallback((txn)=>{
     setState(s=>({...s,transactions:[{...txn,id:Date.now()+Math.random(),createdAt:new Date().toISOString()},...s.transactions]}));
@@ -2388,10 +2450,10 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
   const [showCatSheet, setShowCatSheet] = useState(false);
 
   const filtered=useMemo(()=>{
-    let t=[...transactions];
+    let list=[...transactions];                       // not "t": that name is the translation function used below
     if (search) {
       const q=search.toLowerCase().trim(),asNum=parseFloat(q);
-      t=t.filter(x=>{
+      list=list.filter(x=>{
         if ((x.note||"").toLowerCase().includes(q)) return true;
         if ((x.merchant||"").toLowerCase().includes(q)) return true;
         if (x.category.toLowerCase().includes(q)) return true;
@@ -2408,14 +2470,18 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
         return false;
       });
     }
-    if (typeFilter!=="all") t=t.filter(x=>x.type===typeFilter);
-    if (catFilter!=="all")  t=t.filter(x=>x.category===catFilter);
-    if (dateFrom)           t=t.filter(x=>x.date>=dateFrom);
-    if (dateTo)             t=t.filter(x=>x.date<=dateTo);
-    return t;
+    if (typeFilter!=="all") list=list.filter(x=>x.type===typeFilter);
+    if (catFilter!=="all")  list=list.filter(x=>x.category===catFilter);
+    if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
+    if (dateTo)             list=list.filter(x=>x.date<=dateTo);
+    return list;
   },[transactions,search,typeFilter,catFilter,dateFrom,dateTo,locale()]);
 
-  const usedCats=useMemo(()=>[...new Set(transactions.map(t=>t.category))].map(id=>CAT(id)).filter(Boolean),[transactions]);
+  // The category list offers only categories used by the chosen type (Expenses / Income), and changing the type drops a
+  // category filter that type has no transactions in, instead of leaving an empty list.
+  const catsFor=(ty)=>[...new Set(transactions.filter(x=>ty==="all"||x.type===ty).map(x=>x.category))];
+  const usedCats=useMemo(()=>catsFor(typeFilter).map(id=>CAT(id)).filter(Boolean),[transactions,typeFilter]);
+  const chooseType=(ty)=>{ setTypeFilter(ty); if (catFilter!=="all" && !catsFor(ty).includes(catFilter)) setCatFilter("all"); };
   const hasCatFilter=catFilter!=="all",hasDateFilter=dateFrom||dateTo;
   const selectedCat=CAT(catFilter);
 
@@ -2440,7 +2506,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
       </div>
       <div className="filter-bar">
         {["all","expense","income"].map(ty=>(
-          <button key={ty} className={`chip${typeFilter===ty?" on":""}`} aria-pressed={typeFilter===ty} onClick={()=>setTypeFilter(ty)}>{t("ledger.type."+ty)}</button>
+          <button key={ty} className={`chip${typeFilter===ty?" on":""}`} aria-pressed={typeFilter===ty} onClick={()=>chooseType(ty)}>{t("ledger.type."+ty)}</button>
         ))}
         <button className={`cat-filter-btn${hasCatFilter?" active":""}`} onClick={()=>setShowCatSheet(true)}>
           {hasCatFilter?<><CatIcon catId={catFilter} size={12}/>{catName(catFilter)}</>:<><Icon name="filter" size={12}/>{t("ledger.category")}</>}

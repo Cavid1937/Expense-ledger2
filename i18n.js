@@ -310,6 +310,7 @@ export const MESSAGES = {
   "nav.recurring": { en: "Recurring", az: "Təkrarlanan", ru: "Регулярные" },
   "nav.addTxn":    { en: "Add transaction", az: "Əməliyyat əlavə et", ru: "Добавить операцию" },
   "nav.settings":  { en: "Settings", az: "Parametrlər", ru: "Настройки" },
+  "nav.backAgain": { en: "Press Back again to exit", az: "Çıxmaq üçün yenidən «Geri» düyməsini basın", ru: "Нажмите «Назад» ещё раз, чтобы выйти" },
   "common.undo":   { en: "Undo", az: "Geri qaytar", ru: "Отменить" },
   "common.dismiss": { en: "Dismiss", az: "Bağla", ru: "Закрыть" },
   "common.dismissNotice": { en: "Dismiss notice", az: "Bildirişi bağla", ru: "Закрыть уведомление" },
