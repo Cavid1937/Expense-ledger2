@@ -90,7 +90,17 @@ function isValidDateStr(s) {
 // a missing/invalid date, a non-positive amount or an unsupported type is rejected with a reason (never abs()'d, never today).
 const TXN_TYPES = { income:"income", inc:"income", incomes:"income", expense:"expense", exp:"expense", expenses:"expense" };
 const RECUR_FREQS = new Set(["weekly","biweekly","monthly","yearly"]);
-const DATE_TEXT_RE = /^\d{4}-\d{2}-\d{2}(?:[T ].*)?$/;
+// A date, or a date with a valid time (Run 8): "2026-10-01", "2026-10-01T10:30", "…:15", "…:15.123", optionally "Z" or
+// "+04:00"/"-0530", with T or a space. Anything else after the date ("Tgarbage", "T25:00") is refused — it used to be cut
+// off and the record silently kept with the first ten characters. The stored date is the written calendar date.
+const DATE_TEXT_RE = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(?:Z|[+-](\d{2}):?(\d{2}))?)?$/;
+function isValidDateText(s) {
+  const m=DATE_TEXT_RE.exec(s); if (!m || !isValidDateStr(m[1])) return false;
+  const [,,h,mi,se,oh,om]=m;
+  if (h!==undefined && (Number(h)>23 || Number(mi)>59 || (se!==undefined && Number(se)>59))) return false;
+  if (oh!==undefined && (Number(oh)>14 || Number(om)>59)) return false;
+  return true;
+}
 function normType(v) { if (v===undefined||v===null||v==="") return "expense"; return TXN_TYPES[String(v).trim().toLowerCase()] || null; }
 
 function checkRawTxn(t) {
@@ -98,14 +108,15 @@ function checkRawTxn(t) {
   if (t.date===undefined || t.date===null || (typeof t.date==="string" && t.date.trim()==="")) return "missing date";
   if (typeof t.date!=="string") return "invalid date";
   const d=t.date.trim();
-  if (!DATE_TEXT_RE.test(d) || !isValidDateStr(d.slice(0,10))) return "invalid date";
+  if (!isValidDateText(d)) return "invalid date";
   const r=moneyReason(t.amount ?? t.amt, { positive:true });
   if (r) return r;
   if (normType(t.type)===null) return "unsupported type";
   // isActive: missing = active (as always). An explicit value must be a yes/no: null, 0, 1, "yes", {} … used to be read by
   // truthiness, which could silently re-activate a paused payment. recurring: missing or null = not recurring (null always
   // meant that and it is also the default); any other non-yes/no value is refused.
-  if (t.isActive!==undefined && flagValue(t.isActive)===null) return "invalid active flag";
+  // Run 8: null is accepted as paused — the meaning older versions always gave it (!!null) — so such records stay visible.
+  if (t.isActive!==undefined && t.isActive!==null && flagValue(t.isActive)===null) return "invalid active flag";
   if (t.recurring!==undefined && t.recurring!==null && flagValue(t.recurring)===null) return "invalid recurrence flag";
   if (isTrue(t.recurring) && !RECUR_FREQS.has(t.recurFreq||t.frequency)) return "invalid recurrence";
   return null;
@@ -185,33 +196,33 @@ const nMon    = (n) => { const now=new Date(); const d=new Date(now.getFullYear(
 
 // ─── Category system ──────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id:"food",     name:"Food & Dining",        tile:"Food",      color:"#5C7A6E", income:false,
+  { id:"food",     name:"Food & Dining",        tile:"Food",      color:"#FF6B7F", income:false,
     subs:["Restaurants","Fast Food","Coffee","Groceries","Delivery","Snacks","Other"] },
-  { id:"transport",name:"Transport",             tile:"Transport", color:"#4A6A7A", income:false,
+  { id:"transport",name:"Transport",             tile:"Transport", color:"#F5B83D", income:false,
     subs:["Metro","Bus","Taxi / Ride-hailing","Fuel","Parking","Car Maintenance","Intercity","Other"] },
-  { id:"shopping", name:"Shopping",              tile:"Shopping",  color:"#7A6652", income:false,
+  { id:"shopping", name:"Shopping",              tile:"Shopping",  color:"#4FA3FF", income:false,
     subs:["Clothing","Electronics","Personal Items","Home","Accessories","Online Shopping","Other"] },
-  { id:"gifts",    name:"Gifts & Personal",      tile:"Gifts",     color:"#7A5C7A", income:false,
+  { id:"gifts",    name:"Gifts & Personal",      tile:"Gifts",     color:"#F27AD0", income:false,
     subs:["Gifts","Donations","Personal Care","Barber / Hair","Cosmetics","Other"] },
-  { id:"entertain",name:"Entertainment",         tile:"Entertainment",   color:"#5C6A7A", income:false,
+  { id:"entertain",name:"Entertainment",         tile:"Entertainment",   color:"#9870F5", income:false,
     subs:["Cinema","Games","Events","Sports","Hobbies","Other"] },
-  { id:"digital",  name:"Bills & Subscriptions", tile:"Bills & subs",     color:"#3A6A5A", income:false,
+  { id:"digital",  name:"Bills & Subscriptions", tile:"Bills & subs",     color:"#3FC7E8", income:false,
     subs:["Mobile","Internet","Streaming","Software","Cloud Storage","Other Subs","Other"] },
-  { id:"health",   name:"Health & Fitness",      tile:"Health",    color:"#4A5C7A", income:false,
+  { id:"health",   name:"Health & Fitness",      tile:"Health",    color:"#5ED17A", income:false,
     subs:["Gym","Sports Equipment","Pharmacy","Doctor / Dentist","Supplements","Other"] },
-  { id:"edu",      name:"Education",             tile:"Education", color:"#4A4A7A", income:false,
+  { id:"edu",      name:"Education",             tile:"Education", color:"#7B9BFF", income:false,
     subs:["University","Books","Courses","Exams","Stationery","Other"] },
-  { id:"travel",   name:"Travel",                tile:"Travel",    color:"#6A5A4A", income:false,
+  { id:"travel",   name:"Travel",                tile:"Travel",    color:"#FF9F5A", income:false,
     subs:["Flights","Hotels","Visa","Travel Food","Travel Transport","Activities","Other"] },
-  { id:"housing",  name:"Home",                  tile:"Home",      color:"#5A5A5A", income:false,
+  { id:"housing",  name:"Home",                  tile:"Home",      color:"#4E78FF", income:false,
     subs:["Rent","Utilities","Household","Repairs","Other"] },
-  { id:"finance",  name:"Finance",               tile:"Finance",   color:"#4A6A4A", income:false,
+  { id:"finance",  name:"Finance",               tile:"Finance",   color:"#B6D84A", income:false,
     subs:["Bank Fees","Transfers","Taxes","Insurance","Investments","Other"] },
-  { id:"other",    name:"Other",                 tile:"Other",     color:"#8A8A8A", income:false,
+  { id:"other",    name:"Other",                 tile:"Other",     color:"#98A5B7", income:false,
     subs:["Miscellaneous"] },
-  { id:"salary",   name:"Salary",                tile:"Salary",    color:"#2D6A4F", income:true, subs:[] },
-  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#2D6A4F", income:true, subs:[] },
-  { id:"income",   name:"Other Income",          tile:"Other income",    color:"#3D7A5F", income:true, subs:[] },
+  { id:"salary",   name:"Salary",                tile:"Salary",    color:"#32CDAA", income:true, subs:[] },
+  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#2EC4B6", income:true, subs:[] },
+  { id:"income",   name:"Other Income",          tile:"Other income",    color:"#5ED1B8", income:true, subs:[] },
 ];
 const CAT = (id) => CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==="other");
 // Display names in the interface language. The English `name` above stays the stored/CSV identifier and is never translated.
@@ -244,18 +255,21 @@ const CATEGORY_MAP = {
   "university":"edu","school":"edu","salary & income":"salary","salary and income":"salary",
   "wage":"salary","wages":"salary","paycheck":"salary","pay":"salary",
   "side income":"freelance","commission":"freelance","consulting":"freelance","gig":"freelance",
+  "groceries & cafes":"food","cafes":"food",
 };
 
+// Exact matches only (Run 8): an id, a category's English name or an alias, compared after lower-casing, collapsing spaces
+// and treating "and" as "&". Anything else is "other" — the import sheet counts those rows and says so. The old fallback
+// matched any part of a word ("Payment" → Salary via "pay", "x" → whatever alias contained an x).
+const catKey = (s) => String(s).toLowerCase().trim().replace(/\s+/g," ").replace(/ and /g," & ").replace(/\s*&\s*/g," & ");
+const CATEGORY_LOOKUP = (() => {
+  const m={}; Object.entries(CATEGORY_MAP).forEach(([k,v])=>{ m[catKey(k)]=v; });
+  CATEGORIES.forEach(c=>{ m[catKey(c.name)]=c.id; m[c.id]=c.id; });
+  return m;
+})();
 function resolveCategory(raw) {
   if (!raw) return "other";
-  const key = String(raw).toLowerCase().trim();
-  if (CATEGORIES.find(c=>c.id===key)) return key;  // exact id wins first
-  const byName=CATEGORIES.find(c=>c.name.toLowerCase()===key); if (byName) return byName.id;  // exact display name (CSV round-trip)
-  if (CATEGORY_MAP[key]) return CATEGORY_MAP[key];
-  for (const [k,v] of Object.entries(CATEGORY_MAP)) {
-    if (key.includes(k)||k.includes(key)) return v;
-  }
-  return "other";
+  return CATEGORY_LOOKUP[catKey(raw)] || "other";
 }
 
 // Callers validate with checkRawTxn() first (see partitionTransactions). normaliseTxn never takes abs(),
@@ -278,7 +292,7 @@ function normaliseTxn(t) {
     date:        String(t.date).trim().slice(0,10),
     recurring:   isTrue(t.recurring),
     recurFreq:   RECUR_FREQS.has(f) ? f : null,
-    isActive:    t.isActive!==undefined ? flagValue(t.isActive) : true,       // checkRawTxn has refused anything else
+    isActive:    t.isActive===undefined ? true : t.isActive===null ? false : flagValue(t.isActive),   // checkRawTxn has refused anything else
     createdAt:   t.createdAt||new Date().toISOString(),
   };
 }
@@ -583,10 +597,14 @@ function planImport(raw, filename="") {
   if (sameFile) warnings.push(tn("import.sameFileDup",sameFile));
   // A file with no usable transactions (settings only, an empty list, or only refused rows) may update settings, but it can
   // never replace the ledger: Replace would otherwise delete every transaction on the device.
-  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings };
+  // Run 8: nor can a file where some rows were refused — Replace would quietly drop those rows along with the whole ledger.
+  // Merge (adds the readable rows) stays available; the sheet explains why Replace is not offered.
+  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings };
 }
 
-function txnFingerprint(t) { return [t.date,t.type,Number(t.amount).toFixed(2),t.category,norm(t.merchant),norm(t.note),norm(t.subcategory)].join("|"); }
+// Run 8: whether an entry repeats (and how often) is part of what it is, so a monthly bill and an identical one-off purchase
+// are not look-alikes. Paused/active is a state that changes over time and is left out (a re-imported entry still matches).
+function txnFingerprint(t) { return [t.date,t.type,Number(t.amount).toFixed(2),t.category,norm(t.merchant),norm(t.note),norm(t.subcategory),t.recurring?(t.recurFreq||"r"):""].join("|"); }
 function countSuspectedDuplicates(existing, incoming) { const fp=new Set(existing.map(txnFingerprint)); return incoming.filter(t=>fp.has(txnFingerprint(t))).length; }
 
 // What each mode does with each part of a backup (shown to the user in the import sheet):
@@ -597,8 +615,10 @@ function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
   const sortDesc=(l)=>[...l].sort((a,b)=>b.date.localeCompare(a.date));
   const S=plan.settings||{};
   if (mode==="replace") {
-    // Defence in depth (the sheet does not offer Replace then): zero usable rows never empties the ledger.
-    const next={ ...state, transactions:plan.transactions.length ? sortDesc(plan.transactions) : state.transactions };
+    // Defence in depth (the sheet does not offer Replace then): a file with no usable rows, or with refused rows, never
+    // replaces the ledger; only its valid settings are applied.
+    const keep=!plan.transactions.length || (plan.skippedCount||0)>0;
+    const next={ ...state, transactions:keep ? state.transactions : sortDesc(plan.transactions) };
     ["budgets","templates","currency","goals","safeToSpend"].forEach(k=>{ if (S[k]!==undefined) next[k]=S[k]; });
     return next;
   }
@@ -995,11 +1015,19 @@ const scheduleMonthly = (s) => toMonthlyAmountHelper({ amount:s.amount, recurFre
 // on the last day of a short month (28 Feb, 30 Apr), which is only where a later due day was clamped to: then the run of
 // month-end payments before it shows the intended day (31 Jan, 28 Feb → 31; 29 Feb 2024, 28 Feb 2025 → 29). A payment on
 // a day that is not its month's last day (28 Mar) is a deliberate change and becomes the new due day.
+// Run 8: one payment on a different day (paid early or late, or recorded with "Record payment" on the day it was paid)
+// does not move the due day when the two payments before it agree; a real change needs two payments in a row on the new
+// day. Trade-off: the first payment after a genuine due-date change is read as early/late until the second one confirms it.
 function scheduleDueDay(s) {
   const ds=s.occurrences.map(parseLocalDate), isMonthEnd=(d)=>d.getDate()===new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
-  let day=ds[ds.length-1].getDate();
-  for (let i=ds.length-1; i>=0 && isMonthEnd(ds[i]); i--) day=Math.max(day, ds[i].getDate());
-  return day;
+  const dueAt=(n)=>{   // the due day implied by the first n payments
+    let day=ds[n-1].getDate();
+    for (let i=n-1; i>=0 && isMonthEnd(ds[i]); i--) day=Math.max(day, ds[i].getDate());
+    return day;
+  };
+  const n=ds.length, last=dueAt(n);
+  if (n>=3) { const prev=dueAt(n-1), prev2=dueAt(n-2); if (prev===prev2 && last!==prev) return prev; }
+  return last;
 }
 
 // Dates a schedule is expected to fall on inside month `mon`, projected from its latest occurrence on its due day
@@ -1293,6 +1321,36 @@ function median(arr) {
   return s.length%2?s[m]:(s[m-1]+s[m])/2;
 }
 
+// ─── Redesign (2026-10-27): figures for the Home ring, the Analytics trend and the Home greeting ───
+// Time-of-day greeting for the Home title. No name: the app does not know the user's name and does not ask for it.
+function greetingKey(now=new Date()) { const h=now.getHours(); return h<5?"home.greet.evening":h<12?"home.greet.morning":h<18?"home.greet.afternoon":"home.greet.evening"; }
+// Whole-number percentages that add up to exactly 100 (largest remainder), so a legend never shows 99% or 101%.
+// Rows with no amount get 0. Returns [] when the total is 0.
+function pctShares(amounts) {
+  const total=amounts.reduce((s,a)=>s+a,0); if (!(total>0)) return [];
+  const raw=amounts.map(a=>a/total*100), out=raw.map(Math.floor);
+  let left=100-out.reduce((s,a)=>s+a,0);
+  raw.map((r,i)=>[r-out[i],i]).sort((a,b)=>b[0]-a[0]||a[1]-b[1]).forEach(([,i])=>{ if (left>0 && amounts[i]>0) { out[i]++; left--; } });
+  return out;
+}
+// The month's spending by category for the Home ring: the five largest, the rest (if any) combined as "Other".
+function donutSlices(catSpend, max=5) {
+  const rows=Object.entries(catSpend).filter(([,a])=>a>0).sort((a,b)=>b[1]-a[1]);
+  const top=rows.slice(0,max).map(([id,amt])=>({ id, amt, color:CAT(id)?.color||"#98A5B7", name:catName(id) }));
+  const rest=rows.slice(max).reduce((s,[,a])=>s+a,0);
+  if (rest>0) top.push({ id:"_rest", amt:rest, color:"#5F6B7C", name:t("home.otherCats") });
+  const pct=pctShares(top.map(x=>x.amt));
+  return top.map((x,i)=>({ ...x, pct:pct[i] }));
+}
+// Running total of a month's expenses, day by day: element d-1 is everything spent on days 1…d. Only what has happened
+// counts (days after today are null in the current month; a future month is all null), matching the month's "Spent" figure.
+function cumulativeByDay(transactions, mon, now=new Date()) {
+  const n=daysInMonth(mon), p=monthProgress(mon,now), last=p.state==="future"?0:p.state==="past"?n:p.daysPassed;
+  const perDay=new Array(n).fill(0);
+  transactions.forEach(x=>{ if (x.type==="expense" && x.date.startsWith(mon)) { const d=Number(x.date.slice(8,10)); if (d>=1 && d<=last) perDay[d-1]+=x.amount; } });
+  let run=0; return perDay.map((v,i)=>{ run=Math.round((run+v)*100)/100; return i<last?run:null; });
+}
+
 // ─── SVG icon system ──────────────────────────────────────────────────────────
 const ICONS = {
   food:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v7"/><path d="M7 2v7"/><path d="M10 2v7"/><path d="M4 7a3 3 0 0 0 6 0"/><path d="M7 10v12"/><path d="M17 2c-2.2 2-3 4.5-3 7v2h6V9c0-2.5-.8-5-3-7Z"/><path d="M17 11v11"/></svg>`,
@@ -1334,7 +1392,17 @@ const ICONS = {
   merchant:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18"/><path d="M4 10V20h16V10"/><path d="M2 10l2-7h16l2 7"/><path d="M2 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M9 20v-5h6v5"/></svg>`,
   pattern:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.2 14.5A7 7 0 1 1 15.8 14.5c-.9.6-1.3 1.3-1.5 2.5h-4.6c-.2-1.2-.6-1.9-1.5-2.5Z"/></svg>`,
   compare:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`,
+  menu:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>`,
+  chevLeft:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`,
+  backup:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>`,
+  check:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
 };
+
+// Navigation (2026-10-27 redesign): five tabs. Recurring payments and Import / Export are pages under More; on them the
+// More tab stays selected, Back (or the title's back arrow) returns to More, and a sideways swipe moves from More's position.
+const TABS = [{id:"home",icon:"home"},{id:"ledger",icon:"list"},{id:"monthly",icon:"chart"},{id:"goals",icon:"goal"},{id:"more",icon:"menu"}];
+const TAB_ORDER = TABS.map(x=>x.id);
+const SUBPAGE_PARENT = { recurring:"more", io:"more" };
 
 function Icon({ name, size=16, color="currentColor", style={} }) {
   return (
@@ -1344,34 +1412,45 @@ function Icon({ name, size=16, color="currentColor", style={} }) {
 }
 function CatIcon({ catId, size=16, color }) {
   const cat=CAT(catId);
-  return <Icon name={catId} size={size} color={color||cat?.color||"#8A8A8A"}/>;
+  return <Icon name={catId} size={size} color={color||cat?.color||"#98A5B7"}/>;
 }
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 button{font-family:inherit;cursor:pointer}
+/* Dark design (2026-10-27 redesign). Surfaces: page, card, elevated. Text: primary and muted. Accents: blue (actions,
+   selection), teal (income, on track), coral (expenses over limit, errors), violet (secondary charts), amber (warnings).
+   Contrast (WCAG): muted #98A5B7 is ≥ 6.1:1 on every surface, --ink-4 ≥ 4.9:1. Blue #4E78FF is 4.5:1 on a card, so blue
+   TEXT uses --accent-text (#7B9BFF, ≥ 5.8:1) and filled buttons use --accent-fill (#3D63E8, white text 5.1:1); white on
+   #4E78FF itself is only 3.9:1. */
 :root{
-  --bg:#F7F4EE;--bg-warm:#F0EDE5;--bg-card:#FDFCF9;--bg-inset:#EDEAE2;
-  --ink:#1A1814;--ink-2:#3D3A35;--ink-3:#5F5A53;--ink-4:#6E6961;--ink-5:#D5D1C9;
-  --rule:#E8E4DC;--rule-2:#C8C4BC;
-  --accent:#6B1F2A;--accent-light:#F5ECED;--accent-mid:#C4454F;
-  --pos:#1D5C38;--pos-bg:#EBF4EE;
-  --neg:#6B1F2A;--neg-bg:#F5ECED;
-  --warn:#6B4C00;--warn-bg:#FBF6E7;
+  color-scheme:dark;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --bg:#080F17;--bg-card:#111B27;--bg-warm:#1A2634;--bg-inset:#16212E;
+  --ink:#F3F6FC;--ink-2:#D4DBE6;--ink-3:#98A5B7;--ink-4:#8794A6;--ink-5:#2C3A4B;
+  --rule:#1F2B3A;--rule-2:#33445A;
+  --accent:#4E78FF;--accent-light:#16244A;--accent-mid:#7B9BFF;--accent-text:#7B9BFF;--accent-fill:#3D63E8;
+  --violet:#9870F5;
+  --pos:#32CDAA;--pos-bg:#0F2E2A;
+  --neg:#FF647C;--neg-bg:#3A1720;
+  --warn:#F5B83D;--warn-bg:#33270C;
+  --radius:16px;
 }
-html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+html,body{background:var(--bg);color:var(--ink);font-family:var(--font);min-height:100vh;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
+input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .app{max-width:430px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
-.topbar{position:sticky;top:0;z-index:60;background:rgba(247,244,238,0.94);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-bottom:1px solid var(--rule);padding:0 20px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.wordmark{font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:var(--ink);letter-spacing:-0.1px}
+.topbar{position:sticky;top:0;z-index:60;background:rgba(8,15,23,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:10px 20px 6px;min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.wordmark{font-family:var(--font);font-size:26px;font-weight:700;color:var(--ink);letter-spacing:-0.4px;line-height:1.15;min-width:0;overflow-wrap:anywhere}
+.topbar-back{display:flex;align-items:center;gap:2px;min-width:0;margin-left:-8px}
+.topbar-back .wordmark{font-size:22px}
 .topbar-right{display:flex;align-items:center;gap:7px}
-.topbar-add{width:34px;height:34px;border:1px solid var(--ink);border-radius:9px;background:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;box-shadow:0 2px 5px rgba(26,24,20,0.12);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent}
+.topbar-add{width:36px;height:36px;border:none;border-radius:50%;background:var(--accent-fill);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(61,99,232,0.35);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent}
 .topbar-add:active{transform:scale(0.92)}
 .topbar-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 120ms,color 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .topbar-btn:hover{background:var(--bg-inset);color:var(--ink)}.topbar-btn:active{transform:scale(0.88)}
-.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(247,244,238,0.96);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
-.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;border:none;background:transparent;cursor:pointer;color:var(--ink-3);transition:color 150ms,transform 80ms;font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent}
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(8,15,23,0.94);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
+.tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;border:none;background:transparent;cursor:pointer;color:var(--ink-3);transition:color 150ms,transform 80ms;font-family:var(--font);-webkit-tap-highlight-color:transparent}
 .tab-btn.active{color:var(--ink)}.tab-btn:active{transform:scale(0.88)}
 /* Sentence case, no extra tracking: upper-case labels were up to 30% wider, so long Azerbaijani and Russian words
    ("Əməliyyatlar", "Təkrarlanan", "По месяцам") filled the whole tab at 320 px and ran into their neighbours. */
@@ -1390,7 +1469,7 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 /* Hero */
 .hero{padding:16px 0 18px;border-bottom:1px solid var(--rule);margin-bottom:18px}
 .hero-eyebrow{font-size:10px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
-.hero-amount{font-family:'Playfair Display',serif;font-size:clamp(34px,11.5vw,48px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-2px;line-height:1;color:var(--ink);margin-bottom:3px;white-space:nowrap}
+.hero-amount{font-family:var(--font);font-size:clamp(34px,11.5vw,48px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-2px;line-height:1;color:var(--ink);margin-bottom:3px;white-space:nowrap}
 .hero-sub{font-size:12px;color:var(--ink-3);margin-bottom:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mom-badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
 .mom-badge.better{background:var(--pos-bg);color:var(--pos)}
@@ -1398,7 +1477,7 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .hero-stats{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--bg-card)}
 .hero-stat{padding:11px 10px;position:relative}
 .hero-stat:not(:last-child)::after{content:'';position:absolute;right:0;top:8px;bottom:8px;width:1px;background:var(--rule)}
-.hero-stat-val{font-family:'Playfair Display',serif;font-size:clamp(12px,3.6vw,15px);font-weight:700;letter-spacing:-0.3px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-stat-val{font-family:var(--font);font-size:clamp(12px,3.6vw,15px);font-weight:700;letter-spacing:-0.3px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hero-stat-val.pos{color:var(--pos)}.hero-stat-val.neg{color:var(--neg)}
 .hero-stat-lbl{font-size:10px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-4)}
 /* Cards */
@@ -1409,18 +1488,18 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .pace-fill.on-track{background:var(--pos)}.pace-fill.over-pace{background:var(--neg)}
 .pace-sub{display:flex;justify-content:space-between;margin-top:4px}
 .safe-card{background:var(--bg-card);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;margin-bottom:14px}
-.safe-amount{font-family:'Playfair Display',serif;font-size:clamp(26px,8.6vw,32px);font-weight:900;letter-spacing:-1.5px;margin:4px 0}
+.safe-amount{font-family:var(--font);font-size:clamp(26px,8.6vw,32px);font-weight:900;letter-spacing:-1.5px;margin:4px 0}
 .safe-daily{font-size:11px;color:var(--ink-3);margin-top:2px}
 .safe-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:4px 0;border-bottom:1px solid var(--rule);font-size:11px}
 .safe-row:last-child{border-bottom:none}
-.safe-lbl{color:var(--ink-3)}.safe-val{font-family:'Playfair Display',serif;font-weight:600;color:var(--ink);white-space:nowrap;text-align:right}
+.safe-lbl{color:var(--ink-3)}.safe-val{font-family:var(--font);font-weight:600;color:var(--ink);white-space:nowrap;text-align:right}
 /* Templates */
 .tpl-strip{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:14px;scrollbar-width:none}
 .tpl-strip::-webkit-scrollbar{display:none}
 .tpl-card{flex-shrink:0;display:flex;align-items:center;gap:7px;padding:8px 13px;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;cursor:pointer;transition:border-color 120ms,background 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .tpl-card:hover{border-color:var(--rule-2);background:var(--bg-warm)}.tpl-card:active{transform:scale(0.94)}
 .tpl-name{font-size:12px;font-weight:600;color:var(--ink-2);white-space:nowrap}
-.tpl-amt{font-family:'Playfair Display',serif;font-size:12px;color:var(--ink-3);white-space:nowrap}
+.tpl-amt{font-family:var(--font);font-size:12px;color:var(--ink-3);white-space:nowrap}
 /* Budgets */
 .budget-item{margin-bottom:11px}
 .budget-hdr{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
@@ -1440,7 +1519,7 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .txn-group{margin-bottom:16px}
 .txn-date-hdr{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px;border-bottom:1px solid var(--rule)}
 .txn-date-lbl{font-size:10px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:var(--ink-3)}
-.txn-date-total{font-family:'Playfair Display',serif;font-size:13px;font-weight:600;color:var(--ink)}
+.txn-date-total{font-family:var(--font);font-size:13px;font-weight:600;color:var(--ink)}
 .txn-list{background:var(--bg-card);border:1px solid var(--rule);border-top:none;border-radius:0 0 8px 8px}
 .txn-row{display:flex;align-items:center;gap:11px;padding:11px 13px;border-bottom:1px solid var(--rule);transition:background 80ms,transform 80ms;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .txn-row:last-child{border-bottom:none;border-radius:0 0 8px 8px}
@@ -1453,7 +1532,7 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 .txn-sub span:not(.rec-pill){white-space:normal;overflow-wrap:anywhere;min-width:0;max-width:100%;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .rec-pill{display:inline-flex;align-items:center;gap:3px;background:var(--warn-bg);color:var(--warn);font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;flex-shrink:0}
 .txn-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
-.txn-amt{font-family:'Playfair Display',serif;font-size:14px;font-weight:600}
+.txn-amt{font-family:var(--font);font-size:14px;font-weight:600}
 .txn-amt.exp{color:var(--ink)}.txn-amt.inc{color:var(--pos)}
 .txn-actions{display:flex;gap:1px}
 .txn-act{width:28px;height:28px;border-radius:5px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ink-4);transition:background 120ms,color 120ms}
@@ -1461,88 +1540,88 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
 /* Empty */
 .empty{text-align:center;padding:48px 24px;display:flex;flex-direction:column;align-items:center;gap:10px}
 .empty-icon{color:var(--ink-5);margin-bottom:4px}
-.empty-title{font-family:'Playfair Display',serif;font-size:20px;font-weight:600;color:var(--ink)}
+.empty-title{font-family:var(--font);font-size:20px;font-weight:600;color:var(--ink)}
 .empty-body{font-size:13px;color:var(--ink-3);line-height:1.65;max-width:240px}
 /* Add overlay */
 .add-overlay{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;max-width:430px;margin:0 auto;animation:slideUp 340ms cubic-bezier(0.22,1,0.36,1);overflow-y:auto}
 @keyframes slideUp{from{transform:translateY(100%);opacity:0.6}to{transform:translateY(0);opacity:1}}
 .add-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--rule);flex-shrink:0}
-.add-title{font-family:'Playfair Display',serif;font-size:17px;font-weight:700}
+.add-title{font-family:var(--font);font-size:17px;font-weight:700}
 .add-close{width:30px;height:30px;border-radius:50%;border:1px solid var(--rule);background:transparent;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color 120ms,color 120ms}
 .add-close:hover{border-color:var(--ink-3);color:var(--ink)}
 .add-body{flex:1;padding:18px 20px 36px;display:flex;flex-direction:column}
 /* Amount */
 .amount-zone{display:flex;align-items:center;justify-content:center;padding:18px 0 20px;border-bottom:1px solid var(--rule);margin-bottom:16px}
 .amount-line{display:flex;align-items:baseline;justify-content:center;gap:7px;max-width:100%;min-width:0}
-.amount-input{font-family:'Playfair Display',serif;font-size:clamp(32px,12vw,50px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-1.6px;background:transparent;border:0;border-radius:8px;outline:none;color:var(--ink);min-width:0;max-width:68vw;text-align:right;caret-color:var(--accent);transition:color 160ms,text-shadow 160ms,transform 160ms;appearance:textfield;-moz-appearance:textfield}
-.amount-input:focus{color:var(--ink);text-shadow:0 0 18px rgba(26,24,20,0.07)}
+.amount-input{font-family:var(--font);font-size:clamp(32px,12vw,50px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-1.6px;background:transparent;border:0;border-radius:8px;outline:none;color:var(--ink);min-width:0;max-width:68vw;text-align:right;caret-color:var(--accent);transition:color 160ms,text-shadow 160ms,transform 160ms;appearance:textfield;-moz-appearance:textfield}
+.amount-input:focus{color:var(--ink);text-shadow:0 0 18px rgba(0,0,0,0.07)}
 .amount-input::placeholder{color:var(--ink-5)}
-.amount-cur{font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;color:var(--ink-3);white-space:nowrap;position:relative;top:-2px}
+.amount-cur{font-family:var(--font);font-size:15px;font-weight:600;color:var(--ink-3);white-space:nowrap;position:relative;top:-2px}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 /* Type toggle */
 .type-toggle{display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin-bottom:14px}
-.type-btn{flex:1;padding:9px;border:none;background:transparent;color:var(--ink-3);font-size:12px;font-weight:700;cursor:pointer;transition:background 120ms,color 120ms;font-family:'DM Sans',sans-serif;letter-spacing:0.3px;text-transform:uppercase}
-.type-btn:not(:last-child){border-right:1px solid var(--rule)}.type-btn.active{background:var(--ink);color:var(--bg)}
+.type-btn{flex:1;padding:9px;border:none;background:transparent;color:var(--ink-3);font-size:12px;font-weight:700;cursor:pointer;transition:background 120ms,color 120ms;font-family:var(--font);letter-spacing:0.3px;text-transform:uppercase}
+.type-btn:not(:last-child){border-right:1px solid var(--rule)}.type-btn.active{background:var(--accent-fill);color:#fff}
 /* Cat/sub */
 .cat-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}.cat-scroll::-webkit-scrollbar{display:none}
 .cat-tile{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;width:auto;min-width:68px;padding:9px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--bg-card);cursor:pointer;transition:border-color 150ms,background 150ms,transform 80ms;-webkit-tap-highlight-color:transparent}
-.cat-tile.sel{border-color:var(--ink);background:var(--bg-warm)}
+.cat-tile.sel{border-color:var(--accent);background:var(--accent-light)}
 .cat-tile:active{transform:scale(0.93)}
 .cat-tile-name{font-size:9.5px;font-weight:600;color:var(--ink-3);text-align:center;line-height:1.2;white-space:nowrap;width:auto;letter-spacing:-0.1px}
 .cat-tile.sel .cat-tile-name{color:var(--ink)}
 .sub-strip{display:flex;gap:5px;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;scrollbar-width:none}.sub-strip::-webkit-scrollbar{display:none}
-.sub-chip{flex-shrink:0;padding:4px 10px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'DM Sans',sans-serif;transition:all 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
-.sub-chip.sel{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.sub-chip{flex-shrink:0;padding:4px 10px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
+.sub-chip.sel{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
 .sub-chip:active{transform:scale(0.93)}
 /* Merchant */
 .merchant-wrap{position:relative}
-.merchant-suggestions{position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;z-index:20;overflow:hidden;box-shadow:0 4px 16px rgba(26,24,20,0.1)}
+.merchant-suggestions{position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;z-index:20;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.1)}
 .merchant-sug-item{padding:9px 13px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--rule);color:var(--ink);transition:background 100ms}
 .merchant-sug-item:last-child{border-bottom:none}.merchant-sug-item:hover{background:var(--bg-warm)}
 .merchant-sug-sub{font-size:10px;color:var(--ink-3);margin-top:1px}
 /* Form */
 .field{margin-bottom:12px}
 .field-lbl{font-size:10px;font-weight:700;letter-spacing:1.05px;text-transform:uppercase;color:var(--ink-3);margin-bottom:5px;display:block}
-.field-input{width:100%;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;font-size:14px;color:var(--ink);font-family:'DM Sans',sans-serif;transition:border-color 150ms,box-shadow 150ms}
-.field-input:focus{outline:none;border-color:var(--ink-3);box-shadow:0 0 0 3px rgba(26,24,20,0.06)}
+.field-input{width:100%;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;padding:10px 12px;font-size:14px;color:var(--ink);font-family:var(--font);transition:border-color 150ms,box-shadow 150ms}
+.field-input:focus{outline:none;border-color:var(--ink-3);box-shadow:0 0 0 3px rgba(0,0,0,0.06)}
 .field-select{appearance:none;cursor:pointer}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 /* Toggle */
 .toggle-track{width:44px;height:24px;border-radius:12px;background:var(--ink-5);position:relative;transition:background 100ms;flex-shrink:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.toggle-track.on{background:var(--ink)}
-.toggle-knob{width:18px;height:18px;border-radius:50%;background:white;position:absolute;top:3px;left:3px;transition:transform 220ms cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 1px 4px rgba(0,0,0,0.2),0 0 0 0px rgba(26,24,20,0)}
+.toggle-track.on{background:var(--accent)}
+.toggle-knob{width:18px;height:18px;border-radius:50%;background:white;position:absolute;top:3px;left:3px;transition:transform 220ms cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 1px 4px rgba(0,0,0,0.2),0 0 0 0px rgba(0,0,0,0)}
 .toggle-track.on .toggle-knob{transform:translateX(20px)}
 .toggle-track:active .toggle-knob{transform:scaleX(1.15)}
 .toggle-track.on:active .toggle-knob{transform:translateX(20px) scaleX(1.15)}
 /* Buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:6px;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;transition:opacity 120ms,background 120ms}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:6px;font-family:var(--font);font-weight:600;cursor:pointer;transition:opacity 120ms,background 120ms}
 .btn-full{width:100%}
-.btn-primary{padding:12px 20px;background:var(--ink);color:var(--bg);border:1px solid var(--ink);font-size:14px;font-weight:700;margin-top:8px}.btn-primary:hover{opacity:0.87}
+.btn-primary{padding:12px 20px;background:var(--accent-fill);color:#fff;border:1px solid var(--accent-fill);font-size:15px;font-weight:600;margin-top:8px;border-radius:14px;min-height:48px}.btn-primary:hover{opacity:0.87}
 .btn-ghost{padding:11px 20px;background:transparent;color:var(--ink-3);border:1px solid var(--rule);font-size:13px;margin-top:6px}.btn-ghost:hover{border-color:var(--rule-2);color:var(--ink)}
 .btn-sm{padding:5px 12px;font-size:11px;font-weight:700;background:transparent;border:1px solid var(--rule);color:var(--ink-2)}.btn-sm:hover{border-color:var(--rule-2)}
-.btn-sm-primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn-sm-primary{background:var(--accent-fill);color:#fff;border-color:var(--accent-fill)}
 /* Search/filter */
 .search-wrap{position:relative;margin-bottom:8px}
 .search-ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-4);pointer-events:none}
-.search-input{width:100%;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;padding:9px 12px 9px 34px;font-size:13px;color:var(--ink);font-family:'DM Sans',sans-serif;transition:border-color 120ms}.search-input:focus{outline:none;border-color:var(--rule-2);box-shadow:0 0 0 3px rgba(26,24,20,0.05)}
+.search-input{width:100%;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;padding:9px 12px 9px 34px;font-size:13px;color:var(--ink);font-family:var(--font);transition:border-color 120ms}.search-input:focus{outline:none;border-color:var(--rule-2);box-shadow:0 0 0 3px rgba(0,0,0,0.05)}
 .filter-bar{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px}.filter-bar::-webkit-scrollbar{display:none}
-.chip{flex-shrink:0;padding:5px 11px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;transition:all 120ms,transform 80ms;white-space:nowrap;font-family:'DM Sans',sans-serif;-webkit-tap-highlight-color:transparent}
-.chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}.chip:hover:not(.on){border-color:var(--rule-2);color:var(--ink)}.chip:active{transform:scale(0.94)}
-.cat-filter-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;transition:all 120ms}
+.chip{flex-shrink:0;padding:5px 11px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;transition:all 120ms,transform 80ms;white-space:nowrap;font-family:var(--font);-webkit-tap-highlight-color:transparent}
+.chip.on{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}.chip:hover:not(.on){border-color:var(--rule-2);color:var(--ink)}.chip:active{transform:scale(0.94)}
+.cat-filter-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0;transition:all 120ms}
 .cat-filter-btn.active{border-color:var(--ink);color:var(--ink);background:var(--bg-warm)}
 .cat-filter-btn:active{transform:scale(0.94)}
 .date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .date-input-wrap{display:flex;flex-direction:column;gap:3px}
 .date-lbl{font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-3)}
-.date-input{background:var(--bg-card);border:1px solid var(--rule);border-radius:5px;padding:7px 9px;font-size:12px;color:var(--ink);font-family:'DM Sans',sans-serif;width:100%}.date-input:focus{outline:none;border-color:var(--rule-2);box-shadow:0 0 0 3px rgba(26,24,20,0.05)}
+.date-input{background:var(--bg-card);border:1px solid var(--rule);border-radius:5px;padding:7px 9px;font-size:12px;color:var(--ink);font-family:var(--font);width:100%}.date-input:focus{outline:none;border-color:var(--rule-2);box-shadow:0 0 0 3px rgba(0,0,0,0.05)}
 /* Sheet */
-.sheet-overlay{position:fixed;inset:0;background:rgba(26,24,20,0.5);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:80;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn 200ms cubic-bezier(0.22,1,0.36,1)}
+.sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:80;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn 200ms cubic-bezier(0.22,1,0.36,1)}
 @keyframes fadeIn{from{opacity:0;backdrop-filter:blur(0px)}to{opacity:1;backdrop-filter:blur(12px)}}
-.sheet{background:var(--bg);width:100%;max-width:430px;border-radius:20px 20px 0 0;border-top:1px solid var(--rule);max-height:92vh;overflow-y:auto;animation:sheetRise 320ms cubic-bezier(0.22,1,0.36,1);padding:0 20px 48px;box-shadow:0 -4px 32px rgba(26,24,20,0.12)}
+.sheet{background:var(--bg);width:100%;max-width:430px;border-radius:20px 20px 0 0;border-top:1px solid var(--rule);max-height:92vh;overflow-y:auto;animation:sheetRise 320ms cubic-bezier(0.22,1,0.36,1);padding:0 20px 48px;box-shadow:0 -4px 32px rgba(0,0,0,0.12)}
 @keyframes sheetRise{from{transform:translateY(100%);opacity:0.8}to{transform:translateY(0);opacity:1}}
 .sheet-handle{width:32px;height:3px;background:var(--ink-5);border-radius:99px;margin:12px auto 18px}
-.sheet-title{font-family:'Playfair Display',serif;font-size:21px;font-weight:700;margin-bottom:16px}
+.sheet-title{font-family:var(--font);font-size:21px;font-weight:700;margin-bottom:16px}
 .settings-section-lbl{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);padding:14px 0 8px;border-bottom:1px solid var(--rule)}
 .settings-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--rule);gap:12px}
 .settings-row:last-of-type{border-bottom:none}
@@ -1555,7 +1634,7 @@ input[type=number]{-moz-appearance:textfield}
 .cat-bar-name{font-size:11px;font-weight:600;color:var(--ink-2);width:116px;flex-shrink:0;white-space:normal;overflow:visible;text-overflow:clip;display:flex;align-items:center;gap:5px;line-height:1.25}
 .cat-bar-track{flex:1;height:3px;background:var(--rule);border-radius:99px;overflow:hidden}
 .cat-bar-fill{height:100%;border-radius:99px;transition:width 0.6s ease}
-.cat-bar-amt{font-family:'Playfair Display',serif;font-size:12px;font-weight:600;color:var(--ink);width:68px;text-align:right;flex-shrink:0}
+.cat-bar-amt{font-family:var(--font);font-size:12px;font-weight:600;color:var(--ink);width:68px;text-align:right;flex-shrink:0}
 .cat-bar-pct{font-size:10px;color:var(--ink-3);width:26px;text-align:right;flex-shrink:0}
 /* Month bars */
 .month-bars{display:flex;align-items:flex-end;gap:4px;height:80px;padding-top:8px}
@@ -1570,24 +1649,24 @@ input[type=number]{-moz-appearance:textfield}
 /* Stats */
 .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px}
 .stat-cell{background:var(--bg-card);border:1px solid var(--rule);border-radius:7px;padding:11px 12px}
-.stat-val{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;letter-spacing:-0.5px;margin-bottom:2px}
+.stat-val{font-family:var(--font);font-size:20px;font-weight:700;letter-spacing:-0.5px;margin-bottom:2px}
 .stat-lbl{font-size:10px;font-weight:700;letter-spacing:0.65px;text-transform:uppercase;color:var(--ink-3)}
 /* What Changed */
 .wc-row{display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--rule)}
 .wc-row:last-child{border-bottom:none}
 .wc-name{font-size:12px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:6px}
-.wc-diff{font-family:'Playfair Display',serif;font-size:13px;font-weight:700}
+.wc-diff{font-family:var(--font);font-size:13px;font-weight:700}
 .wc-diff.pos{color:var(--pos)}.wc-diff.neg{color:var(--neg)}
 .wc-merchants{margin-top:5px;padding-left:19px}
 .wc-m-row{display:flex;justify-content:space-between;font-size:11px;color:var(--ink-3);padding:2px 0}
 /* Pattern */
 .pattern-item{background:var(--bg-warm);border-radius:6px;padding:10px 13px;margin-bottom:7px;font-size:12px;color:var(--ink-2);line-height:1.5;display:flex;align-items:flex-start;gap:8px}
 /* Snackbar / Toast */
-.snackbar{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 8px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:200;display:flex;align-items:center;gap:14px;white-space:nowrap;box-shadow:0 8px 24px rgba(26,24,20,0.3),0 2px 6px rgba(26,24,20,0.15);animation:snackIn 300ms cubic-bezier(0.22,1,0.36,1)}
+.snackbar{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 8px);left:50%;transform:translateX(-50%);background:var(--bg-warm);color:var(--ink);border:1px solid var(--rule-2);padding:11px 18px;border-radius:14px;font-size:13px;font-weight:600;z-index:200;display:flex;align-items:center;gap:14px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.3),0 2px 6px rgba(0,0,0,0.15);animation:snackIn 300ms cubic-bezier(0.22,1,0.36,1)}
 @keyframes snackIn{from{opacity:0;transform:translateX(-50%) translateY(16px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
-.snackbar-undo{background:none;border:1px solid rgba(255,255,255,0.25);color:var(--bg);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;transition:border-color 120ms}
+.snackbar-undo{background:none;border:1px solid rgba(123,155,255,0.45);color:var(--accent-text);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:border-color 120ms}
 .snackbar-undo:hover{border-color:rgba(255,255,255,0.5)}
-.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 18px;border-radius:8px;font-size:12px;font-weight:600;z-index:300;white-space:nowrap;pointer-events:none;animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1);box-shadow:0 4px 16px rgba(26,24,20,0.25)}
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--bg-warm);color:var(--ink);border:1px solid var(--rule-2);padding:9px 18px;border-radius:12px;font-size:12px;font-weight:600;z-index:300;white-space:nowrap;pointer-events:none;animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1);box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
 /* Staggered section entrance */
 .section-enter{animation:sectionIn 280ms cubic-bezier(0.22,1,0.36,1) both}
@@ -1600,21 +1679,21 @@ input[type=number]{-moz-appearance:textfield}
 .section-enter-7{animation-delay:240ms}
 .section-enter-8{animation-delay:280ms}
 @keyframes sectionIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.backup-banner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--warn-bg);border-bottom:1px solid #D4A82A;font-size:11px;font-weight:600;color:var(--warn)}
+.backup-banner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--warn-bg);border-bottom:1px solid rgba(245,184,61,0.35);font-size:11px;font-weight:600;color:var(--warn)}
 .backup-banner span{flex:1}
-.backup-banner-btn{flex-shrink:0;padding:4px 10px;background:var(--warn);color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif}
+.backup-banner-btn{flex-shrink:0;padding:4px 10px;background:var(--warn);color:var(--bg);border:none;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font)}
 .backup-dismiss{background:none;border:none;color:var(--warn);font-size:15px;cursor:pointer;padding:2px;line-height:1;flex-shrink:0}
 .drop-zone{border:1.5px dashed var(--rule);border-radius:7px;padding:16px;text-align:center;cursor:pointer;transition:border-color 150ms,background 150ms;width:100%}
 .drop-zone:hover{border-color:var(--rule-2);background:var(--bg-warm)}
 .drop-zone input{display:none}
-.dupe-warn{display:flex;align-items:center;gap:7px;background:var(--warn-bg);border:1px solid #D4A82A;border-radius:6px;padding:8px 11px;font-size:12px;font-weight:600;color:var(--warn);margin-bottom:11px}
+.dupe-warn{display:flex;align-items:center;gap:7px;background:var(--warn-bg);border:1px solid rgba(245,184,61,0.35);border-radius:10px;padding:8px 11px;font-size:12px;font-weight:600;color:var(--warn);margin-bottom:11px}
 /* Monthly view */
 .month-selector{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .month-nav-btn{width:34px;height:34px;border-radius:8px;background:var(--bg-card);border:1px solid var(--rule);color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 120ms;font-size:16px;line-height:1}
 .month-nav-btn:hover{border-color:var(--rule-2);color:var(--ink)}
-.month-name{font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--ink)}
+.month-name{font-family:var(--font);font-size:20px;font-weight:700;color:var(--ink)}
 .month-stat{background:var(--bg-card);border:1px solid var(--rule);border-radius:8px;padding:13px 14px}
-.month-stat-val{font-family:'Playfair Display',serif;font-size:clamp(17px,5.8vw,22px);font-weight:900;letter-spacing:-0.5px;margin-bottom:3px}
+.month-stat-val{font-family:var(--font);font-size:clamp(17px,5.8vw,22px);font-weight:900;letter-spacing:-0.5px;margin-bottom:3px}
 .month-stat-lbl{font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-3)}
 /* Smart helper */
 .helper-card{background:var(--bg-card);border:1px solid var(--rule);border-radius:8px;padding:13px 14px;margin-bottom:10px;display:flex;gap:11px;align-items:flex-start}
@@ -1690,7 +1769,7 @@ input[type=number]{-moz-appearance:textfield}
 .lang-switch{display:flex;flex-wrap:wrap;gap:8px;border:none;margin:0;padding:0}
 .lang-pill{position:relative;display:inline-flex;align-items:center;min-height:40px;padding:8px 14px;border:1.5px solid var(--rule-2);border-radius:20px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;background:var(--bg-card)}
 .lang-pill input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
-.lang-pill.sel{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.lang-pill.sel{border-color:var(--accent-fill);background:var(--accent-fill);color:#fff}
 .lang-pill:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .topbar-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* ── Design pass (from patch_H_design.py, reviewed) ── */
@@ -1719,14 +1798,126 @@ input[type=number]{-moz-appearance:textfield}
 /* Once dragged, a sheet's entrance animation stays off: re-enabling it on release would replay the rise from the bottom. */
 .sheet.settled{animation:none}
 .sheet:focus{outline:none}
+/* ── Redesign (2026-10-27): dark cards, larger radii, blue selection ── */
+.tab-btn{color:var(--ink-3)}.tab-btn.active{color:var(--accent-text)}
+.tabbar{border-top:1px solid var(--rule)}
+.card,.safe-card,.a-card,.pace-card,.helper-card,.month-stat,.stat-cell,.goal-card{background:var(--bg-card);border:1px solid var(--rule);border-radius:var(--radius)}
+.card{padding:16px;margin-bottom:14px}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+.card-title{font-size:16px;font-weight:600;color:var(--ink)}
+.card-sub-title{font-size:15px;font-weight:600;color:var(--ink);margin:16px 0 10px}
+.section-title{display:block;font-size:17px;font-weight:600;color:var(--ink);margin:18px 2px 10px}
+.list-title{display:block;font-size:15px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.list-sub{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px;overflow-wrap:anywhere}
+.big-num{font-size:clamp(26px,8vw,32px);font-weight:700;letter-spacing:-0.5px;color:var(--ink);margin:4px 0 12px;font-variant-numeric:tabular-nums}
+.label-sm{font-size:12px;font-weight:600;letter-spacing:0.2px;text-transform:none;color:var(--ink-3)}
+/* This month (the "hero") is now a card */
+.hero.card{padding:16px;border-bottom:1px solid var(--rule)}
+.hero .hero-eyebrow{font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-3);margin:0}
+.hero-amount{font-size:clamp(30px,10vw,40px);font-weight:700;letter-spacing:-1px}
+.hero-stats{border:none;background:var(--bg-inset);border-radius:12px}
+.hero-stat-val{font-size:clamp(13px,3.9vw,16px);font-weight:700;letter-spacing:-0.2px}
+.hero-stat-lbl{font-size:11px;letter-spacing:0.2px;text-transform:none;color:var(--ink-3)}
+.hero-stat:not(:last-child)::after{background:var(--rule-2)}
+.mom-badge{border-radius:999px;padding:3px 9px}
+/* Safe to Spend */
+.safe-card{padding:16px;margin-bottom:14px;background:linear-gradient(135deg,#132A2F 0%,var(--bg-card) 60%)}
+.safe-amount{font-size:clamp(30px,10vw,38px);font-weight:700;letter-spacing:-1px}
+.safe-card .label-sm{font-size:14px;font-weight:600;color:var(--pos)}
+.safe-row{font-size:12.5px;padding:6px 0}
+/* Spending ring */
+.donut-wrap{display:flex;align-items:center;gap:16px}
+.donut{position:relative;width:132px;height:132px;flex-shrink:0}
+.donut-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--ink);text-align:center;padding:0 26px;font-variant-numeric:tabular-nums}
+.donut-legend{list-style:none;flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
+.donut-legend li{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+.donut-legend .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.donut-name{flex:1;min-width:0;overflow-wrap:anywhere}
+.donut-pct{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+@media (max-width:340px){.donut-wrap{flex-direction:column;align-items:stretch}.donut{margin:0 auto}}
+/* Rows with a round category icon */
+.cat-dot{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.up-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--rule)}
+.up-row:first-of-type{border-top:none}
+.up-body{flex:1;min-width:0}
+.up-amt{font-size:15px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Lists inside a card (More, Budgets) */
+.list-card{padding:4px 16px}
+.list-row{display:flex;align-items:center;gap:14px;width:100%;min-height:60px;padding:12px 0;background:none;border:none;border-bottom:1px solid var(--rule);text-align:left;color:var(--ink);font:inherit;cursor:pointer}
+.list-row:last-child{border-bottom:none}
+.list-row:active{opacity:0.7}
+.list-ico{width:28px;display:inline-flex;justify-content:center;flex-shrink:0}
+.list-body{flex:1;min-width:0}
+.more-id{display:flex;align-items:center;gap:14px}
+.more-mark{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--violet));display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+/* Segmented control */
+.seg{display:flex;background:var(--bg-card);border:1px solid var(--rule);border-radius:12px;padding:3px;margin-bottom:14px}
+.seg-btn{flex:1;min-height:38px;border:none;border-radius:9px;background:transparent;color:var(--ink-3);font:inherit;font-size:14px;font-weight:600}
+.seg-btn.on{background:var(--accent-fill);color:#fff}
+.seg-btn:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+/* Progress bars */
+.bar{flex:1;height:8px;background:var(--bg-inset);border-radius:99px;overflow:hidden}
+.bar-fill{height:100%;border-radius:99px;transition:width 0.6s ease}
+.bud-row{padding:12px 0;border-bottom:1px solid var(--rule)}
+.bud-row:last-child{border-bottom:none}
+.bud-top{display:flex;align-items:center;gap:12px}
+.bud-name{flex:1;min-width:0;font-size:15px;font-weight:600;color:var(--ink);overflow-wrap:break-word}
+.bud-nums{font-size:12.5px;color:var(--ink-3);text-align:right;font-variant-numeric:tabular-nums}
+.bud-bar-row{display:flex;align-items:center;gap:10px;margin-top:9px;padding-left:50px}
+.goal-card .bud-bar-row{padding-left:0}
+.bud-pct{font-size:12px;font-weight:600;color:var(--ink-3);min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
+.goal-card{padding:16px}
+.goal-name{font-size:15px;font-weight:600}
+.trend-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--ink-3)}
+.trend-legend span{display:inline-flex;align-items:center;gap:6px}
+.trend-legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
+.trend-legend i.dash{background:repeating-linear-gradient(90deg,var(--ink-4) 0 4px,transparent 4px 7px)}
+.month-name{font-size:20px;font-weight:700}
+/* Import / Export */
+.io-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.io-card{display:flex;flex-direction:column;align-items:flex-start;margin-bottom:0;cursor:pointer}
+.io-card.drop-zone{border:1px solid var(--rule);border-radius:var(--radius);padding:16px;text-align:left}
+.io-card.drop-zone:hover{background:var(--bg-warm)}
+.io-ico{margin-bottom:12px}
+.io-backup{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.io-status{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--warn);white-space:nowrap}
+.io-status.ok{color:var(--pos)}
+@media (max-width:340px){.io-grid{grid-template-columns:1fr}}
+/* Enlarged text (≤ 280 CSS px): budget rows stack, so the Edit / Set button never runs off the screen */
+/* Narrow phones: the spent / limit figures get their own line, so a category name is never broken mid-word */
+@media (max-width:360px){ .bud-top{flex-wrap:wrap}.bud-nums{flex-basis:100%;text-align:left;padding-left:50px;margin-top:-4px} }
+@media (max-width:280px){
+  .bud-bar-row{flex-wrap:wrap;padding-left:0}.bud-bar-row .bar{flex-basis:100%}
+  .up-row{flex-wrap:wrap}.donut-wrap{flex-direction:column;align-items:stretch}
+}
+/* Transactions */
+.txn-ico{border-radius:50%;width:38px;height:38px}
+.txn-list{border-radius:0 0 var(--radius) var(--radius)}
+.txn-row:last-child{border-radius:0 0 var(--radius) var(--radius)}
+.txn-date-hdr{border-bottom:none;padding:0 2px 8px}
+.txn-date-lbl{font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--ink-2)}
+.txn-list{border-top:1px solid var(--rule);border-radius:var(--radius)}
+.txn-row:first-child{border-radius:var(--radius) var(--radius) 0 0}
+.txn-row:only-child{border-radius:var(--radius)}
+.txn-name{font-size:15px}.txn-sub{font-size:12.5px}
+.txn-amt{font-size:15px;font-weight:600}
+.txn-amt.exp{color:var(--neg)}
+.search-input{border-radius:12px;padding:11px 12px 11px 36px;font-size:14px}
+.chip,.cat-filter-btn{border-radius:999px;padding:6px 14px;font-size:13px}
+.a-card-title,.stat-lbl,.month-stat-lbl,.field-lbl,.settings-section-lbl,.date-lbl{letter-spacing:0.3px;text-transform:none;font-size:12px;font-weight:600}
+.a-card-title{font-size:15px;color:var(--ink)}
+.sheet{border-radius:24px 24px 0 0;background:var(--bg-card);border-top:1px solid var(--rule-2)}
+.field-input,.date-input{background:var(--bg-inset);border-radius:10px}
+.btn-sm{border-radius:999px}
+.btn-ghost{border-radius:14px;min-height:46px}
 /* Materials follow the user's preferences */
 @media (prefers-reduced-transparency: reduce){
   .topbar,.tabbar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none}
-  .sheet-overlay{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(26,24,20,0.62)}
+  .sheet-overlay{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,0.62)}
 }
 @media (prefers-contrast: more){
-  :root{--rule:#8B867E;--rule-2:#5F5A53;--ink-3:#4A4640;--ink-4:#504B45}
-  .sheet-overlay{background:rgba(26,24,20,0.72)}
+  :root{--rule:#5A6B80;--rule-2:#7D8DA3;--ink-3:#C3CCD8;--ink-4:#B5BFCC}
+  .sheet-overlay{background:rgba(0,0,0,0.72)}
   .btn-ghost,.chip,.sub-chip,.field-input,.cat-tile,.search-input,.tpl-card{border-color:var(--rule-2)}
 }
 @media (prefers-reduced-motion: reduce){
@@ -1752,7 +1943,7 @@ function useSheetGestures() {
     const reduced=()=>!!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     let drag=null, anim=null;
     const stop=()=>{ if (anim) { cancelAnimationFrame(anim.raf); anim=null; } };
-    const apply=(sheet,overlay,y,h)=>{ sheet.style.transform=`translateY(${y}px)`; overlay.style.background=`rgba(26,24,20,${0.5*(1-Math.min(1,Math.max(0,y)/h))})`; };
+    const apply=(sheet,overlay,y,h)=>{ sheet.style.transform=`translateY(${y}px)`; overlay.style.background=`rgba(0,0,0,${0.5*(1-Math.min(1,Math.max(0,y)/h))})`; };
     const spring=(sheet,overlay,from,to,v0,h,done)=>{
       stop(); if (reduced()) { apply(sheet,overlay,to,h); done(); return; }
       let x=from, v=v0, last=performance.now(); const k=380, c=2*Math.sqrt(k)*0.92;
@@ -1850,7 +2041,7 @@ export default function App() {
   useEffect(() => {
     if (document.getElementById("pwa-manifest")) return;
     const manifest={name:"Expense Ledger",short_name:"Ledger",start_url:"/",display:"standalone",
-      background_color:"#F7F4EE",theme_color:"#1A1814",orientation:"portrait",
+      background_color:"#080F17",theme_color:"#080F17",orientation:"portrait",
       icons:[{src:"/icon-192.png",sizes:"192x192",type:"image/png",purpose:"any maskable"},
              {src:"/icon-512.png",sizes:"512x512",type:"image/png",purpose:"any maskable"}]};
     const link=document.createElement("link");
@@ -1861,7 +2052,7 @@ export default function App() {
     addMeta("apple-mobile-web-app-capable","yes");
     addMeta("apple-mobile-web-app-status-bar-style","black-translucent");
     addMeta("apple-mobile-web-app-title","Expense Ledger");
-    addMeta("theme-color","#1A1814");
+    addMeta("theme-color","#080F17");
   },[]);
 
   const [storageFailed, setStorageFailed] = useState(false);
@@ -1877,10 +2068,21 @@ export default function App() {
   const toastTimer=useRef(null);
   // A new toast cancels the previous one's timer, so back-to-back messages are never cut short.
   const showToast=useCallback((msg,ms=1800)=>{ clearTimeout(toastTimer.current); setToast(msg); toastTimer.current=setTimeout(()=>setToast(null),ms); },[]);
-  const showSnackbar=useCallback((msg,onUndo,ms=4000)=>{
+  // Undo snackbars (Run 8): a snackbar of the same kind replaces the open one (more deletions share one "N deleted" undo);
+  // a different kind waits until the open one's undo window ends, so an undo is never silently taken away.
+  const snackQueue=useRef([]), snackKind=useRef(null);
+  const openSnack=useCallback(({msg,onUndo,ms,kind})=>{
     clearTimeout(snackTimer.current);
-    setSnackbar({msg,onUndo}); snackActive.current=true;
-    snackTimer.current=setTimeout(()=>{ setSnackbar(null); snackActive.current=false; },ms);
+    setSnackbar({msg,onUndo}); snackActive.current=true; snackKind.current=kind;
+    snackTimer.current=setTimeout(()=>closeSnack(),ms);
+  },[]);
+  const closeSnack=useCallback(()=>{
+    clearTimeout(snackTimer.current); setSnackbar(null); snackActive.current=false; snackKind.current=null;
+    const next=snackQueue.current.shift(); if (next) setTimeout(()=>openSnack(next),250);
+  },[]);
+  const showSnackbar=useCallback((msg,onUndo,ms=4000,kind="other")=>{
+    if (snackActive.current && snackKind.current!==kind) { snackQueue.current.push({msg,onUndo,ms,kind}); return; }
+    openSnack({msg,onUndo,ms,kind});
   },[]);
 
   const switchTab=useCallback((t)=>{ setTab(t); setTabKey(k=>k+1); },[]);
@@ -1897,7 +2099,7 @@ export default function App() {
     const onPop=()=>{
       clearTimeout(rearm);
       if (closeTopLayer()) { arm(); return; }
-      if (tabRef.current!=="home") { switchTab("home"); arm(); return; }
+      if (tabRef.current!=="home") { switchTab(SUBPAGE_PARENT[tabRef.current]||"home"); arm(); return; }
       if (history.state && history.state.ledgerGuard) return;
       showToast(t("nav.backAgain"),2000);
       rearm=setTimeout(arm,2000);
@@ -1914,7 +2116,7 @@ export default function App() {
   // open, on form fields, on rows that scroll sideways (e.g. the filter chips), and from the screen edges (the system's own
   // back gesture lives there).
   useEffect(()=>{
-    const ORDER=["home","ledger","monthly","recurring"];
+    const ORDER=TAB_ORDER;
     let s=null;
     const scrollsSideways=(el)=>{ for (;el && el!==document.body;el=el.parentElement) { const ox=getComputedStyle(el).overflowX; if ((ox==="auto"||ox==="scroll") && el.scrollWidth>el.clientWidth+1) return true; } return false; };
     const onStart=(e)=>{
@@ -1929,7 +2131,7 @@ export default function App() {
     const onEnd=(e)=>{
       if (!s) return; const { dx, dy, t0 }=s; s=null;
       if (Math.abs(dx)<70 || Math.abs(dx)<Math.abs(dy)*1.8 || e.timeStamp-t0>700) return;
-      const i=ORDER.indexOf(tabRef.current), j=i+(dx<0?1:-1);
+      const i=ORDER.indexOf(SUBPAGE_PARENT[tabRef.current]||tabRef.current), j=i+(dx<0?1:-1);
       if (i<0 || j<0 || j>=ORDER.length) return;
       switchTab(ORDER[j]); window.scrollTo(0,0);
     };
@@ -1955,7 +2157,7 @@ export default function App() {
     if (!removed) return;
     setState(s=>({...s,transactions:s.transactions.filter(t=>t.id!==id)}));
     // Deletions made while one undo window is open share it ("2 transactions deleted"), so none of them is lost.
-    if (!snackActive.current) undoBuffer.current=[];
+    if (!snackActive.current || snackKind.current!=="delete") undoBuffer.current=[];
     undoBuffer.current.push(removed);
     const batch=[...undoBuffer.current];
     showSnackbar(tn("toast.deleted",batch.length),()=>{
@@ -1966,7 +2168,7 @@ export default function App() {
         return back.length ? {...s,transactions:[...back,...s.transactions].sort((a,b)=>b.date.localeCompare(a.date))} : s;
       });
       undoBuffer.current=[];
-    });
+    }, 4000, "delete");
   },[showSnackbar]);
 
   // Pausing or reactivating applies to the WHOLE schedule (every recorded payment of it), so the state is always consistent.
@@ -2029,7 +2231,7 @@ export default function App() {
       // Undo only if nothing has changed since; otherwise it would erase newer work.
       if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; }
       setState(before);
-    }, 8000);
+    }, 8000, "import");
   },[importPending,skipDup,showToast,showSnackbar]);
 
   const {transactions,budgets,templates,currency,goals,safeToSpend}=state;
@@ -2049,7 +2251,7 @@ export default function App() {
         {snackbar&&(
           <div className="snackbar" role="status">
             <span>{snackbar.msg}</span>
-            <button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();setSnackbar(null);snackActive.current=false;clearTimeout(snackTimer.current);}}>{t("common.undo")}</button>
+            <button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();closeSnack();}}>{t("common.undo")}</button>
           </div>
         )}
         {recoveryNotice&&(
@@ -2080,7 +2282,12 @@ export default function App() {
         )}
 
         <header className="topbar">
-          <span className="wordmark">Expense Ledger</span>
+          {SUBPAGE_PARENT[tab]
+            ? <div className="topbar-back">
+                <button className="topbar-btn" onClick={()=>switchTab(SUBPAGE_PARENT[tab])} aria-label={t("common.back")} title={t("common.back")}><Icon name="chevLeft" size={22}/></button>
+                <h1 className="wordmark">{t(tab==="io"?"io.title":"rec.title")}</h1>
+              </div>
+            : <h1 className="wordmark">{tab==="home"?t(greetingKey()):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
             <button className="topbar-add" onClick={()=>openAdd()} aria-label={t("nav.addTxn")} title={t("nav.addTxn")}><Icon name="add" size={18} color="var(--bg)"/></button>
             <button className="topbar-btn" onClick={()=>setShowSettings(true)} aria-label={t("nav.settings")} title={t("nav.settings")}><Icon name="settings" size={18}/></button>
@@ -2091,18 +2298,25 @@ export default function App() {
           {tab==="home"      && <HomePage transactions={transactions} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} onView={txn=>setViewTxn(txn)}/>}
+          {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast}
+            onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
+            onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
+            onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
+            onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}/>}
+          {tab==="more"      && <MorePage onOpen={switchTab} onSettings={()=>setShowSettings(true)}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq })}/>}
+          {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
+            onConfirmBackup={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}/>}
         </main>
 
 
-        <nav className="tabbar" role="navigation" style={{"--tab-index":tab==="home"?0:tab==="ledger"?1:tab==="monthly"?2:3,"--tab-count":4}}>
-          {[{id:"home",icon:"home"},{id:"ledger",icon:"list"},{id:"monthly",icon:"chart"},{id:"recurring",icon:"repeat"}].map(tb=>(
-            <button key={tb.id} className={`tab-btn${tab===tb.id?" active":""}`} onClick={()=>switchTab(tb.id)} aria-label={t("nav."+tb.id)} aria-current={tab===tb.id?"page":undefined}>
-              <Icon name={tb.icon} size={18}/><span className="tab-lbl">{t("nav."+tb.id)}</span>
+        <nav className="tabbar" role="navigation" style={{"--tab-index":TAB_ORDER.indexOf(SUBPAGE_PARENT[tab]||tab),"--tab-count":TABS.length}}>
+          {TABS.map(tb=>{ const on=(SUBPAGE_PARENT[tab]||tab)===tb.id; return (
+            <button key={tb.id} className={`tab-btn${on?" active":""}`} onClick={()=>switchTab(tb.id)} aria-label={t("nav."+tb.id)} aria-current={tab===tb.id?"page":undefined}>
+              <Icon name={tb.icon} size={22}/><span className="tab-lbl">{t("nav."+tb.id)}</span>
             </button>
-          ))}
-          <span className="tab-indicator" aria-hidden="true"/>
+          ); })}
         </nav>
 
         {showAdd&&(
@@ -2111,14 +2325,9 @@ export default function App() {
         )}
         {showSettings&&(
           <SettingsSheet state={state} onLanguageChange={changeLanguage}
-            onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
-            onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onCurrencyChange={c=>setState(s=>({...s,currency:c}))}
             onAddTemplate={tpl=>setState(s=>({...s,templates:[...s.templates,{...tpl,id:"t"+Date.now()}]}))}
             onDeleteTemplate={id=>setState(s=>({...s,templates:s.templates.filter(t=>t.id!==id)}))}
-            onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
-            onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
-            onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}
             onClose={()=>setShowSettings(false)} showToast={showToast}/>
         )}
@@ -2145,7 +2354,9 @@ export default function App() {
                     <strong>{t("import.mergeLabel")}</strong> {t("import.mergeText")}<br/>
                     {importPending.canReplace
                       ? <><strong>{t("import.replaceLabel")}</strong> {t("import.replaceText")}</>
-                      : <><strong>{t("import.settingsOnlyLabel")}</strong> {t("import.settingsOnlyText")}</>}
+                      : importPending.transactions.length>0
+                        ? <span className="import-replace-blocked"><strong>{t("import.replaceBlockedLabel")}</strong> {tn("import.replaceBlockedText",importPending.skippedCount)}</span>
+                        : <><strong>{t("import.settingsOnlyLabel")}</strong> {t("import.settingsOnlyText")}</>}
                   </div>
                   {importPending.dupCount>0&&(
                     <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12,color:"var(--ink-2)",marginBottom:14,lineHeight:1.45}}>
@@ -2156,7 +2367,9 @@ export default function App() {
                   <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>commitImport("merge")}>{t("import.mergeBtn")}</button>
                   {importPending.canReplace
                     ? <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>{t("import.replaceBtn")}</button>
-                    : <button className="btn btn-ghost btn-full import-settings-only" style={{marginTop:8}} onClick={()=>commitImport("settings")}>{t("import.settingsOnlyBtn")}</button>}
+                    : Object.keys(importPending.settings||{}).length>0
+                      ? <button className="btn btn-ghost btn-full import-settings-only" style={{marginTop:8}} onClick={()=>commitImport("settings")}>{t("import.settingsOnlyBtn")}</button>
+                      : null}
                   <button className="btn btn-ghost btn-full" onClick={()=>setImportPending(null)}>{t("common.cancel")}</button>
                 </>
               )}
@@ -2259,9 +2472,10 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
 
   return (
     <div>
-      {/* LEVEL 1: Financial position */}
-      <div className="hero">
-        <div className="hero-eyebrow">{monthName(now)}</div>
+      {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
+      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} currency={currency} now={now}/>
+      <div className="hero card">
+        <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount">{fmt(curExp,currency)}</div>
         <div className="hero-sub">
           <span>{t("home.spentThisMonth")}</span>
@@ -2290,14 +2504,49 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
           </div>
         </div>
         <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
+        {curExp>0&&<>
+          <div className="card-sub-title">{t("home.breakdown")}</div>
+          <SpendDonut catSpend={catSpend} total={curExp} currency={currency}/>
+        </>}
       </div>
+
+      {/* Due within 7 days */}
+      {upcomingSchedules.length>0&&(
+        <div className="card section-enter section-enter-1">
+          <div className="card-head"><span className="card-title">{t("home.dueWithin7")}</span></div>
+          {upcomingSchedules.slice(0,3).map(s=>{
+            const daysLeft=daysBetween(new Date(),s.nextDue); const cat=CAT(s.category);
+            return (
+              <div key={s.key} className="up-row">
+                <span className="cat-dot" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={s.category} size={16}/></span>
+                <div className="up-body">
+                  <div className="list-title">{s.merchant||s.note||catName(s.category)}</div>
+                  <div className="list-sub">{fmtDate(localDateStr(s.nextDue))} · {catName(s.category)}</div>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div className="up-amt">{fmt(s.amount,currency)}</div>
+                  <div style={{fontSize:11,color:daysLeft<=1?"var(--warn)":"var(--ink-3)",fontWeight:600}}>{daysLeft===0?t("date.today"):daysLeft===1?t("date.tomorrow"):t("date.inDays",{n:daysLeft})}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Smart Helper — deterministic advice cards */}
-      <div className="section-enter section-enter-1">
+      <div className="section-enter section-enter-2">
         <SmartHelper transactions={transactions} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
       </div>
+      <HomeDetails goals={goals} budgetItems={budgetItems} wc={wc} prevExp={prevExp} spentToDate={spentToDate} paceInfo={paceInfo}
+        budgetTotal={budgetTotal} recent={recent} currency={currency} onAdd={onAdd} onView={onView}/>
+    </div>
+  );
+}
 
-      {/* LEVEL 2: Available — Safe to Spend (decision-first) */}
+// The Safe to Spend card and its note (redesign: shown first on Home). A separate function only to keep HomePage readable.
+function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
+  return (
+    <>
       {safeToSpend?.enabled&&safeInfo.feasible&&(
         <div className="safe-card section-enter section-enter-2">
           <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
@@ -2390,7 +2639,14 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
           </div>
         </div>
       )}
+    </>
+  );
+}
 
+// The rest of Home, below the advice cards: goals, budgets, what changed, pace and recent activity.
+function HomeDetails({ goals, budgetItems, wc, prevExp, spentToDate, paceInfo, budgetTotal, recent, currency, onAdd, onView }) {
+  return (
+    <>
       {/* LEVEL 3: Goals — trajectory */}
       {goals?.length>0&&(
         <div className="section-enter section-enter-3" style={{marginBottom:16}}>
@@ -2401,7 +2657,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
               <div key={goal.id} className="goal-card">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
                   <div className="goal-name">{goal.name}</div>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:700,color:behindSchedule?"var(--neg)":"var(--ink)"}}>{Math.round(pct)}%</div>
+                  <div style={{fontFamily:"var(--font)",fontSize:13,fontWeight:700,color:behindSchedule?"var(--neg)":"var(--ink)"}}>{Math.round(pct)}%</div>
                 </div>
                 <div className="goal-progress"><div className="goal-fill" style={{width:`${pct}%`}}/></div>
                 <div className="goal-meta">
@@ -2440,27 +2696,6 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
         </div>
       )}
 
-      {/* LEVEL 5: Upcoming recurring commitments */}
-      {upcomingSchedules.length>0&&(
-        <div className="section-enter section-enter-5" style={{background:"var(--warn-bg)",border:"1px solid #D4A82A",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
-          <div className="label-sm" style={{marginBottom:8,display:"flex",alignItems:"center",gap:5,color:"var(--warn)"}}>
-            <Icon name="calendar" size={12} color="var(--warn)"/>{t("home.dueWithin7")}
-          </div>
-          {upcomingSchedules.slice(0,3).map(s=>{
-            const daysLeft=daysBetween(new Date(),s.nextDue);
-            return (
-              <div key={s.key} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
-                <span style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{s.merchant||s.note||catName(s.category)}</span>
-                <div style={{textAlign:"right"}}>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:12,fontWeight:600,color:"var(--neg)"}}>{fmt(s.amount,currency)}</div>
-                  <div style={{fontSize:10,color:"var(--warn)",fontWeight:700}}>{daysLeft===0?t("date.today"):daysLeft===1?t("date.tomorrow"):t("date.inDays",{n:daysLeft})}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* LEVEL 6: What changed — compact signal */}
       {wc.catChanges.length>0&&prevExp>0&&(
         <div className="section-enter section-enter-6" style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
@@ -2473,7 +2708,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
               <div key={catId} style={{padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                   <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--ink)"}}><CatIcon catId={catId} size={13} color={cat?.color}/>{catName(catId)}</div>
-                  <div style={{fontSize:12,fontFamily:"'Playfair Display',serif",fontWeight:700,color:diff<=0?"var(--pos)":"var(--neg)"}}>{diff>0?"+":""}{fmt(diff,currency)}</div>
+                  <div style={{fontSize:12,fontFamily:"var(--font)",fontWeight:700,color:diff<=0?"var(--pos)":"var(--neg)"}}>{diff>0?"+":""}{fmt(diff,currency)}</div>
                 </div>
                 {topM&&(
                   <div style={{fontSize:11,color:"var(--ink-3)",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
@@ -2532,7 +2767,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
           <button className="btn btn-primary btn-full" style={{maxWidth:220,marginTop:4}} onClick={onAdd}>{t("home.emptyBtn")}</button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -2574,7 +2809,7 @@ function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
   ].filter(Boolean).join(" · ");
   return (
     <div className="txn-row" onClick={()=>onView?.(txn)}>
-      <div className="txn-ico" style={{background:(cat?.color||"#8A8A8A")+"18"}}><CatIcon catId={txn.category} size={16} color={cat?.color}/></div>
+      <div className="txn-ico" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={txn.category} size={16} color={cat?.color}/></div>
       <div className="txn-body">
         <div className="txn-name">{displayName}</div>
         <div className="txn-sub">
@@ -2652,10 +2887,6 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
 
   return (
     <div>
-      <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"baseline",marginBottom:14,gap:8}}>
-        <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,margin:0}}>{t("nav.ledger")}</h1>
-        <span style={{fontSize:11,color:"var(--ink-3)"}}>{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</span>
-      </div>
       <div className="search-wrap">
         <span className="search-ico"><Icon name="search" size={14}/></span>
         <input className="search-input" placeholder={t("ledger.searchPh")} value={search} onChange={e=>setSearch(e.target.value)} aria-label={t("ledger.search")}/>
@@ -2682,6 +2913,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
           <label className="date-input-wrap"><span className="date-lbl">{t("ledger.to")}</span><input type="date" lang={locale()} className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
         </div>
       )}
+      <div className="list-sub" style={{margin:"2px 2px 12px"}}>{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</div>
       {filtered.length===0?(
         <div className="empty" style={{padding:"36px 0"}}>
           <div className="empty-icon"><Icon name="search" size={28}/></div>
@@ -2696,10 +2928,10 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
           <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("ledger.filterTitle")}>
             <div className="sheet-grip"><div className="sheet-handle"/></div>
             <div className="sheet-title">{t("ledger.filterTitle")}</div>
-            {[{id:"all",color:"#8A8A8A"},...usedCats].map(cat=>(
+            {[{id:"all",color:"#98A5B7"},...usedCats].map(cat=>(
               <button key={cat.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",background:"none",border:"none",borderBottom:"1px solid var(--rule)",cursor:"pointer",width:"100%",textAlign:"left",font:"inherit"}}
                 onClick={()=>{setCatFilter(cat.id==="all"?"all":cat.id);setShowCatSheet(false);}}>
-                <div style={{width:34,height:34,borderRadius:8,background:(cat.color||"#8A8A8A")+"18",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <div style={{width:34,height:34,borderRadius:8,background:(cat.color||"#98A5B7")+"26",display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <CatIcon catId={cat.id} size={16} color={cat.color}/>
                 </div>
                 <span style={{fontSize:14,fontWeight:catFilter===cat.id?700:500,color:"var(--ink)",flex:1}}>{cat.id==="all"?t("ledger.allCategories"):catName(cat.id)}</span>
@@ -2740,14 +2972,14 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
 
   const dueText=(x)=>{ if (!x.nextDue) return t("rec.noDate"); const d=daysBetween(nowD,x.nextDue); return d===0?t("rec.dueToday"):d===1?t("rec.dueTomorrow"):d<=60?tn("rec.dueInDays",d):t("rec.dueOn",{date:fmtDate(localDateStr(x.nextDue))}); };
   const Row=({x})=>{
-    const cat=CAT(x.category)||{id:"other",color:"#8A8A8A"};
+    const cat=CAT(x.category)||{id:"other",color:"#98A5B7"};
     const isInc=x.type==="income";
     const near=x.nextDue && daysBetween(nowD,x.nextDue)<=3;
     return (
       // A paused schedule is marked by its "Paused" text and a faded icon; its text keeps full contrast (fading the whole row
       // made it 2.2–3.9:1, including the Reactivate button the user needs).
       <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)"}}>
-        <div onClick={()=>onView?.(x.latest)} style={{width:36,height:36,borderRadius:9,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:x.isActive?1:0.5}}>
+        <div onClick={()=>onView?.(x.latest)} style={{width:38,height:38,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:x.isActive?1:0.5}}>
           <CatIcon catId={cat.id} size={16} color={cat.color}/>
         </div>
         <div onClick={()=>onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
@@ -2761,16 +2993,16 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
           </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(x.amount,currency)}</div>
+          <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(x.amount,currency)}</div>
           {x.freq!=="monthly"&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}}>{t("rec.perMonthApprox",{amount:fmt(x.monthly,currency)})}</div>}
           {/* Run 6 (D20): a payment only settles a bill when it is recorded as that bill (same details, Recurring on).
               This opens the Add form filled in exactly that way, dated today; the user can still change anything. */}
           {x.isActive&&onRecordPayment&&(
-            <button className="rec-record" onClick={e=>{e.stopPropagation();onRecordPayment(x);}} style={{fontSize:11,fontWeight:700,color:"var(--ink)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}>
+            <button className="rec-record" onClick={e=>{e.stopPropagation();onRecordPayment(x);}} style={{fontSize:11,fontWeight:700,color:"var(--ink)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"var(--font)",textDecoration:"underline",textUnderlineOffset:2}}>
               {t(isInc?"rec.recordIncome":"rec.recordPayment")}
             </button>
           )}
-          <button onClick={e=>{e.stopPropagation();onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}>
+          <button onClick={e=>{e.stopPropagation();onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"var(--font)",textDecoration:"underline",textUnderlineOffset:2}}>
             {x.isActive?t("rec.pause"):t("rec.reactivate")}
           </button>
         </div>
@@ -2780,7 +3012,6 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
 
   return (
     <div>
-      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,margin:"0 0 6px"}}>{t("rec.title")}</h1>
       <div style={{fontSize:11,color:"var(--ink-4)",fontStyle:"italic",marginBottom:14,lineHeight:1.5}}>{t("rec.intro")}</div>
       <div className="stat-row">
         <div className="stat-cell"><div className="stat-val" style={{color:"var(--neg)"}}>{fmt(monthlyOut,currency)}</div><div className="stat-lbl">{t("rec.monthlyOut")}</div></div>
@@ -2789,19 +3020,18 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
         <div className="stat-cell"><div className="stat-val">{active.length}</div><div className="stat-lbl">{t("rec.activeSchedules")}</div></div>
       </div>
       {upcoming.length>0&&(
-        <div style={{background:"var(--warn-bg)",border:"1px solid #D4A82A",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
-          <div style={{fontSize:10,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--warn)",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
-            <Icon name="calendar" size={12} color="var(--warn)"/>{t("home.dueWithin7")}
-          </div>
-          {upcoming.map(x=>(
-            <div key={x.key} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid rgba(212,168,42,0.2)"}}>
-              <span style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{x.merchant||x.note||catName(x.category)}</span>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:13,fontWeight:600,color:"var(--neg)"}}>{fmt(x.amount,currency)}</div>
-                <div style={{fontSize:10,color:"var(--warn)",fontWeight:700}}>{dueText(x)}</div>
+        <div className="card">
+          <div className="card-head"><span className="card-title">{t("home.dueWithin7")}</span></div>
+          {upcoming.map(x=>{ const c=CAT(x.category); return (
+            <div key={x.key} className="up-row">
+              <span className="cat-dot" style={{background:(c?.color||"#98A5B7")+"26"}}><CatIcon catId={x.category} size={16}/></span>
+              <div className="up-body"><div className="list-title">{x.merchant||x.note||catName(x.category)}</div><div className="list-sub">{catName(x.category)}</div></div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div className="up-amt">{fmt(x.amount,currency)}</div>
+                <div style={{fontSize:11,color:"var(--warn)",fontWeight:600}}>{dueText(x)}</div>
               </div>
             </div>
-          ))}
+          ); })}
         </div>
       )}
       {active.length>0&&(<>
@@ -2820,7 +3050,7 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
             const ct={}; outgoing.forEach(x=>{ ct[x.category]=(ct[x.category]||0)+x.monthly; });
             const sorted=Object.entries(ct).sort((a,b)=>b[1]-a[1]); const maxV=sorted[0]?.[1]||1;
             return sorted.map(([catId,mo])=>{
-              const cat=CAT(catId)||{id:"other",color:"#8A8A8A"};
+              const cat=CAT(catId)||{id:"other",color:"#98A5B7"};
               return (<div key={catId} className="cat-bar"><div className="cat-bar-name"><CatIcon catId={cat.id} size={12} color={cat.color}/>{catName(catId)}</div><div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(mo/maxV)*100}%`,background:cat.color}}/></div><div className="cat-bar-amt">{fmt(mo*12,currency)}</div></div>);
             });
           })()}
@@ -3056,7 +3286,7 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
 
 // ─── S6: Transaction Detail Sheet with Merchant Intelligence ─────────────────
 function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplicate, onDelete }) {
-  const cat=CAT(txn.category)||{id:"other",name:txn.category,color:"#8A8A8A"};
+  const cat=CAT(txn.category)||{id:"other",name:txn.category,color:"#98A5B7"};
   const isInc=txn.type==="income";
   const profile=useMemo(()=>txn.merchant?calcMerchantProfile(txn.merchant,transactions):null,[txn.merchant,transactions]);
 
@@ -3065,11 +3295,11 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
       <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={txn.merchant||txn.note||catName(txn.category)}>
         <div className="sheet-grip"><div className="sheet-handle"/></div>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-          <div style={{width:44,height:44,borderRadius:12,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <div style={{width:44,height:44,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <CatIcon catId={cat.id} size={22} color={cat.color}/>
           </div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700,marginBottom:2,lineHeight:1.25,overflowWrap:"anywhere"}}>{txn.merchant||txn.note||catName(txn.category)}</div>
+            <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700,marginBottom:2,lineHeight:1.25,overflowWrap:"anywhere"}}>{txn.merchant||txn.note||catName(txn.category)}</div>
             <div style={{fontSize:12,color:"var(--ink-3)"}}>{catName(txn.category)}{txn.subcategory?` / ${subName(txn.subcategory)}`:""} · {fmtDate(txn.date)}</div>
           </div>
           <button onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
@@ -3077,7 +3307,7 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
 
         {/* Amount */}
         <div style={{textAlign:"center",padding:"14px 0 16px",borderTop:"1px solid var(--rule)",borderBottom:"1px solid var(--rule)",marginBottom:16}}>
-          <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(32px,11vw,44px)",fontWeight:900,letterSpacing:-2,overflowWrap:"anywhere",color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(txn.amount,currency)}</div>
+          <div style={{fontFamily:"var(--font)",fontSize:"clamp(32px,11vw,42px)",fontWeight:700,letterSpacing:-1,overflowWrap:"anywhere",color:isInc?"var(--pos)":"var(--ink)",fontVariantNumeric:"tabular-nums"}}>{isInc?"+":"−"}{fmt(txn.amount,currency)}</div>
           <div style={{fontSize:12,color:"var(--ink-3)",marginTop:3}}>{t(txn.type==="income"?"add.income":"add.expense")}</div>
         </div>
 
@@ -3089,14 +3319,14 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
             [t("add.category"),  catName(txn.category)+(txn.subcategory?` / ${subName(txn.subcategory)}`:"")],
             [t("add.recurring"), txn.recurring?(txn.recurFreq?t("freqCap."+txn.recurFreq):t("common.yes")):t("common.no")],
           ].map(([lbl,val])=>(
-            <div key={lbl} style={{background:"var(--bg-warm)",borderRadius:7,padding:"10px 12px"}}>
-              <div style={{fontSize:9,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--ink-4)",marginBottom:3}}>{lbl}</div>
-              <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",lineHeight:1.3,overflowWrap:"anywhere"}}>{val}</div>
+            <div key={lbl} style={{background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px"}}>
+              <div style={{fontSize:12,fontWeight:500,color:"var(--ink-3)",marginBottom:3}}>{lbl}</div>
+              <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",lineHeight:1.3,overflowWrap:"anywhere"}}>{val}</div>
             </div>
           ))}
         </div>
 
-        {txn.note&&<div style={{fontSize:13,color:"var(--ink-2)",background:"var(--bg-warm)",borderRadius:7,padding:"10px 12px",marginBottom:16}}>{txn.note}</div>}
+        {txn.note&&<div style={{fontSize:14,color:"var(--ink-2)",background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px",marginBottom:16}}>{txn.note}</div>}
 
         {/* S6: Merchant profile — frequency, timing, category stability */}
         {profile&&profile.count>1&&(
@@ -3110,15 +3340,15 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
             {/* Stats grid */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
               <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>{profile.count}</div>
+                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{profile.count}</div>
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.visits")}</div>
               </div>
               <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>{fmt(profile.avg,currency)}</div>
+                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{fmt(profile.avg,currency)}</div>
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.avgSpend")}</div>
               </div>
               <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:18,fontWeight:700}}>{fmt(profile.total,currency)}</div>
+                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{fmt(profile.total,currency)}</div>
                 <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.total")}</div>
               </div>
             </div>
@@ -3197,12 +3427,11 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
 }
 
 // ─── Settings Sheet ───────────────────────────────────────────────────────────
-function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onImportFile, onSetBudget, onCurrencyChange,
-  onAddTemplate, onDeleteTemplate, onAddGoal, onUpdateGoal, onDeleteGoal, onSafeToSpendChange, onClose, showToast }) {
-  const { transactions,budgets,templates,currency,goals=[],safeToSpend={} }=state;
+// Settings (2026-10-27 redesign): budgets and goals moved to the Budgets & Goals tab, import / export and backups to
+// More → Import / Export. What remains here: language, overview, Safe to Spend, currency and quick-add templates.
+function SettingsSheet({ state, onLanguageChange, onCurrencyChange, onAddTemplate, onDeleteTemplate, onSafeToSpendChange, onClose, showToast }) {
+  const { transactions,templates,currency,safeToSpend={} }=state;
   const [curSym,      setCurSym]      = useState(currency);
-  const [editBudget,  setEditBudget]  = useState(null);
-  const [budgetVal,   setBudgetVal]   = useState("");
   const [showNewTpl,  setShowNewTpl]  = useState(false);
   const [tplName,     setTplName]     = useState("");
   const [tplAmt,      setTplAmt]      = useState("");
@@ -3210,14 +3439,7 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
   const [tplSubcat,   setTplSubcat]   = useState("");
   const [tplMerchant, setTplMerchant] = useState("");
   const [tplNote,     setTplNote]     = useState("");
-  const [showNewGoal, setShowNewGoal] = useState(false);
-  const [goalName,    setGoalName]    = useState("");
-  const [goalTarget,  setGoalTarget]  = useState("");
-  const [goalSaved,   setGoalSaved]   = useState("");
-  const [goalMonthly, setGoalMonthly] = useState("");
-  const [goalDate,    setGoalDate]    = useState("");
   const [savingsT,    setSavingsT]    = useState(String(safeToSpend.savingsTarget||0));
-  const fileRef=useRef();
 
   const totalInc=transactions.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const totalExp=transactions.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
@@ -3228,17 +3450,6 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
     if (!tplName.trim()||tAmt===null) { showToast(t("set.tplInvalid")); return; }
     onAddTemplate({name:tplName.trim(),amount:tAmt,catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()});
     setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);
-  };
-
-  const saveGoal=()=>{
-    const gTarget=parseMoney(goalTarget,{positive:true});
-    const gSaved=goalSaved.trim()===""?0:parseMoney(goalSaved);
-    const gMonthly=goalMonthly.trim()===""?0:parseMoney(goalMonthly);
-    if (!goalName.trim()||gTarget===null) { showToast(t("set.goalInvalidTarget")); return; }
-    if (gSaved===null||gMonthly===null) { showToast(t("set.goalInvalidAmounts")); return; }
-    if (goalDate && !isValidDateStr(goalDate)) { showToast(t("set.goalInvalidDate")); return; }
-    onAddGoal({name:goalName.trim(),target:gTarget,saved:gSaved,monthlyTarget:gMonthly,targetDate:goalDate||null});
-    setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);
   };
 
   return (
@@ -3267,7 +3478,7 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
           {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
             <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",borderBottom:"1px solid var(--rule)"}}>
               <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
-              <span style={{fontSize:13,fontWeight:700,color:col,fontFamily:"'Playfair Display',serif",whiteSpace:"nowrap"}}>{val}</span>
+              <span style={{fontSize:13,fontWeight:700,color:col,fontFamily:"var(--font)",whiteSpace:"nowrap"}}>{val}</span>
             </div>
           ))}
         </div>
@@ -3334,148 +3545,311 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
           ))}
         </div>
 
-        {/* Budgets */}
-        <div style={{marginTop:8}}>
-          <div style={{fontSize:12,fontWeight:700,color:"var(--ink)",marginBottom:10}}>{t("set.budgets")}</div>
-          {expCats.map((cat,i,arr)=>{
-            const limit=budgets[cat.id]||0;
-            return (
-              <div key={cat.id} style={{padding:"9px 0",borderBottom:i<arr.length-1?"1px solid var(--rule)":"none"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:600,minWidth:0}}><CatIcon catId={cat.id} size={13}/>{catName(cat.id)}</div>
-                  <div style={{display:"flex",alignItems:"center",gap:9,flexShrink:0}}>
-                    {limit>0&&<span style={{fontSize:12,fontFamily:"'Playfair Display',serif",fontWeight:600}}>{fmt(limit,currency)}</span>}
-                    <button className="btn btn-sm" style={{fontSize:10,padding:"4px 9px"}} onClick={()=>{setEditBudget(cat.id);setBudgetVal(limit>0?String(limit):"");}} aria-label={`${limit>0?t("common.edit"):t("set.set")}: ${catName(cat.id)}`}>{limit>0?t("common.edit"):t("set.set")}</button>
-                  </div>
-                </div>
-                {editBudget===cat.id&&(
-                  <div style={{display:"flex",gap:7,marginTop:7}}>
-                    <input className="field-input" type="number" min="0" step="1" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(e.target.value)} autoFocus style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-                    <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:parseMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
-                    <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* S1: Goals — with target date */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("goals.title")}</div>
-        <div style={{padding:"12px 0"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
-            <span style={{fontSize:12,fontWeight:700,color:"var(--ink)"}}>{t("set.financialGoals")}</span>
-            <button className="btn btn-sm" onClick={()=>setShowNewGoal(s=>!s)}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
-          </div>
-          {showNewGoal&&(
-            <div style={{background:"var(--bg-warm)",borderRadius:7,padding:13,marginBottom:11}}>
-              <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="goal-name">{t("set.goalName")}</label><input id="goal-name" className="field-input" placeholder={t("set.goalNamePh")} value={goalName} onChange={e=>setGoalName(e.target.value)} autoFocus/></div>
-              <div className="field-row" style={{marginBottom:10}}>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-target">{t("set.target",{currency})}</label><input id="goal-target" className="field-input" type="number" min="0" step="1" placeholder="0" value={goalTarget} onChange={e=>setGoalTarget(e.target.value)}/></div>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-saved">{t("set.savedSoFar")}</label><input id="goal-saved" className="field-input" type="number" min="0" step="1" placeholder="0" value={goalSaved} onChange={e=>setGoalSaved(e.target.value)}/></div>
-              </div>
-              <div className="field-row" style={{marginBottom:10}}>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-monthly">{t("set.monthlyContribution")}</label><input id="goal-monthly" className="field-input" type="number" min="0" step="1" placeholder={t("set.optionalPh")} value={goalMonthly} onChange={e=>setGoalMonthly(e.target.value)}/></div>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-date">{t("set.targetDate")}</label><input id="goal-date" className="field-input" lang={locale()} type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
-              </div>
-              <button className="btn btn-primary btn-full" style={{marginTop:0,padding:"10px"}} onClick={saveGoal}>{t("set.saveGoal")}</button>
-            </div>
-          )}
-          {goals.length===0&&!showNewGoal&&<div style={{fontSize:12,color:"var(--ink-3)"}}>{t("set.noGoals")}</div>}
-          {goals.map(goal=>{
-            const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion,whatIf,milestones}=gp;
-            return (
-              <div key={goal.id} style={{padding:"12px 0",borderBottom:"1px solid var(--rule)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:5}}>
-                  <div>
-                    <div style={{fontSize:13,fontWeight:700,color:"var(--ink)"}}>{goal.name}</div>
-                    {goal.targetDate&&gp.daysToTarget!==null&&(
-                      <div style={{fontSize:11,color:gp.behindSchedule||gp.overdue?"var(--neg)":gp.onTrack?"var(--pos)":"var(--ink-3)",marginTop:2}}>
-                        {gp.complete?t("goals.completed"):gp.overdue?tn("goals.overdueDays",-gp.daysToTarget):gp.daysToTarget===0?t("set.targetToday"):tn("set.daysToTarget",gp.daysToTarget)}
-                        {gp.behindSchedule?t("set.projectedAfter"):gp.onTrack?t("set.onTrackSuffix"):""}
-                      </div>
-                    )}
-                    {!goal.targetDate&&gp.complete&&<div style={{fontSize:11,color:"var(--pos)",marginTop:2}}>{t("goals.completed")}</div>}
-                  </div>
-                  <div style={{display:"flex",gap:7,alignItems:"center"}}>
-                    <button className="btn btn-sm" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{
-                      const newSaved=prompt(t("set.updatePrompt",{name:goal.name}),goal.saved||0);
-                      if (newSaved!==null) {
-                        const v=parseMoney(newSaved);
-                        if (v===null) showToast(t("set.updateInvalid"));
-                        else onUpdateGoal(goal.id,{saved:v});
-                      }
-                    }}>{t("set.update")}</button>
-                    <button className="topbar-btn" style={{color:"var(--ink-4)",width:26,height:26}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:goal.name})}><Icon name="trash" size={13}/></button>
-                  </div>
-                </div>
-                <div className="goal-progress"><div className="goal-fill" style={{width:`${pct}%`}}/></div>
-                <div className="goal-meta">
-                  <span>{t("goals.savedOf",{ saved:fmt(goal.saved||0,currency), target:fmt(goal.target||0,currency) })}</span>
-                  <span>{Math.round(pct)}%{remaining>0?` · ${t("goals.toGo",{amount:fmt(remaining,currency)})}`:""}</span>
-                </div>
-                {estCompletion&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:5}}>{t("set.atRate",{amount:fmt(goal.monthlyTarget||0,currency),date:estCompletion})}</div>}
-                {/* Milestones */}
-                {milestones&&(
-                  <div className="goal-milestones" style={{marginTop:8,display:"flex",gap:6}}>
-                    {milestones.map(m=>(
-                      <div key={m.pct} style={{flex:1,textAlign:"center",padding:"4px 2px",borderRadius:5,
-                        background:m.completed?"var(--pos-bg)":"var(--bg-inset)",
-                        border:`1px solid ${m.completed?"var(--pos)":"var(--rule)"}`}}>
-                        <div style={{fontSize:10,fontWeight:700,color:m.completed?"var(--pos)":"var(--ink-4)"}}>{m.pct}%</div>
-                        <div style={{fontSize:9,color:m.completed?"var(--pos)":"var(--ink-4)"}}>
-                          {m.completed?"✓":t("goals.toGo",{amount:fmt(m.amount-Math.min(goal.saved||0,m.amount),currency)})}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* S1: What-if scenarios */}
-                {whatIf.length>1&&(
-                  <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid var(--rule)"}}>
-                    <div style={{fontSize:9,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",color:"var(--ink-4)",marginBottom:6}}>{t("set.whatIf")}</div>
-                    {whatIf.map((w,i)=>(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11,color:"var(--ink-3)",padding:"2px 0"}}>
-                        <span>{t("set.perMonth",{amount:fmt(w.monthly,currency)})}</span>
-                        <span style={{color:i===1?"var(--ink)":"var(--ink-3)",fontWeight:i===1?600:400,textAlign:"right"}}>{tn("set.months",w.months)} · {w.completion}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Data */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.data")}</div>
-        <div className="settings-row">
-          <div><div className="settings-row-title">{t("set.exportCsv")}</div><div className="settings-row-sub">{t("set.exportCsvSub")}</div></div>
-          <button className="btn btn-sm" onClick={onExportCSV} style={{display:"flex",alignItems:"center",gap:5}}><Icon name="download" size={12}/>{t("set.export")}</button>
-        </div>
-        <div className="settings-row">
-          <div><div className="settings-row-title">{t("set.jsonBackup")}</div><div className="settings-row-sub">{tn("set.jsonBackupSub",transactions.length)}</div></div>
-          <button className="btn btn-sm btn-sm-primary" onClick={onExportJSON} style={{display:"flex",alignItems:"center",gap:5}}><Icon name="download" size={12}/>{t("set.backup")}</button>
-        </div>
-        <div className="settings-row" style={{flexDirection:"column",alignItems:"flex-start",gap:8}}>
-          <div><div className="settings-row-title">{t("import.title")}</div><div className="settings-row-sub">{t("set.restoreSub")}</div></div>
-          <div className="drop-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}}>
-            <input ref={fileRef} type="file" accept=".json,.csv" aria-label={t("import.title")} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:12,color:"var(--ink-3)",fontWeight:600}}><Icon name="upload" size={13}/>{t("set.dropHint")}</div>
-          </div>
-        </div>
-        {state.lastBackup?
-          <div style={{fontSize:11,color:"var(--ink-3)",marginTop:8,lineHeight:1.5}}>
-            <strong style={{color:"var(--ink-2)"}}>{t("set.lastBackup")}</strong> {fmtLongDate(state.lastBackup)}
-            <div>{state.backupConfirmedAt && Date.parse(state.backupConfirmedAt)>=Date.parse(state.lastBackup)
-              ? t("set.confirmedOn",{date:fmtLongDate(state.backupConfirmedAt)})
-              : t("set.notConfirmed")}</div>
-            <div style={{fontStyle:"italic",color:"var(--ink-4)"}}>{t("set.cantTell")}</div>
-          </div>:
-          <div style={{fontSize:11,color:"var(--neg)",fontWeight:600,marginTop:8}}>{t("set.noBackup")}</div>
-        }
         <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:18}}>{t("common.close")}</button>
       </div>
+    </div>
+  );
+}
+
+// ─── Redesign pages (2026-10-27) ─────────────────────────────────────────────────────────────────────────────────────
+
+function SpendDonut({ catSpend, total, currency }) {
+  const slices=donutSlices(catSpend);
+  if (!slices.length) return null;
+  const R=46, C=2*Math.PI*R; let off=0;
+  return (
+    <div className="donut-wrap">
+      <div className="donut" role="img" aria-label={t("home.breakdown")+": "+slices.map(s=>`${s.name} ${s.pct}%`).join(", ")}>
+        <svg viewBox="0 0 120 120" width="100%" height="100%" aria-hidden="true">
+          <circle cx="60" cy="60" r={R} fill="none" stroke="var(--bg-inset)" strokeWidth="14"/>
+          {slices.map(s=>{ const len=C*s.amt/total, gap=slices.length>1?Math.min(2,len/3):0; const el=(
+            <circle key={s.id} cx="60" cy="60" r={R} fill="none" stroke={s.color} strokeWidth="14" strokeDasharray={`${Math.max(len-gap,0.01)} ${C}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"/>
+          ); off+=len; return el; })}
+        </svg>
+        <div className="donut-center">{fmtShort(total,currency)}</div>
+      </div>
+      <ul className="donut-legend">
+        {slices.map(s=>(
+          <li key={s.id}><span className="dot" style={{background:s.color}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{s.pct}%</span></li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// A row in an inset list (More page, Import / Export): icon, title, optional subtitle, chevron.
+function ListRow({ icon, title, sub, onClick, color="var(--accent-text)", className="" }) {
+  return (
+    <button className={`list-row ${className}`} onClick={onClick}>
+      <span className="list-ico" style={{color}}><Icon name={icon} size={20}/></span>
+      <span className="list-body"><span className="list-title">{title}</span>{sub&&<span className="list-sub">{sub}</span>}</span>
+      <Icon name="chevRight" size={16} color="var(--ink-4)"/>
+    </button>
+  );
+}
+
+// More: the pages that do not have a tab of their own. There is no account, profile, dark-mode switch or help centre in
+// this app, so none is shown; the card at the top says where the data lives, which is true and useful.
+function MorePage({ onOpen, onSettings }) {
+  return (
+    <div className="more-page">
+      <div className="card more-id">
+        <span className="more-mark" aria-hidden="true"><Icon name="finance" size={22} color="#fff"/></span>
+        <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
+      </div>
+      <div className="card list-card">
+        <ListRow icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
+        <ListRow icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
+        <ListRow icon="settings" title={t("nav.settings")} sub={t("more.settingsSub")} onClick={onSettings}/>
+      </div>
+    </div>
+  );
+}
+
+// Import / Export: the same import, export and backup functions Settings used to hold, on a page of their own.
+// There is no import history in the data, so no "recent imports" list is shown.
+function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup }) {
+  const fileRef=useRef();
+  const { transactions, lastBackup, backupConfirmedAt }=state;
+  const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
+  return (
+    <div className="io-page">
+      <div className="io-grid">
+        <div className="card io-card drop-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}}>
+          <input ref={fileRef} type="file" accept=".json,.csv" aria-label={t("import.title")} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
+          <span className="io-ico" style={{color:"var(--accent-text)"}}><Icon name="upload" size={24}/></span>
+          <div className="list-title">{t("io.import")}</div>
+          <div className="list-sub">{t("io.importSub")}</div>
+        </div>
+        <div className="card io-card">
+          <span className="io-ico" style={{color:"var(--violet)"}}><Icon name="download" size={24}/></span>
+          <div className="list-title">{t("io.export")}</div>
+          <div className="list-sub">{t("set.exportCsvSub")}</div>
+          <button className="btn btn-sm" onClick={onExportCSV} style={{marginTop:10}}><Icon name="download" size={12}/>{t("io.exportCsv")}</button>
+        </div>
+      </div>
+      <div className="section-title">{t("io.backups")}</div>
+      <div className="card">
+        {lastBackup?(
+          <div className="io-backup">
+            <div style={{minWidth:0}}>
+              <div className="list-sub">{t("set.lastBackup")}</div>
+              <div className="list-title">{fmtLongDate(lastBackup)}</div>
+            </div>
+            <span className={`io-status${confirmed?" ok":""}`}>{confirmed?<><Icon name="check" size={12}/>{t("io.confirmed")}</>:t("io.unconfirmed")}</span>
+          </div>
+        ):(
+          <div className="list-title" style={{color:"var(--neg)"}}>{t("set.noBackup")}</div>
+        )}
+        <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>
+          {lastBackup && (confirmed ? t("set.confirmedOn",{date:fmtLongDate(backupConfirmedAt)}) : t("set.notConfirmed"))}{lastBackup?" ":""}{t("set.cantTell")}
+        </div>
+        <button className="btn btn-primary btn-full" onClick={onExportJSON} style={{marginTop:12}}><Icon name="backup" size={16}/>{t("io.createBackup")}</button>
+        {lastBackup && !confirmed && <button className="btn btn-ghost btn-full" onClick={onConfirmBackup}>{t("banner.haveFile")}</button>}
+        <div className="list-sub" style={{marginTop:8}}>{tn("set.jsonBackupSub",transactions.length)}</div>
+      </div>
+    </div>
+  );
+}
+
+// Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
+function BudgetsGoalsPage({ state, showToast, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal }) {
+  const { transactions, budgets={}, goals=[], currency }=state;
+  const [seg,setSeg]=useState("budgets");
+  const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
+  const [showNewGoal,setShowNewGoal]=useState(false);
+  const [goalName,setGoalName]=useState(""), [goalTarget,setGoalTarget]=useState(""), [goalSaved,setGoalSaved]=useState("");
+  const [goalMonthly,setGoalMonthly]=useState(""), [goalDate,setGoalDate]=useState("");
+  const now=curMon();
+  const catSpend=calcCategorySpend(transactions,now);
+  const items=calcBudgetStatus(budgets,catSpend,now);
+  const byCat=Object.fromEntries(items.map(x=>[x.catId,x]));
+  const limitTotal=items.reduce((s,x)=>s+x.limit,0), spentTotal=items.reduce((s,x)=>s+x.spent,0);
+  const expCats=CATEGORIES.filter(c=>!c.income);
+  const budgeted=expCats.filter(c=>byCat[c.id]), unbudgeted=expCats.filter(c=>!byCat[c.id]);
+
+  const saveGoal=()=>{
+    const gTarget=parseMoney(goalTarget,{positive:true});
+    const gSaved=goalSaved.trim()===""?0:parseMoney(goalSaved);
+    const gMonthly=goalMonthly.trim()===""?0:parseMoney(goalMonthly);
+    if (!goalName.trim()||gTarget===null) { showToast(t("set.goalInvalidTarget")); return; }
+    if (gSaved===null||gMonthly===null) { showToast(t("set.goalInvalidAmounts")); return; }
+    if (goalDate && !isValidDateStr(goalDate)) { showToast(t("set.goalInvalidDate")); return; }
+    onAddGoal({name:goalName.trim(),target:gTarget,saved:gSaved,monthlyTarget:gMonthly,targetDate:goalDate||null});
+    setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);
+  };
+  const editRow=(cat,limit)=>editBudget===cat.id&&(
+    <div style={{display:"flex",gap:7,marginTop:9}}>
+      <input className="field-input" type="number" min="0" step="1" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(e.target.value)} autoFocus style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+      <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:parseMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
+      <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
+    </div>
+  );
+  const editBtn=(cat,limit)=>(
+    <button className="btn btn-sm" onClick={()=>{setEditBudget(cat.id);setBudgetVal(limit>0?String(limit):"");}} aria-label={`${limit>0?t("common.edit"):t("set.set")}: ${catName(cat.id)}`}>{limit>0?t("common.edit"):t("set.set")}</button>
+  );
+
+  return (
+    <div className="goals-page">
+      <div className="seg" role="tablist" aria-label={t("goals.pageTitle")}>
+        {[["budgets",t("budgets.title")],["goals",t("goals.title")]].map(([id,lbl])=>(
+          <button key={id} role="tab" aria-selected={seg===id} className={`seg-btn${seg===id?" on":""}`} onClick={()=>setSeg(id)}>{lbl}</button>
+        ))}
+      </div>
+
+      {seg==="budgets"&&(<>
+        {limitTotal>0&&(
+          <div className="card">
+            <div className="list-sub">{t("budgets.monthTotal",{month:monthName(now)})}</div>
+            <div className="big-num">{fmt(limitTotal,currency)}</div>
+            <div className="bar"><div className="bar-fill" style={{width:`${Math.min(spentTotal/limitTotal*100,100)}%`,background:spentTotal>limitTotal?"var(--neg)":spentTotal>=0.8*limitTotal?"var(--warn)":"var(--pos)"}}/></div>
+            <div className="list-sub" style={{marginTop:8}}>{t("budgets.spentOf",{spent:fmt(spentTotal,currency),limit:fmt(limitTotal,currency)})}</div>
+            <div style={{fontSize:13,fontWeight:600,marginTop:6,color:spentTotal>limitTotal?"var(--neg)":"var(--pos)"}}>
+              {spentTotal>limitTotal?t("budgets.over",{amount:fmt(spentTotal-limitTotal,currency)}):t("budgets.remaining",{amount:fmt(limitTotal-spentTotal,currency)})}
+            </div>
+          </div>
+        )}
+        <div className="section-title">{t("budgets.byCategory")}</div>
+        {budgeted.length===0&&<div className="list-sub" style={{margin:"0 2px 12px"}}>{t("budgets.none")}</div>}
+        {budgeted.length>0&&(
+          <div className="card list-card">
+            {budgeted.map(cat=>{ const x=byCat[cat.id]; const pct=Math.round(x.spent/x.limit*100); return (
+              <div key={cat.id} className="bud-row">
+                <div className="bud-top">
+                  <span className="cat-dot" style={{background:cat.color+"26"}}><CatIcon catId={cat.id} size={16}/></span>
+                  <span className="bud-name">{catName(cat.id)}</span>
+                  <span className="bud-nums">{fmt(x.spent,currency)} / {fmt(x.limit,currency)}</span>
+                </div>
+                <div className="bud-bar-row">
+                  <div className="bar"><div className="bar-fill" style={{width:`${x.pct}%`,background:x.over?"var(--neg)":x.warn?"var(--warn)":"var(--pos)"}}/></div>
+                  <span className="bud-pct" style={{color:x.over?"var(--neg)":"var(--ink-3)"}}>{pct}%</span>
+                  {editBtn(cat,x.limit)}
+                </div>
+                {editRow(cat,x.limit)}
+              </div>
+            ); })}
+          </div>
+        )}
+        <div className="section-title">{t("budgets.notSet")}</div>
+        <div className="card list-card">
+          {unbudgeted.map(cat=>(
+            <div key={cat.id} className="bud-row">
+              <div className="bud-top">
+                <span className="cat-dot" style={{background:cat.color+"26"}}><CatIcon catId={cat.id} size={16}/></span>
+                <span className="bud-name">{catName(cat.id)}</span>
+                {editBtn(cat,0)}
+              </div>
+              {editRow(cat,0)}
+            </div>
+          ))}
+        </div>
+      </>)}
+
+      {seg==="goals"&&(<>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"4px 2px 10px"}}>
+          <span className="section-title" style={{margin:0}}>{t("set.financialGoals")}</span>
+          <button className="btn btn-sm" onClick={()=>setShowNewGoal(s=>!s)}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
+        </div>
+        {showNewGoal&&(
+          <div className="card">
+            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="goal-name">{t("set.goalName")}</label><input id="goal-name" className="field-input" placeholder={t("set.goalNamePh")} value={goalName} onChange={e=>setGoalName(e.target.value)} autoFocus/></div>
+            <div className="field-row" style={{marginBottom:10}}>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-target">{t("set.target",{currency})}</label><input id="goal-target" className="field-input" type="number" min="0" step="1" placeholder="0" value={goalTarget} onChange={e=>setGoalTarget(e.target.value)}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-saved">{t("set.savedSoFar")}</label><input id="goal-saved" className="field-input" type="number" min="0" step="1" placeholder="0" value={goalSaved} onChange={e=>setGoalSaved(e.target.value)}/></div>
+            </div>
+            <div className="field-row" style={{marginBottom:10}}>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-monthly">{t("set.monthlyContribution")}</label><input id="goal-monthly" className="field-input" type="number" min="0" step="1" placeholder={t("set.optionalPh")} value={goalMonthly} onChange={e=>setGoalMonthly(e.target.value)}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-date">{t("set.targetDate")}</label><input id="goal-date" className="field-input" lang={locale()} type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
+            </div>
+            <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={saveGoal}>{t("set.saveGoal")}</button>
+          </div>
+        )}
+        {goals.length===0&&!showNewGoal&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noGoals")}</div>}
+        {goals.map(goal=>{
+          const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion,whatIf,milestones}=gp;
+          return (
+            <div key={goal.id} className="card goal-card">
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div style={{display:"flex",gap:10,alignItems:"center",minWidth:0}}>
+                  <span className="cat-dot" style={{background:"rgba(50,205,170,0.15)"}}><Icon name="goal" size={16} color="var(--pos)"/></span>
+                  <div style={{minWidth:0}}>
+                    <div className="goal-name">{goal.name}</div>
+                    <div className="list-sub">{t("goals.savedOf",{ saved:fmt(goal.saved||0,currency), target:fmt(goal.target||0,currency) })}</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                  <button className="btn btn-sm" onClick={()=>{
+                    const newSaved=prompt(t("set.updatePrompt",{name:goal.name}),goal.saved||0);
+                    if (newSaved!==null) { const v=parseMoney(newSaved); if (v===null) showToast(t("set.updateInvalid")); else onUpdateGoal(goal.id,{saved:v}); }
+                  }}>{t("set.update")}</button>
+                  <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:goal.name})}><Icon name="trash" size={15}/></button>
+                </div>
+              </div>
+              <div className="bud-bar-row" style={{marginTop:12}}>
+                <div className="bar"><div className="bar-fill" style={{width:`${pct}%`,background:"var(--accent)"}}/></div>
+                <span className="bud-pct">{Math.round(pct)}%</span>
+              </div>
+              <div className="list-sub" style={{marginTop:6,color:gp.behindSchedule||gp.overdue?"var(--neg)":gp.onTrack||gp.complete?"var(--pos)":"var(--ink-3)"}}>
+                {gp.complete?t("goals.completed")
+                  :goal.targetDate&&gp.daysToTarget!==null?<>{gp.overdue?tn("goals.overdueDays",-gp.daysToTarget):gp.daysToTarget===0?t("set.targetToday"):tn("set.daysToTarget",gp.daysToTarget)}{gp.behindSchedule?t("set.projectedAfter"):gp.onTrack?t("set.onTrackSuffix"):""}</>
+                  :remaining>0?t("goals.toGo",{amount:fmt(remaining,currency)}):""}
+              </div>
+              {estCompletion&&<div className="list-sub" style={{marginTop:4}}>{t("set.atRate",{amount:fmt(goal.monthlyTarget||0,currency),date:estCompletion})}</div>}
+              {milestones&&(
+                <div className="goal-milestones" style={{marginTop:10,display:"flex",gap:6}}>
+                  {milestones.map(m=>(
+                    <div key={m.pct} style={{flex:1,textAlign:"center",padding:"5px 2px",borderRadius:8,background:m.completed?"var(--pos-bg)":"var(--bg-inset)"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:m.completed?"var(--pos)":"var(--ink-3)"}}>{m.pct}%</div>
+                      <div style={{fontSize:10,color:m.completed?"var(--pos)":"var(--ink-4)"}}>{m.completed?"✓":t("goals.toGo",{amount:fmt(m.amount-Math.min(goal.saved||0,m.amount),currency)})}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {whatIf.length>1&&(
+                <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--rule)"}}>
+                  <div className="list-sub" style={{fontWeight:700,marginBottom:6}}>{t("set.whatIf")}</div>
+                  {whatIf.map((w,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,color:"var(--ink-3)",padding:"2px 0"}}>
+                      <span>{t("set.perMonth",{amount:fmt(w.monthly,currency)})}</span>
+                      <span style={{color:i===1?"var(--ink)":"var(--ink-3)",fontWeight:i===1?600:400,textAlign:"right"}}>{tn("set.months",w.months)} · {w.completion}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </>)}
+    </div>
+  );
+}
+
+// Analytics "Spending trend": this month's running total, with the previous month's as a faint line for comparison.
+function SpendingTrend({ transactions, mon, prv, currency }) {
+  const cur=cumulativeByDay(transactions,mon), prev=cumulativeByDay(transactions,prv);
+  const curLast=[...cur].reverse().find(v=>v!==null)??0, prevLast=prev[prev.length-1]??0;
+  if (!(curLast>0) && !(prevLast>0)) return null;
+  const W=320, H=120, n=Math.max(cur.length,prev.length), max=Math.max(curLast,prevLast,1);
+  const x=i=>(i/(n-1))*W, y=v=>H-(v/max)*(H-8);
+  const path=arr=>arr.map((v,i)=>v===null?null:`${x(i).toFixed(1)},${y(v).toFixed(1)}`).filter(Boolean);
+  const cp=path(cur), pp=path(prev);
+  const ticks=[1,8,15,22,n];
+  return (
+    <div className="card trend-card">
+      <div className="card-head"><span className="card-title">{t("an.trendTitle")}</span></div>
+      <div className="big-num" style={{marginBottom:2}}>{fmt(curLast,currency)}</div>
+      <div className="list-sub" style={{marginBottom:10}}>{t("an.trendSub",{month:monthName(prv)})}</div>
+      <svg viewBox={`0 0 ${W} ${H+18}`} width="100%" role="img" aria-label={t("an.trendAria",{amount:fmt(curLast,currency),prev:fmt(prevLast,currency)})}>
+        {[0.5,1].map(f=><line key={f} x1="0" x2={W} y1={y(max*f)} y2={y(max*f)} stroke="var(--rule)" strokeWidth="1"/>)}
+        <line x1="0" x2={W} y1={H} y2={H} stroke="var(--rule-2)" strokeWidth="1"/>
+        {pp.length>1&&<polyline points={pp.join(" ")} fill="none" stroke="var(--ink-4)" strokeWidth="1.5" strokeDasharray="4 4"/>}
+        {cp.length>1&&<>
+          <polygon points={`0,${H} ${cp.join(" ")} ${cp[cp.length-1].split(",")[0]},${H}`} fill="var(--accent)" opacity="0.18"/>
+          <polyline points={cp.join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round"/>
+        </>}
+        {ticks.map(d=><text key={d} x={Math.min(Math.max(x(d-1),8),W-8)} y={H+15} textAnchor="middle" fontSize="11" fill="var(--ink-3)">{d}</text>)}
+      </svg>
+      <div className="trend-legend"><span><i style={{background:"var(--accent)"}}/>{monthName(mon)}</span><span><i className="dash"/>{monthName(prv)}</span></div>
     </div>
   );
 }
@@ -3522,7 +3896,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
   const done        = happenedIn(selectedMon);
   const isCurrentMon = selectedMon === curMon();
 
-  const catData = Object.entries(catSpend).map(([id, amt]) => ({ ...CAT(id) || { id, name: id, color:"#8A8A8A" }, amt })).sort((a,b) => b.amt - a.amt);
+  const catData = Object.entries(catSpend).map(([id, amt]) => ({ ...CAT(id) || { id, name: id, color:"#98A5B7" }, amt })).sort((a,b) => b.amt - a.amt);
   const maxCat = catData[0]?.amt || 1;
   const merchantTotals = {};
   expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
@@ -3594,10 +3968,11 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
         </div>
       </div>
       <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
+      <SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/>
       {isCurrentMon&&paceInfo.dailyAvg>0&&(
         <div className="a-card" style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:"4px 12px",fontSize:12}}>
-          <span style={{color:"var(--ink-3)"}}>{t("an.dailyAvg")} <strong style={{fontFamily:"'Playfair Display',serif",color:"var(--ink)"}}>{fmt(paceInfo.dailyAvg,currency)}</strong></span>
-          <span style={{color:"var(--ink-3)"}}>{t("an.projected")} <strong style={{fontFamily:"'Playfair Display',serif",color:paceInfo.projected>prevFullExp+20?"var(--neg)":"var(--ink)"}}>{fmt(paceInfo.projected,currency)}</strong></span>
+          <span style={{color:"var(--ink-3)"}}>{t("an.dailyAvg")} <strong style={{fontFamily:"var(--font)",color:"var(--ink)"}}>{fmt(paceInfo.dailyAvg,currency)}</strong></span>
+          <span style={{color:"var(--ink-3)"}}>{t("an.projected")} <strong style={{fontFamily:"var(--font)",color:paceInfo.projected>prevFullExp+20?"var(--neg)":"var(--ink)"}}>{fmt(paceInfo.projected,currency)}</strong></span>
         </div>
       )}
 
@@ -3714,7 +4089,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                 <span style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{merchant}</span>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700}}>−{fmt(amt,currency)}</div>
+                <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:700}}>−{fmt(amt,currency)}</div>
                 {curExp>0&&<div style={{fontSize:10,color:"var(--ink-4)"}}>{Math.round((amt/curExp)*100)}%</div>}
               </div>
             </div>
@@ -3727,17 +4102,17 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
         <div className="a-card">
           <div className="a-card-title">{t("an.topExpenses")}</div>
           {topExpenses.map((x,i)=>{
-            const cat=CAT(x.category)||{color:"#8A8A8A"};
+            const cat=CAT(x.category)||{color:"#98A5B7"};
             return (
               <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<topExpenses.length-1?"1px solid var(--rule)":"none"}}>
-                <div style={{width:32,height:32,borderRadius:7,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <div style={{width:32,height:32,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   <CatIcon catId={x.category} size={15} color={cat.color}/>
                 </div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.merchant||x.note||catName(x.category)}</div>
                   <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(x.date)} · {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""}</div>
                 </div>
-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:600,flexShrink:0}}>−{fmt(x.amount,currency)}</div>
+                <div style={{fontFamily:"var(--font)",fontSize:15,fontWeight:600,flexShrink:0}}>−{fmt(x.amount,currency)}</div>
               </div>
             );
           })}
@@ -3773,11 +4148,11 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
 
         <div className="a-card">
           <div className="a-card-title">{t("an.sixMonth")}</div>
-          {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>{t("an.sixMonthAvg")} <strong style={{fontFamily:"'Playfair Display',serif",color:"var(--ink)"}}>{fmt(monthAvg,currency)}</strong></div>}
+          {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>{t("an.sixMonthAvg")} <strong style={{fontFamily:"var(--font)",color:"var(--ink)"}}>{fmt(monthAvg,currency)}</strong></div>}
           {activeBar!==null&&monthlyData[activeBar]&&(
             <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between"}}>
               <span>{monthName(monthlyData[activeBar].ym)}</span>
-              <span style={{fontFamily:"'Playfair Display',serif",fontSize:14}}>{fmt(monthlyData[activeBar].exp,currency)}</span>
+              <span style={{fontFamily:"var(--font)",fontSize:14}}>{fmt(monthlyData[activeBar].exp,currency)}</span>
             </div>
           )}
           <div className="month-bars">
@@ -3819,7 +4194,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                   <div style={{flex:1,height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden"}}>
                     <div style={{height:"100%",width:`${(d.median/maxMed)*100}%`,background:"var(--accent)",borderRadius:99}}/>
                   </div>
-                  <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"'Playfair Display',serif",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.median,currency)}</div>
+                  <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"var(--font)",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.median,currency)}</div>
                   <div style={{width:24,textAlign:"right",fontSize:10,color:"var(--ink-4)",flexShrink:0}}>{d.count}×</div>
                 </div>
               );
@@ -3831,17 +4206,17 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           <div className="a-card">
             <div className="a-card-title">{t("an.unusual")}</div>
             {anomalies.slice(0,5).map((a,i)=>{
-              const cat=CAT(a.category)||{color:"#8A8A8A"};
+              const cat=CAT(a.category)||{color:"#98A5B7"};
               return (
                 <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<Math.min(anomalies.length,5)-1?"1px solid var(--rule)":"none"}}>
-                  <div style={{width:30,height:30,borderRadius:7,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     <CatIcon catId={a.category} size={14} color={cat.color}/>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{a.merchant||catName(a.category)}</div>
                     <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(a.date)} · {a.reason}</div>
                   </div>
-                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:"var(--neg)",flexShrink:0}}>−{fmt(a.amount,currency)}</div>
+                  <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:700,color:"var(--neg)",flexShrink:0}}>−{fmt(a.amount,currency)}</div>
                 </div>
               );
             })}
@@ -3876,9 +4251,9 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
               <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:cell.cats?3:0}}>
                   <span>{fmtDate(cell.date)}</span>
-                  <span style={{fontFamily:"'Playfair Display',serif",fontSize:14}}>{cell.amt>0?fmt(cell.amt,currency):t("an.noSpending")}</span>
+                  <span style={{fontFamily:"var(--font)",fontSize:14}}>{cell.amt>0?fmt(cell.amt,currency):t("an.noSpending")}</span>
                 </div>
-                {cell.cats&&<div style={{fontSize:10,color:"rgba(247,244,238,0.7)"}}>{cell.cats}</div>}
+                {cell.cats&&<div style={{fontSize:10,color:"var(--ink-3)"}}>{cell.cats}</div>}
               </div>
             );
           })()}
@@ -3894,7 +4269,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                   return (
                     <div key={`${wi}-${di}`} className="hm-cell"
                       onClick={e=>{e.stopPropagation();setActiveCell(isActive?null:{wi,di});setActiveBar(null);}}
-                      style={{background:cell.amt>0?`rgba(107,31,42,${intensity})`:"var(--bg-inset)",outline:isActive?"2px solid var(--ink)":cell.isToday?"1.5px solid var(--ink-3)":"none",outlineOffset:"1px"}}
+                      style={{background:cell.amt>0?`rgba(78,120,255,${intensity})`:"var(--bg-inset)",outline:isActive?"2px solid var(--ink)":cell.isToday?"1.5px solid var(--ink-3)":"none",outlineOffset:"1px"}}
                     />
                   );
                 })}
@@ -3903,7 +4278,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           </div>
           <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,justifyContent:"flex-end"}}>
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
-            {[0.1,0.3,0.6,0.9].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(107,31,42,${o})`}}/>)}
+            {[0.1,0.3,0.6,0.9].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(78,120,255,${o})`}}/>)}
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
           </div>
         </div>
