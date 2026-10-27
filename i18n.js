@@ -121,6 +121,7 @@ export const MESSAGES = {
   "ins.dayOfWeek":    { en: "This month a typical transaction on {hi} is {pct}% larger than on {lo} (median of {a} vs {b} transactions)", az: "Bu ay {hi} tipik əməliyyat məbləği {lo} {pct}% çoxdur ({a} və {b} əməliyyatın medianı)", ru: "В этом месяце типичная сумма операции {hi} на {pct}% выше, чем {lo} (медиана {a} и {b} операций)" },
   "ins.dayOfWeekX":   { en: "This month a typical transaction on {hi} is {x}× the size of one on {lo} (median of {a} vs {b} transactions)", az: "Bu ay {hi} tipik əməliyyat məbləği {lo} {x} dəfə çoxdur ({a} və {b} əməliyyatın medianı)", ru: "В этом месяце типичная сумма операции {hi} в {x} раза выше, чем {lo} (медиана {a} и {b} операций)" },
   "ins.trendUp":      { en: "{cat} spending has been increasing over recent months ({pct}% last month vs the month before)", az: "«{cat}» üzrə xərclər son aylarda artır (keçən ay əvvəlki aya nisbətən {pct}%)", ru: "Расходы в категории «{cat}» в последние месяцы растут ({pct}% в прошлом месяце по сравнению с позапрошлым)" },
+  "ins.lastMonthChange": { en: "{cat} spending last month: {pct}% compared with the month before", az: "«{cat}» üzrə keçən ayın xərcləri: əvvəlki aya nisbətən {pct}%", ru: "Расходы в категории «{cat}» в прошлом месяце: {pct}% по сравнению с позапрошлым" },
   "ins.trendDown":    { en: "{cat} spending has been decreasing over recent months ({pct}% last month vs the month before)", az: "«{cat}» üzrə xərclər son aylarda azalır (keçən ay əvvəlki aya nisbətən {pct}%)", ru: "Расходы в категории «{cat}» в последние месяцы снижаются ({pct}% в прошлом месяце по сравнению с позапрошлым)" },
   "ins.anomalyReason": { en: "{x}× the usual {cat} amount (median {med})", az: "«{cat}» üçün adi məbləğdən {x} dəfə çox (median {med})", ru: "в {x} раза больше обычной суммы в категории «{cat}» (медиана {med})" },
   "ins.anomalies":    { en: { one: "{n} unusually large transaction this month", other: "{n} unusually large transactions this month" }, az: "Bu ay {n} qeyri-adi böyük əməliyyat", ru: { one: "{n} необычно крупная операция в этом месяце", few: "{n} необычно крупные операции в этом месяце", many: "{n} необычно крупных операций в этом месяце", other: "{n} необычно крупной операции в этом месяце" } },
@@ -521,6 +522,10 @@ export const MESSAGES = {
   "add.quickFill":    { en: "Quick fill", az: "Sürətli seçim", ru: "Быстрое заполнение" },
   "add.optional":     { en: "optional", az: "istəyə görə", ru: "необязательно" },
   "add.merchant":     { en: "Merchant", az: "Satıcı / xidmət", ru: "Продавец" },
+  "add.discardTitle": { en: "This entry isn't saved", az: "Bu qeyd yadda saxlanmayıb", ru: "Запись не сохранена" },
+  "add.discardBody":  { en: "If you close now, what you've entered will be lost.", az: "İndi bağlasanız, daxil etdikləriniz itəcək.", ru: "Если закрыть сейчас, введённые данные пропадут." },
+  "add.keepEditing":  { en: "Keep editing", az: "Davam et", ru: "Продолжить" },
+  "add.discard":      { en: "Close without saving", az: "Yadda saxlamadan bağla", ru: "Закрыть без сохранения" },
   "add.merchantPh":   { en: "e.g., BakuBus, Bravo, Spotify", az: "məs., BakuBus, Bravo, Spotify", ru: "напр., BakuBus, Bravo, Spotify" },
   "add.hintUsually":  { en: "Usually {amount}", az: "Adətən {amount}", ru: "Обычно {amount}" },
   "add.hintDay":      { en: "typically {day}", az: "adətən {day}", ru: "обычно {day}" },
@@ -633,6 +638,8 @@ export const MESSAGES = {
   "set.noBackup":      { en: "No backup yet — export one above", az: "Hələ ehtiyat nüsxə yoxdur — yuxarıda ixrac edin", ru: "Резервной копии пока нет — сделайте её выше" },
 
   // ── Monthly
+  "month.plannedExp":   { en: "+{amount} in expenses dated later this month (not counted yet)", az: "+{amount} xərc bu ayın sonrakı tarixlərinə yazılıb (hələ hesablanmayıb)", ru: "+{amount} расходов записано на более поздние даты месяца (пока не учтено)" },
+  "month.plannedInc":   { en: "+{amount} in income dated later this month (not counted yet)", az: "+{amount} gəlir bu ayın sonrakı tarixlərinə yazılıb (hələ hesablanmayıb)", ru: "+{amount} доходов записано на более поздние даты месяца (пока не учтено)" },
   "month.prev":         { en: "Previous month", az: "Əvvəlki ay", ru: "Предыдущий месяц" },
   "month.next":         { en: "Next month", az: "Növbəti ay", ru: "Следующий месяц" },
   "month.current":      { en: "Current", az: "Cari ay", ru: "Текущий" },

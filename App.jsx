@@ -737,7 +737,7 @@ function calcMerchantProfile(merchant, transactions) {
 
   // Visit count this month and last 30 days
   const mon = curMon();
-  const visitCountThisMonth = txns.filter(t=>t.date.startsWith(mon)).length;
+  const visitCountThisMonth = txns.filter(happenedIn(mon)).length;   // visits that have happened, not ones dated later
   const visitCount30 = txns.filter(t=>t.date>=now30).length;
 
   return {
@@ -760,21 +760,34 @@ function surplusLabel(inc, exp) { return inc>exp ? "Surplus" : inc<exp ? "Defici
 
 function surplusColor(inc, exp) { return inc>exp ? "var(--pos)" : inc<exp ? "var(--neg)" : "var(--ink)"; }
 
-function calcMonthSummary(transactions, mon=curMon(), prv=prevMon()) {
-  const isExp=t=>t.type==="expense", isInc=t=>t.type==="income";
-  const curExp =transactions.filter(t=>isExp(t)&&t.date.startsWith(mon)).reduce((s,t)=>s+t.amount,0);
-  const curInc =transactions.filter(t=>isInc(t)&&t.date.startsWith(mon)).reduce((s,t)=>s+t.amount,0);
-  const prevExp=transactions.filter(t=>isExp(t)&&t.date.startsWith(prv)).reduce((s,t)=>s+t.amount,0);
-  const prevInc=transactions.filter(t=>isInc(t)&&t.date.startsWith(prv)).reduce((s,t)=>s+t.amount,0);
+// "Has this entry happened?" for month figures: a past month counts whole, the current month up to and including today,
+// a future month nothing. Entries dated later are PLANNED: shown separately, never as money already spent or received.
+function happenedIn(mon, now=new Date()) {
+  const p=monthProgress(mon,now), todayStr=localDateStr(now);
+  return (t)=>t.date.startsWith(mon) && (p.state==="past" || (p.state==="current" && t.date<=todayStr));
+}
+
+// cur* = happened (to date), planned* = dated later in the month, total* = the whole month (Safe to Spend uses totalExp:
+// an expense entered ahead of time is money already committed).
+function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
+  const isExp=t=>t.type==="expense", isInc=t=>t.type==="income", inMon=t=>t.date.startsWith(mon);
+  const done=happenedIn(mon,now), donePrv=happenedIn(prv,now), sum=l=>l.reduce((s,t)=>s+t.amount,0);
+  const curExp =sum(transactions.filter(t=>isExp(t)&&done(t)));
+  const curInc =sum(transactions.filter(t=>isInc(t)&&done(t)));
+  const plannedExp=sum(transactions.filter(t=>isExp(t)&&inMon(t)&&!done(t)));
+  const plannedInc=sum(transactions.filter(t=>isInc(t)&&inMon(t)&&!done(t)));
+  const totalExp=sum(transactions.filter(t=>isExp(t)&&inMon(t))), totalInc=sum(transactions.filter(t=>isInc(t)&&inMon(t)));
+  const prevExp=sum(transactions.filter(t=>isExp(t)&&donePrv(t)));
+  const prevInc=sum(transactions.filter(t=>isInc(t)&&donePrv(t)));
   const momDiff=prevExp>0?curExp-prevExp:null;
   // Negative when expenses exceed income — don't clamp, show the deficit
   const surplusRate=curInc>0?Math.round(((curInc-curExp)/curInc)*100):null;
-  return { curExp,curInc,prevExp,prevInc,momDiff,surplusRate };
+  return { curExp,curInc,plannedExp,plannedInc,totalExp,totalInc,prevExp,prevInc,momDiff,surplusRate };
 }
 
-function calcCategorySpend(transactions, mon=curMon()) {
-  const out={};
-  transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon))
+function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
+  const out={}, done=happenedIn(mon,now);
+  transactions.filter(t=>t.type==="expense"&&done(t))
     .forEach(t=>{ out[t.category]=(out[t.category]||0)+t.amount; });
   return out;
 }
@@ -825,11 +838,12 @@ function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
   });
 }
 
-function calcTxnStats(transactions, mon=curMon()) {
-  const amts=transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)).map(t=>t.amount);
+function calcTxnStats(transactions, mon=curMon(), now=new Date()) {
+  const done=happenedIn(mon,now);
+  const amts=transactions.filter(t=>t.type==="expense"&&done(t)).map(t=>t.amount);
   const isWkend=d=>[0,6].includes(parseLocalDate(d).getDay());
-  const wkdExp=transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&!isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
-  const wkndExp=transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
+  const wkdExp=transactions.filter(t=>t.type==="expense"&&done(t)&&!isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
+  const wkndExp=transactions.filter(t=>t.type==="expense"&&done(t)&&isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
   return { count:amts.length, avgTxn:amts.length?amts.reduce((s,a)=>s+a,0)/amts.length:0, medTxn:median(amts), weekdayExp:wkdExp, weekendExp:wkndExp };
 }
 
@@ -856,10 +870,11 @@ function calcWeekdayWeekend(transactions, mon=curMon(), now=new Date()) {
 }
 
 // S3: What Changed — category + merchant-level explanation + recurring/one-off flag
-function calcWhatChanged(transactions, mon=curMon(), prv=prevMon()) {
-  const catSpendMon=calcCategorySpend(transactions,mon);
-  const catSpendPrv=calcCategorySpend(transactions,prv);
-  const { curExp,prevExp,curInc,prevInc }=calcMonthSummary(transactions,mon,prv);
+function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
+  const catSpendMon=calcCategorySpend(transactions,mon,now);
+  const catSpendPrv=calcCategorySpend(transactions,prv,now);
+  const { curExp,prevExp,curInc,prevInc }=calcMonthSummary(transactions,mon,prv,now);
+  const doneMon=happenedIn(mon,now), donePrv=happenedIn(prv,now);
 
   // Build a set of merchant names that have any recurring transaction
   const recurringMerchants=new Set(
@@ -870,8 +885,8 @@ function calcWhatChanged(transactions, mon=curMon(), prv=prevMon()) {
   const catChanges=cats.map(catId=>{
     const cur=catSpendMon[catId]||0,prev=catSpendPrv[catId]||0,diff=cur-prev;
     const merchantMon={},merchantPrv={};
-    transactions.filter(t=>t.type==="expense"&&t.category===catId&&t.merchant&&t.date.startsWith(mon)).forEach(t=>{merchantMon[t.merchant]=(merchantMon[t.merchant]||0)+t.amount;});
-    transactions.filter(t=>t.type==="expense"&&t.category===catId&&t.merchant&&t.date.startsWith(prv)).forEach(t=>{merchantPrv[t.merchant]=(merchantPrv[t.merchant]||0)+t.amount;});
+    transactions.filter(t=>t.type==="expense"&&t.category===catId&&t.merchant&&doneMon(t)).forEach(t=>{merchantMon[t.merchant]=(merchantMon[t.merchant]||0)+t.amount;});
+    transactions.filter(t=>t.type==="expense"&&t.category===catId&&t.merchant&&donePrv(t)).forEach(t=>{merchantPrv[t.merchant]=(merchantPrv[t.merchant]||0)+t.amount;});
     const allM=[...new Set([...Object.keys(merchantMon),...Object.keys(merchantPrv)])];
     const merchantDiffs=allM.map(m=>({
       merchant:m,
@@ -885,8 +900,8 @@ function calcWhatChanged(transactions, mon=curMon(), prv=prevMon()) {
   }).filter(c=>Math.abs(c.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
 
   const merchantMon={},merchantPrv={};
-  transactions.filter(t=>t.type==="expense"&&t.merchant&&t.date.startsWith(mon)).forEach(t=>{merchantMon[t.merchant]=(merchantMon[t.merchant]||0)+t.amount;});
-  transactions.filter(t=>t.type==="expense"&&t.merchant&&t.date.startsWith(prv)).forEach(t=>{merchantPrv[t.merchant]=(merchantPrv[t.merchant]||0)+t.amount;});
+  transactions.filter(t=>t.type==="expense"&&t.merchant&&doneMon(t)).forEach(t=>{merchantMon[t.merchant]=(merchantMon[t.merchant]||0)+t.amount;});
+  transactions.filter(t=>t.type==="expense"&&t.merchant&&donePrv(t)).forEach(t=>{merchantPrv[t.merchant]=(merchantPrv[t.merchant]||0)+t.amount;});
   const allM=[...new Set([...Object.keys(merchantMon),...Object.keys(merchantPrv)])];
   const merchantChanges=allM.map(m=>({
     merchant:m, cur:merchantMon[m]||0, prev:merchantPrv[m]||0,
@@ -977,7 +992,8 @@ function scheduleNextDue(s, transactions, now=new Date()) {
 function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
   const { savingsTarget=0 }=safeConfig||{};
   const mon=localMonthStr(now), todayStr=localDateStr(now);
-  const { curExp }=calcMonthSummary(transactions,mon);
+  // Every expense recorded for this month, including ones dated later: money entered ahead of time is already committed.
+  const { totalExp:curExp }=calcMonthSummary(transactions,mon,prevMon(),now);
   const monthInc=transactions.filter(t=>t.type==="income"&&t.date.startsWith(mon));
   const curInc=monthInc.filter(t=>t.date<=todayStr).reduce((s,t)=>s+t.amount,0);
   const expectedInc=monthInc.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
@@ -1086,7 +1102,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
   }
 
   // ── Concentration this month
-  const monExp=expenses.filter(t=>t.date.startsWith(mon));
+  const monExp=expenses.filter(t=>t.date.startsWith(mon)&&t.date<=todayStr);   // what has happened this month (not entries dated later)
   const monTotal=sumOf(monExp);
   if (monExp.length>=5 && monTotal>0) {
     const catTotals={}; monExp.forEach(t=>{ catTotals[t.category]=(catTotals[t.category]||0)+t.amount; });
@@ -1101,7 +1117,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
   // ── Typical transaction vs last month: the MEDIAN per transaction (a part-month stays comparable, and one unusual purchase
   //    cannot read as a general change; unusual purchases are reported separately as anomalies)
   const median=(l)=>quantile([...l].sort((a,b)=>a-b),0.5);
-  const curAmts=expenses.filter(t=>t.date.startsWith(mon)).map(t=>t.amount), prvAmts=expenses.filter(t=>t.date.startsWith(prv)).map(t=>t.amount);
+  const curAmts=monExp.map(t=>t.amount), prvAmts=expenses.filter(t=>t.date.startsWith(prv)).map(t=>t.amount);
   if (curAmts.length>=4 && prvAmts.length>=4) {
     const curMed=median(curAmts), prvMed=median(prvAmts);
     if (prvMed>0) { const pct=pctChange(curMed,prvMed); if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:t(pct>0?"ins.avgHigher":"ins.avgLower",{ pct:Math.abs(pct), a:curAmts.length, b:prvAmts.length }) }); }
@@ -1129,16 +1145,20 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
   [...new Set(expenses.map(t=>t.category))].forEach(catId=>{
     const data=months6.map((m,i)=>({ x:i, y:sumOf(expenses.filter(t=>t.category===catId&&t.date.startsWith(m))) }));
     if (data.filter(d=>d.y>0).length<3) return;
-    const n=data.length, sumX=data.reduce((a,d)=>a+d.x,0), sumY=data.reduce((a,d)=>a+d.y,0);
-    const sumXY=data.reduce((a,d)=>a+d.x*d.y,0), sumX2=data.reduce((a,d)=>a+d.x*d.x,0), denom=n*sumX2-sumX*sumX;
-    if (denom===0) return;
-    const slope=(n*sumXY-sumX*sumY)/denom, avgY=sumY/n;
-    const trend=slope>avgY*0.05 ? "increasing" : slope<-avgY*0.05 ? "decreasing" : "stable";
+    // Least-squares direction of a run of months: "increasing" / "decreasing" when the slope exceeds 5% of the average.
+    const direction=(pts)=>{ const n=pts.length, sx=pts.reduce((a,d)=>a+d.x,0), sy=pts.reduce((a,d)=>a+d.y,0), sxy=pts.reduce((a,d)=>a+d.x*d.y,0), sx2=pts.reduce((a,d)=>a+d.x*d.x,0), den=n*sx2-sx*sx;
+      if (den===0) return { slope:0, trend:"stable" }; const sl=(n*sxy-sx*sy)/den, avg=sy/n; return { slope:sl, trend: sl>avg*0.05?"increasing":sl<-avg*0.05?"decreasing":"stable" }; };
+    const n=data.length, { slope, trend }=direction(data);
     const last=data[n-1].y, prev=data[n-2].y;
     const trendPct=prev>0 ? pctChange(last,prev) : 0;
     categoryTrends.push({ catId, trend, trendPct, slope:parseFloat(slope.toFixed(2)), monthlyData:data });
-    if (trend!=="stable" && prev>0 && last>0 && Math.abs(trendPct)>=20)
-      insights.push({ id:`trend-${catId}`, text:t(trend==="increasing"?"ins.trendUp":"ins.trendDown",{ cat:catName(catId), pct:`${trendPct>0?"+":""}${trendPct}` }) });
+    // "Over recent months" only when the months BEFORE last month already moved the same way; a one-month jump is stated as
+    // what it is (last month vs the month before), not as a trend.
+    const sustained=direction(data.slice(0,n-1)).trend===trend;
+    if (trend!=="stable" && prev>0 && last>0 && Math.abs(trendPct)>=20) {
+      const vars={ cat:catName(catId), pct:`${trendPct>0?"+":""}${trendPct}` };
+      insights.push({ id:`trend-${catId}`, text: sustained ? t(trend==="increasing"?"ins.trendUp":"ins.trendDown",vars) : t("ins.lastMonthChange",vars) });
+    }
   });
 
   // ── Unusually large transactions this month: above Q3 + 1.5×IQR of that category's history AND at least 1.5× its median
@@ -1623,6 +1643,7 @@ input[type=number]{-moz-appearance:textfield}
 // Dismissal always goes through the sheet's own close handler (a click on its overlay, or the add form's close button).
 // closeTopLayer() is that dismissal for the top-most layer, shared by Escape and the phone's Back button; false = nothing open.
 function closeTopLayer() {
+  const keep=document.querySelector(".discard-overlay .discard-keep"); if (keep) { keep.click(); return true; }   // "unsaved" question: Back/Escape = keep editing
   const add=document.querySelector(".add-overlay .add-close"); if (add) { add.click(); return true; }
   const sheets=document.querySelectorAll(".sheet-overlay"); if (sheets.length) { sheets[sheets.length-1].click(); return true; }
   return false;
@@ -2087,9 +2108,20 @@ function LanguageChooser({ onChoose }) {
 // Level 5: What am I working toward? (goals)
 // Level 6: Raw data (recent activity)
 // ─────────────────────────────────────────────────────────────────────────────
+// Amounts dated later in the month: shown, but kept apart from what has been spent or received so far.
+function PlannedNote({ plannedExp, plannedInc, currency, style }) {
+  if (!(plannedExp>0) && !(plannedInc>0)) return null;
+  return (
+    <div className="planned-note" style={{fontSize:12,color:"var(--ink-3)",lineHeight:1.5,...style}}>
+      {plannedExp>0&&<div>{t("month.plannedExp",{amount:fmt(plannedExp,currency)})}</div>}
+      {plannedInc>0&&<div>{t("month.plannedInc",{amount:fmt(plannedInc,currency)})}</div>}
+    </div>
+  );
+}
+
 function HomePage({ transactions, budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView }) {
   const now=curMon(), prv=prevMon();
-  const { curExp,curInc,prevExp,momDiff,surplusRate }=calcMonthSummary(transactions,now,prv);
+  const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
   const budgetTotal =Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const spentToDate =calcSpentToDate(transactions,now);
@@ -2141,6 +2173,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
             )}
           </div>
         </div>
+        <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
       </div>
 
       {/* Smart Helper — deterministic advice cards */}
@@ -2561,7 +2594,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
 // ─── Analytics Page ───────────────────────────────────────────────────────────
 function AnalyticsPage({ transactions, currency, budgets }) {
   const now=curMon(),prv=prevMon();
-  const {curExp,curInc,prevExp,momDiff}=calcMonthSummary(transactions,now,prv);
+  const {curExp,curInc,prevExp,momDiff,plannedExp,plannedInc}=calcMonthSummary(transactions,now,prv);
   const catSpend   =calcCategorySpend(transactions,now);
   const budgetTotal=Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const paceInfo   =calcSpendingPace(calcSpentToDate(transactions,now),now,budgetTotal);
@@ -2584,9 +2617,9 @@ function AnalyticsPage({ transactions, currency, budgets }) {
 
   const catData=Object.entries(catSpend).map(([id,amt])=>({...CAT(id)||{id,name:id,color:"#8A8A8A"},amt})).sort((a,b)=>b.amt-a.amt);
   const maxCat=catData[0]?.amt||1;
-  const topExpenses=expenses.filter(t=>t.date.startsWith(now)).sort((a,b)=>b.amount-a.amount).slice(0,5);
+  const topExpenses=expenses.filter(happenedIn(now)).sort((a,b)=>b.amount-a.amount).slice(0,5);   // spent so far, not entries dated later
   const months6=Array.from({length:6},(_,i)=>nMon(5-i));
-  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(t=>t.date.startsWith(m)).reduce((s,t)=>s+t.amount,0),isCur:m===now,ym:m}));
+  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce((s,t)=>s+t.amount,0),isCur:m===now,ym:m}));
   const maxMonth=Math.max(...monthlyData.map(m=>m.exp),1);
   const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
   const daysInMon=daysInMonth(now);
@@ -2625,6 +2658,7 @@ function AnalyticsPage({ transactions, currency, budgets }) {
         <div className="a-card-title">{monthName(now)}</div>
         <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(28px,9.2vw,36px)",fontWeight:900,letterSpacing:-1.5,marginBottom:4}}>{fmt(curExp,currency)}</div>
         <div style={{fontSize:12,color:"var(--ink-3)",marginBottom:momDiff!==null?8:0}}>{t("an.totalSpent")}</div>
+        <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginBottom:8}}/>
         {momDiff!==null&&(
           <div style={{display:"flex",alignItems:"center",gap:7,fontSize:12,flexWrap:"wrap"}}>
             <span className={`mom-badge ${momDiff<=0?"better":"worse"}`}>
@@ -2963,7 +2997,7 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule }) {
         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
           <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(x.amount,currency)}</div>
           {x.freq!=="monthly"&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}}>{t("rec.perMonthApprox",{amount:fmt(x.monthly,currency)})}</div>}
-          <button onClick={e=>{e.stopPropagation();onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"6px 0",minHeight:32,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}>
+          <button onClick={e=>{e.stopPropagation();onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}>
             {x.isActive?t("rec.pause"):t("rec.reactivate")}
           </button>
         </div>
@@ -3037,6 +3071,16 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
   const [showMerchantSugs, setShowMerchantSugs] = useState(false);
   const amtRef=useRef();
 
+  // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
+  // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
+  // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
+  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq }).current;
+  const [askDiscard, setAskDiscard] = useState(false);
+  const defaultCat=type===initial.type ? initial.catId : (type==="income"?"salary":"food");
+  const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
+    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat;
+  const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
+
   const expCats=CATEGORIES.filter(c=>!c.income);
   const incCats=CATEGORIES.filter(c=>c.income);
   const displayCats=type==="income"?incCats:expCats;
@@ -3093,7 +3137,7 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
     <div className="add-overlay" role="dialog" aria-modal="true" aria-label={title}>
       <div className="add-bar">
         <span className="add-title">{title}</span>
-        <button className="add-close" onClick={onClose} aria-label={t("common.close")}><Icon name="close" size={14}/></button>
+        <button className="add-close" onClick={requestClose} aria-label={t("common.close")}><Icon name="close" size={14}/></button>
       </div>
       <div className="add-body">
         <div className="type-toggle">
@@ -3215,8 +3259,19 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
         <button className="btn btn-primary btn-full" onClick={submit}>
           {isEditing?t("add.saveChanges"):t(type==="income"?"add.recordIncome":"add.recordExpense")}
         </button>
-        <button className="btn btn-ghost btn-full" onClick={onClose}>{t("common.cancel")}</button>
+        <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
       </div>
+      {askDiscard&&(
+        <div className="sheet-overlay discard-overlay" onClick={e=>e.target===e.currentTarget&&setAskDiscard(false)}>
+          <div className="sheet" role="alertdialog" aria-modal="true" tabIndex={-1} aria-labelledby="discard-title" aria-describedby="discard-body">
+            <div className="sheet-grip"><div className="sheet-handle"/></div>
+            <div className="sheet-title" id="discard-title">{t("add.discardTitle")}</div>
+            <p id="discard-body" style={{fontSize:14,color:"var(--ink-3)",margin:"0 0 16px",lineHeight:1.5}}>{t("add.discardBody")}</p>
+            <button className="btn btn-primary btn-full discard-keep" onClick={()=>setAskDiscard(false)}>{t("add.keepEditing")}</button>
+            <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)"}} onClick={onClose}>{t("add.discard")}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3674,7 +3729,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
     return localMonthStr(d);
   }, [selectedMon]);
 
-  const { curExp, curInc, prevExp, momDiff } = calcMonthSummary(transactions, selectedMon, prv);
+  const { curExp, curInc, prevExp, momDiff, plannedExp, plannedInc } = calcMonthSummary(transactions, selectedMon, prv);
   const catSpend    = calcCategorySpend(transactions, selectedMon);
   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
   const expenses    = transactions.filter(t => t.type === "expense");
@@ -3686,7 +3741,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
 
   // Merchant breakdown for selected month
   const merchantTotals = {};
-  transactions.filter(t => t.type==="expense" && t.date.startsWith(selectedMon) && t.merchant)
+  transactions.filter(t => t.type==="expense" && happenedIn(selectedMon)(t) && t.merchant)
     .forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
   const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
 
@@ -3728,6 +3783,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           {prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{t("month.vsSpentIn",{amount:fmt(prevExp,currency),month:monthShort(prv)})}</div>}
         </div>
       </div>
+      <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
 
       {/* Category breakdown */}
       {catData.length>0&&(
