@@ -538,6 +538,17 @@ async function shareBackupFile(text, filename, nav=(typeof navigator!=="undefine
   catch (e) { return e && e.name==="AbortError" ? "cancelled" : "unsupported"; }
 }
 
+// Run 11: which version of the app a page is. The built page loads one script, /assets/index-<hash>.js; the hash changes
+// with every release, so it identifies the version. null when it can't be told (the test bundle, a single-file build).
+function appVersionOf(html) { const m=String(html||"").match(/\/assets\/index-([A-Za-z0-9_-]+)\.js/); return m?m[1]:null; }
+// Compares the running version with the one the site serves now. "update" only when both are known and differ, so an
+// unreadable answer (offline, an error page) never nags. fetchHtml() returns the site's current page as text.
+async function checkForUpdate(currentVersion, fetchHtml) {
+  if (!currentVersion) return "unknown";
+  try { const latest=appVersionOf(await fetchHtml()); return !latest ? "unknown" : latest===currentVersion ? "current" : "update"; }
+  catch { return "unknown"; }
+}
+
 function downloadFile(content, mime, filename) {
   const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const a=document.createElement("a"); a.href=url; a.download=filename;
@@ -2241,6 +2252,24 @@ export default function App() {
   const [protection, setProtection] = useState("unknown");
   const askProtection = useCallback((ask=true)=>storageProtection(ask).then(r=>{ setProtection(r); return r; }),[]);
   useEffect(()=>{ askProtection(true); },[askProtection]);
+  // Run 11: an installed app (or a tab) that stays in the phone's memory keeps showing the version it was opened with.
+  // When the app comes back to the screen (and every 30 min while open) it asks the site which version it serves now and,
+  // if that is newer, offers "Update". It never reloads by itself, so nothing being typed is lost. The address carries a
+  // changing ?v= so neither the offline helper nor the browser answers with a saved copy.
+  const runningVersion = useMemo(()=>appVersionOf([...document.scripts].map(s=>s.src).find(s=>/\/assets\/index-/.test(s))),[]);
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(()=>{
+    if (!runningVersion) return;
+    let last=0;
+    const check=()=>{
+      if (document.visibilityState!=="visible" || navigator.onLine===false || Date.now()-last<20000) return;   // at most every 20 s
+      last=Date.now();
+      checkForUpdate(runningVersion,()=>fetch(`/?v=${Date.now()}`,{cache:"no-store"}).then(r=>r.ok?r.text():"")).then(r=>{ if (r==="update") setUpdateReady(true); });
+    };
+    const t0=setTimeout(check,3000), iv=setInterval(check,30*60*1000);
+    document.addEventListener("visibilitychange",check); window.addEventListener("online",check);
+    return ()=>{ clearTimeout(t0); clearInterval(iv); document.removeEventListener("visibilitychange",check); window.removeEventListener("online",check); };
+  },[runningVersion]);
   const [installEvt, setInstallEvt] = useState(null);
   useEffect(()=>{
     const onBip=(e)=>{ e.preventDefault(); setInstallEvt(e); };
@@ -2345,6 +2374,12 @@ export default function App() {
             <button className="backup-banner-btn" style={{background:"var(--neg)"}} onClick={exportJSON}>{t("banner.backUp")}</button>
           </div>
         )}
+        {updateReady&&(
+          <div className="backup-banner backup-reminder update-banner" role="status">
+            <span>{t("update.ready")}</span>
+            <button className="backup-banner-btn update-now" onClick={()=>window.location.reload()}>{t("update.now")}</button>
+          </div>
+        )}
         {!backupDismissed&&backupReminder==="due"&&transactions.length>0&&(
           <div className="backup-banner backup-reminder" role="alert">
             <span>{t("banner.backupDue")}</span>
@@ -2388,7 +2423,7 @@ export default function App() {
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
             onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}/>}
-          {tab==="more"      && <MorePage onOpen={switchTab} onSettings={()=>setShowSettings(true)}/>}
+          {tab==="more"      && <MorePage onOpen={switchTab} onSettings={()=>setShowSettings(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq })}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
@@ -3658,7 +3693,7 @@ function ListRow({ icon, title, sub, onClick, color="var(--accent-text)", classN
 
 // More: the pages that do not have a tab of their own. There is no account, profile, dark-mode switch or help centre in
 // this app, so none is shown; the card at the top says where the data lives, which is true and useful.
-function MorePage({ onOpen, onSettings }) {
+function MorePage({ onOpen, onSettings, version }) {
   return (
     <div className="more-page">
       <div className="card more-id">
@@ -3670,6 +3705,7 @@ function MorePage({ onOpen, onSettings }) {
         <ListRow icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
         <ListRow icon="settings" title={t("nav.settings")} sub={t("more.settingsSub")} onClick={onSettings}/>
       </div>
+      {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}
     </div>
   );
 }

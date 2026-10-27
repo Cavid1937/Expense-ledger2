@@ -353,6 +353,10 @@ export const MESSAGES = {
   "goals.addBudget":  { en: "Add budget", az: "Büdcə əlavə et", ru: "Добавить бюджет" },
   "goals.addGoal":    { en: "Add goal", az: "Məqsəd əlavə et", ru: "Добавить цель" },
   "rec.add":          { en: "Add recurring payment", az: "Təkrarlanan ödəniş əlavə et", ru: "Добавить регулярный платёж" },
+  // ── Run 11: new-version notice and version label
+  "update.ready":     { en: "A new version of the app is ready", az: "Tətbiqin yeni versiyası hazırdır", ru: "Готова новая версия приложения" },
+  "update.now":       { en: "Update", az: "Yenilə", ru: "Обновить" },
+  "more.version":     { en: "Version {v}", az: "Versiya {v}", ru: "Версия {v}" },
   // ── Run 10: keeping the data safe
   "io.safety":        { en: "Data safety", az: "Məlumatların təhlükəsizliyi", ru: "Сохранность данных" },
   "io.protectTitle":  { en: "Storage protection", az: "Yaddaşın qorunması", ru: "Защита хранилища" },
