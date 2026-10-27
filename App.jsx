@@ -196,33 +196,33 @@ const nMon    = (n) => { const now=new Date(); const d=new Date(now.getFullYear(
 
 // ─── Category system ──────────────────────────────────────────────────────────
 const CATEGORIES = [
-  { id:"food",     name:"Food & Dining",        tile:"Food",      color:"#FF6B7F", income:false,
+  { id:"food",     name:"Food & Dining",        tile:"Food",      color:"#F0C46F", income:false,
     subs:["Restaurants","Fast Food","Coffee","Groceries","Delivery","Snacks","Other"] },
-  { id:"transport",name:"Transport",             tile:"Transport", color:"#F5B83D", income:false,
+  { id:"transport",name:"Transport",             tile:"Transport", color:"#83B9F5", income:false,
     subs:["Metro","Bus","Taxi / Ride-hailing","Fuel","Parking","Car Maintenance","Intercity","Other"] },
-  { id:"shopping", name:"Shopping",              tile:"Shopping",  color:"#4FA3FF", income:false,
+  { id:"shopping", name:"Shopping",              tile:"Shopping",  color:"#B3A1FF", income:false,
     subs:["Clothing","Electronics","Personal Items","Home","Accessories","Online Shopping","Other"] },
-  { id:"gifts",    name:"Gifts & Personal",      tile:"Gifts",     color:"#F27AD0", income:false,
+  { id:"gifts",    name:"Gifts & Personal",      tile:"Gifts",     color:"#C9A27E", income:false,
     subs:["Gifts","Donations","Personal Care","Barber / Hair","Cosmetics","Other"] },
-  { id:"entertain",name:"Entertainment",         tile:"Entertainment",   color:"#9870F5", income:false,
+  { id:"entertain",name:"Entertainment",         tile:"Entertainment",   color:"#E7A3D6", income:false,
     subs:["Cinema","Games","Events","Sports","Hobbies","Other"] },
-  { id:"digital",  name:"Bills & Subscriptions", tile:"Bills & subs",     color:"#3FC7E8", income:false,
+  { id:"digital",  name:"Bills & Subscriptions", tile:"Bills & subs",     color:"#9FB4C7", income:false,
     subs:["Mobile","Internet","Streaming","Software","Cloud Storage","Other Subs","Other"] },
-  { id:"health",   name:"Health & Fitness",      tile:"Health",    color:"#5ED17A", income:false,
+  { id:"health",   name:"Health & Fitness",      tile:"Health",    color:"#F2A66E", income:false,
     subs:["Gym","Sports Equipment","Pharmacy","Doctor / Dentist","Supplements","Other"] },
-  { id:"edu",      name:"Education",             tile:"Education", color:"#7B9BFF", income:false,
+  { id:"edu",      name:"Education",             tile:"Education", color:"#C9B8FF", income:false,
     subs:["University","Books","Courses","Exams","Stationery","Other"] },
-  { id:"travel",   name:"Travel",                tile:"Travel",    color:"#FF9F5A", income:false,
+  { id:"travel",   name:"Travel",                tile:"Travel",    color:"#D8CB7E", income:false,
     subs:["Flights","Hotels","Visa","Travel Food","Travel Transport","Activities","Other"] },
-  { id:"housing",  name:"Home",                  tile:"Home",      color:"#4E78FF", income:false,
+  { id:"housing",  name:"Home",                  tile:"Home",      color:"#4CC9C4", income:false,
     subs:["Rent","Utilities","Household","Repairs","Other"] },
-  { id:"finance",  name:"Finance",               tile:"Finance",   color:"#B6D84A", income:false,
+  { id:"finance",  name:"Finance",               tile:"Finance",   color:"#85D9D0", income:false,
     subs:["Bank Fees","Transfers","Taxes","Insurance","Investments","Other"] },
-  { id:"other",    name:"Other",                 tile:"Other",     color:"#98A5B7", income:false,
+  { id:"other",    name:"Other",                 tile:"Other",     color:"#A5B7B8", income:false,
     subs:["Miscellaneous"] },
-  { id:"salary",   name:"Salary",                tile:"Salary",    color:"#32CDAA", income:true, subs:[] },
-  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#2EC4B6", income:true, subs:[] },
-  { id:"income",   name:"Other Income",          tile:"Other income",    color:"#5ED1B8", income:true, subs:[] },
+  { id:"salary",   name:"Salary",                tile:"Salary",    color:"#8BD97A", income:true, subs:[] },
+  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#7CCB9A", income:true, subs:[] },
+  { id:"income",   name:"Other Income",          tile:"Other income",    color:"#9FDDA0", income:true, subs:[] },
 ];
 const CAT = (id) => CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==="other");
 // Display names in the interface language. The English `name` above stays the stored/CSV identifier and is never translated.
@@ -513,6 +513,31 @@ function parseCSV(raw) {
 
 
 // Browser download. Starting a download is all the page can know: it cannot confirm the file was kept.
+// ─── Run 10: keeping the data safe ──────────────────────────────────────────────────────────────────────────────────────
+// Storage protection. Unless a site asks, browsers may clear its stored data when the device runs low on space (and Safari
+// clears script storage of a site not visited for 7 days unless it is on the Home Screen). persist() asks the browser to keep
+// it; the browser decides (Chrome grants it to installed or often-used sites without a prompt). Returns "on" | "off" |
+// "unsupported" | "unknown". It never touches the ledger data.
+async function storageProtection(ask, nav=(typeof navigator!=="undefined"?navigator:null)) {
+  const s=nav&&nav.storage;
+  if (!s||typeof s.persisted!=="function") return "unsupported";
+  try {
+    if (await s.persisted()) return "on";
+    if (ask&&typeof s.persist==="function") return (await s.persist()) ? "on" : "off";
+    return "off";
+  } catch { return "unknown"; }
+}
+// Sends the backup file to the phone's share menu (Google Drive, Telegram, e-mail, Files …), so a copy leaves the phone.
+// "shared" (a destination was chosen — the app still can't see whether it arrived), "cancelled", or "unsupported" (no file
+// sharing here; the caller then downloads the file instead).
+async function shareBackupFile(text, filename, nav=(typeof navigator!=="undefined"?navigator:null)) {
+  if (!nav||typeof nav.share!=="function"||typeof nav.canShare!=="function"||typeof File==="undefined") return "unsupported";
+  const file=new File([text],filename,{type:"application/json"});
+  try { if (!nav.canShare({files:[file]})) return "unsupported"; } catch { return "unsupported"; }
+  try { await nav.share({files:[file],title:filename}); return "shared"; }
+  catch (e) { return e && e.name==="AbortError" ? "cancelled" : "unsupported"; }
+}
+
 function downloadFile(content, mime, filename) {
   const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const a=document.createElement("a"); a.href=url; a.download=filename;
@@ -1288,12 +1313,22 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Privacy mode (Run 9): a display-only switch for this session. While it is on, every formatted amount, percentage and
+// personal name on screen (and in accessible names) is replaced by dots. It never touches stored data, imports, exports or
+// calculations, and it is not security: the data is still in the browser's storage, readable by anyone with the phone unlocked.
+let PRIVACY=false;
+const MASK="••••";
+function setPrivacyMode(on) { PRIVACY=!!on; }
+function maskText(s) { return PRIVACY && s ? "•••••" : s; }
+function fmtPct(n) { return PRIVACY ? "••%" : `${n}%`; }
 function fmt(n, sym="₼") {
+  if (PRIVACY) return `${MASK} ${sym}`;
   return `${Math.abs(n||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})} ${sym}`;
 }
 // The three small Home tiles. Exact below 10,000 (1,050.00 used to show as "1.1k", which reads as 1,100 — Run 7, V4);
 // above that the short form is marked "≈" so it is never taken for an exact figure.
 function fmtShort(n, sym="₼") {
+  if (PRIVACY) return fmt(n,sym);
   const a=Math.abs(n||0);
   return a>=1e6?`≈${(a/1e6).toFixed(1)}M ${sym}`:a>=10000?`≈${(a/1000).toFixed(1)}k ${sym}`:fmt(a,sym);
 }
@@ -1396,6 +1431,8 @@ const ICONS = {
   chevLeft:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>`,
   backup:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>`,
   check:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+  eye:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`,
+  eyeOff:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.6 3.6"/><path d="M6.6 6.6C3.9 8.3 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="2" y1="2" x2="22" y2="22"/></svg>`,
 };
 
 // Navigation (2026-10-27 redesign): five tabs. Recurring payments and Import / Export are pages under More; on them the
@@ -1419,37 +1456,37 @@ function CatIcon({ catId, size=16, color }) {
 const CSS = `
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 button{font-family:inherit;cursor:pointer}
-/* Dark design (2026-10-27 redesign). Surfaces: page, card, elevated. Text: primary and muted. Accents: blue (actions,
-   selection), teal (income, on track), coral (expenses over limit, errors), violet (secondary charts), amber (warnings).
-   Contrast (WCAG): muted #98A5B7 is ≥ 6.1:1 on every surface, --ink-4 ≥ 4.9:1. Blue #4E78FF is 4.5:1 on a card, so blue
-   TEXT uses --accent-text (#7B9BFF, ≥ 5.8:1) and filled buttons use --accent-fill (#3D63E8, white text 5.1:1); white on
-   #4E78FF itself is only 3.9:1. */
+/* "Caspian Ledger" dark design (Run 9, 2026-10-27; replaces the blue redesign of the same day). Surfaces: page #07151A,
+   card #0E2229, elevated #153039, border #24414A. Text #F3F7F6, muted #A5B7B8. Brand / selection: sea-glass teal #4CC9C4;
+   filled teal controls carry dark text (white on teal is 2.0:1, dark is 9.3:1). Meaning colours: income #8BD97A (a clear
+   green, 69° of hue away from the teal — the proposed #63D6A0 was 26° away and read as "selected"), expense #FF8188,
+   warning #F0C46F, comparison #83B9F5. Every text colour is ≥ 5.5:1 on every surface. */
 :root{
   color-scheme:dark;
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --bg:#080F17;--bg-card:#111B27;--bg-warm:#1A2634;--bg-inset:#16212E;
-  --ink:#F3F6FC;--ink-2:#D4DBE6;--ink-3:#98A5B7;--ink-4:#8794A6;--ink-5:#2C3A4B;
-  --rule:#1F2B3A;--rule-2:#33445A;
-  --accent:#4E78FF;--accent-light:#16244A;--accent-mid:#7B9BFF;--accent-text:#7B9BFF;--accent-fill:#3D63E8;
-  --violet:#9870F5;
-  --pos:#32CDAA;--pos-bg:#0F2E2A;
-  --neg:#FF647C;--neg-bg:#3A1720;
-  --warn:#F5B83D;--warn-bg:#33270C;
-  --radius:16px;
+  --bg:#07151A;--bg-card:#0E2229;--bg-warm:#153039;--bg-inset:#112A31;
+  --ink:#F3F7F6;--ink-2:#D3DFDE;--ink-3:#A5B7B8;--ink-4:#93A7A8;--ink-5:#2A464E;
+  --rule:#24414A;--rule-2:#36606A;
+  --accent:#4CC9C4;--accent-light:#123C3F;--accent-mid:#85D9D0;--accent-text:#4CC9C4;--accent-fill:#4CC9C4;--on-accent:#07151A;
+  --violet:#B3A1FF;--info:#83B9F5;
+  --pos:#8BD97A;--pos-bg:#173622;
+  --neg:#FF8188;--neg-bg:#3B1C22;
+  --warn:#F0C46F;--warn-bg:#352B14;
+  --radius:18px;
 }
 html,body{background:var(--bg);color:var(--ink);font-family:var(--font);min-height:100vh;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .app{max-width:430px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
-.topbar{position:sticky;top:0;z-index:60;background:rgba(8,15,23,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:10px 20px 6px;min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.topbar{position:sticky;top:0;z-index:60;background:rgba(7,21,26,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:10px 20px 6px;min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
 .wordmark{font-family:var(--font);font-size:26px;font-weight:700;color:var(--ink);letter-spacing:-0.4px;line-height:1.15;min-width:0;overflow-wrap:anywhere}
 .topbar-back{display:flex;align-items:center;gap:2px;min-width:0;margin-left:-8px}
 .topbar-back .wordmark{font-size:22px}
 .topbar-right{display:flex;align-items:center;gap:7px}
-.topbar-add{width:36px;height:36px;border:none;border-radius:50%;background:var(--accent-fill);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(61,99,232,0.35);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent}
+.topbar-add{width:36px;height:36px;border:none;border-radius:50%;background:var(--accent-fill);color:var(--on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(76,201,196,0.25);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent}
 .topbar-add:active{transform:scale(0.92)}
 .topbar-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 120ms,color 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .topbar-btn:hover{background:var(--bg-inset);color:var(--ink)}.topbar-btn:active{transform:scale(0.88)}
-.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(8,15,23,0.94);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(7,21,26,0.94);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
 .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;border:none;background:transparent;cursor:pointer;color:var(--ink-3);transition:color 150ms,transform 80ms;font-family:var(--font);-webkit-tap-highlight-color:transparent}
 .tab-btn.active{color:var(--ink)}.tab-btn:active{transform:scale(0.88)}
 /* Sentence case, no extra tracking: upper-case labels were up to 30% wider, so long Azerbaijani and Russian words
@@ -1555,14 +1592,14 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .amount-line{display:flex;align-items:baseline;justify-content:center;gap:7px;max-width:100%;min-width:0}
 .amount-input{font-family:var(--font);font-size:clamp(32px,12vw,50px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-1.6px;background:transparent;border:0;border-radius:8px;outline:none;color:var(--ink);min-width:0;max-width:68vw;text-align:right;caret-color:var(--accent);transition:color 160ms,text-shadow 160ms,transform 160ms;appearance:textfield;-moz-appearance:textfield}
 .amount-input:focus{color:var(--ink);text-shadow:0 0 18px rgba(0,0,0,0.07)}
-.amount-input::placeholder{color:var(--ink-5)}
+.amount-input::placeholder{color:var(--ink-3)}   /* Run 9: was --ink-5, 1.66:1 on the dark page — unreadable */
 .amount-cur{font-family:var(--font);font-size:15px;font-weight:600;color:var(--ink-3);white-space:nowrap;position:relative;top:-2px}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 /* Type toggle */
 .type-toggle{display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin-bottom:14px}
 .type-btn{flex:1;padding:9px;border:none;background:transparent;color:var(--ink-3);font-size:12px;font-weight:700;cursor:pointer;transition:background 120ms,color 120ms;font-family:var(--font);letter-spacing:0.3px;text-transform:uppercase}
-.type-btn:not(:last-child){border-right:1px solid var(--rule)}.type-btn.active{background:var(--accent-fill);color:#fff}
+.type-btn:not(:last-child){border-right:1px solid var(--rule)}.type-btn.active{background:var(--accent-fill);color:var(--on-accent)}
 /* Cat/sub */
 .cat-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}.cat-scroll::-webkit-scrollbar{display:none}
 .cat-tile{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;width:auto;min-width:68px;padding:9px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--bg-card);cursor:pointer;transition:border-color 150ms,background 150ms,transform 80ms;-webkit-tap-highlight-color:transparent}
@@ -1572,7 +1609,7 @@ input[type=number]{-moz-appearance:textfield}
 .cat-tile.sel .cat-tile-name{color:var(--ink)}
 .sub-strip{display:flex;gap:5px;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;scrollbar-width:none}.sub-strip::-webkit-scrollbar{display:none}
 .sub-chip{flex-shrink:0;padding:4px 10px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
-.sub-chip.sel{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}
+.sub-chip.sel{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--on-accent)}
 .sub-chip:active{transform:scale(0.93)}
 /* Merchant */
 .merchant-wrap{position:relative}
@@ -1597,17 +1634,17 @@ input[type=number]{-moz-appearance:textfield}
 /* Buttons */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:6px;font-family:var(--font);font-weight:600;cursor:pointer;transition:opacity 120ms,background 120ms}
 .btn-full{width:100%}
-.btn-primary{padding:12px 20px;background:var(--accent-fill);color:#fff;border:1px solid var(--accent-fill);font-size:15px;font-weight:600;margin-top:8px;border-radius:14px;min-height:48px}.btn-primary:hover{opacity:0.87}
+.btn-primary{padding:12px 20px;background:var(--accent-fill);color:var(--on-accent);border:1px solid var(--accent-fill);font-size:15px;font-weight:600;margin-top:8px;border-radius:14px;min-height:48px}.btn-primary:hover{opacity:0.87}
 .btn-ghost{padding:11px 20px;background:transparent;color:var(--ink-3);border:1px solid var(--rule);font-size:13px;margin-top:6px}.btn-ghost:hover{border-color:var(--rule-2);color:var(--ink)}
 .btn-sm{padding:5px 12px;font-size:11px;font-weight:700;background:transparent;border:1px solid var(--rule);color:var(--ink-2)}.btn-sm:hover{border-color:var(--rule-2)}
-.btn-sm-primary{background:var(--accent-fill);color:#fff;border-color:var(--accent-fill)}
+.btn-sm-primary{background:var(--accent-fill);color:var(--on-accent);border-color:var(--accent-fill)}
 /* Search/filter */
 .search-wrap{position:relative;margin-bottom:8px}
 .search-ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--ink-4);pointer-events:none}
 .search-input{width:100%;background:var(--bg-card);border:1px solid var(--rule);border-radius:6px;padding:9px 12px 9px 34px;font-size:13px;color:var(--ink);font-family:var(--font);transition:border-color 120ms}.search-input:focus{outline:none;border-color:var(--rule-2);box-shadow:0 0 0 3px rgba(0,0,0,0.05)}
 .filter-bar{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px}.filter-bar::-webkit-scrollbar{display:none}
 .chip{flex-shrink:0;padding:5px 11px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;transition:all 120ms,transform 80ms;white-space:nowrap;font-family:var(--font);-webkit-tap-highlight-color:transparent}
-.chip.on{background:var(--accent-fill);border-color:var(--accent-fill);color:#fff}.chip:hover:not(.on){border-color:var(--rule-2);color:var(--ink)}.chip:active{transform:scale(0.94)}
+.chip.on{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--on-accent)}.chip:hover:not(.on){border-color:var(--rule-2);color:var(--ink)}.chip:active{transform:scale(0.94)}
 .cat-filter-btn{display:flex;align-items:center;gap:5px;padding:5px 11px;border:1px solid var(--rule);border-radius:4px;background:var(--bg-card);color:var(--ink-3);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--font);white-space:nowrap;flex-shrink:0;transition:all 120ms}
 .cat-filter-btn.active{border-color:var(--ink);color:var(--ink);background:var(--bg-warm)}
 .cat-filter-btn:active{transform:scale(0.94)}
@@ -1664,7 +1701,7 @@ input[type=number]{-moz-appearance:textfield}
 /* Snackbar / Toast */
 .snackbar{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 8px);left:50%;transform:translateX(-50%);background:var(--bg-warm);color:var(--ink);border:1px solid var(--rule-2);padding:11px 18px;border-radius:14px;font-size:13px;font-weight:600;z-index:200;display:flex;align-items:center;gap:14px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.3),0 2px 6px rgba(0,0,0,0.15);animation:snackIn 300ms cubic-bezier(0.22,1,0.36,1)}
 @keyframes snackIn{from{opacity:0;transform:translateX(-50%) translateY(16px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
-.snackbar-undo{background:none;border:1px solid rgba(123,155,255,0.45);color:var(--accent-text);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:border-color 120ms}
+.snackbar-undo{background:none;border:1px solid rgba(76,201,196,0.45);color:var(--accent-text);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:border-color 120ms}
 .snackbar-undo:hover{border-color:rgba(255,255,255,0.5)}
 .toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--bg-warm);color:var(--ink);border:1px solid var(--rule-2);padding:9px 18px;border-radius:12px;font-size:12px;font-weight:600;z-index:300;white-space:nowrap;pointer-events:none;animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1);box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
@@ -1679,14 +1716,14 @@ input[type=number]{-moz-appearance:textfield}
 .section-enter-7{animation-delay:240ms}
 .section-enter-8{animation-delay:280ms}
 @keyframes sectionIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-.backup-banner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--warn-bg);border-bottom:1px solid rgba(245,184,61,0.35);font-size:11px;font-weight:600;color:var(--warn)}
+.backup-banner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--warn-bg);border-bottom:1px solid rgba(240,196,111,0.35);font-size:11px;font-weight:600;color:var(--warn)}
 .backup-banner span{flex:1}
 .backup-banner-btn{flex-shrink:0;padding:4px 10px;background:var(--warn);color:var(--bg);border:none;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font)}
 .backup-dismiss{background:none;border:none;color:var(--warn);font-size:15px;cursor:pointer;padding:2px;line-height:1;flex-shrink:0}
 .drop-zone{border:1.5px dashed var(--rule);border-radius:7px;padding:16px;text-align:center;cursor:pointer;transition:border-color 150ms,background 150ms;width:100%}
 .drop-zone:hover{border-color:var(--rule-2);background:var(--bg-warm)}
 .drop-zone input{display:none}
-.dupe-warn{display:flex;align-items:center;gap:7px;background:var(--warn-bg);border:1px solid rgba(245,184,61,0.35);border-radius:10px;padding:8px 11px;font-size:12px;font-weight:600;color:var(--warn);margin-bottom:11px}
+.dupe-warn{display:flex;align-items:center;gap:7px;background:var(--warn-bg);border:1px solid rgba(240,196,111,0.35);border-radius:10px;padding:8px 11px;font-size:12px;font-weight:600;color:var(--warn);margin-bottom:11px}
 /* Monthly view */
 .month-selector{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .month-nav-btn{width:34px;height:34px;border-radius:8px;background:var(--bg-card);border:1px solid var(--rule);color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 120ms;font-size:16px;line-height:1}
@@ -1769,7 +1806,7 @@ input[type=number]{-moz-appearance:textfield}
 .lang-switch{display:flex;flex-wrap:wrap;gap:8px;border:none;margin:0;padding:0}
 .lang-pill{position:relative;display:inline-flex;align-items:center;min-height:40px;padding:8px 14px;border:1.5px solid var(--rule-2);border-radius:20px;font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;background:var(--bg-card)}
 .lang-pill input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
-.lang-pill.sel{border-color:var(--accent-fill);background:var(--accent-fill);color:#fff}
+.lang-pill.sel{border-color:var(--accent-fill);background:var(--accent-fill);color:var(--on-accent)}
 .lang-pill:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .topbar-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* ── Design pass (from patch_H_design.py, reviewed) ── */
@@ -1821,10 +1858,12 @@ input[type=number]{-moz-appearance:textfield}
 .hero-stat:not(:last-child)::after{background:var(--rule-2)}
 .mom-badge{border-radius:999px;padding:3px 9px}
 /* Safe to Spend */
-.safe-card{padding:16px;margin-bottom:14px;background:linear-gradient(135deg,#132A2F 0%,var(--bg-card) 60%)}
+.safe-card{padding:16px;margin-bottom:14px;background:var(--bg-card)}
 .safe-amount{font-size:clamp(30px,10vw,38px);font-weight:700;letter-spacing:-1px}
-.safe-card .label-sm{font-size:14px;font-weight:600;color:var(--pos)}
+.safe-card .label-sm{font-size:14px;font-weight:600;color:var(--accent-text)}
 .safe-row{font-size:12.5px;padding:6px 0}
+.safe-toggle{display:inline-flex;align-items:center;gap:4px;min-height:36px;margin-top:6px;padding:0;background:none;border:none;color:var(--accent-text);font:inherit;font-size:13px;font-weight:600}
+.safe-note{font-size:11.5px;color:var(--ink-3);line-height:1.5;margin-top:8px}
 /* Spending ring */
 .donut-wrap{display:flex;align-items:center;gap:16px}
 .donut{position:relative;width:132px;height:132px;flex-shrink:0}
@@ -1849,11 +1888,11 @@ input[type=number]{-moz-appearance:textfield}
 .list-ico{width:28px;display:inline-flex;justify-content:center;flex-shrink:0}
 .list-body{flex:1;min-width:0}
 .more-id{display:flex;align-items:center;gap:14px}
-.more-mark{width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--violet));display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.more-mark{width:46px;height:46px;border-radius:50%;background:var(--accent-light);border:1px solid var(--accent);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Segmented control */
 .seg{display:flex;background:var(--bg-card);border:1px solid var(--rule);border-radius:12px;padding:3px;margin-bottom:14px}
 .seg-btn{flex:1;min-height:38px;border:none;border-radius:9px;background:transparent;color:var(--ink-3);font:inherit;font-size:14px;font-weight:600}
-.seg-btn.on{background:var(--accent-fill);color:#fff}
+.seg-btn.on{background:var(--accent-fill);color:var(--on-accent)}
 .seg-btn:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
 /* Progress bars */
 .bar{flex:1;height:8px;background:var(--bg-inset);border-radius:99px;overflow:hidden}
@@ -1910,13 +1949,22 @@ input[type=number]{-moz-appearance:textfield}
 .field-input,.date-input{background:var(--bg-inset);border-radius:10px}
 .btn-sm{border-radius:999px}
 .btn-ghost{border-radius:14px;min-height:46px}
+/* Run 9: the routine backup reminder is a compact card under the screen edge, not a full-width amber bar above the title.
+   Recovery notices and storage failures keep the strong full-width banner (Master Prompt §8). Dismissing lasts for this visit. */
+.backup-banner.backup-reminder{margin:8px 16px 0;border:1px solid rgba(240,196,111,0.35);border-radius:14px;background:var(--bg-card);color:var(--ink-2);font-weight:500;padding:8px 12px}
+.backup-reminder .backup-banner-btn{border-radius:999px;padding:6px 12px}
+/* Run 9 privacy mode: numbers and names are replaced in the text itself (see fmt / maskText); graphics that would still
+   reveal proportions are blurred. Navigation, titles and buttons are never blurred. */
+.privacy-toggle.on{color:var(--accent-text);background:var(--accent-light);border-radius:50%}
+.privacy-on .donut svg,.privacy-on .trend-card svg,.privacy-on .bar,.privacy-on .cat-bar-track,.privacy-on .budget-track,
+.privacy-on .goal-progress,.privacy-on .pace-track,.privacy-on .month-bars,.privacy-on .heatmap{filter:blur(6px)}
 /* Materials follow the user's preferences */
 @media (prefers-reduced-transparency: reduce){
   .topbar,.tabbar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none}
   .sheet-overlay{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,0.62)}
 }
 @media (prefers-contrast: more){
-  :root{--rule:#5A6B80;--rule-2:#7D8DA3;--ink-3:#C3CCD8;--ink-4:#B5BFCC}
+  :root{--rule:#4E7580;--rule-2:#6E959E;--ink-3:#C6D4D4;--ink-4:#B7C7C8}
   .sheet-overlay{background:rgba(0,0,0,0.72)}
   .btn-ghost,.chip,.sub-chip,.field-input,.cat-tile,.search-input,.tpl-card{border-color:var(--rule-2)}
 }
@@ -2016,6 +2064,12 @@ export default function App() {
   useEffect(()=>{ document.documentElement.lang=state.language||"en"; },[state.language]);
   const [tab,      setTab]      = useState("home");
   const [tabKey,   setTabKey]   = useState(0);
+  // Privacy mode lives only in memory: it is never saved, so a reload (or a new tab) starts with it off.
+  const [privacy,  setPrivacy]  = useState(false);
+  setPrivacyMode(privacy);
+  // Budgets & Goals: which half is shown, and a counter the title bar's "+" bumps to open that half's "new" form.
+  const [goalsSeg, setGoalsSeg] = useState("budgets");
+  const [goalsAdd, setGoalsAdd] = useState(0);
   const [showAdd,  setShowAdd]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [toast,    setToast]    = useState(null);
@@ -2037,11 +2091,11 @@ export default function App() {
   const snackActive=useRef(false);   // is an undo window currently open?
   const undoBuffer=useRef([]);       // everything deleted inside the current undo window
 
-  // PWA manifest
+  // PWA manifest — only when the page has none (the single-file build). The built app links /manifest.webmanifest.
   useEffect(() => {
-    if (document.getElementById("pwa-manifest")) return;
+    if (document.getElementById("pwa-manifest") || document.querySelector('link[rel="manifest"]')) return;
     const manifest={name:"Expense Ledger",short_name:"Ledger",start_url:"/",display:"standalone",
-      background_color:"#080F17",theme_color:"#080F17",orientation:"portrait",
+      background_color:"#07151A",theme_color:"#07151A",orientation:"portrait",
       icons:[{src:"/icon-192.png",sizes:"192x192",type:"image/png",purpose:"any maskable"},
              {src:"/icon-512.png",sizes:"512x512",type:"image/png",purpose:"any maskable"}]};
     const link=document.createElement("link");
@@ -2052,7 +2106,7 @@ export default function App() {
     addMeta("apple-mobile-web-app-capable","yes");
     addMeta("apple-mobile-web-app-status-bar-style","black-translucent");
     addMeta("apple-mobile-web-app-title","Expense Ledger");
-    addMeta("theme-color","#080F17");
+    addMeta("theme-color","#07151A");
   },[]);
 
   const [storageFailed, setStorageFailed] = useState(false);
@@ -2182,6 +2236,19 @@ export default function App() {
   },[]);
   const closeAdd=useCallback(()=>{ setShowAdd(false); setPrefill(null); setEditId(null); },[]);
 
+  // Run 10: storage protection (asked once at start; again from Import / Export, where a tap counts as a user gesture) and
+  // the browser's own "install" offer, kept for the Install button. Neither is stored in the ledger data.
+  const [protection, setProtection] = useState("unknown");
+  const askProtection = useCallback((ask=true)=>storageProtection(ask).then(r=>{ setProtection(r); return r; }),[]);
+  useEffect(()=>{ askProtection(true); },[askProtection]);
+  const [installEvt, setInstallEvt] = useState(null);
+  useEffect(()=>{
+    const onBip=(e)=>{ e.preventDefault(); setInstallEvt(e); };
+    const onInstalled=()=>{ setInstallEvt(null); askProtection(true); };
+    window.addEventListener("beforeinstallprompt",onBip); window.addEventListener("appinstalled",onInstalled);
+    return ()=>{ window.removeEventListener("beforeinstallprompt",onBip); window.removeEventListener("appinstalled",onInstalled); };
+  },[askProtection]);
+
   const exportCSV=useCallback(()=>{
     downloadFile(buildCsv(state.transactions),"text/csv;charset=utf-8;",`ledger-${today()}.csv`);
     showToast(tn("toast.csvCreated",state.transactions.length));
@@ -2196,6 +2263,18 @@ export default function App() {
     setBackupDismissed(false);
     showToast(tn("toast.backupCreated",state.transactions.length),5000);
   },[state,showToast]);
+
+  // Run 10: the same backup file, sent through the phone's share menu (Google Drive, Telegram, e-mail …) so a copy leaves
+  // the phone. Cancelled → nothing changes. No file sharing on this device → falls back to the download above.
+  const shareBackup=useCallback(async ()=>{
+    const now=new Date().toISOString();
+    const r=await shareBackupFile(JSON.stringify(buildBackup(state,now),null,2),`ledger-backup-${today()}.json`);
+    if (r==="unsupported") { exportJSON(); return; }
+    if (r!=="shared") return;
+    setState(s=>({...s,lastBackup:now}));
+    setBackupDismissed(false);
+    showToast(t("io.sharedToast"),5000);
+  },[state,showToast,exportJSON]);
 
   const importFile=useCallback((file)=>{
     if (!file) return;
@@ -2246,7 +2325,7 @@ export default function App() {
   return (
     <>
       <style>{CSS}</style>
-      <div className="app" lang={state.language}>
+      <div className={`app${privacy?" privacy-on":""}`} lang={state.language}>
         {toast&&<div className="toast" role="status">{toast}</div>}
         {snackbar&&(
           <div className="snackbar" role="status">
@@ -2267,14 +2346,14 @@ export default function App() {
           </div>
         )}
         {!backupDismissed&&backupReminder==="due"&&transactions.length>0&&(
-          <div className="backup-banner" role="alert">
+          <div className="backup-banner backup-reminder" role="alert">
             <span>{t("banner.backupDue")}</span>
             <button className="backup-banner-btn" onClick={exportJSON}>{t("banner.backUpNow")}</button>
             <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label={t("common.dismiss")}>×</button>
           </div>
         )}
         {!backupDismissed&&backupReminder==="confirm"&&transactions.length>0&&(
-          <div className="backup-banner" role="status">
+          <div className="backup-banner backup-reminder" role="status">
             <span>{t("banner.backupConfirm")}</span>
             <button className="backup-banner-btn" onClick={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}>{t("banner.haveFile")}</button>
             <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label={t("common.dismiss")}>×</button>
@@ -2289,8 +2368,14 @@ export default function App() {
               </div>
             : <h1 className="wordmark">{tab==="home"?t(greetingKey()):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
-            <button className="topbar-add" onClick={()=>openAdd()} aria-label={t("nav.addTxn")} title={t("nav.addTxn")}><Icon name="add" size={18} color="var(--bg)"/></button>
-            <button className="topbar-btn" onClick={()=>setShowSettings(true)} aria-label={t("nav.settings")} title={t("nav.settings")}><Icon name="settings" size={18}/></button>
+            {/* Run 9: the "+" creates what the screen is about (none where nothing is created); Settings lives under More only. */}
+            {(()=>{ const a=tab==="home"||tab==="ledger" ? { label:t("nav.addTxn"), run:()=>openAdd() }
+                : tab==="goals" ? { label:t(goalsSeg==="goals"?"goals.addGoal":"goals.addBudget"), run:()=>setGoalsAdd(n=>n+1) }
+                : tab==="recurring" ? { label:t("rec.add"), run:()=>openAdd({ type:"expense", recurring:true, recurFreq:"monthly" }) }
+                : null;
+              return a && <button className="topbar-add" onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={18} color="var(--on-accent)"/></button>; })()}
+            <button className={`topbar-btn privacy-toggle${privacy?" on":""}`} aria-pressed={privacy} aria-label={t(privacy?"privacy.show":"privacy.hide")} title={t(privacy?"privacy.show":"privacy.hide")}
+              onClick={()=>{ setPrivacy(p=>!p); showToast(t(privacy?"privacy.offToast":"privacy.onToast")); }}><Icon name={privacy?"eyeOff":"eye"} size={20}/></button>
           </div>
         </header>
 
@@ -2298,7 +2383,7 @@ export default function App() {
           {tab==="home"      && <HomePage transactions={transactions} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} onView={txn=>setViewTxn(txn)}/>}
-          {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast}
+          {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
@@ -2307,6 +2392,8 @@ export default function App() {
           {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq })}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
+            onShareBackup={shareBackup} protection={protection} onProtect={()=>askProtection(true)}
+            onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
             onConfirmBackup={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}/>}
         </main>
 
@@ -2381,7 +2468,17 @@ export default function App() {
             onClose={()=>setViewTxn(null)}
             onEdit={()=>{ openAdd(viewTxn,viewTxn.id); setViewTxn(null); }}
             onDuplicate={()=>{ openAdd({...viewTxn,date:today(),id:undefined},null); setViewTxn(null); }}
-            onDelete={()=>{ deleteTransaction(viewTxn.id); setViewTxn(null); }}/>
+            onDelete={()=>{ deleteTransaction(viewTxn.id); setViewTxn(null); }}
+            onLinkBill={x=>{
+              // The entry becomes that bill's payment: it takes the bill's name, category and frequency (the fields that identify
+              // a bill today); its amount, date and id stay. Undo restores the entry exactly, unless it was changed again since.
+              const before=viewTxn, linked={...viewTxn, recurring:true, recurFreq:x.freq, category:x.category, subcategory:x.subcategory||"", merchant:x.merchant||viewTxn.merchant};
+              setState(s=>({...s,transactions:s.transactions.map(t=>t.id===before.id?linked:t)}));
+              setViewTxn(null);
+              showSnackbar(t("detail.linkedToast",{name:maskText(x.merchant||x.note)||catName(x.category)}),()=>{
+                setState(s=>({...s,transactions:s.transactions.map(t=>t.id===before.id && JSON.stringify(t)===JSON.stringify(linked)?before:t)}));
+              },8000,"link");
+            }}/>
         )}
       </div>
     </>
@@ -2497,7 +2594,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
           </div>
           <div className="hero-stat">
             {hasIncome?(
-              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":(surplusRate||0)<0?" neg":""}`}>{surplusRate??0}%</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curInc,curExp))}</div></>
+              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":(surplusRate||0)<0?" neg":""}`}>{fmtPct(surplusRate??0)}</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curInc,curExp))}</div></>
             ):(
               <><div className={`hero-stat-val${curInc>curExp?" pos":curInc<curExp?" neg":""}`}>{curInc<curExp?"−":""}{fmtShort(Math.abs(curInc-curExp),currency)}</div><div className="hero-stat-lbl">{t("home.balance")}</div></>
             )}
@@ -2520,7 +2617,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
               <div key={s.key} className="up-row">
                 <span className="cat-dot" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={s.category} size={16}/></span>
                 <div className="up-body">
-                  <div className="list-title">{s.merchant||s.note||catName(s.category)}</div>
+                  <div className="list-title">{maskText(s.merchant||s.note)||catName(s.category)}</div>
                   <div className="list-sub">{fmtDate(localDateStr(s.nextDue))} · {catName(s.category)}</div>
                 </div>
                 <div style={{textAlign:"right",flexShrink:0}}>
@@ -2537,14 +2634,16 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
       <div className="section-enter section-enter-2">
         <SmartHelper transactions={transactions} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
       </div>
-      <HomeDetails goals={goals} budgetItems={budgetItems} wc={wc} prevExp={prevExp} spentToDate={spentToDate} paceInfo={paceInfo}
-        budgetTotal={budgetTotal} recent={recent} currency={currency} onAdd={onAdd} onView={onView}/>
+      <HomeDetails goals={goals} budgetItems={budgetItems} recent={recent} currency={currency} onAdd={onAdd} onView={onView}/>
     </div>
   );
 }
 
 // The Safe to Spend card and its note (redesign: shown first on Home). A separate function only to keep HomePage readable.
 function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
+  // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
+  // summary and upcoming bills out of the first screen.
+  const [open,setOpen]=useState(false);
   return (
     <>
       {safeToSpend?.enabled&&safeInfo.feasible&&(
@@ -2561,6 +2660,10 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
               {tn("safe.daysLeft",safeInfo.daysRemaining,{month:monthShort(now)})}
             </div>
           )}
+          <button className="safe-toggle" aria-expanded={open} aria-controls="safe-breakdown" onClick={()=>setOpen(o=>!o)}>
+            {t(open?"safe.hideHow":"safe.showHow")}<Icon name={open?"chevDown":"chevRight"} size={14}/>
+          </button>
+          {open&&<div id="safe-breakdown">
           {/* Four explicit lines — planning engine, not just a number */}
           <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
             <div className="safe-row">
@@ -2616,15 +2719,13 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {safeToSpend?.enabled&&safeInfo.feasible&&(
-        <div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic",margin:"-6px 2px 14px",lineHeight:1.5}}>
-          {t("safe.noteIncome")}{" "}
-          {safeInfo.scheduleCount>0
-            ? t("safe.noteSchedules",{ up:safeInfo.upcomingCount, un:safeInfo.unrecordedCount, s:safeInfo.scheduleCount, payments:tn("unit.payments",safeInfo.upcomingCount+safeInfo.unrecordedCount), schedules:tn("unit.schedules",safeInfo.scheduleCount) })
-            : t("safe.noteNoRecurring")}
+          <div className="safe-note">
+            {t("safe.noteIncome")}{" "}
+            {safeInfo.scheduleCount>0&&t("safe.noteSchedules",{ up:safeInfo.upcomingCount, un:safeInfo.unrecordedCount, s:safeInfo.scheduleCount, payments:tn("unit.payments",safeInfo.upcomingCount+safeInfo.unrecordedCount), schedules:tn("unit.schedules",safeInfo.scheduleCount) })}
+          </div>
+          </div>}
+          {/* Always visible, open or not: without recurring bills the number is optimistic, and the user must not have to tap to learn that. */}
+          {safeInfo.scheduleCount===0&&<div className="safe-note safe-caveat" role="note">{t("safe.noteNoRecurring")}</div>}
         </div>
       )}
 
@@ -2644,7 +2745,7 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
 }
 
 // The rest of Home, below the advice cards: goals, budgets, what changed, pace and recent activity.
-function HomeDetails({ goals, budgetItems, wc, prevExp, spentToDate, paceInfo, budgetTotal, recent, currency, onAdd, onView }) {
+function HomeDetails({ goals, budgetItems, recent, currency, onAdd, onView }) {
   return (
     <>
       {/* LEVEL 3: Goals — trajectory */}
@@ -2656,8 +2757,8 @@ function HomeDetails({ goals, budgetItems, wc, prevExp, spentToDate, paceInfo, b
             return (
               <div key={goal.id} className="goal-card">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                  <div className="goal-name">{goal.name}</div>
-                  <div style={{fontFamily:"var(--font)",fontSize:13,fontWeight:700,color:behindSchedule?"var(--neg)":"var(--ink)"}}>{Math.round(pct)}%</div>
+                  <div className="goal-name">{maskText(goal.name)}</div>
+                  <div style={{fontFamily:"var(--font)",fontSize:13,fontWeight:700,color:behindSchedule?"var(--neg)":"var(--ink)"}}>{fmtPct(Math.round(pct))}</div>
                 </div>
                 <div className="goal-progress"><div className="goal-fill" style={{width:`${pct}%`}}/></div>
                 <div className="goal-meta">
@@ -2696,63 +2797,7 @@ function HomeDetails({ goals, budgetItems, wc, prevExp, spentToDate, paceInfo, b
         </div>
       )}
 
-      {/* LEVEL 6: What changed — compact signal */}
-      {wc.catChanges.length>0&&prevExp>0&&(
-        <div className="section-enter section-enter-6" style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
-          <div className="label-sm" style={{marginBottom:10}}>{cmpTitle(wc.cmpKind)}</div>
-          {wc.catChanges.slice(0,3).map(({catId,diff,merchantDiffs})=>{
-            const cat=CAT(catId);
-            // Show top merchant driver if available
-            const topM=merchantDiffs?.[0];
-            return (
-              <div key={catId} style={{padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--ink)"}}><CatIcon catId={catId} size={13} color={cat?.color}/>{catName(catId)}</div>
-                  <div style={{fontSize:12,fontFamily:"var(--font)",fontWeight:700,color:diff<=0?"var(--pos)":"var(--neg)"}}>{diff>0?"+":""}{fmt(diff,currency)}</div>
-                </div>
-                {topM&&(
-                  <div style={{fontSize:11,color:"var(--ink-3)",marginTop:2,display:"flex",alignItems:"center",gap:5}}>
-                    <Icon name="merchant" size={10} color="var(--ink-4)"/>
-                    {topM.merchant}
-                    <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,background:topM.isRecurring?"var(--warn-bg)":"var(--bg-inset)",color:topM.isRecurring?"var(--warn)":"var(--ink-4)"}}>
-                      {topM.isRecurring?t("wc.recurring"):t("wc.oneOff")}
-                    </span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Spending pace — trajectory context */}
-      {spentToDate>0&&(
-        <div className="pace-card section-enter section-enter-7">
-          <div className="pace-row">
-            <span className="label-sm" style={{display:"flex",alignItems:"center",gap:5}}><Icon name="pace" size={12} color="var(--ink-3)"/>{t("pace.title")}</span>
-            <span style={{fontSize:11,color:"var(--ink-3)"}}>{t("pace.dayOf",{d:paceInfo.daysPassed,total:paceInfo.totalDays})}</span>
-          </div>
-          {budgetTotal>0&&(
-            <div className="pace-track" style={{position:"relative",height:5}}>
-              <div className={`pace-fill ${paceInfo.onTrack?"on-track":"over-pace"}`} style={{width:`${Math.min((spentToDate/budgetTotal)*100,100)}%`}}/>
-              <span aria-hidden="true" title={t("pace.marker")} style={{position:"absolute",top:0,bottom:0,width:2,background:"var(--ink)",opacity:0.55,left:`${(paceInfo.daysPassed/paceInfo.totalDays)*100}%`}}/>
-            </div>
-          )}
-          <div className="pace-sub">
-            <span style={{fontSize:11,color:"var(--ink-3)"}}>{t("pace.dailyAvg",{amount:fmt(paceInfo.dailyAvg,currency)})}</span>
-            <span style={{fontSize:11,color:paceInfo.onTrack===null?"var(--ink-3)":paceInfo.onTrack?"var(--pos)":"var(--neg)",fontWeight:600}}>
-              {paceInfo.projectionReliable?t("pace.projected",{amount:fmt(paceInfo.projected,currency)}):t("pace.tooEarly")}
-            </span>
-          </div>
-          {paceInfo.onTrack===null&&(
-            <div style={{fontSize:10,color:"var(--ink-4)",marginTop:3,fontStyle:"italic"}}>{t("pace.setBudget")}</div>
-          )}
-          {paceInfo.onTrack===false&&paceInfo.diff>0&&(
-            <div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{t("pace.aboveToday",{amount:fmt(paceInfo.diff,currency)})}</div>
-          )}
-        </div>
-      )}
-
+      {/* Run 9: 'What changed' and 'Spending pace' were removed from Home — the same cards are on Analytics. */}
       {/* LEVEL 7: Recent activity */}
       {recent.length>0?(
         <div className="section-enter section-enter-8">
@@ -2800,9 +2845,9 @@ function GroupedTxns({ txns, currency, onDelete, onEdit, onView, compact }) {
 function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
   const cat=CAT(txn.category);
   const isInc=txn.type==="income";
-  const displayName=txn.merchant||txn.note||catName(txn.category);
+  const displayName=maskText(txn.merchant||txn.note)||catName(txn.category);
   const displaySub=[
-    txn.merchant&&txn.note?txn.note:null,
+    txn.merchant&&txn.note?maskText(txn.note):null,
     catName(txn.category),
     subName(txn.subcategory)||null,
     !compact?fmtDate(txn.date):null,
@@ -2983,7 +3028,7 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
           <CatIcon catId={cat.id} size={16} color={cat.color}/>
         </div>
         <div onClick={()=>onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
-          <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{x.merchant||x.note||catName(x.category)}</div>
+          <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{maskText(x.merchant||x.note)||catName(x.category)}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,lineHeight:1.4}}>
             {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""} · {t("freq."+x.freq)} · {tn("rec.paymentsRecorded",x.occurrences.length)}
           </div>
@@ -3025,7 +3070,7 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
           {upcoming.map(x=>{ const c=CAT(x.category); return (
             <div key={x.key} className="up-row">
               <span className="cat-dot" style={{background:(c?.color||"#98A5B7")+"26"}}><CatIcon catId={x.category} size={16}/></span>
-              <div className="up-body"><div className="list-title">{x.merchant||x.note||catName(x.category)}</div><div className="list-sub">{catName(x.category)}</div></div>
+              <div className="up-body"><div className="list-title">{maskText(x.merchant||x.note)||catName(x.category)}</div><div className="list-sub">{catName(x.category)}</div></div>
               <div style={{textAlign:"right",flexShrink:0}}>
                 <div className="up-amt">{fmt(x.amount,currency)}</div>
                 <div style={{fontSize:11,color:"var(--warn)",fontWeight:600}}>{dueText(x)}</div>
@@ -3285,21 +3330,25 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
 }
 
 // ─── S6: Transaction Detail Sheet with Merchant Intelligence ─────────────────
-function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplicate, onDelete }) {
+function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplicate, onDelete, onLinkBill }) {
+  // Run 9: an ordinary (non-recurring) entry can be marked as the payment of an existing bill — only when the user picks the
+  // bill. Same merchant and amount are never enough to link anything automatically.
+  const [showLink,setShowLink]=useState(false);
+  const bills=useMemo(()=>txn.recurring?[]:buildSchedules(transactions).filter(x=>x.isActive&&x.type===txn.type),[txn,transactions]);
   const cat=CAT(txn.category)||{id:"other",name:txn.category,color:"#98A5B7"};
   const isInc=txn.type==="income";
   const profile=useMemo(()=>txn.merchant?calcMerchantProfile(txn.merchant,transactions):null,[txn.merchant,transactions]);
 
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={txn.merchant||txn.note||catName(txn.category)}>
+      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={maskText(txn.merchant||txn.note)||catName(txn.category)}>
         <div className="sheet-grip"><div className="sheet-handle"/></div>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
           <div style={{width:44,height:44,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <CatIcon catId={cat.id} size={22} color={cat.color}/>
           </div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700,marginBottom:2,lineHeight:1.25,overflowWrap:"anywhere"}}>{txn.merchant||txn.note||catName(txn.category)}</div>
+            <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700,marginBottom:2,lineHeight:1.25,overflowWrap:"anywhere"}}>{maskText(txn.merchant||txn.note)||catName(txn.category)}</div>
             <div style={{fontSize:12,color:"var(--ink-3)"}}>{catName(txn.category)}{txn.subcategory?` / ${subName(txn.subcategory)}`:""} · {fmtDate(txn.date)}</div>
           </div>
           <button onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
@@ -3315,7 +3364,7 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
         <div className="detail-meta" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
           {[
             [t("add.date"),      fmtDate(txn.date)],
-            [t("add.merchant"),  txn.merchant||"—"],
+            [t("add.merchant"),  maskText(txn.merchant)||"—"],
             [t("add.category"),  catName(txn.category)+(txn.subcategory?` / ${subName(txn.subcategory)}`:"")],
             [t("add.recurring"), txn.recurring?(txn.recurFreq?t("freqCap."+txn.recurFreq):t("common.yes")):t("common.no")],
           ].map(([lbl,val])=>(
@@ -3326,7 +3375,7 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
           ))}
         </div>
 
-        {txn.note&&<div style={{fontSize:14,color:"var(--ink-2)",background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px",marginBottom:16}}>{txn.note}</div>}
+        {txn.note&&<div style={{fontSize:14,color:"var(--ink-2)",background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px",marginBottom:16}}>{maskText(txn.note)}</div>}
 
         {/* S6: Merchant profile — frequency, timing, category stability */}
         {profile&&profile.count>1&&(
@@ -3419,6 +3468,25 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
           <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onEdit}><Icon name="edit" size={14}/>{t("common.edit")}</button>
           <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onDuplicate}><Icon name="repeat" size={14}/>{t("detail.duplicate")}</button>
         </div>
+        {onLinkBill&&bills.length>0&&(
+          <div style={{marginBottom:8}}>
+            <button className="btn btn-ghost btn-full link-bill" style={{marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} aria-expanded={showLink} onClick={()=>setShowLink(s=>!s)}>
+              <Icon name="repeat" size={14}/>{t(txn.type==="income"?"detail.linkIncome":"detail.linkBill")}
+            </button>
+            {showLink&&(
+              <div className="card" style={{marginTop:8,padding:"8px 14px"}}>
+                <div className="list-sub" style={{margin:"4px 0 6px",lineHeight:1.5}}>{t("detail.linkHint")}</div>
+                {bills.map(x=>(
+                  <button key={x.key} className="list-row link-bill-option" onClick={()=>onLinkBill(x)}>
+                    <span className="cat-dot" style={{background:(CAT(x.category)?.color||"#98A5B7")+"26",width:32,height:32}}><CatIcon catId={x.category} size={14}/></span>
+                    <span className="list-body"><span className="list-title">{maskText(x.merchant||x.note)||catName(x.category)}</span>
+                      <span className="list-sub">{fmt(x.amount,currency)} · {t("freq."+x.freq)} · {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""}</span></span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
         <button className="btn btn-ghost btn-full" style={{color:"var(--neg)",borderColor:"var(--neg-bg)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:0}} onClick={onDelete}><Icon name="trash" size={14}/>{t("common.delete")}</button>
         <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:6}}>{t("common.close")}</button>
       </div>
@@ -3559,7 +3627,7 @@ function SpendDonut({ catSpend, total, currency }) {
   const R=46, C=2*Math.PI*R; let off=0;
   return (
     <div className="donut-wrap">
-      <div className="donut" role="img" aria-label={t("home.breakdown")+": "+slices.map(s=>`${s.name} ${s.pct}%`).join(", ")}>
+      <div className="donut" role="img" aria-label={t("home.breakdown")+": "+slices.map(s=>`${s.name} ${fmtPct(s.pct)}`).join(", ")}>
         <svg viewBox="0 0 120 120" width="100%" height="100%" aria-hidden="true">
           <circle cx="60" cy="60" r={R} fill="none" stroke="var(--bg-inset)" strokeWidth="14"/>
           {slices.map(s=>{ const len=C*s.amt/total, gap=slices.length>1?Math.min(2,len/3):0; const el=(
@@ -3570,7 +3638,7 @@ function SpendDonut({ catSpend, total, currency }) {
       </div>
       <ul className="donut-legend">
         {slices.map(s=>(
-          <li key={s.id}><span className="dot" style={{background:s.color}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{s.pct}%</span></li>
+          <li key={s.id}><span className="dot" style={{background:s.color}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{fmtPct(s.pct)}</span></li>
         ))}
       </ul>
     </div>
@@ -3594,7 +3662,7 @@ function MorePage({ onOpen, onSettings }) {
   return (
     <div className="more-page">
       <div className="card more-id">
-        <span className="more-mark" aria-hidden="true"><Icon name="finance" size={22} color="#fff"/></span>
+        <span className="more-mark" aria-hidden="true"><Icon name="finance" size={22} color="var(--accent)"/></span>
         <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
       </div>
       <div className="card list-card">
@@ -3608,12 +3676,34 @@ function MorePage({ onOpen, onSettings }) {
 
 // Import / Export: the same import, export and backup functions Settings used to hold, on a page of their own.
 // There is no import history in the data, so no "recent imports" list is shown.
-function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup }) {
+function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup, onShareBackup, protection, onProtect, onInstall }) {
   const fileRef=useRef();
   const { transactions, lastBackup, backupConfirmedAt }=state;
   const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
+  // Can this device hand a file to the share menu? (Android and iPhone: yes; many desktop browsers: no.)
+  const canShareFiles=useMemo(()=>{ try { return typeof navigator.canShare==="function" && typeof File!=="undefined" && navigator.canShare({files:[new File(["{}"],"x.json",{type:"application/json"})]}); } catch { return false; } },[]);
+  const standalone=typeof window!=="undefined" && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone===true);
   return (
     <div className="io-page">
+      {/* Run 10: how safe the data is on this phone, and what makes it safer */}
+      <div className="section-title" style={{marginTop:0}}>{t("io.safety")}</div>
+      <div className="card io-safety">
+        <div className="io-backup">
+          <div style={{minWidth:0}}>
+            <div className="list-title">{t("io.protectTitle")}</div>
+            <div className="list-sub" style={{lineHeight:1.5}}>{t(protection==="on"?"io.protectOn":protection==="off"?"io.protectOff":"io.protectUnsupported")}</div>
+          </div>
+          <span className={`io-status${protection==="on"?" ok":""}`}>{protection==="on"?<><Icon name="check" size={12}/>{t("io.on")}</>:protection==="off"?t("io.off"):"—"}</span>
+        </div>
+        {protection==="off"&&<button className="btn btn-ghost btn-full io-protect" onClick={onProtect}>{t("io.protectBtn")}</button>}
+        {!standalone&&(
+          <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
+            <div className="list-title">{t("io.installTitle")}</div>
+            <div className="list-sub" style={{lineHeight:1.5}}>{t("io.installHow")}</div>
+            {onInstall&&<button className="btn btn-ghost btn-full io-install" onClick={onInstall}>{t("io.installBtn")}</button>}
+          </div>
+        )}
+      </div>
       <div className="io-grid">
         <div className="card io-card drop-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}}>
           <input ref={fileRef} type="file" accept=".json,.csv" aria-label={t("import.title")} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
@@ -3644,7 +3734,11 @@ function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onCo
         <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>
           {lastBackup && (confirmed ? t("set.confirmedOn",{date:fmtLongDate(backupConfirmedAt)}) : t("set.notConfirmed"))}{lastBackup?" ":""}{t("set.cantTell")}
         </div>
-        <button className="btn btn-primary btn-full" onClick={onExportJSON} style={{marginTop:12}}><Icon name="backup" size={16}/>{t("io.createBackup")}</button>
+        {canShareFiles&&onShareBackup&&<>
+          <button className="btn btn-primary btn-full io-share" onClick={onShareBackup} style={{marginTop:12}}><Icon name="upload" size={16}/>{t("io.shareBackup")}</button>
+          <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("io.shareHint")}</div>
+        </>}
+        <button className={`btn ${canShareFiles&&onShareBackup?"btn-ghost":"btn-primary"} btn-full`} onClick={onExportJSON} style={{marginTop:canShareFiles&&onShareBackup?8:12}}><Icon name="backup" size={16}/>{t("io.createBackup")}</button>
         {lastBackup && !confirmed && <button className="btn btn-ghost btn-full" onClick={onConfirmBackup}>{t("banner.haveFile")}</button>}
         <div className="list-sub" style={{marginTop:8}}>{tn("set.jsonBackupSub",transactions.length)}</div>
       </div>
@@ -3653,11 +3747,20 @@ function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onCo
 }
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
-function BudgetsGoalsPage({ state, showToast, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal }) {
+function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal }) {
   const { transactions, budgets={}, goals=[], currency }=state;
-  const [seg,setSeg]=useState("budgets");
+  const setSeg=onSeg;
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
   const [showNewGoal,setShowNewGoal]=useState(false);
+  // "New budget" form opened by the title bar's "+" on the Budgets half: pick a category without a limit, type the limit.
+  const [newBudget,setNewBudget]=useState(null);   // null = closed; otherwise { catId, val }
+  const seenSignal=useRef(addSignal);
+  useEffect(()=>{
+    if (addSignal===seenSignal.current) return; seenSignal.current=addSignal;
+    if (seg==="goals") setShowNewGoal(true);
+    else { const free=CATEGORIES.filter(c=>!c.income && !(budgets[c.id]>0)); setNewBudget({ catId:(free[0]||CATEGORIES[0]).id, val:"" }); }
+    window.scrollTo(0,0);
+  },[addSignal]);
   const [goalName,setGoalName]=useState(""), [goalTarget,setGoalTarget]=useState(""), [goalSaved,setGoalSaved]=useState("");
   const [goalMonthly,setGoalMonthly]=useState(""), [goalDate,setGoalDate]=useState("");
   const now=curMon();
@@ -3698,6 +3801,23 @@ function BudgetsGoalsPage({ state, showToast, onSetBudget, onAddGoal, onUpdateGo
       </div>
 
       {seg==="budgets"&&(<>
+        {newBudget&&(
+          <div className="card new-budget">
+            <div className="card-title" style={{marginBottom:10}}>{t("goals.addBudget")}</div>
+            <div className="field-row" style={{marginBottom:10}}>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-cat">{t("add.category")}</label>
+                <select id="nb-cat" className="field-input field-select" value={newBudget.catId} onChange={e=>setNewBudget(b=>({...b,catId:e.target.value}))}>
+                  {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}{budgets[c.id]>0?` (${fmt(budgets[c.id],currency)})`:""}</option>)}
+                </select></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-val">{t("set.monthlyLimit")}</label>
+                <input id="nb-val" className="field-input" type="number" min="0" step="1" placeholder="0" value={newBudget.val} onChange={e=>setNewBudget(b=>({...b,val:e.target.value}))} autoFocus/></div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="btn btn-primary" style={{flex:1,marginTop:0}} onClick={()=>{ const v=newBudget.val.trim()===""?null:parseMoney(newBudget.val,{positive:true}); if(v===null){showToast(t("add.errAmount"));return;} onSetBudget(newBudget.catId,v); setNewBudget(null); showToast(t("set.budgetSaved")); }}>{t("common.save")}</button>
+              <button className="btn btn-ghost" style={{flex:1,marginTop:0}} onClick={()=>setNewBudget(null)}>{t("common.cancel")}</button>
+            </div>
+          </div>
+        )}
         {limitTotal>0&&(
           <div className="card">
             <div className="list-sub">{t("budgets.monthTotal",{month:monthName(now)})}</div>
@@ -3722,7 +3842,7 @@ function BudgetsGoalsPage({ state, showToast, onSetBudget, onAddGoal, onUpdateGo
                 </div>
                 <div className="bud-bar-row">
                   <div className="bar"><div className="bar-fill" style={{width:`${x.pct}%`,background:x.over?"var(--neg)":x.warn?"var(--warn)":"var(--pos)"}}/></div>
-                  <span className="bud-pct" style={{color:x.over?"var(--neg)":"var(--ink-3)"}}>{pct}%</span>
+                  <span className="bud-pct" style={{color:x.over?"var(--neg)":"var(--ink-3)"}}>{fmtPct(pct)}</span>
                   {editBtn(cat,x.limit)}
                 </div>
                 {editRow(cat,x.limit)}
@@ -3771,9 +3891,9 @@ function BudgetsGoalsPage({ state, showToast, onSetBudget, onAddGoal, onUpdateGo
             <div key={goal.id} className="card goal-card">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                 <div style={{display:"flex",gap:10,alignItems:"center",minWidth:0}}>
-                  <span className="cat-dot" style={{background:"rgba(50,205,170,0.15)"}}><Icon name="goal" size={16} color="var(--pos)"/></span>
+                  <span className="cat-dot" style={{background:"var(--pos-bg)"}}><Icon name="goal" size={16} color="var(--pos)"/></span>
                   <div style={{minWidth:0}}>
-                    <div className="goal-name">{goal.name}</div>
+                    <div className="goal-name">{maskText(goal.name)}</div>
                     <div className="list-sub">{t("goals.savedOf",{ saved:fmt(goal.saved||0,currency), target:fmt(goal.target||0,currency) })}</div>
                   </div>
                 </div>
@@ -3782,12 +3902,12 @@ function BudgetsGoalsPage({ state, showToast, onSetBudget, onAddGoal, onUpdateGo
                     const newSaved=prompt(t("set.updatePrompt",{name:goal.name}),goal.saved||0);
                     if (newSaved!==null) { const v=parseMoney(newSaved); if (v===null) showToast(t("set.updateInvalid")); else onUpdateGoal(goal.id,{saved:v}); }
                   }}>{t("set.update")}</button>
-                  <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:goal.name})}><Icon name="trash" size={15}/></button>
+                  <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>
                 </div>
               </div>
               <div className="bud-bar-row" style={{marginTop:12}}>
                 <div className="bar"><div className="bar-fill" style={{width:`${pct}%`,background:"var(--accent)"}}/></div>
-                <span className="bud-pct">{Math.round(pct)}%</span>
+                <span className="bud-pct">{fmtPct(Math.round(pct))}</span>
               </div>
               <div className="list-sub" style={{marginTop:6,color:gp.behindSchedule||gp.overdue?"var(--neg)":gp.onTrack||gp.complete?"var(--pos)":"var(--ink-3)"}}>
                 {gp.complete?t("goals.completed")
@@ -3799,7 +3919,7 @@ function BudgetsGoalsPage({ state, showToast, onSetBudget, onAddGoal, onUpdateGo
                 <div className="goal-milestones" style={{marginTop:10,display:"flex",gap:6}}>
                   {milestones.map(m=>(
                     <div key={m.pct} style={{flex:1,textAlign:"center",padding:"5px 2px",borderRadius:8,background:m.completed?"var(--pos-bg)":"var(--bg-inset)"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:m.completed?"var(--pos)":"var(--ink-3)"}}>{m.pct}%</div>
+                      <div style={{fontSize:11,fontWeight:700,color:m.completed?"var(--pos)":"var(--ink-3)"}}>{fmtPct(m.pct)}</div>
                       <div style={{fontSize:10,color:m.completed?"var(--pos)":"var(--ink-4)"}}>{m.completed?"✓":t("goals.toGo",{amount:fmt(m.amount-Math.min(goal.saved||0,m.amount),currency)})}</div>
                     </div>
                   ))}
@@ -3957,7 +4077,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           <div className="month-stat-val" style={{color:"var(--pos)"}}>{fmt(curInc,currency)}</div>
           <div className="month-stat-lbl">{t("home.income")}</div>
           {curInc>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
-            {Math.round(((curInc-curExp)/curInc)*100)}% {t("surplus."+surplusLabel(curInc,curExp)).toLowerCase()}
+            {fmtPct(Math.round(((curInc-curExp)/curInc)*100))} {t("surplus."+surplusLabel(curInc,curExp)).toLowerCase()}
           </div>}
         </div>
         <div className="month-stat" style={{gridColumn:"1 / -1"}}>
@@ -4004,7 +4124,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                       <div key={m.merchant} className="wc-m-row">
                         <span style={{display:"flex",alignItems:"center",gap:4}}>
                           <Icon name="merchant" size={10} color="var(--ink-4)"/>
-                          {m.merchant}
+                          {maskText(m.merchant)}
                           <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,background:m.isRecurring?"var(--warn-bg)":"var(--bg-inset)",color:m.isRecurring?"var(--warn)":"var(--ink-4)"}}>
                             {m.isRecurring?t("wc.recurring"):t("wc.oneOff")}
                           </span>
@@ -4043,7 +4163,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
               <div key={catId} style={{marginBottom:13,paddingBottom:13,borderBottom:"1px solid var(--rule)"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
                   <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6,minWidth:0}}><CatIcon catId={catId} size={13}/>{catName(catId)}</div>
-                  <div style={{fontSize:11,color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:600,flexShrink:0}}>{t("an.pctUsed",{pct:Math.round(pct)})}</div>
+                  <div style={{fontSize:11,color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:600,flexShrink:0}}>{t("an.pctUsed",{pct:PRIVACY?"••":Math.round(pct)})}</div>
                 </div>
                 <div style={{height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden",marginBottom:4}}>
                   <div style={{height:"100%",width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)"),borderRadius:99}}/>
@@ -4070,7 +4190,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
               <div className="cat-bar-name"><CatIcon catId={cat.id} size={13} color={cat.color}/>{catName(cat.id)}</div>
               <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(cat.amt/maxCat)*100}%`,background:cat.color}}/></div>
               <div className="cat-bar-amt">{fmt(cat.amt,currency)}</div>
-              <div className="cat-bar-pct">{curExp>0?Math.round((cat.amt/curExp)*100):0}%</div>
+              <div className="cat-bar-pct">{fmtPct(curExp>0?Math.round((cat.amt/curExp)*100):0)}</div>
             </div>
           ))}
         </div>
@@ -4086,11 +4206,11 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                 <div style={{width:28,height:28,borderRadius:6,background:"var(--bg-inset)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   <Icon name="merchant" size={13} color="var(--ink-3)"/>
                 </div>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{merchant}</span>
+                <span style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(merchant)}</span>
               </div>
               <div style={{textAlign:"right",flexShrink:0}}>
                 <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:700}}>−{fmt(amt,currency)}</div>
-                {curExp>0&&<div style={{fontSize:10,color:"var(--ink-4)"}}>{Math.round((amt/curExp)*100)}%</div>}
+                {curExp>0&&<div style={{fontSize:10,color:"var(--ink-4)"}}>{fmtPct(Math.round((amt/curExp)*100))}</div>}
               </div>
             </div>
           ))}
@@ -4109,7 +4229,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                   <CatIcon catId={x.category} size={15} color={cat.color}/>
                 </div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.merchant||x.note||catName(x.category)}</div>
+                  <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(x.merchant||x.note)||catName(x.category)}</div>
                   <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(x.date)} · {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""}</div>
                 </div>
                 <div style={{fontFamily:"var(--font)",fontSize:15,fontWeight:600,flexShrink:0}}>−{fmt(x.amount,currency)}</div>
@@ -4173,7 +4293,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
             {patterns.map(p=>(
               <div key={p.id} className="pattern-item">
                 <Icon name="pattern" size={14} color="var(--ink-3)"/>
-                <span>{p.text}</span>
+                <span>{PRIVACY?t("privacy.hiddenText"):p.text}</span>
               </div>
             ))}
           </div>
@@ -4213,8 +4333,8 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                     <CatIcon catId={a.category} size={14} color={cat.color}/>
                   </div>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{a.merchant||catName(a.category)}</div>
-                    <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(a.date)} · {a.reason}</div>
+                    <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{maskText(a.merchant)||catName(a.category)}</div>
+                    <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(a.date)} · {PRIVACY?t("privacy.hiddenText"):a.reason}</div>
                   </div>
                   <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:700,color:"var(--neg)",flexShrink:0}}>−{fmt(a.amount,currency)}</div>
                 </div>
@@ -4236,7 +4356,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                   <CatIcon catId={c.category2} size={13}/>
                   {catName(c.category2)}
                 </div>
-                <div style={{fontSize:11,color:"var(--ink-3)",flexShrink:0}}>{t("an.ofDays",{pct:Math.round(c.correlation*100)})}</div>
+                <div style={{fontSize:11,color:"var(--ink-3)",flexShrink:0}}>{t("an.ofDays",{pct:PRIVACY?"••":Math.round(c.correlation*100)})}</div>
               </div>
             ))}
           </div>
@@ -4269,7 +4389,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
                   return (
                     <div key={`${wi}-${di}`} className="hm-cell"
                       onClick={e=>{e.stopPropagation();setActiveCell(isActive?null:{wi,di});setActiveBar(null);}}
-                      style={{background:cell.amt>0?`rgba(78,120,255,${intensity})`:"var(--bg-inset)",outline:isActive?"2px solid var(--ink)":cell.isToday?"1.5px solid var(--ink-3)":"none",outlineOffset:"1px"}}
+                      style={{background:cell.amt>0?`rgba(76,201,196,${intensity})`:"var(--bg-inset)",outline:isActive?"2px solid var(--ink)":cell.isToday?"1.5px solid var(--ink-3)":"none",outlineOffset:"1px"}}
                     />
                   );
                 })}
@@ -4278,7 +4398,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           </div>
           <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,justifyContent:"flex-end"}}>
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
-            {[0.1,0.3,0.6,0.9].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(78,120,255,${o})`}}/>)}
+            {[0.1,0.3,0.6,0.9].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(76,201,196,${o})`}}/>)}
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
           </div>
         </div>
@@ -4326,7 +4446,7 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
       title:t("help.budgetTitle",{cat:name}),
       text:b.over
         ?t("help.budgetOver",{cat:name,amount:fmt(b.spent-b.limit,currency)})
-        :tn("help.budgetWarn",b.daysLeft,{cat:name,pct:Math.round(b.pct)}),
+        :tn("help.budgetWarn",b.daysLeft,{cat:name,pct:PRIVACY?"••":Math.round(b.pct)}),
       impact:b.over
         ?t("help.budgetOverImpact",{cat:name})
         :t("help.budgetWarnImpact",{left:fmt(b.limit-b.spent,currency),perDay:fmt((b.limit-b.spent)/Math.max(b.daysLeft,1),currency)}),
@@ -4374,7 +4494,7 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
       cards.push({
         id:"recur-audit", type:"info", icon:"repeat",
         title:t("help.recurTitle"),
-        text:t("help.recurText",{n:activeSchedules.length,amount:fmt(monthlyTotal,currency),pct:pctOfIncome}),
+        text:t("help.recurText",{n:activeSchedules.length,amount:fmt(monthlyTotal,currency),pct:PRIVACY?"••":pctOfIncome}),
         impact:t("help.recurImpact"),
       });
     }
@@ -4417,8 +4537,8 @@ function SmartHelper({ transactions, budgets, goals, safeToSpend, currency }) {
           </div>
           <div className="helper-body">
             <div className="helper-title">{card.title}</div>
-            <div className="helper-text">{card.text}</div>
-            <div className="helper-impact" style={{color:ICON_COLOR[card.type]}}>{card.impact}</div>
+            <div className="helper-text">{PRIVACY?t("privacy.hiddenText"):card.text}</div>
+            <div className="helper-impact" style={{color:ICON_COLOR[card.type]}}>{PRIVACY?"":card.impact}</div>
           </div>
         </div>
       ))}
