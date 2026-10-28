@@ -66,6 +66,9 @@ function moneyReason(v, { positive=false } = {}) {
 function parseMoney(v, opts) { return moneyReason(v,opts)===null ? strictNum(v) : null; }
 
 function isPlainObject(x) { return x!==null && typeof x==="object" && !Array.isArray(x); }
+// Run 14: a clickable <div> that acts as a button must answer Enter and Space too. Only when the key was pressed ON the element
+// itself, so a real button inside it keeps its own keys.
+const activateKey = (fn) => (e) => { if (e.target!==e.currentTarget) return; if (e.key==="Enter" || e.key===" ") { e.preventDefault(); fn(); } };
 // A yes/no field: true/false, or the words "true"/"false" (any case, trimmed). Anything else → null (not guessed).
 const flagValue = (v) => { if (typeof v==="boolean") return v; if (typeof v==="string") { const s=v.trim().toLowerCase(); if (s==="true") return true; if (s==="false") return false; } return null; };
 const isTrue = (v) => flagValue(v)===true;
@@ -294,13 +297,18 @@ function normaliseTxn(t) {
     recurFreq:   RECUR_FREQS.has(f) ? f : null,
     isActive:    t.isActive===undefined ? true : t.isActive===null ? false : flagValue(t.isActive),   // checkRawTxn has refused anything else
     createdAt:   t.createdAt||new Date().toISOString(),
+    // Run 12: the bill this payment paid (explicit bills). Only a short non-blank text id is kept; records without one get
+    // no new field, so data written by earlier versions loads byte-for-byte the same.
+    ...(isBillId(t.billId) ? { billId:t.billId.trim() } : {}),
   };
 }
+function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }
 
 // ─── Settings contract (used for stored data AND imported backups) ───────────
 // Each section is validated on its own. Invalid entries are skipped and reported; a section whose entries are ALL
 // invalid is rejected so your current value is kept. Sections absent from the source are simply not returned.
-const BACKUP_VERSION = 9;
+// Run 12: version 10 adds explicit bills ("bills" + each payment's "billId"). Version 9 files import unchanged.
+const BACKUP_VERSION = 10;
 const EXPENSE_CAT_IDS = () => CATEGORIES.filter(c=>!c.income).map(c=>c.id);
 function budgetKey(k) {
   const ids=EXPENSE_CAT_IDS();
@@ -360,6 +368,15 @@ function validateSettings(src) {
       else { settings.goals=out; if (bad) problems.push(tn("settings.goalsSomeBad",bad)); }
     }
   }
+  if (has("bills")) {
+    if (!Array.isArray(src.bills)) problems.push(t("settings.billsNotList"));
+    else {
+      const out=[], used=new Set(); let bad=0;
+      src.bills.forEach(b=>{ const v=validateBill(b); if (!v || used.has(v.id)) { bad++; return; } used.add(v.id); out.push(v); });
+      if (src.bills.length && !out.length) problems.push(tn("settings.billsAllBad",src.bills.length));
+      else { settings.bills=out; if (bad) problems.push(tn("settings.billsSomeBad",bad)); }
+    }
+  }
   if (has("currency")) {
     const c=typeof src.currency==="string" ? src.currency.trim() : "";
     if (c && c.length<=3 && !/[\u0000-\u001f]/.test(c)) settings.currency=c;
@@ -399,7 +416,7 @@ function migrateAndLoad() {
     if (language) setLang(language);
     const v=validateSettings(current);
     if (v.problems.length) {
-      const kept=preserveRaw("settings_rejected",{ budgets:current.budgets, templates:current.templates, currency:current.currency, goals:current.goals, safeToSpend:current.safeToSpend });
+      const kept=preserveRaw("settings_rejected",{ budgets:current.budgets, templates:current.templates, currency:current.currency, goals:current.goals, safeToSpend:current.safeToSpend, bills:current.bills });
       if (!kept) SAVE_BLOCKED=true;
       noteLoad(t(kept ? "load.settingsResetKept" : "load.settingsResetBlocked"));
     }
@@ -412,6 +429,7 @@ function migrateAndLoad() {
       currency:     v.settings.currency    ?? "₼",
       goals:        v.settings.goals       ?? [],
       safeToSpend:  v.settings.safeToSpend ?? { savingsTarget:0, enabled:false },
+      bills:        v.settings.bills       ?? [],
       lastBackup,
       backupConfirmedAt,
       language,
@@ -471,6 +489,7 @@ function buildState(transactions=[], settings=null) {
     currency:    v.settings.currency    ?? "₼",
     goals:       v.settings.goals       ?? [],
     safeToSpend: v.settings.safeToSpend ?? { savingsTarget:0, enabled:false },
+    bills:       v.settings.bills       ?? [],
     lastBackup:  null,
     backupConfirmedAt: null,
     language:    null,
@@ -530,7 +549,17 @@ async function storageProtection(ask, nav=(typeof navigator!=="undefined"?naviga
 // Sends the backup file to the phone's share menu (Google Drive, Telegram, e-mail, Files …), so a copy leaves the phone.
 // "shared" (a destination was chosen — the app still can't see whether it arrived), "cancelled", or "unsupported" (no file
 // sharing here; the caller then downloads the file instead).
-async function shareBackupFile(text, filename, nav=(typeof navigator!=="undefined"?navigator:null)) {
+// Run 13: inside a native shell (the Capacitor Android app) the ordinary download link does nothing, so the shell defines
+// window.__ledgerNativeShare(filename, text, mime) -> "shared" | "cancelled" (or rejects). The web app uses it when it exists
+// and counts only an explicit "shared" as success: anything else is "cancelled" or "failed" and is never reported as saved.
+// No hook (the PWA) = the behaviour below, unchanged.
+const nativeShareHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeShare==="function") ? window.__ledgerNativeShare : null;
+async function shareViaNative(native, filename, text, mime) {
+  try { const r=await native(filename, text, mime); return r==="shared" ? "shared" : r==="cancelled" ? "cancelled" : "failed"; }
+  catch { return "failed"; }
+}
+async function shareBackupFile(text, filename, nav=(typeof navigator!=="undefined"?navigator:null), native=nativeShareHook()) {
+  if (native) return shareViaNative(native, filename, text, "application/json");
   if (!nav||typeof nav.share!=="function"||typeof nav.canShare!=="function"||typeof File==="undefined") return "unsupported";
   const file=new File([text],filename,{type:"application/json"});
   try { if (!nav.canShare({files:[file]})) return "unsupported"; } catch { return "unsupported"; }
@@ -611,6 +640,10 @@ function planImport(raw, filename="") {
       else if (Array.isArray(parsed.entries)) list=parsed.entries;
       else { const v=Object.values(parsed).find(v=>Array.isArray(v) && v.length>0 && isPlainObject(v[0]) && v[0].amount!==undefined); if (v) list=v; }
       const v=validateSettings(parsed); settings=v.settings; problems=v.problems; warnings=v.warnings.slice();
+      // Run 13: an entry list that is present but not a list used to be skipped without a word when the file also held
+      // settings (and had no entry count to disagree with). The user is told no entries could be read.
+      if ((parsed.transactions!==undefined && !Array.isArray(parsed.transactions) && !Array.isArray(parsed.entries)) || (parsed.entries!==undefined && !Array.isArray(parsed.entries) && !Array.isArray(parsed.transactions)))
+        warnings.push(t("import.listUnreadable"));
       if (parsed.exportedAt!==undefined && !(typeof parsed.exportedAt==="string" && !Number.isNaN(Date.parse(parsed.exportedAt)))) warnings.push(t("import.badExportDate"));
       if (isPlainObject(parsed.meta) && Number.isInteger(parsed.meta.transactionCount) && parsed.meta.transactionCount!==list.length)
         warnings.push(t("import.countMismatch",{said:parsed.meta.transactionCount,has:list.length}));
@@ -625,6 +658,11 @@ function planImport(raw, filename="") {
     return { ok:false, error: bad.length ? t("import.nothing",{summary:summariseReasons(bad)}) : t("import.empty") };
   const unknownCat=list.filter(t=>checkRawTxn(t)===null).filter(t=>{ const c=txt(t.category||t.catId||t.cat).trim(); return c && resolveCategory(c)==="other" && !/^(other|miscellaneous)$/i.test(c); }).length;
   if (unknownCat) warnings.push(tn("import.unknownCat",unknownCat));
+  // Run 12: a payment's bill link is kept only when the file also contains that bill; otherwise only the link is dropped
+  // (the payment stays, still recurring) and the sheet says how many.
+  const fileBills=new Set((settings.bills||[]).map(b=>b.id)); let unlinked=0;
+  good.forEach((t,i)=>{ if (t.billId && !fileBills.has(t.billId)) { const { billId, ...rest }=t; good[i]=rest; unlinked++; } });
+  if (unlinked) warnings.push(tn("import.billUnlinked",unlinked));
   if (rekeyed) warnings.push(tn("import.rekeyed",rekeyed));
   // Rows identical to another row of the same file are all imported (two coffees at the same price on the same day are real),
   // but the user is told, since a file exported twice into one can look the same (Run 6, D10: policy — tell, never auto-remove).
@@ -655,7 +693,7 @@ function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
     // replaces the ledger; only its valid settings are applied.
     const keep=!plan.transactions.length || (plan.skippedCount||0)>0;
     const next={ ...state, transactions:keep ? state.transactions : sortDesc(plan.transactions) };
-    ["budgets","templates","currency","goals","safeToSpend"].forEach(k=>{ if (S[k]!==undefined) next[k]=S[k]; });
+    ["budgets","templates","currency","goals","safeToSpend","bills"].forEach(k=>{ if (S[k]!==undefined) next[k]=S[k]; });
     return next;
   }
   const ids=new Set(state.transactions.map(t=>String(t.id)));
@@ -672,6 +710,9 @@ function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
     const key=(g)=>`${norm(g.name)}|${Number(g.target).toFixed(2)}`; const have=new Set(state.goals.map(key));
     next.goals=[...state.goals, ...S.goals.filter(g=>!have.has(key(g))).map(g=>state.goals.some(x=>x.id===g.id)?{...g,id:fresh("g")}:g)];
   }
+  // Run 12: bills are added when their id is not on the device yet (a backup's bill is the same bill as the device's one
+  // with that id, so payments linked to it in either place stay linked).
+  if (S.bills) { const have=new Set((state.bills||[]).map(b=>b.id)); next.bills=[...(state.bills||[]), ...S.bills.filter(b=>!have.has(b.id))]; }
   return next;
 }
 
@@ -690,9 +731,9 @@ function backupReminderDue(s, now=new Date()) {
 }
 
 function buildBackup(state, now=new Date().toISOString()) {
-  const { transactions,budgets,templates,currency,goals,safeToSpend }=state;
+  const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[] }=state;
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
-    transactions, budgets, templates, currency, goals, safeToSpend, lastBackup:now };
+    transactions, budgets, templates, currency, goals, safeToSpend, bills, lastBackup:now };
 }
 
 function buildCsv(transactions) {
@@ -1035,15 +1076,117 @@ function scheduleKey(t) {
   const tail=who ? norm(t.subcategory) : `${norm(t.subcategory)}|${Number(t.amount).toFixed(2)}`;
   return [t.type,t.category,who,t.recurFreq,tail].join("|");
 }
-function buildSchedules(transactions) {
+// Run 12: explicit bills. A bill is the user's own record of a repeating payment — its name, expected amount, how often,
+// and the date it is first due (the due day comes from that date, never from guessing). A payment points to its bill with
+// billId. Payments with no (known) bill keep the earlier inferred grouping below, so data from before bills, or not yet
+// converted, behaves exactly as it always did.
+function validateBill(b) {
+  if (!isPlainObject(b)) return null;
+  const id=isBillId(b.id) ? b.id.trim() : null;
+  const name=typeof b.name==="string" ? b.name.trim() : "";
+  const type=b.type==="income" ? "income" : b.type==="expense" ? "expense" : null;
+  const amount=parseMoney(b.amount,{positive:true});
+  const anchor=typeof b.anchorDate==="string" && isValidDateStr(b.anchorDate) ? b.anchorDate : null;
+  const dueDayOk=b.dueDay===undefined || (Number.isInteger(b.dueDay) && b.dueDay>=1 && b.dueDay<=31);
+  if (!id || !name || name.length>80 || !type || amount===null || !RECUR_FREQS.has(b.freq) || !anchor || !dueDayOk || (b.active!==undefined && typeof b.active!=="boolean")) return null;
+  const ids=CATEGORIES.map(c=>c.id);
+  return { id, name, type, category:ids.includes(b.category) ? b.category : "other", subcategory:txt(b.subcategory).slice(0,40), amount, freq:b.freq,
+    anchorDate:anchor, ...(b.dueDay!==undefined ? { dueDay:b.dueDay } : {}), active:b.active!==false, createdAt:typeof b.createdAt==="string" ? b.createdAt : "" };
+}
+function newBillId(taken) { let id; do { id="b"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); } while (taken && taken.has(id)); return id; }
+
+// ── Run 13: bills mirror ──
+// The version-9 app (live before bills) rewrites the whole ledger every time it starts and does not know `bills` or a
+// payment's `billId`, so opening it once after a rollback erases both. It cannot be patched and the ledger key cannot change,
+// so a small copy of the bills and the payment links is kept under a separate key that version 9 never touches (it only
+// prunes its own "before_import" copies). When the ledger has lost bills the mirror still has, the app OFFERS to restore them;
+// nothing is ever restored silently, and bills are matched by id only, never by name or amount.
+const BILLS_MIRROR_KEY = `${KEY}__bills_mirror`;
+function buildBillsMirror(bills, transactions) {
+  const links={};
+  for (const t of (transactions||[])) if (t && isBillId(t.billId)) links[String(t.id)]=t.billId;
+  return { v:1, savedAt:new Date().toISOString(), bills:Array.isArray(bills) ? bills : [], links };
+}
+function planBillRestore(bills, transactions, mirror) {
+  if (!isPlainObject(mirror) || mirror.v!==1 || !Array.isArray(mirror.bills)) return null;
+  const have=new Set((bills||[]).map(b=>b.id)), seen=new Set(), add=[];
+  for (const raw of mirror.bills) { const b=validateBill(raw); if (!b || have.has(b.id) || seen.has(b.id)) continue; seen.add(b.id); add.push(b); }
+  if (!add.length) return null;
+  const known=new Set([...have, ...seen]), links=[];
+  if (isPlainObject(mirror.links)) for (const t of (transactions||[])) {
+    if (t.billId!==undefined) continue;   // a payment that already points somewhere is never re-linked
+    const to=mirror.links[String(t.id)];
+    if (typeof to==="string" && known.has(to)) links.push({ id:t.id, billId:to });
+  }
+  return { bills:add, links };
+}
+function applyBillRestore(s, plan) {
+  const have=new Set((s.bills||[]).map(b=>b.id));
+  const to=new Map(plan.links.map(l=>[String(l.id), l.billId]));
+  return { ...s, bills:[...(s.bills||[]), ...plan.bills.filter(b=>!have.has(b.id))],
+    transactions:s.transactions.map(t=>(t.billId===undefined && to.has(String(t.id))) ? { ...t, billId:to.get(String(t.id)) } : t) };
+}
+function readBillsMirror() { try { const r=localStorage.getItem(BILLS_MIRROR_KEY); return r===null ? null : JSON.parse(r); } catch { return null; } }
+// Best effort: the ledger itself was already saved. Users who never had bills get no extra key.
+function syncBillsMirror(bills, transactions) {
+  try { if (!(bills&&bills.length) && localStorage.getItem(BILLS_MIRROR_KEY)===null) return true; } catch { return false; }
+  return writeRaw(BILLS_MIRROR_KEY, buildBillsMirror(bills, transactions));
+}
+
+function buildSchedules(transactions, bills=[]) {
+  const known=new Map((bills||[]).map(b=>[b.id,b]));
+  const billed=(t)=>!!(t.billId && known.has(t.billId));
+  const byDate=(a,b)=>a.date.localeCompare(b.date)||String(a.createdAt).localeCompare(String(b.createdAt));
+  const fromBills=[...known.values()].map(b=>{
+    const paid=transactions.filter(t=>t.billId===b.id).sort(byDate);
+    return { key:"bill:"+b.id, billId:b.id, bill:b, anchorDate:b.anchorDate, type:b.type, category:b.category, subcategory:b.subcategory, merchant:b.name, note:"",
+      freq:b.freq, amount:b.amount, isActive:b.active!==false, occurrences:paid.map(t=>t.date), memberIds:paid.map(t=>t.id), latest:paid[paid.length-1]||null, knownBills:known };
+  });
   const groups=new Map();
-  transactions.forEach(t=>{ if (t.recurring && RECUR_FREQS.has(t.recurFreq)) { const k=scheduleKey(t); if (!groups.has(k)) groups.set(k,[]); groups.get(k).push(t); } });
-  return [...groups.entries()].map(([key,members])=>{
-    const sorted=[...members].sort((a,b)=>a.date.localeCompare(b.date)||String(a.createdAt).localeCompare(String(b.createdAt)));
+  transactions.forEach(t=>{ if (t.recurring && RECUR_FREQS.has(t.recurFreq) && !billed(t)) { const k=scheduleKey(t); if (!groups.has(k)) groups.set(k,[]); groups.get(k).push(t); } });
+  const inferred=[...groups.entries()].map(([key,members])=>{
+    const sorted=[...members].sort(byDate);
     const latest=sorted[sorted.length-1];
     return { key, type:latest.type, category:latest.category, subcategory:latest.subcategory, merchant:latest.merchant, note:latest.note,
-      freq:latest.recurFreq, amount:latest.amount, isActive:latest.isActive!==false, occurrences:sorted.map(t=>t.date), memberIds:sorted.map(t=>t.id), latest };
-  }).sort((a,b)=>a.key.localeCompare(b.key));
+      freq:latest.recurFreq, amount:latest.amount, isActive:latest.isActive!==false, occurrences:sorted.map(t=>t.date), memberIds:sorted.map(t=>t.id), latest, knownBills:known };
+  });
+  return [...fromBills, ...inferred].sort((a,b)=>a.key.localeCompare(b.key));
+}
+
+// Turns every inferred schedule into a bill (one explicit step the user takes; the app shows Undo). Each bill takes the
+// schedule's name, latest amount, frequency, activity and due day (from the earlier rules), starting at its first payment;
+// each payment gets that bill's id. Nothing else in any record changes, the inputs are not modified, and running it again
+// does nothing. Two bills that were already inferred as one stay one bill — the user separates them (assignToBill).
+function convertLegacySchedules(transactions, bills=[], now=new Date()) {
+  const legacy=buildSchedules(transactions,bills).filter(s=>!s.billId);
+  if (!legacy.length) return { transactions, bills, created:0 };
+  const taken=new Set((bills||[]).map(b=>b.id)), link=new Map(), made=[];
+  legacy.forEach(s=>{
+    const id=newBillId(taken); taken.add(id);
+    const first=parseLocalDate(s.occurrences[0]);
+    const day=(s.freq==="weekly"||s.freq==="biweekly") ? first.getDate() : Math.min(scheduleDueDay(s), new Date(first.getFullYear(),first.getMonth()+1,0).getDate());
+    // dueDay keeps the intended day when it is later than the first payment's month allows (28 Feb, then 31 Mar → due on the 31st).
+    made.push({ id, name:(s.merchant||s.note||catName(s.category)).trim().slice(0,80), type:s.type, category:s.category, subcategory:s.subcategory||"", amount:s.amount,
+      freq:s.freq, anchorDate:localDateStr(new Date(first.getFullYear(),first.getMonth(),day)), ...((s.freq==="monthly"||s.freq==="yearly") ? { dueDay:scheduleDueDay(s) } : {}), active:s.isActive, createdAt:now.toISOString() });
+    s.memberIds.forEach(mid=>link.set(String(mid),id));
+  });
+  return { transactions:transactions.map(t=>link.has(String(t.id)) ? { ...t, billId:link.get(String(t.id)) } : t), bills:[...(bills||[]), ...made], created:made.length };
+}
+
+// Marks one entry as the payment of a bill — an existing bill (target = its id) or a new bill made from this entry
+// (target = "new": its name, amount and frequency, due from its date). The entry keeps its own amount, date, category,
+// name and id; it becomes recurring with the bill's frequency. Moving a payment to another bill never deletes a bill.
+function assignToBill(transactions, bills=[], txnId, target, now=new Date()) {
+  const txn=transactions.find(t=>String(t.id)===String(txnId));
+  if (!txn) return { transactions, bills, billId:null };
+  let list=bills||[], bill=null;
+  if (target==="new") {
+    bill={ id:newBillId(new Set(list.map(b=>b.id))), name:(txn.merchant||txn.note||catName(txn.category)).trim().slice(0,80), type:txn.type, category:txn.category,
+      subcategory:txn.subcategory||"", amount:txn.amount, freq:RECUR_FREQS.has(txn.recurFreq) ? txn.recurFreq : "monthly", anchorDate:txn.date, active:true, createdAt:now.toISOString() };
+    list=[...list, bill];
+  } else bill=list.find(b=>b.id===target)||null;
+  if (!bill) return { transactions, bills, billId:null };
+  return { transactions:transactions.map(t=>t===txn ? { ...t, billId:bill.id, recurring:true, recurFreq:bill.freq, isActive:true } : t), bills:list, billId:bill.id };
 }
 const scheduleMonthly = (s) => toMonthlyAmountHelper({ amount:s.amount, recurFreq:s.freq });   // an ESTIMATE of a typical month
 
@@ -1068,11 +1211,15 @@ function scheduleDueDay(s) {
 
 // Dates a schedule is expected to fall on inside month `mon`, projected from its latest occurrence on its due day
 // (clamped to the month's length: due on the 31st → 30 Apr, 28/29 Feb).
+// Run 12: a bill's dates come from the bill itself — it starts on its anchor date and is due on that date's day (or, weekly,
+// every 7 / 14 days from it) — whether or not anything has been paid yet.
 function scheduleOccurrences(s, mon) {
   const [y,mo]=mon.split("-").map(Number);
   const first=new Date(y,mo-1,1), last=new Date(y,mo,0);
-  const anchor=parseLocalDate(s.occurrences[s.occurrences.length-1]), start=parseLocalDate(s.occurrences[0]);
-  const dueDay=Math.min(scheduleDueDay(s), last.getDate());
+  const fromBill=!!s.billId;
+  const anchor=fromBill ? parseLocalDate(s.anchorDate) : parseLocalDate(s.occurrences[s.occurrences.length-1]);
+  const start=fromBill ? anchor : parseLocalDate(s.occurrences[0]);
+  const dueDay=Math.min(fromBill ? (s.bill.dueDay||anchor.getDate()) : scheduleDueDay(s), last.getDate());
   if (mon<localMonthStr(start)) return [];                       // the commitment did not exist yet
   const out=[];
   if (s.freq==="weekly" || s.freq==="biweekly") {
@@ -1092,7 +1239,10 @@ function scheduleOccurrences(s, mon) {
 function scheduleMonthStatus(s, transactions, mon, now=new Date()) {
   const todayStr=localDateStr(now);
   const expected=scheduleOccurrences(s,mon).map(localDateStr);
-  const recorded=transactions.filter(t=>t.recurring&&scheduleKey(t)===s.key&&t.date.startsWith(mon)).map(t=>t.date).sort();
+  // A bill's payments are the entries linked to it; an inferred schedule's are the unlinked recurring entries with its key.
+  const linked=(t)=>!!(t.billId && s.knownBills && s.knownBills.has(t.billId));
+  const mine=s.billId ? (t)=>t.billId===s.billId : (t)=>t.recurring && !linked(t) && scheduleKey(t)===s.key;
+  const recorded=transactions.filter(t=>mine(t)&&t.date.startsWith(mon)).map(t=>t.date).sort();
   let remaining=[];
   if (s.freq==="monthly" || s.freq==="yearly") remaining = recorded.length ? [] : expected;
   else {
@@ -1123,7 +1273,7 @@ function scheduleNextDue(s, transactions, now=new Date()) {
 // "Commitments still to come" = every expected payment of an active schedule this month that has no matching recorded payment:
 // both upcoming ones and earlier ones that were never recorded (counted so the figure is never optimistic).
 // Recurring monthly estimates (recurringMonthly) are informational and are NOT part of this month's subtraction.
-function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
+function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bills=[]) {
   const { savingsTarget=0 }=safeConfig||{};
   const mon=localMonthStr(now), todayStr=localDateStr(now);
   // Every expense recorded for this month, including ones dated later: money entered ahead of time is already committed.
@@ -1134,7 +1284,7 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
   const expectedInc=monthInc.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
   const p=monthProgress(mon,now);
 
-  const schedules=buildSchedules(transactions).filter(s=>s.isActive && s.type==="expense");
+  const schedules=buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense");
   let upcomingCommitments=0, unrecordedCommitments=0, upcomingCount=0, unrecordedCount=0;
   schedules.forEach(s=>{
     const st=scheduleMonthStatus(s,transactions,mon,now);
@@ -1512,7 +1662,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .page{flex:1;overflow-y:auto;padding:20px 20px calc(112px + env(safe-area-inset-bottom,0px));animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) backwards}
 /* "backwards", not "both": a transform kept after the animation makes .page the box that position:fixed sheets are placed in,
    so a sheet opened from a long list landed thousands of pixels below the screen, under the tab bar. */
-@keyframes pageIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pageIn{from{opacity:0}to{opacity:1}}   /* Run 14: a short fade only; sliding every screen in made the numbers move while being read */
 .label-sm{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3)}
 /* Hero */
 .hero{padding:16px 0 18px;border-bottom:1px solid var(--rule);margin-bottom:18px}
@@ -1717,16 +1867,11 @@ input[type=number]{-moz-appearance:textfield}
 .toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--bg-warm);color:var(--ink);border:1px solid var(--rule-2);padding:9px 18px;border-radius:12px;font-size:12px;font-weight:600;z-index:300;white-space:nowrap;pointer-events:none;animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1);box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
 /* Staggered section entrance */
-.section-enter{animation:sectionIn 280ms cubic-bezier(0.22,1,0.36,1) both}
-.section-enter-1{animation-delay:0ms}
-.section-enter-2{animation-delay:40ms}
-.section-enter-3{animation-delay:80ms}
-.section-enter-4{animation-delay:120ms}
-.section-enter-5{animation-delay:160ms}
-.section-enter-6{animation-delay:200ms}
-.section-enter-7{animation-delay:240ms}
-.section-enter-8{animation-delay:280ms}
-@keyframes sectionIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+/* Run 14: the sections of a screen appear together with a short fade (no per-section delay, no sliding). The classes stay so the
+   markup is unchanged; reduced-motion handling further down still switches the animation off completely. */
+.section-enter{animation:sectionIn 160ms ease-out both}
+.section-enter-1,.section-enter-2,.section-enter-3,.section-enter-4,.section-enter-5,.section-enter-6,.section-enter-7,.section-enter-8{animation-delay:0ms}
+@keyframes sectionIn{from{opacity:0}to{opacity:1}}
 .backup-banner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--warn-bg);border-bottom:1px solid rgba(240,196,111,0.35);font-size:11px;font-weight:600;color:var(--warn)}
 .backup-banner span{flex:1}
 .backup-banner-btn{flex-shrink:0;padding:4px 10px;background:var(--warn);color:var(--bg);border:none;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font)}
@@ -1820,6 +1965,9 @@ input[type=number]{-moz-appearance:textfield}
 .lang-pill.sel{border-color:var(--accent-fill);background:var(--accent-fill);color:var(--on-accent)}
 .lang-pill:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .topbar-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* Run 14: rows, bars, the import tile and switches are keyboard-reachable now; they get the same visible ring (inside the edge for rows, which sit in clipped cards) */
+.txn-row:focus-visible,.bill-row:focus-visible,.drop-zone:focus-visible,.list-row:focus-visible,.toggle-track:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.m-col:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 /* ── Design pass (from patch_H_design.py, reviewed) ── */
 /* Secondary greys: --ink-3 #5F5A53 is 6.2:1 on the page background, --ink-4 #6E6961 is ≥ 4.5:1 on every surface
    (page, card, warm and inset backgrounds). They were 4.2:1 and 2.0:1. (The patch's #746F67 failed on --bg-inset: 4.15:1.) */
@@ -2094,6 +2242,12 @@ export default function App() {
   const [recoveryNotice, setRecoveryNotice] = useState(()=>LOAD_NOTICE);
   const stateRef = useRef(state);
   stateRef.current = state;   // always the latest committed state, for callbacks that must not close over a stale copy
+  // Run 13: bills an older app version removed (worked out once, from the data as loaded, against the mirror kept on disk).
+  // While the offer is open the mirror is not rewritten, so ignoring the banner never loses the bills; restoring, or
+  // choosing "No thanks", closes it and the mirror then follows the ledger again.
+  const [restoreOffer] = useState(() => planBillRestore(state.bills, state.transactions, readBillsMirror()));
+  const [restoreClosed, setRestoreClosed] = useState(false);
+  const restoreOpen = !!restoreOffer && !restoreClosed && restoreOffer.bills.some(b=>!(state.bills||[]).some(x=>x.id===b.id));
   useSheetGestures();
   // Dismissing the backup reminder hides it for this visit only; it is worked out from the saved state on every render.
   const [backupDismissed, setBackupDismissed] = useState(false);
@@ -2126,7 +2280,8 @@ export default function App() {
     if (SAVE_BLOCKED) { setStorageFailed(true); return; }
     const ok=writeRaw(KEY,state);
     setStorageFailed(!ok);
-  },[state]);
+    if (ok && !restoreOpen) syncBillsMirror(state.bills, state.transactions);
+  },[state, restoreOpen]);
 
   const merchantMemory=useMemo(()=>buildMerchantMemory(state.transactions),[state.transactions]);
 
@@ -2207,13 +2362,24 @@ export default function App() {
       document.removeEventListener("touchend",onEnd); document.removeEventListener("touchcancel",reset); };
   },[switchTab]);
 
+  // Run 12: the add form may say which bill a recurring entry pays ("new" = make a bill from it, or a bill id). An entry
+  // that is not recurring has no bill. billChoice null = grouped the earlier way (while old recurring payments exist).
+  const withBill=(s,id,billChoice)=>{
+    const txn=s.transactions.find(t=>t.id===id);
+    if (txn && !txn.recurring && txn.billId) { const { billId, ...rest }=txn; return { ...s, transactions:s.transactions.map(t=>t.id===id?rest:t) }; }
+    if (!txn || !txn.recurring || !billChoice) return s;
+    const r=assignToBill(s.transactions,s.bills||[],id,billChoice);
+    return { ...s, transactions:r.transactions, bills:r.bills };
+  };
   const addTransaction=useCallback((txn)=>{
-    setState(s=>({...s,transactions:[{...txn,id:Date.now()+Math.random(),createdAt:new Date().toISOString()},...s.transactions]}));
+    const { billChoice, ...data }=txn, id=Date.now()+Math.random();
+    setState(s=>withBill({...s,transactions:[{...data,id,createdAt:new Date().toISOString()},...s.transactions]},id,billChoice));
     showToast(t("toast.recorded"));
   },[showToast]);
 
   const updateTransaction=useCallback((id,txn)=>{
-    setState(s=>({...s,transactions:s.transactions.map(t=>t.id===id?{...t,...txn}:t)}));
+    const { billChoice, ...data }=txn;
+    setState(s=>withBill({...s,transactions:s.transactions.map(t=>t.id===id?{...t,...data}:t)},id,billChoice));
     showToast(t("toast.updated"));
   },[showToast]);
 
@@ -2235,6 +2401,44 @@ export default function App() {
       undoBuffer.current=[];
     }, 4000, "delete");
   },[showSnackbar]);
+
+  // ── Run 12: explicit bills ──
+  const [editBill, setEditBill] = useState(undefined);   // undefined = closed · null = new bill · a bill = editing it
+  // One explicit step: every recurring payment still grouped the old way gets a bill. A recovery copy of the data is kept
+  // first (as before a Replace import) and Undo restores it exactly, unless something changed since.
+  const convertBills=useCallback(()=>{
+    const before=stateRef.current;
+    if (!preserveRaw("before_bills", before)) { showToast(t("import.copyFailed"),6000); return; }
+    pruneRecoveryCopies("before_bills");
+    const r=convertLegacySchedules(before.transactions, before.bills||[]);
+    if (!r.created) return;
+    const next={ ...before, transactions:r.transactions, bills:r.bills };
+    setState(next);
+    showSnackbar(tn("bill.converted",r.created),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },10000,"bills");
+  },[showToast,showSnackbar]);
+  const saveBill=useCallback((b)=>{
+    setState(s=>{ const list=s.bills||[];
+      return b.id ? { ...s, bills:list.map(x=>x.id===b.id?b:x) } : { ...s, bills:[...list, { ...b, id:newBillId(new Set(list.map(x=>x.id))) }] }; });
+    setEditBill(undefined); showToast(t("bill.saved"));
+  },[showToast]);
+  // Deleting a bill keeps every payment; they stop pointing to it (and count as recurring payments the earlier way). Undo.
+  const deleteBill=useCallback((id)=>{
+    const before=stateRef.current;
+    const next={ ...before, bills:(before.bills||[]).filter(b=>b.id!==id), transactions:before.transactions.map(t=>{ if (t.billId!==id) return t; const { billId, ...rest }=t; return { ...rest, recurring:false, recurFreq:null }; }) };   // history stays (amount, date, name, id); they leave the recurring system so they are neither set aside again nor offered for conversion
+    setState(next); setEditBill(undefined);
+    showSnackbar(t("bill.deleted"),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },8000,"bills");
+  },[showToast,showSnackbar]);
+  const toggleBill=useCallback((id,active)=>setState(s=>({ ...s, bills:(s.bills||[]).map(b=>b.id===id?{...b,active}:b) })),[]);
+  // Run 13: restoring the bills an older app version removed. Explicit, with a recovery copy first and Undo.
+  const restoreBills=useCallback(()=>{
+    const before=stateRef.current;
+    if (!restoreOffer) return;
+    if (!preserveRaw("before_bills_restore", before)) { showToast(t("import.copyFailed"),6000); return; }
+    pruneRecoveryCopies("before_bills_restore");
+    const next=applyBillRestore(before, restoreOffer);
+    setState(next); setRestoreClosed(true);
+    showSnackbar(tn("bill.restored",restoreOffer.bills.length),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); setRestoreClosed(false); },10000,"bills");
+  },[restoreOffer,showToast,showSnackbar]);
 
   // Pausing or reactivating applies to the WHOLE schedule (every recorded payment of it), so the state is always consistent.
   const toggleScheduleActive=useCallback((ids,makeActive)=>{
@@ -2278,12 +2482,21 @@ export default function App() {
     return ()=>{ window.removeEventListener("beforeinstallprompt",onBip); window.removeEventListener("appinstalled",onInstalled); };
   },[askProtection]);
 
-  const exportCSV=useCallback(()=>{
+  const exportCSV=useCallback(async ()=>{
+    const native=nativeShareHook();
+    if (native) {   // Run 13: in the native shell a download link does nothing; success is claimed only after the hand-over says so
+      const r=await shareViaNative(native,`ledger-${today()}.csv`,buildCsv(state.transactions),"text/csv;charset=utf-8;");
+      if (r==="shared") showToast(tn("toast.csvCreated",state.transactions.length));
+      else if (r==="failed") showToast(t("io.shareFailed"),6000);
+      return;
+    }
     downloadFile(buildCsv(state.transactions),"text/csv;charset=utf-8;",`ledger-${today()}.csv`);
     showToast(tn("toast.csvCreated",state.transactions.length));
   },[state.transactions,showToast]);
 
+  const shareBackupRef=useRef(null);
   const exportJSON=useCallback(()=>{
+    if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: native shell → the hand-over, never a dead download link
     const now=new Date().toISOString();
     downloadFile(JSON.stringify(buildBackup(state,now),null,2),"application/json",`ledger-backup-${today()}.json`);
     // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
@@ -2299,11 +2512,13 @@ export default function App() {
     const now=new Date().toISOString();
     const r=await shareBackupFile(JSON.stringify(buildBackup(state,now),null,2),`ledger-backup-${today()}.json`);
     if (r==="unsupported") { exportJSON(); return; }
+    if (r==="failed") { showToast(t("io.shareFailed"),6000); return; }   // Run 13: told, and nothing is recorded
     if (r!=="shared") return;
     setState(s=>({...s,lastBackup:now}));
     setBackupDismissed(false);
     showToast(t("io.sharedToast"),5000);
   },[state,showToast,exportJSON]);
+  shareBackupRef.current=shareBackup;
 
   const importFile=useCallback((file)=>{
     if (!file) return;
@@ -2342,7 +2557,7 @@ export default function App() {
     }, 8000, "import");
   },[importPending,skipDup,showToast,showSnackbar]);
 
-  const {transactions,budgets,templates,currency,goals,safeToSpend}=state;
+  const {transactions,budgets,templates,currency,goals,safeToSpend}=state; const bills=state.bills||[];
   const changeLanguage=useCallback((l)=>{ setState(s=>({...s,language:l})); showToast(tIn(l,"lang.changed")); },[showToast]);
 
   // Genuinely fresh install: the language is chosen before anything else is shown. The starter quick-fill templates are
@@ -2368,6 +2583,13 @@ export default function App() {
             <button className="backup-dismiss" onClick={()=>setRecoveryNotice(null)} aria-label={t("common.dismissNotice")}>×</button>
           </div>
         )}
+        {restoreOpen&&(
+          <div className="backup-banner backup-reminder bill-restore" role="alert">
+            <span>{tn("bill.restoreAsk",restoreOffer.bills.length)}</span>
+            <button className="backup-banner-btn bill-restore-yes" onClick={restoreBills}>{t("bill.restoreBtn")}</button>
+            <button className="backup-banner-btn bill-restore-no" style={{background:"transparent",color:"var(--ink-2)",border:"1px solid var(--rule-2)"}} onClick={()=>setRestoreClosed(true)}>{t("bill.restoreNo")}</button>
+          </div>
+        )}
         {storageFailed&&(
           <div className="backup-banner" role="alert" style={{background:"var(--neg-bg)",borderBottomColor:"var(--neg)",color:"var(--neg)"}}>
             <span>{SAVE_BLOCKED?t(SAVE_BLOCKED_READ?"banner.readPaused":"banner.savePaused"):t("banner.saveFailed")}</span>
@@ -2380,14 +2602,16 @@ export default function App() {
             <button className="backup-banner-btn update-now" onClick={()=>window.location.reload()}>{t("update.now")}</button>
           </div>
         )}
-        {!backupDismissed&&backupReminder==="due"&&transactions.length>0&&(
+        {/* Run 14: the routine backup reminders appear where they can be acted on (Home, Import / Export), not above every screen.
+            Warnings about the data's safety (recovery notices, "cannot save", update) above stay on every screen. */}
+        {!backupDismissed&&(tab==="home"||tab==="io")&&backupReminder==="due"&&transactions.length>0&&(
           <div className="backup-banner backup-reminder" role="alert">
             <span>{t("banner.backupDue")}</span>
             <button className="backup-banner-btn" onClick={exportJSON}>{t("banner.backUpNow")}</button>
             <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label={t("common.dismiss")}>×</button>
           </div>
         )}
-        {!backupDismissed&&backupReminder==="confirm"&&transactions.length>0&&(
+        {!backupDismissed&&(tab==="home"||tab==="io")&&backupReminder==="confirm"&&transactions.length>0&&(
           <div className="backup-banner backup-reminder" role="status">
             <span>{t("banner.backupConfirm")}</span>
             <button className="backup-banner-btn" onClick={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}>{t("banner.haveFile")}</button>
@@ -2406,7 +2630,7 @@ export default function App() {
             {/* Run 9: the "+" creates what the screen is about (none where nothing is created); Settings lives under More only. */}
             {(()=>{ const a=tab==="home"||tab==="ledger" ? { label:t("nav.addTxn"), run:()=>openAdd() }
                 : tab==="goals" ? { label:t(goalsSeg==="goals"?"goals.addGoal":"goals.addBudget"), run:()=>setGoalsAdd(n=>n+1) }
-                : tab==="recurring" ? { label:t("rec.add"), run:()=>openAdd({ type:"expense", recurring:true, recurFreq:"monthly" }) }
+                : tab==="recurring" ? { label:t("bill.add"), run:()=>setEditBill(null) }
                 : null;
               return a && <button className="topbar-add" onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={18} color="var(--on-accent)"/></button>; })()}
             <button className={`topbar-btn privacy-toggle${privacy?" on":""}`} aria-pressed={privacy} aria-label={t(privacy?"privacy.show":"privacy.hide")} title={t(privacy?"privacy.show":"privacy.hide")}
@@ -2415,7 +2639,7 @@ export default function App() {
         </header>
 
         <main className="page" key={tabKey}>
-          {tab==="home"      && <HomePage transactions={transactions} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)}/>}
+          {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} onView={txn=>setViewTxn(txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
@@ -2424,8 +2648,9 @@ export default function App() {
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
             onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}/>}
           {tab==="more"      && <MorePage onOpen={switchTab} onSettings={()=>setShowSettings(true)} version={runningVersion}/>}
-          {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
-            onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq })}/>}
+          {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
+            onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
+            onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
@@ -2442,7 +2667,7 @@ export default function App() {
         </nav>
 
         {showAdd&&(
-          <AddEditOverlay templates={templates} currency={currency} transactions={transactions} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
+          <AddEditOverlay templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
             onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onClose={closeAdd}/>
         )}
         {showSettings&&(
@@ -2479,6 +2704,9 @@ export default function App() {
                       : importPending.transactions.length>0
                         ? <span className="import-replace-blocked"><strong>{t("import.replaceBlockedLabel")}</strong> {tn("import.replaceBlockedText",importPending.skippedCount)}</span>
                         : <><strong>{t("import.settingsOnlyLabel")}</strong> {t("import.settingsOnlyText")}</>}
+                    {importPending.canReplace && (state.bills||[]).length>0 && importPending.settings?.bills===undefined&&(
+                      <div className="import-bills-stay" style={{marginTop:6,color:"var(--warn)"}}>{tn("import.billsStay",state.bills.length)}</div>
+                    )}
                   </div>
                   {importPending.dupCount>0&&(
                     <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12,color:"var(--ink-2)",marginBottom:14,lineHeight:1.45}}>
@@ -2498,8 +2726,19 @@ export default function App() {
             </div>
           </div>
         )}
+        {editBill!==undefined&&(
+          <BillSheet bill={editBill} currency={currency} onSave={saveBill} onDelete={deleteBill} onClose={()=>setEditBill(undefined)} showToast={showToast}/>
+        )}
         {viewTxn&&(
-          <TxnDetailSheet txn={viewTxn} currency={currency} transactions={transactions}
+          <TxnDetailSheet txn={viewTxn} currency={currency} transactions={transactions} bills={bills}
+            onAssignBill={target=>{
+              // Explicit bills: this entry becomes the payment of the chosen bill (or of a new bill made from it). Undo.
+              const before=stateRef.current, r=assignToBill(before.transactions,before.bills||[],viewTxn.id,target);
+              if (!r.billId) return;
+              const next={ ...before, transactions:r.transactions, bills:r.bills }; setState(next); setViewTxn(null);
+              const b=r.bills.find(x=>x.id===r.billId);
+              showSnackbar(t("detail.linkedToast",{name:maskText(b.name)}),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },8000,"link");
+            }}
             onClose={()=>setViewTxn(null)}
             onEdit={()=>{ openAdd(viewTxn,viewTxn.id); setViewTxn(null); }}
             onDuplicate={()=>{ openAdd({...viewTxn,date:today(),id:undefined},null); setViewTxn(null); }}
@@ -2580,7 +2819,7 @@ function cmpText(diff, kind, currency) {
 const cmpTitle = (kind) => t(kind==="same" ? "cmp.titleSame" : "cmp.titleFull");
 const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevSame" : "cmp.prevFull", { amount:fmt(amount,currency) });
 
-function HomePage({ transactions, budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView }) {
+function HomePage({ transactions, bills=[], budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -2588,7 +2827,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
   const spentToDate =calcSpentToDate(transactions,now);
   const paceInfo    =calcSpendingPace(spentToDate,now,budgetTotal);
   const budgetItems =calcBudgetStatus(budgets,catSpend,now);
-  const safeInfo    =calcSafeToSpend(transactions,safeToSpend,goals);
+  const safeInfo    =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills);
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curInc>0;
   const recent      =transactions.slice(0,6);
@@ -2596,11 +2835,11 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
   // Upcoming recurring (due within 7 days)
   const upcomingSchedules=useMemo(()=>{
     const nowD=new Date();
-    return buildSchedules(transactions).filter(x=>x.isActive&&x.type==="expense")
+    return buildSchedules(transactions,bills).filter(x=>x.isActive&&x.type==="expense")
       .map(x=>({...x,nextDue:scheduleNextDue(x,transactions,nowD)}))
       .filter(x=>x.nextDue&&daysBetween(nowD,x.nextDue)<=7)
       .sort((a,b)=>a.nextDue-b.nextDue);
-  },[transactions]);
+  },[transactions,bills]);
 
   return (
     <div>
@@ -2667,7 +2906,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
 
       {/* Smart Helper — deterministic advice cards */}
       <div className="section-enter section-enter-2">
-        <SmartHelper transactions={transactions} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
+        <SmartHelper transactions={transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
       </div>
       <HomeDetails goals={goals} budgetItems={budgetItems} recent={recent} currency={currency} onAdd={onAdd} onView={onView}/>
     </div>
@@ -2888,7 +3127,7 @@ function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
     !compact?fmtDate(txn.date):null,
   ].filter(Boolean).join(" · ");
   return (
-    <div className="txn-row" onClick={()=>onView?.(txn)}>
+    <div className="txn-row" onClick={()=>onView?.(txn)} {...(onView ? { role:"button", tabIndex:0, onKeyDown:activateKey(()=>onView(txn)) } : {})}>
       <div className="txn-ico" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={txn.category} size={16} color={cat?.color}/></div>
       <div className="txn-body">
         <div className="txn-name">{displayName}</div>
@@ -3027,14 +3266,64 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
 }
 
 // ─── Recurring Hub ────────────────────────────────────────────────────────────
-function RecurringHub({ transactions, currency, onView, onToggleSchedule, onRecordPayment }) {
+// Run 12: the bill form — add a bill, or edit / pause / delete one. The due date is the user's: the bill is expected on it
+// and then every week / two weeks / month / year (a day past a month's end falls on that month's last day).
+// Deleting a bill keeps all its payments; they just stop pointing to it.
+function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast }) {
+  const isNew=!bill;
+  const [name,setName]=useState(bill?.name||""), [type,setType]=useState(bill?.type||"expense"), [amount,setAmount]=useState(bill?String(bill.amount):"");
+  const [category,setCategory]=useState(bill?.category||"housing"), [freq,setFreq]=useState(bill?.freq||"monthly");
+  const [anchor,setAnchor]=useState(bill?.anchorDate||today()), [active,setActive]=useState(bill?bill.active!==false:true);
+  const cats=CATEGORIES.filter(c=>type==="income"?c.income:!c.income);
+  const save=()=>{
+    const b=validateBill({ id:bill?.id||"tmp", name, type, category:cats.some(c=>c.id===category)?category:cats[0].id, subcategory:bill?.subcategory||"",
+      amount:parseMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), active, createdAt:bill?.createdAt||new Date().toISOString() });
+    if (!b) { showToast(t("bill.invalid"),3500); return; }
+    onSave(isNew ? { ...b, id:null } : b);
+  };
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet bill-sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t(isNew?"bill.add":"bill.edit")}>
+        <div className="sheet-grip"><div className="sheet-handle"/></div>
+        <div className="sheet-title">{t(isNew?"bill.add":"bill.edit")}</div>
+        <div className="type-toggle">
+          {["expense","income"].map(ty=><button key={ty} className={`type-btn${type===ty?" active":""}`} aria-pressed={type===ty} onClick={()=>setType(ty)}>{t(ty==="income"?"add.income":"add.expense")}</button>)}
+        </div>
+        <div className="field"><label className="field-lbl" htmlFor="bill-name">{t("bill.name")}</label><input id="bill-name" className="field-input" value={name} maxLength={80} placeholder={t("bill.namePh")} onChange={e=>setName(e.target.value)}/></div>
+        <div className="field-row">
+          <div className="field"><label className="field-lbl" htmlFor="bill-amount">{t("add.amount")} ({currency})</label><input id="bill-amount" className="field-input" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)}/></div>
+          <div className="field"><label className="field-lbl" htmlFor="bill-freq">{t("add.frequency")}</label>
+            <select id="bill-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)}>{["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}</select></div>
+        </div>
+        <div className="field-row">
+          <div className="field"><label className="field-lbl" htmlFor="bill-cat">{t("add.category")}</label>
+            <select id="bill-cat" className="field-input field-select" value={cats.some(c=>c.id===category)?category:cats[0].id} onChange={e=>setCategory(e.target.value)}>{cats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</select></div>
+          <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><input id="bill-date" className="field-input" type="date" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/>
+            {isValidDateStr(anchor)&&<div className="list-sub" style={{marginTop:4}}>{fmtLongDate(parseLocalDate(anchor))}</div>}</div>
+        </div>
+        {!isNew&&(
+          <div className="settings-row">
+            <div><div className="settings-row-title">{t("bill.active")}</div><div className="settings-row-sub">{t("bill.activeSub")}</div></div>
+            <div className={`toggle-track${active?" on":""}`} role="switch" aria-checked={active} aria-label={t("bill.active")} tabIndex={0} onClick={()=>setActive(a=>!a)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setActive(a=>!a); } }}><div className="toggle-knob"/></div>
+          </div>
+        )}
+        <button className="btn btn-primary btn-full bill-save" onClick={save}>{t("common.save")}</button>
+        {!isNew&&<button className="btn btn-ghost btn-full bill-delete" style={{color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>onDelete(bill.id)}>{t("bill.delete")}</button>}
+        <button className="btn btn-ghost btn-full" onClick={onClose}>{t("common.cancel")}</button>
+      </div>
+    </div>
+  );
+}
+
+function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedule, onRecordPayment, onConvert, onEditBill, onToggleBill }) {
   const schedules=useMemo(()=>{
     const nowD=new Date();
-    return buildSchedules(transactions).map(x=>{
+    return buildSchedules(transactions,bills).map(x=>{
       const st=x.isActive ? scheduleMonthStatus(x,transactions,localMonthStr(nowD),nowD) : null;
       return { ...x, nextDue:scheduleNextDue(x,transactions,nowD), monthly:scheduleMonthly(x), unrecordedThisMonth:st?st.overdue.length:0 };
     }).sort((a,b)=>{ if (a.isActive!==b.isActive) return a.isActive?-1:1; return (a.nextDue?a.nextDue.getTime():Infinity)-(b.nextDue?b.nextDue.getTime():Infinity); });
-  },[transactions]);
+  },[transactions,bills]);
+  const inferred=schedules.filter(x=>!x.billId).length;
   const active=schedules.filter(x=>x.isActive), paused=schedules.filter(x=>!x.isActive);
   const outgoing=active.filter(x=>x.type==="expense");
   const monthlyOut=outgoing.reduce((a,x)=>a+x.monthly,0);
@@ -3059,16 +3348,16 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
       // A paused schedule is marked by its "Paused" text and a faded icon; its text keeps full contrast (fading the whole row
       // made it 2.2–3.9:1, including the Reactivate button the user needs).
       <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)"}}>
-        <div onClick={()=>onView?.(x.latest)} style={{width:38,height:38,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:x.isActive?1:0.5}}>
+        <div aria-hidden="true" onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{width:38,height:38,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:x.isActive?1:0.5}}>
           <CatIcon catId={cat.id} size={16} color={cat.color}/>
         </div>
-        <div onClick={()=>onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
+        <div className={x.billId?"bill-row":undefined} role="button" tabIndex={0} onKeyDown={activateKey(()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest))} onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
           <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{maskText(x.merchant||x.note)||catName(x.category)}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,lineHeight:1.4}}>
             {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""} · {t("freq."+x.freq)} · {tn("rec.paymentsRecorded",x.occurrences.length)}
           </div>
           <div style={{fontSize:11,marginTop:1,color:near&&x.isActive?"var(--warn)":"var(--ink-4)",fontWeight:near&&x.isActive?700:400}}>
-            {x.isActive?dueText(x):t("rec.paused")} · {t("rec.last",{date:fmtDate(x.occurrences[x.occurrences.length-1])})}
+            {x.isActive?dueText(x):t("rec.paused")} · {x.occurrences.length?t("rec.last",{date:fmtDate(x.occurrences[x.occurrences.length-1])}):t("bill.noPayments")}
             {x.unrecordedThisMonth>0&&<span style={{color:"var(--warn)",fontWeight:700}}> · {tn("rec.notRecorded",x.unrecordedThisMonth)}</span>}
           </div>
         </div>
@@ -3082,7 +3371,7 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
               {t(isInc?"rec.recordIncome":"rec.recordPayment")}
             </button>
           )}
-          <button onClick={e=>{e.stopPropagation();onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"var(--font)",textDecoration:"underline",textUnderlineOffset:2}}>
+          <button onClick={e=>{e.stopPropagation(); if (x.billId) onToggleBill(x.billId,!x.isActive); else onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"var(--font)",textDecoration:"underline",textUnderlineOffset:2}}>
             {x.isActive?t("rec.pause"):t("rec.reactivate")}
           </button>
         </div>
@@ -3093,6 +3382,13 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
   return (
     <div>
       <div style={{fontSize:11,color:"var(--ink-4)",fontStyle:"italic",marginBottom:14,lineHeight:1.5}}>{t("rec.intro")}</div>
+      {inferred>0&&onConvert&&(
+        <div className="card bill-convert">
+          <div className="card-title" style={{marginBottom:6}}>{t("bill.legacyTitle")}</div>
+          <div className="list-sub" style={{lineHeight:1.5}}>{tn("bill.legacyText",inferred)}</div>
+          <button className="btn btn-primary btn-full rec-convert" onClick={onConvert} style={{marginTop:12}}>{t("bill.convertBtn")}</button>
+        </div>
+      )}
       <div className="stat-row">
         <div className="stat-cell"><div className="stat-val" style={{color:"var(--neg)"}}>{fmt(monthlyOut,currency)}</div><div className="stat-lbl">{t("rec.monthlyOut")}</div></div>
         <div className="stat-cell"><div className="stat-val">{fmt(monthlyOut*12,currency)}</div><div className="stat-lbl">{t("rec.yearly")}</div></div>
@@ -3140,7 +3436,13 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule, onReco
   );
 }
 
-function AddEditOverlay({ templates, currency, transactions, prefill, editId, merchantMemory, onSave, onClose }) {
+function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose }) {
+  // Run 12: which bill a recurring entry pays. Offered only when every recurring payment is already linked to a bill
+  // (nothing inferred the old way); otherwise the entry is grouped as before, so it can't start a second copy of a bill
+  // that is still inferred. "new" makes a bill from this entry; an id links to that bill.
+  const hasInferred=useMemo(()=>buildSchedules(transactions,bills).some(s=>!s.billId),[transactions,bills]);
+  const [billChoice, setBillChoice] = useState(prefill?.billId||(hasInferred?"auto":"new"));
+  const [askBill, setAskBill] = useState(null);   // a same-name bill exists: ask before making another one
   const isEditing=!!editId;
   const [type,     setType]     = useState(prefill?.type||"expense");
   const [amount,   setAmount]   = useState(prefill?.amount?String(prefill.amount):"");
@@ -3204,13 +3506,22 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
     );
   },[amount,catId,note,transactions,isEditing]);
 
-  const submit=()=>{
+  const submit=(override)=>{
     const amt=parseMoney(amount,{positive:true});
     if (amt===null) { setErr(t("add.errAmount")); return; }
     if (!isValidDateStr(String(date||""))) { setErr(t("add.errDate")); return; }
     // S0: Preserve isActive when editing — never silently reactivate a paused recurring
     const isActive=isEditing?(prefill?.isActive!==undefined?prefill.isActive:true):true;
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?freq:null,isActive});
+    // A bill that exists always links (also while old-style groups remain); only "a new bill" is held back until none remain.
+    const choice=typeof override==="string" ? override : billChoice;
+    const chosenBill=recur ? bills.find(b=>b.id===choice&&b.type===type) : null;
+    if (recur && !chosenBill && !hasInferred && override===undefined) {
+      const who=norm(merchant.trim()||note.trim());
+      const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
+      if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
+    }
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,
+      billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
   const relevantTpls=!isEditing?templates.filter(tp=>!CATEGORIES.find(c=>c.id===tp.catId)?.income&&type==="expense"):[];
@@ -3334,17 +3645,35 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
               <div className={`toggle-track${recur?" on":""}`} onClick={()=>setRecur(r=>!r)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setRecur(r=>!r); } }} role="switch" aria-checked={recur} aria-label={t("add.recurring")} tabIndex={0}>
                 <div className="toggle-knob"/>
               </div>
-              {recur&&(
+              {recur&&!bills.some(b=>b.id===billChoice&&b.type===type)&&(
                 <select className="field-select" value={freq} onChange={e=>setFreq(e.target.value)} aria-label={t("add.frequency")}
                   style={{fontSize:12,color:"var(--ink)",background:"transparent",border:"none",outline:"none",cursor:"pointer"}}>
                   {["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}
                 </select>
               )}
             </div>
+            {recur&&(!hasInferred||bills.some(b=>b.type===type))&&(
+              <div className="field" style={{marginTop:10,marginBottom:0}}>
+                <label className="field-lbl" htmlFor="txn-bill">{t("bill.which")}</label>
+                <select id="txn-bill" className="field-input field-select bill-choice" value={bills.some(b=>b.id===billChoice&&b.type===type)?billChoice:(hasInferred?"auto":"new")} onChange={e=>setBillChoice(e.target.value)}>
+                  {hasInferred ? <option value="auto">{t("bill.autoGroup")}</option> : <option value="new">{t("bill.newFromEntry")}</option>}
+                  {bills.filter(b=>b.type===type).map(b=><option key={b.id} value={b.id}>{maskText(b.name)} · {fmt(b.amount,currency)} · {t("freq."+b.freq)}</option>)}
+                </select>
+              </div>
+            )}
+            {recur&&hasInferred&&<div className="list-sub" style={{marginTop:8,lineHeight:1.45}}>{t("bill.convertFirst")}</div>}
+            {askBill&&(
+              <div className="card bill-ask" role="alert" style={{marginTop:10,marginBottom:0}}>
+                <div className="list-title" style={{marginBottom:4}}>{t("bill.askTitle",{name:maskText(askBill.name)})}</div>
+                <div className="list-sub" style={{lineHeight:1.5,marginBottom:10}}>{t("bill.askText",{amount:fmt(askBill.amount,currency),freq:t("freq."+askBill.freq)})}</div>
+                <button className="btn btn-primary btn-full bill-ask-pay" style={{marginTop:0}} onClick={()=>submit(askBill.id)}>{t("bill.askPay",{name:maskText(askBill.name)})}</button>
+                <button className="btn btn-ghost btn-full bill-ask-new" onClick={()=>submit("new")}>{t("bill.askNew")}</button>
+              </div>
+            )}
           </div>
         </div>
 
-        <button className="btn btn-primary btn-full" onClick={submit}>
+        <button className="btn btn-primary btn-full" onClick={()=>submit()}>
           {isEditing?t("add.saveChanges"):t(type==="income"?"add.recordIncome":"add.recordExpense")}
         </button>
         <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
@@ -3365,11 +3694,17 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
 }
 
 // ─── S6: Transaction Detail Sheet with Merchant Intelligence ─────────────────
-function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplicate, onDelete, onLinkBill }) {
+function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClose, onEdit, onDuplicate, onDelete, onLinkBill, onAssignBill }) {
   // Run 9: an ordinary (non-recurring) entry can be marked as the payment of an existing bill — only when the user picks the
   // bill. Same merchant and amount are never enough to link anything automatically.
+  // Run 12: once every recurring payment has a bill ("explicit"), any entry can be linked to a bill, moved to another bill,
+  // or made into a new bill; before that, the Run 9 behaviour (inferred schedules, ordinary entries only) is kept.
   const [showLink,setShowLink]=useState(false);
-  const bills=useMemo(()=>txn.recurring?[]:buildSchedules(transactions).filter(x=>x.isActive&&x.type===txn.type),[txn,transactions]);
+  const all=useMemo(()=>buildSchedules(transactions,billList),[transactions,billList]);
+  const explicit=!!onAssignBill && !all.some(s=>!s.billId);
+  const bills=useMemo(()=>explicit ? all.filter(x=>x.billId && x.type===txn.type && x.billId!==txn.billId)
+    : (txn.recurring?[]:all.filter(x=>x.isActive&&x.type===txn.type)),[all,explicit,txn]);
+  const myBill=txn.billId ? billList.find(b=>b.id===txn.billId) : null;
   const cat=CAT(txn.category)||{id:"other",name:txn.category,color:"#98A5B7"};
   const isInc=txn.type==="income";
   const profile=useMemo(()=>txn.merchant?calcMerchantProfile(txn.merchant,transactions):null,[txn.merchant,transactions]);
@@ -3503,21 +3838,26 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
           <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onEdit}><Icon name="edit" size={14}/>{t("common.edit")}</button>
           <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onDuplicate}><Icon name="repeat" size={14}/>{t("detail.duplicate")}</button>
         </div>
-        {onLinkBill&&bills.length>0&&(
+        {myBill&&<div className="list-sub bill-of" style={{margin:"0 2px 8px"}}>{t("bill.paymentOf",{name:maskText(myBill.name)})}</div>}
+        {((explicit&&onAssignBill)||(onLinkBill&&bills.length>0))&&(
           <div style={{marginBottom:8}}>
             <button className="btn btn-ghost btn-full link-bill" style={{marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} aria-expanded={showLink} onClick={()=>setShowLink(s=>!s)}>
-              <Icon name="repeat" size={14}/>{t(txn.type==="income"?"detail.linkIncome":"detail.linkBill")}
+              <Icon name="repeat" size={14}/>{t(myBill?"bill.change":txn.type==="income"?"detail.linkIncome":"detail.linkBill")}
             </button>
             {showLink&&(
               <div className="card" style={{marginTop:8,padding:"8px 14px"}}>
-                <div className="list-sub" style={{margin:"4px 0 6px",lineHeight:1.5}}>{t("detail.linkHint")}</div>
+                <div className="list-sub" style={{margin:"4px 0 6px",lineHeight:1.5}}>{t(explicit?"bill.linkHint":"detail.linkHint")}</div>
                 {bills.map(x=>(
-                  <button key={x.key} className="list-row link-bill-option" onClick={()=>onLinkBill(x)}>
+                  <button key={x.key} className="list-row link-bill-option" onClick={()=>x.billId&&onAssignBill?onAssignBill(x.billId):onLinkBill(x)}>
                     <span className="cat-dot" style={{background:(CAT(x.category)?.color||"#98A5B7")+"26",width:32,height:32}}><CatIcon catId={x.category} size={14}/></span>
                     <span className="list-body"><span className="list-title">{maskText(x.merchant||x.note)||catName(x.category)}</span>
                       <span className="list-sub">{fmt(x.amount,currency)} · {t("freq."+x.freq)} · {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""}</span></span>
                   </button>
                 ))}
+                {explicit&&<button className="list-row link-bill-option link-bill-new" onClick={()=>onAssignBill("new")}>
+                  <span className="cat-dot" style={{background:"var(--accent-light)",width:32,height:32}}><Icon name="add" size={14} color="var(--accent)"/></span>
+                  <span className="list-body"><span className="list-title">{t("bill.newFromThis")}</span><span className="list-sub">{fmt(txn.amount,currency)} · {t("freq."+(txn.recurFreq||"monthly"))}</span></span>
+                </button>}
               </div>
             )}
           </div>
@@ -3717,7 +4057,7 @@ function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onCo
   const { transactions, lastBackup, backupConfirmedAt }=state;
   const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
   // Can this device hand a file to the share menu? (Android and iPhone: yes; many desktop browsers: no.)
-  const canShareFiles=useMemo(()=>{ try { return typeof navigator.canShare==="function" && typeof File!=="undefined" && navigator.canShare({files:[new File(["{}"],"x.json",{type:"application/json"})]}); } catch { return false; } },[]);
+  const canShareFiles=useMemo(()=>{ try { if (nativeShareHook()) return true; return typeof navigator.canShare==="function" && typeof File!=="undefined" && navigator.canShare({files:[new File(["{}"],"x.json",{type:"application/json"})]}); } catch { return false; } },[]);
   const standalone=typeof window!=="undefined" && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone===true);
   return (
     <div className="io-page">
@@ -3741,8 +4081,8 @@ function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onCo
         )}
       </div>
       <div className="io-grid">
-        <div className="card io-card drop-zone" onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}}>
-          <input ref={fileRef} type="file" accept=".json,.csv" aria-label={t("import.title")} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
+        <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}}>
+          <input ref={fileRef} type="file" accept=".json,.csv" aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
           <span className="io-ico" style={{color:"var(--accent-text)"}}><Icon name="upload" size={24}/></span>
           <div className="list-title">{t("io.import")}</div>
           <div className="list-sub">{t("io.importSub")}</div>
@@ -4313,7 +4653,9 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           )}
           <div className="month-bars">
             {monthlyData.map((m,i)=>(
-              <div key={i} className="m-col" onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);setActiveCell(null);}}>
+              <div key={i} className="m-col" role="button" tabIndex={0} aria-pressed={activeBar===i} aria-label={`${monthName(m.ym)}: ${fmt(m.exp,currency)}`}
+                onKeyDown={activateKey(()=>{setActiveBar(activeBar===i?null:i);setActiveCell(null);})}
+                onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);setActiveCell(null);}}>
                 <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
                   <div className="m-bar" style={{height:m.exp>0?`${Math.max(5,(m.exp/maxMonth)*100)}%`:"3px",background:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",width:"100%",outline:activeBar===i?"2px solid var(--accent)":"none",outlineOffset:"1px"}}/>
                 </div>
@@ -4447,7 +4789,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
 // SMART HELPER — deterministic advice cards based on real data
 // Not AI. Not guessing. Every card has a clear data source and impact.
 // ─────────────────────────────────────────────────────────────────────────────
-function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
+function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills=[]) {
   const cards = [];
   const mon = curMon();
   const { curExp, curInc } = calcMonthSummary(transactions, mon);
@@ -4456,7 +4798,7 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
   const spentToDate = calcSpentToDate(transactions, mon);
   const paceInfo = calcSpendingPace(spentToDate, mon, budgetTotal);
   const budgetItems = calcBudgetStatus(budgets||{}, catSpend, mon);
-  const safeInfo = calcSafeToSpend(transactions, safeToSpend, goals);
+  const safeInfo = calcSafeToSpend(transactions, safeToSpend, goals, new Date(), bills);
 
   // 1. Spending pace — only fire when compared against a real budget (onTrack===false)
   if (paceInfo.onTrack === false && paceInfo.daysRemaining > 0 && spentToDate > 0) {
@@ -4522,7 +4864,7 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
   }
 
   // 5. Recurring audit — one line per schedule, not per recorded payment
-  const activeSchedules = buildSchedules(transactions).filter(x=>x.isActive && x.type==="expense");
+  const activeSchedules = buildSchedules(transactions, bills).filter(x=>x.isActive && x.type==="expense");
   if (activeSchedules.length >= 3) {
     const monthlyTotal = activeSchedules.reduce((sum,x)=>sum+scheduleMonthly(x),0);
     const pctOfIncome = curInc>0 ? Math.round((monthlyTotal/curInc)*100) : 0;
@@ -4552,11 +4894,11 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
   return cards.slice(0, 4);
 }
 
-function SmartHelper({ transactions, budgets, goals, safeToSpend, currency }) {
+function SmartHelper({ transactions, bills=[], budgets, goals, safeToSpend, currency }) {
   const lc = locale();
   const cards = useMemo(
-    () => calcHelperCards(transactions, budgets, goals, safeToSpend, currency),
-    [transactions, budgets, goals, safeToSpend, currency, lc]   // card text follows the interface language
+    () => calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills),
+    [transactions, bills, budgets, goals, safeToSpend, currency, lc]   // card text follows the interface language
   );
 
   if (cards.length === 0) return null;
