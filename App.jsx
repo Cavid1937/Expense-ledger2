@@ -1324,7 +1324,9 @@ function calcGoalProgress(goal, now=new Date()) {
   const monthLabel=(d,style)=>t("date.monthYear",{ m:t((style==="long"?"mon.":"monShort.")+(d.getMonth()+1)), y:d.getFullYear() });
 
   let monthsNeeded=null, estCompletion=null, estDate=null;
-  if (monthlyTarget>0 && remaining>0) { monthsNeeded=Math.ceil(remaining/monthlyTarget); estDate=addMonths(now,monthsNeeded); estCompletion=monthLabel(estDate,"long"); }
+  // Run 15: the user's own monthly amount follows the same rule as goalRequiredMonthly: one payment on the 1st of each month,
+  // so N payments finish on the N-th month-start after today (not N months from today). Counted in whole cents.
+  if (monthlyTarget>0 && remaining>0) { const mc=goalCents(monthlyTarget); monthsNeeded=Math.floor((goalCents(target)-goalCents(saved)+mc-1)/mc); estDate=new Date(now.getFullYear(),now.getMonth()+monthsNeeded,1); estCompletion=monthLabel(estDate,"long"); }
 
   const daysToTarget = td ? daysBetween(now,td) : null;                      // calendar days, not 24-hour blocks
   const overdue = !!td && !complete && daysToTarget<0;
@@ -1332,16 +1334,45 @@ function calcGoalProgress(goal, now=new Date()) {
   const onTrack = !!td && !complete && !overdue && !!estDate && !behindSchedule;
   const noContribution = !complete && remaining>0 && monthlyTarget===0;
 
-  const whatIf=[];
-  if (remaining>0) {
-    const baseRate = monthlyTarget>0 ? monthlyTarget : 50;
-    [...new Set([baseRate*0.6,baseRate,baseRate*1.4].map(r=>Math.round(r)))].filter(r=>r>0).slice(0,3).forEach(r=>{
-      const months=Math.ceil(remaining/r);
-      whatIf.push({ monthly:r, months, completion:monthLabel(addMonths(now,months),"short") });
-    });
-  }
-  const milestones=[25,50,75,100].map(pp=>({ pct:pp, amount:parseFloat(((target*pp)/100).toFixed(2)), completed:target>0 && saved>=(target*pp)/100 }));
-  return { pct, remaining, complete, monthsNeeded, estCompletion, estDate, whatIf, daysToTarget, overdue, behindSchedule, onTrack, noContribution, milestones };
+  // Run 15: the fixed what-if rows (60% / 100% / 140% of the monthly amount, or 50 when none) and the 25/50/75/100% milestone
+  // tiles were removed with their screens. The optional what-if is goalScenario(); the required amount is goalRequiredMonthly().
+  return { pct, remaining, complete, monthsNeeded, estCompletion, estDate, daysToTarget, overdue, behindSchedule, onTrack, noContribution };
+}
+
+// Run 15: the ONE rule for "how much must I save each month to reach this goal on time". The goal cards, the Home coach and the
+// what-if all call it, so the same goal never shows two different figures (the coach used to divide days by 30.44).
+// Rule: one contribution on the 1st of each month. The periods are the month-starts after today, up to and including the deadline
+// month; when none is left (deadline later this month, or today) there is 1 period. Money is whole cents (integers), rounded UP, so
+// periods x amount is never short. It is a plan, not a promise: nothing is moved or reserved.
+const goalCents=(v)=>{ const n=Number(v); return Number.isFinite(n)&&n>0 ? Math.round(n*100) : 0; };    // malformed or non-positive -> 0, never NaN
+function goalPeriods(td, now) {    // td: a valid deadline on or after today
+  const months=(td.getFullYear()*12+td.getMonth())-(now.getFullYear()*12+now.getMonth());
+  return { periods:Math.max(1,months), thisMonth:months<1 };
+}
+function goalRequiredMonthly(goal, now=new Date()) {
+  const targetC=goalCents(goal&&goal.target), savedC=goalCents(goal&&goal.saved);
+  const remainingC=Math.max(targetC-savedC,0), remaining=remainingC/100;
+  const base={ remaining, periods:null, perMonth:null, thisMonth:false };
+  if (targetC===0) return { ...base, state:"invalid" };
+  if (savedC>=targetC) return { ...base, state:"complete", perMonth:0 };
+  const raw=goal.targetDate;
+  if (!raw || !isValidDateStr(String(raw))) return { ...base, state:"noDate" };
+  const td=parseLocalDate(String(raw));
+  if (daysBetween(now,td)<0) return { ...base, state:"overdue" };
+  const { periods, thisMonth }=goalPeriods(td,now);
+  return { ...base, state:"active", periods, thisMonth, perMonth:Math.floor((remainingC+periods-1)/periods)/100 };
+}
+// The optional what-if: "if I save this much each month, when do I finish and does that meet the deadline?" Same periods, same cents.
+function goalScenario(goal, amount, now=new Date()) {
+  const req=goalRequiredMonthly(goal,now);
+  if (req.state==="invalid" || req.state==="complete") return { valid:false, reason:req.state };
+  const amtC=goalCents(amount);
+  if (amtC===0) return { valid:false, reason:"amount" };
+  const months=Math.floor((Math.round(req.remaining*100)+amtC-1)/amtC);
+  const d=new Date(now.getFullYear(),now.getMonth()+months,1);
+  const completion=t("date.monthYear",{ m:t("mon."+(d.getMonth()+1)), y:d.getFullYear() });
+  const meetsDeadline=req.state==="active" ? months<=req.periods : req.state==="overdue" ? false : null;
+  return { valid:true, months, completion, meetsDeadline };
 }
 
 function toMonthlyAmountHelper(t) {
@@ -2066,6 +2097,16 @@ input[type=number]{-moz-appearance:textfield}
 .bud-pct{font-size:12px;font-weight:600;color:var(--ink-3);min-width:36px;text-align:right;font-variant-numeric:tabular-nums}
 .goal-card{padding:16px}
 .goal-name{font-size:15px;font-weight:600}
+/* Run 15: the required monthly amount is the first answer on a goal; the what-if below it is optional and collapsed. */
+.goal-need{margin-top:12px;padding:10px 12px;border-radius:8px;background:var(--bg-inset);border:1px solid var(--rule)}
+.goal-need-main{font-size:16px;font-weight:700;color:var(--ink);margin-bottom:2px}
+.goal-need-muted{font-size:12px;color:var(--ink-3);line-height:1.5}
+.goal-need-note{margin-top:4px}
+.goal-scenario{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule)}
+.goal-scenario summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--ink-3);min-height:24px;padding:2px 0}
+.goal-scenario summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.goal-scenario .field-input{margin-top:6px}
+.goal-scenario-out{margin-top:8px;font-size:12px;color:var(--ink-2);line-height:1.5}
 .trend-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--ink-3)}
 .trend-legend span{display:inline-flex;align-items:center;gap:6px}
 .trend-legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
@@ -2639,7 +2680,7 @@ export default function App() {
         </header>
 
         <main className="page" key={tabKey}>
-          {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)}/>}
+          {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} onView={txn=>setViewTxn(txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
@@ -2819,18 +2860,16 @@ function cmpText(diff, kind, currency) {
 const cmpTitle = (kind) => t(kind==="same" ? "cmp.titleSame" : "cmp.titleFull");
 const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevSame" : "cmp.prevFull", { amount:fmt(amount,currency) });
 
-function HomePage({ transactions, bills=[], budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView }) {
+function HomePage({ transactions, bills=[], budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView, onOpenLedger }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
   const budgetTotal =Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const spentToDate =calcSpentToDate(transactions,now);
   const paceInfo    =calcSpendingPace(spentToDate,now,budgetTotal);
-  const budgetItems =calcBudgetStatus(budgets,catSpend,now);
-  const safeInfo    =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills);
+  const safeInfo   =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills);
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curInc>0;
-  const recent      =transactions.slice(0,6);
 
   // Upcoming recurring (due within 7 days)
   const upcomingSchedules=useMemo(()=>{
@@ -2845,7 +2884,7 @@ function HomePage({ transactions, bills=[], budgets, templates, currency, safeTo
     <div>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
       <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} currency={currency} now={now}/>
-      <div className="hero card">
+      <div className="hero card" data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount">{fmt(curExp,currency)}</div>
         <div className="hero-sub">
@@ -2875,15 +2914,15 @@ function HomePage({ transactions, bills=[], budgets, templates, currency, safeTo
           </div>
         </div>
         <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
-        {curExp>0&&<>
+        {curExp>0&&<div data-section="home-breakdown">
           <div className="card-sub-title">{t("home.breakdown")}</div>
           <SpendDonut catSpend={catSpend} total={curExp} currency={currency}/>
-        </>}
+        </div>}
       </div>
 
       {/* Due within 7 days */}
       {upcomingSchedules.length>0&&(
-        <div className="card section-enter section-enter-1">
+        <div className="card section-enter section-enter-1" data-section="home-upcoming">
           <div className="card-head"><span className="card-title">{t("home.dueWithin7")}</span></div>
           {upcomingSchedules.slice(0,3).map(s=>{
             const daysLeft=daysBetween(new Date(),s.nextDue); const cat=CAT(s.category);
@@ -2905,10 +2944,10 @@ function HomePage({ transactions, bills=[], budgets, templates, currency, safeTo
       )}
 
       {/* Smart Helper — deterministic advice cards */}
-      <div className="section-enter section-enter-2">
+      <div className="section-enter section-enter-2" data-section="home-coach">
         <SmartHelper transactions={transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
       </div>
-      <HomeDetails goals={goals} budgetItems={budgetItems} recent={recent} currency={currency} onAdd={onAdd} onView={onView}/>
+      <HomeDetails hasTxns={transactions.length>0} onAdd={onAdd} onOpenLedger={onOpenLedger}/>
     </div>
   );
 }
@@ -2921,7 +2960,7 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
   return (
     <>
       {safeToSpend?.enabled&&safeInfo.feasible&&(
-        <div className="safe-card section-enter section-enter-2">
+        <div className="safe-card section-enter section-enter-2" data-section="home-safe">
           <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
             <Icon name="safe" size={12} color="var(--ink-3)"/>{t("safe.title")}
           </div>
@@ -3005,7 +3044,7 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
 
       {/* Safe to Spend is on but no income has arrived yet this month: say so instead of showing nothing. */}
       {safeToSpend?.enabled&&!safeInfo.feasible&&(
-        <div className="safe-card section-enter section-enter-2" role="status">
+        <div className="safe-card section-enter section-enter-2" role="status" data-section="home-safe">
           <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
             <Icon name="safe" size={12} color="var(--ink-3)"/>{t("safe.title")}
           </div>
@@ -3018,75 +3057,21 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
   );
 }
 
-// The rest of Home, below the advice cards: goals, budgets, what changed, pace and recent activity.
-function HomeDetails({ goals, budgetItems, recent, currency, onAdd, onView }) {
-  return (
-    <>
-      {/* LEVEL 3: Goals — trajectory */}
-      {goals?.length>0&&(
-        <div className="section-enter section-enter-3" style={{marginBottom:16}}>
-          <div className="label-sm" style={{marginBottom:10}}>{t("goals.title")}</div>
-          {goals.map(goal=>{
-            const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion,behindSchedule}=gp;
-            return (
-              <div key={goal.id} className="goal-card">
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                  <div className="goal-name">{maskText(goal.name)}</div>
-                  <div style={{fontFamily:"var(--font)",fontSize:13,fontWeight:700,color:behindSchedule?"var(--neg)":"var(--ink)"}}>{fmtPct(Math.round(pct))}</div>
-                </div>
-                <div className="goal-progress"><div className="goal-fill" style={{width:`${pct}%`}}/></div>
-                <div className="goal-meta">
-                  <span>{t("goals.savedOf",{ saved:fmt(goal.saved||0,currency), target:fmt(goal.target||0,currency) })}</span>
-                  <span>{gp.complete?t("goals.completed"):gp.overdue?t("goals.overdueToGo",{amount:fmt(remaining,currency)}):estCompletion?t("goals.est",{date:estCompletion}):remaining>0?t("goals.toGo",{amount:fmt(remaining,currency)}):""}</span>
-                </div>
-                {gp.behindSchedule&&<div style={{fontSize:10,color:"var(--neg)",fontWeight:600,marginTop:4}}>{t("goals.behind")}</div>}
-                {gp.onTrack&&<div style={{fontSize:10,color:"var(--pos)",fontWeight:600,marginTop:4}}>{t("goals.onTrack")}</div>}
-                {gp.overdue&&<div style={{fontSize:10,color:"var(--neg)",fontWeight:600,marginTop:4}}>{tn("goals.overdueDays",-gp.daysToTarget)}</div>}
-                {gp.noContribution&&<div style={{fontSize:10,color:"var(--ink-4)",marginTop:4}}>{t("goals.noContribution")}</div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* LEVEL 4: Budget status */}
-      {budgetItems.length>0&&(
-        <div className="section-enter section-enter-4" style={{marginBottom:16}}>
-          <div className="label-sm" style={{marginBottom:10}}>{t("budgets.title")}</div>
-          {budgetItems.map(({catId,limit,spent,pct,over,warn})=>{
-            const cat=CAT(catId);
-            return (
-              <div key={catId} className="budget-item">
-                <div className="budget-hdr">
-                  <div className="budget-name"><CatIcon catId={catId} size={12}/>{catName(catId)}</div>
-                  <span className="budget-nums"><strong>{fmt(spent,currency)}</strong> / {fmt(limit,currency)}</span>
-                </div>
-                <div className="budget-track"><div className="budget-fill" style={{width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)")}}/></div>
-                <div className={`budget-msg${over?" over":warn?" warn":""}`}>
-                  {over?t("budgets.over",{amount:fmt(spent-limit,currency)}):warn?t("budgets.warn",{amount:fmt(limit-spent,currency)}):t("budgets.remaining",{amount:fmt(limit-spent,currency)})}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Run 9: 'What changed' and 'Spending pace' were removed from Home — the same cards are on Analytics. */}
-      {/* LEVEL 7: Recent activity */}
-      {recent.length>0?(
-        <div className="section-enter section-enter-8">
-          <div className="label-sm" style={{marginBottom:10}}>{t("home.recent")}</div>
-          <GroupedTxns txns={recent} currency={currency} onView={onView} compact/>
-        </div>
-      ):(
-        <div className="empty section-enter section-enter-8">
-          <div className="empty-icon"><Icon name="list" size={30}/></div>
-          <div className="empty-title">{t("home.emptyTitle")}</div>
-          <div className="empty-body">{t("home.emptyBody")}</div>
-          <button className="btn btn-primary btn-full" style={{maxWidth:220,marginTop:4}} onClick={onAdd}>{t("home.emptyBtn")}</button>
-        </div>
-      )}
-    </>
+// The rest of Home. Run 15: Home is the quick answer, not a second ledger. The full Goals and Budgets lists and the long
+// recent-transactions list were removed from here: each lives in its own tab (Goals, Transactions), and the coach cards above
+// still raise a goal or budget only when it needs attention. With entries, one route leads to the full list; without, the empty state.
+function HomeDetails({ hasTxns, onAdd, onOpenLedger }) {
+  return hasTxns?(
+    <div className="section-enter section-enter-8" data-section="home-see-all">
+      <button className="btn btn-ghost btn-full" onClick={onOpenLedger}>{t("home.seeAll")}<Icon name="chevRight" size={14}/></button>
+    </div>
+  ):(
+    <div className="empty section-enter section-enter-8" data-section="home-empty">
+      <div className="empty-icon"><Icon name="list" size={30}/></div>
+      <div className="empty-title">{t("home.emptyTitle")}</div>
+      <div className="empty-body">{t("home.emptyBody")}</div>
+      <button className="btn btn-primary btn-full" style={{maxWidth:220,marginTop:4}} onClick={onAdd}>{t("home.emptyBtn")}</button>
+    </div>
   );
 }
 
@@ -4195,7 +4180,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
           </div>
         )}
         {limitTotal>0&&(
-          <div className="card">
+          <div className="card" data-section="bg-total">
             <div className="list-sub">{t("budgets.monthTotal",{month:monthName(now)})}</div>
             <div className="big-num">{fmt(limitTotal,currency)}</div>
             <div className="bar"><div className="bar-fill" style={{width:`${Math.min(spentTotal/limitTotal*100,100)}%`,background:spentTotal>limitTotal?"var(--neg)":spentTotal>=0.8*limitTotal?"var(--warn)":"var(--pos)"}}/></div>
@@ -4262,9 +4247,9 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
         )}
         {goals.length===0&&!showNewGoal&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noGoals")}</div>}
         {goals.map(goal=>{
-          const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion,whatIf,milestones}=gp;
+          const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion}=gp; const req=goalRequiredMonthly(goal);
           return (
-            <div key={goal.id} className="card goal-card">
+            <div key={goal.id} className="card goal-card" data-section="goal-card">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                 <div style={{display:"flex",gap:10,alignItems:"center",minWidth:0}}>
                   <span className="cat-dot" style={{background:"var(--pos-bg)"}}><Icon name="goal" size={16} color="var(--pos)"/></span>
@@ -4285,38 +4270,54 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
                 <div className="bar"><div className="bar-fill" style={{width:`${pct}%`,background:"var(--accent)"}}/></div>
                 <span className="bud-pct">{fmtPct(Math.round(pct))}</span>
               </div>
+              {/* Run 15: the answer to "how much must I save each month?" comes first; the what-if below is optional. */}
+              {(req.state==="active"||req.state==="noDate"||req.state==="overdue")&&(
+                <div className={`goal-need${req.state==="active"?"":" goal-need-muted"}`} data-section="goal-need" role="note">
+                  {req.state==="active"&&<>
+                    <div className="goal-need-main">{req.thisMonth?t("goals.needThisMonth",{amount:fmt(req.perMonth,currency),date:fmtDate(goal.targetDate)}):t("goals.needMain",{amount:fmt(req.perMonth,currency)})}</div>
+                    {!req.thisMonth&&<div className="list-sub">{tn("goals.needSub",req.periods,{date:fmtDate(goal.targetDate)})}</div>}
+                    <div className="list-sub goal-need-note">{t("goals.needNote")}</div>
+                  </>}
+                  {req.state==="noDate"&&<div>{t("goals.needNoDate")}</div>}
+                  {req.state==="overdue"&&<div>{t("goals.needOverdue",{amount:fmt(req.remaining,currency)})}</div>}
+                </div>
+              )}
               <div className="list-sub" style={{marginTop:6,color:gp.behindSchedule||gp.overdue?"var(--neg)":gp.onTrack||gp.complete?"var(--pos)":"var(--ink-3)"}}>
                 {gp.complete?t("goals.completed")
                   :goal.targetDate&&gp.daysToTarget!==null?<>{gp.overdue?tn("goals.overdueDays",-gp.daysToTarget):gp.daysToTarget===0?t("set.targetToday"):tn("set.daysToTarget",gp.daysToTarget)}{gp.behindSchedule?t("set.projectedAfter"):gp.onTrack?t("set.onTrackSuffix"):""}</>
                   :remaining>0?t("goals.toGo",{amount:fmt(remaining,currency)}):""}
               </div>
               {estCompletion&&<div className="list-sub" style={{marginTop:4}}>{t("set.atRate",{amount:fmt(goal.monthlyTarget||0,currency),date:estCompletion})}</div>}
-              {milestones&&(
-                <div className="goal-milestones" style={{marginTop:10,display:"flex",gap:6}}>
-                  {milestones.map(m=>(
-                    <div key={m.pct} style={{flex:1,textAlign:"center",padding:"5px 2px",borderRadius:8,background:m.completed?"var(--pos-bg)":"var(--bg-inset)"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:m.completed?"var(--pos)":"var(--ink-3)"}}>{fmtPct(m.pct)}</div>
-                      <div style={{fontSize:10,color:m.completed?"var(--pos)":"var(--ink-4)"}}>{m.completed?"✓":t("goals.toGo",{amount:fmt(m.amount-Math.min(goal.saved||0,m.amount),currency)})}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {whatIf.length>1&&(
-                <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--rule)"}}>
-                  <div className="list-sub" style={{fontWeight:700,marginBottom:6}}>{t("set.whatIf")}</div>
-                  {whatIf.map((w,i)=>(
-                    <div key={i} style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:12,color:"var(--ink-3)",padding:"2px 0"}}>
-                      <span>{t("set.perMonth",{amount:fmt(w.monthly,currency)})}</span>
-                      <span style={{color:i===1?"var(--ink)":"var(--ink-3)",fontWeight:i===1?600:400,textAlign:"right"}}>{tn("set.months",w.months)} · {w.completion}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {!gp.complete&&<GoalScenario goal={goal} currency={currency}/>}
             </div>
           );
         })}
       </>)}
     </div>
+  );
+}
+
+// Run 15: the optional what-if, replacing the fixed 60% / 100% / 140% rows. The user types an amount; the answer uses the same
+// month-start rule and cents as the required monthly amount, says whether it meets the deadline, and says it is an estimate.
+function GoalScenario({ goal, currency }) {
+  const [val,setVal]=useState("");
+  const amt=val.trim()===""?null:parseMoney(val,{positive:true});
+  const s=amt!==null ? goalScenario(goal,amt) : null;
+  const id="gs-"+String(goal.id).replace(/[^a-zA-Z0-9_-]/g,"");
+  return (
+    <details className="goal-scenario" data-section="goal-scenario">
+      <summary>{t("goals.scenarioTitle")}</summary>
+      <label className="field-lbl" htmlFor={id}>{t("goals.scenarioLabel")}</label>
+      <input id={id} className="field-input" type="number" inputMode="decimal" min="0" step="1" placeholder="0" value={val} onChange={e=>setVal(e.target.value)}/>
+      {val.trim()!==""&&amt===null&&<div className="list-sub" role="status">{t("add.errAmount")}</div>}
+      {s&&s.valid&&(
+        <div className="goal-scenario-out" role="status" aria-live="polite">
+          <div>{t("goals.scenarioResult",{amount:fmt(amt,currency),months:tn("set.months",s.months),date:s.completion})}</div>
+          {s.meetsDeadline!==null&&<div className="list-sub" style={{color:s.meetsDeadline?"var(--pos)":"var(--neg)",fontWeight:600}}>{t(s.meetsDeadline?"goals.scenarioMeets":"goals.scenarioMisses")}</div>}
+          <div className="list-sub">{t("goals.scenarioEstimate")}</div>
+        </div>
+      )}
+    </details>
   );
 }
 
@@ -4397,7 +4398,6 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
   const merchantTotals = {};
   expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
   const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const topExpenses = expenses.filter(done).sort((a,b)=>b.amount-a.amount).slice(0,5);   // happened, not entries dated later
   const monTxns = transactions.filter(t => t.date.startsWith(selectedMon));
   const recurringCount = transactions.filter(x=>x.recurring&&x.date.startsWith(selectedMon)).length;
 
@@ -4431,7 +4431,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
   return (
     <div onClick={()=>{setActiveBar(null);setActiveCell(null);}}>
       {/* Month selector — the one month setting for everything above the Trends section */}
-      <div className="month-selector">
+      <div className="month-selector" data-section="an-month">
         <button className="month-nav-btn" onClick={prevM} disabled={idx===allMonths.length-1} aria-label={t("month.prev")} style={{opacity:idx===allMonths.length-1?0.3:1}}>‹</button>
         <div style={{textAlign:"center"}}>
           <h1 className="month-name" style={{margin:0}}>{monthName(selectedMon)}</h1>
@@ -4441,7 +4441,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
       </div>
 
       {/* Summary stats */}
-      <div className="month-stats" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+      <div className="month-stats" data-section="an-summary" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
         <div className="month-stat">
           <div className="month-stat-val" style={{color:"var(--neg)"}}>{fmt(curExp,currency)}</div>
           <div className="month-stat-lbl">{t("home.spent")}</div>
@@ -4464,7 +4464,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
         </div>
       </div>
       <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
-      <SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/>
+      <div data-section="an-trend"><SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/></div>
       {isCurrentMon&&paceInfo.dailyAvg>0&&(
         <div className="a-card" style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:"4px 12px",fontSize:12}}>
           <span style={{color:"var(--ink-3)"}}>{t("an.dailyAvg")} <strong style={{fontFamily:"var(--font)",color:"var(--ink)"}}>{fmt(paceInfo.dailyAvg,currency)}</strong></span>
@@ -4474,7 +4474,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
 
       {/* What changed — same comparison window as the summary */}
       {(wc.totalDiff!==0||wc.catChanges.length>0)&&prevExp>0&&momDiff!==null&&(
-        <div className="a-card">
+        <div className="a-card" data-section="an-changes">
           <div className="a-card-title">{cmpTitle(wc.cmpKind)}</div>
           <div className="wc-row" style={{paddingTop:0}}>
             <span className="wc-name" style={{fontWeight:700}}>{t("an.totalSpending")}</span>
@@ -4531,7 +4531,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
 
       {/* Budget status for the month */}
       {budgetItems.length>0&&(
-        <div className="a-card">
+        <div className="a-card" data-section="an-budget">
           <div className="a-card-title">{t("an.budgetStatus",{month:monthName(selectedMon)})}</div>
           {budgetItems.map(({catId,limit,spent,pct,over,warn,aheadOfPace,daysLeft,state})=>{
             const cat=CAT(catId);
@@ -4559,7 +4559,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
 
       {/* Category breakdown */}
       {catData.length>0&&(
-        <div className="a-card">
+        <div className="a-card" data-section="an-category">
           <div className="a-card-title">{t("an.byCategory")}</div>
           {catData.map((cat,i)=>(
             <div key={i} className="cat-bar">
@@ -4574,7 +4574,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
 
       {/* Merchant breakdown */}
       {topMerchants.length>0&&(
-        <div className="a-card">
+        <div className="a-card" data-section="an-merchant">
           <div className="a-card-title">{t("month.byMerchant")}</div>
           {topMerchants.map(([merchant,amt],i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:i<topMerchants.length-1?"1px solid var(--rule)":"none"}}>
@@ -4593,42 +4593,18 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
         </div>
       )}
 
-      {/* Top expenses of the month */}
-      {topExpenses.length>0&&(
-        <div className="a-card">
-          <div className="a-card-title">{t("an.topExpenses")}</div>
-          {topExpenses.map((x,i)=>{
-            const cat=CAT(x.category)||{color:"#98A5B7"};
-            return (
-              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<topExpenses.length-1?"1px solid var(--rule)":"none"}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <CatIcon catId={x.category} size={15} color={cat.color}/>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(x.merchant||x.note)||catName(x.category)}</div>
-                  <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(x.date)} · {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""}</div>
-                </div>
-                <div style={{fontFamily:"var(--font)",fontSize:15,fontWeight:600,flexShrink:0}}>−{fmt(x.amount,currency)}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
+      {/* Run 15: the "Top expenses" and "All transactions" lists were removed from Analytics. They repeated rows of the Transactions
+          tab (which can be searched by month name and filtered by date). Analytics keeps what Transactions cannot show: totals,
+          comparisons, categories, merchants and trends. */}
       {recurringCount>0&&(
         <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"var(--ink-3)"}}>
           <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",recurringCount)}
         </div>
       )}
 
-      {/* Transaction list of the month */}
-      {monTxns.length>0?(
-        <>
-          <div className="label-sm" style={{marginBottom:10}}>{t("month.allTxns",{month:monthName(selectedMon)})}</div>
-          <GroupedTxns txns={monTxns} currency={currency} onView={onView}/>
-        </>
-      ):(
-        <div className="empty" style={{padding:"32px 0"}}>
+      {/* A month without entries says so (the list of entries lives in Transactions) */}
+      {monTxns.length===0&&(
+        <div className="empty" style={{padding:"32px 0"}} data-section="an-empty">
           <div className="empty-icon"><Icon name="calendar" size={28}/></div>
           <div className="empty-title">{t("month.emptyTitle")}</div>
           <div className="empty-body">{t("month.emptyBody",{month:monthName(selectedMon)})}</div>
@@ -4637,7 +4613,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
 
       {/* Trends — recent months up to today; not affected by the month selected above */}
       {hasTrends&&(<>
-        <div className="trends-head" style={{marginTop:22,marginBottom:10}}>
+        <div className="trends-head" data-section="an-trends" style={{marginTop:22,marginBottom:10}}>
           <div className="label-sm">{t("month.trendsTitle")}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",lineHeight:1.5,marginTop:4}}>{t("month.trendsSub")}</div>
         </div>
@@ -4834,21 +4810,20 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bi
   // 3. Goals that will miss their target date, or whose date has passed
   goals?.forEach(goal=>{
     const gp=calcGoalProgress(goal);
+    // Run 15: a short alert only. The required monthly amount, the dates and the what-if are on the Goals tab, not repeated here.
     if (gp.behindSchedule && goal.monthlyTarget>0) {
-      const monthsLeft=Math.max(1,Math.ceil(gp.daysToTarget/30.44));
-      const neededMonthly=Math.ceil(gp.remaining/monthsLeft);
       cards.push({
         id:`goal-${goal.id}`, type:"warn", icon:"goal",
         title:t("help.goalTitle",{name:goal.name}),
-        text:t("help.goalBehind",{amount:fmt(goal.monthlyTarget,currency),name:goal.name,date:gp.estCompletion}),
-        impact:t("help.goalBehindImpact",{amount:fmt(neededMonthly,currency)}),
+        text:t("help.goalBehind",{name:goal.name}),
+        impact:t("help.goalBehindImpact"),
       });
     } else if (gp.overdue) {
       cards.push({
         id:`goal-${goal.id}`, type:"warn", icon:"goal",
         title:t("help.goalTitle",{name:goal.name}),
-        text:t("help.goalOverdue",{name:goal.name,amount:fmt(gp.remaining,currency)}),
-        impact:gp.estCompletion ? t("help.goalOverdueAt",{amount:fmt(goal.monthlyTarget,currency),date:gp.estCompletion}) : t("help.goalNoContribution"),
+        text:t("help.goalOverdue",{name:goal.name}),
+        impact:t("help.goalOverdueImpact"),
       });
     }
   });
