@@ -300,7 +300,56 @@ function normaliseTxn(t) {
     // Run 12: the bill this payment paid (explicit bills). Only a short non-blank text id is kept; records without one get
     // no new field, so data written by earlier versions loads byte-for-byte the same.
     ...(isBillId(t.billId) ? { billId:t.billId.trim() } : {}),
+    // Run 16: how it was paid. Optional, so entries without one keep exactly the shape older versions wrote.
+    ...(walletId(t.wallet) ? { wallet:walletId(t.wallet) } : {}),
   };
+}
+// Run 16: the wallet an entry was paid from. Only a tag (no balances, no transfers). The built-in ids are below; a short safe
+// text id this version does not know (a wallet from a newer version or file) is KEPT, never dropped or turned into another one,
+// and shown as "Other". "" means not set.
+const WALLET_IDS = ["cash","card","mobile","other"];
+function walletId(v) { const s=typeof v==="string" ? v.trim().toLowerCase() : ""; return /^[a-z0-9_-]{1,32}$/.test(s) ? s : ""; }
+// Names a person types in a CSV, mapped to the ids ("Bank card" has a space, so it is not an id by itself).
+const WALLET_ALIASES = { "bank card":"card", "credit card":"card", "debit card":"card", "mobile wallet":"mobile", "e wallet":"mobile" };
+function walletFromText(s) { const k=String(s||"").trim().toLowerCase(); return WALLET_ALIASES[k] || walletId(k); }
+// The wallet of the newest entry that has one (the list is newest first): the default for the next entry.
+function lastWallet(transactions) { const t=(transactions||[]).find(x=>walletId(x && x.wallet)); return t ? walletId(t.wallet) : ""; }
+const walletName=(id)=>WALLET_IDS.includes(id) ? t("wallet."+id) : t("wallet.other");   // an id this version does not know shows as "Other"
+// Run 16: the user's own subcategories (Phase 1 of the custom-categories design note). A subcategory is already free text on each
+// entry, so these are only SUGGESTIONS in the picker, kept in their own storage key. The ledger and every entry stay untouched,
+// and an older version simply never shows them. Limits: 20 per category, 30 characters, no duplicates (ignoring case), nothing
+// equal to a built-in subcategory of that category.
+const SUBCAT_KEY=KEY+"__subcats", SUBCAT_MAX=20, SUBCAT_LEN=30;
+const subKey=(s)=>String(s).trim().toLowerCase();
+function cleanSubcats(raw) {
+  const out={};
+  const src=raw && typeof raw==="object" && !Array.isArray(raw) ? (raw.byCategory && typeof raw.byCategory==="object" && !Array.isArray(raw.byCategory) ? raw.byCategory : raw) : {};
+  Object.entries(src).forEach(([cid,list])=>{
+    const cat=CATEGORIES.find(c=>c.id===cid); if (!cat || !Array.isArray(list)) return;
+    const seen=new Set((cat.subs||[]).map(subKey)), keep=[];
+    list.forEach(v=>{ if (typeof v!=="string") return; const s=v.trim().replace(/\s+/g," "); if (!s || s.length>SUBCAT_LEN || seen.has(subKey(s)) || keep.length>=SUBCAT_MAX) return; seen.add(subKey(s)); keep.push(s); });
+    if (keep.length) out[cid]=keep;
+  });
+  return out;
+}
+function addUserSubcat(map, catId, text) {
+  const cat=CATEGORIES.find(c=>c.id===catId); if (!cat) return { map, added:false, reason:"category" };
+  const s=typeof text==="string" ? text.trim().replace(/\s+/g," ") : ""; if (!s) return { map, added:false, reason:"empty" };
+  if (s.length>SUBCAT_LEN) return { map, added:false, reason:"long" };
+  const mine=(map&&map[catId])||[];
+  if ((cat.subs||[]).some(x=>subKey(x)===subKey(s)) || mine.some(x=>subKey(x)===subKey(s))) return { map, added:false, reason:"dup" };
+  if (mine.length>=SUBCAT_MAX) return { map, added:false, reason:"full" };
+  return { map:{ ...map, [catId]:[...mine,s] }, added:true, reason:"" };
+}
+function removeUserSubcat(map, catId, text) {
+  const rest=((map&&map[catId])||[]).filter(x=>subKey(x)!==subKey(text)), out={ ...map };
+  if (rest.length) out[catId]=rest; else delete out[catId];
+  return out;
+}
+function mergeSubcats(a, b) { const out={}; const A=cleanSubcats(a), B=cleanSubcats(b); new Set([...Object.keys(A),...Object.keys(B)]).forEach(k=>{ out[k]=[...(A[k]||[]),...(B[k]||[])]; }); return cleanSubcats(out); }
+function readSubcats() { try { const r=localStorage.getItem(SUBCAT_KEY); return r ? cleanSubcats(JSON.parse(r)) : {}; } catch { return {}; } }
+function writeSubcats(map) {   // an empty list removes the key instead of keeping an empty shell
+  try { const c=cleanSubcats(map); if (!Object.keys(c).length) localStorage.removeItem(SUBCAT_KEY); else localStorage.setItem(SUBCAT_KEY,JSON.stringify({ version:1, byCategory:c })); return true; } catch { return false; }
 }
 function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }
 
@@ -596,7 +645,7 @@ function pruneRecoveryCopies(label) {
 // ─── Import / export pipeline (pure: no React, no storage) ───────────────────
 const CSV_COLUMNS = { date:["date"], amount:["amount","amt","value"], type:["type"], category:["category","cat"],
   categoryId:["categoryid","category id","category_id"], subcategory:["subcategory","subcat"], merchant:["merchant"],
-  note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"] };
+  note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"], wallet:["wallet","paid with"] };
 
 function parseCsvImport(raw) {
   const rows=parseCSV(String(raw).replace(/^\uFEFF/,""));
@@ -611,9 +660,11 @@ function parseCsvImport(raw) {
   const records=rows.slice(1).map((row,i)=>{
     const rec=cell(row,"recurring").toLowerCase();
     const isRec=!!rec && !["no","false","0","none"].includes(rec);
+    const wal=walletFromText(cell(row,"wallet"));   // Run 16: free text that is not a wallet gives none, never an error
     return { id:Date.now()+i+Math.random(), type:cell(row,"type"), amount:cell(row,"amount"),
       category:cell(row,"categoryId")||cell(row,"category"), subcategory:cell(row,"subcategory"), merchant:cell(row,"merchant"),
-      note:cell(row,"note"), date:cell(row,"date"), recurring:isRec, recurFreq:isRec?rec:null, isActive:true, createdAt:new Date().toISOString() };
+      note:cell(row,"note"), date:cell(row,"date"), recurring:isRec, recurFreq:isRec?rec:null, isActive:true, createdAt:new Date().toISOString(),
+      ...(wal ? { wallet:wal } : {}) };
   });
   return { records };
 }
@@ -622,7 +673,7 @@ function parseCsvImport(raw) {
 function planImport(raw, filename="") {
   const text=String(raw).replace(/^\uFEFF/,"");
   const isCSV=/\.csv$/i.test(filename) || text.trimStart().toLowerCase().startsWith("date,");
-  let list=[], settings={}, problems=[], warnings=[];
+  let list=[], settings={}, problems=[], warnings=[], subcategories={};
   if (isCSV) {
     const r=parseCsvImport(text);
     if (r.error) return { ok:false, error:r.error };
@@ -640,6 +691,7 @@ function planImport(raw, filename="") {
       else if (Array.isArray(parsed.entries)) list=parsed.entries;
       else { const v=Object.values(parsed).find(v=>Array.isArray(v) && v.length>0 && isPlainObject(v[0]) && v[0].amount!==undefined); if (v) list=v; }
       const v=validateSettings(parsed); settings=v.settings; problems=v.problems; warnings=v.warnings.slice();
+      subcategories=cleanSubcats(parsed.subcategories);   // Run 16: the user's own subcategory suggestions (optional)
       // Run 13: an entry list that is present but not a list used to be skipped without a word when the file also held
       // settings (and had no entry count to disagree with). The user is told no entries could be read.
       if ((parsed.transactions!==undefined && !Array.isArray(parsed.transactions) && !Array.isArray(parsed.entries)) || (parsed.entries!==undefined && !Array.isArray(parsed.entries) && !Array.isArray(parsed.transactions)))
@@ -673,7 +725,7 @@ function planImport(raw, filename="") {
   // never replace the ledger: Replace would otherwise delete every transaction on the device.
   // Run 8: nor can a file where some rows were refused — Replace would quietly drop those rows along with the whole ledger.
   // Merge (adds the readable rows) stays available; the sheet explains why Replace is not offered.
-  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings };
+  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings, subcategories };
 }
 
 // Run 8: whether an entry repeats (and how often) is part of what it is, so a monthly bill and an identical one-off purchase
@@ -731,14 +783,16 @@ function backupReminderDue(s, now=new Date()) {
 }
 
 function buildBackup(state, now=new Date().toISOString()) {
-  const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[] }=state;
+  const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
+  const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
-    transactions, budgets, templates, currency, goals, safeToSpend, bills, lastBackup:now };
+    transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}), lastBackup:now };
 }
 
 function buildCsv(transactions) {
-  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId"]];
-  transactions.forEach(t=>rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category]));
+  // Run 16: "Wallet" is the last column, so the columns before it did not move (older readers and the older import still work).
+  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet"]];
+  transactions.forEach(t=>rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category,walletId(t.wallet)]));
   // Formula-injection guard: a cell starting with = + - @ tab or CR would run as a formula in a spreadsheet, so it gets a
   // leading apostrophe (shown as text). parseCsvImport removes it again, so the app's own CSV round trip stays exact.
   const safe=(v)=>{ const s=String(v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; };
@@ -941,6 +995,18 @@ function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
   transactions.filter(t=>t.type==="expense"&&done(t))
     .forEach(t=>{ out[t.category]=(out[t.category]||0)+t.amount; });
   return out;
+}
+
+// Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
+// Whole cents, so 0.1 + 0.2 is exactly 0.30. "none" = entries without a wallet. "used" = at least one entry has a wallet.
+function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
+  const done=happenedIn(mon,now), cents={}; let totalC=0, used=false;
+  (transactions||[]).filter(t=>t.type==="expense"&&done(t)).forEach(t=>{
+    const w=walletId(t.wallet)||"none"; if (w!=="none") used=true;
+    const c=Math.round(Number(t.amount)*100); cents[w]=(cents[w]||0)+c; totalC+=c;
+  });
+  const byWallet={}; Object.keys(cents).forEach(k=>{ byWallet[k]=cents[k]/100; });
+  return { byWallet, total:totalC/100, used };
 }
 
 // Where a month sits relative to today. "daysLeft" counts the days AFTER today; "daysRemaining" counts today as well,
@@ -2277,6 +2343,7 @@ export default function App() {
   const [prefill,  setPrefill]  = useState(null);
   const [editId,   setEditId]   = useState(null);
   const [viewTxn,  setViewTxn]  = useState(null);
+  const [infoKind, setInfoKind] = useState(null);   // Run 16: "how" | "privacy" | null
   const [importPending, setImportPending] = useState(null);
   const [skipDup, setSkipDup] = useState(true);
   // Recovery messages stay on screen until the user dismisses them; ordinary toasts can never replace them.
@@ -2342,9 +2409,13 @@ export default function App() {
     const next=snackQueue.current.shift(); if (next) setTimeout(()=>openSnack(next),250);
   },[]);
   const showSnackbar=useCallback((msg,onUndo,ms=4000,kind="other")=>{
+    // Run 16: the undo after ADDING an entry is the least important one. It gives way at once to any other undo (a delete, an
+    // import ...) instead of making that one wait, and it never waits behind another undo: a plain message is shown instead.
+    if (snackActive.current && snackKind.current==="add" && kind!=="add") { openSnack({msg,onUndo,ms,kind}); return; }
+    if (kind==="add" && snackActive.current && snackKind.current!=="add") { showToast(msg); return; }
     if (snackActive.current && snackKind.current!==kind) { snackQueue.current.push({msg,onUndo,ms,kind}); return; }
     openSnack({msg,onUndo,ms,kind});
-  },[]);
+  },[showToast]);
 
   const switchTab=useCallback((t)=>{ setTab(t); setTabKey(k=>k+1); },[]);
   const tabRef=useRef(tab); tabRef.current=tab;
@@ -2428,14 +2499,19 @@ export default function App() {
     return { ...s, transactions:r.transactions, bills:r.bills };
   };
   const addTransaction=useCallback((txn)=>{
-    const { billChoice, ...data }=txn, id=Date.now()+Math.random();
-    setState(s=>withBill({...s,transactions:[{...data,id,createdAt:new Date().toISOString()},...s.transactions]},id,billChoice));
-    showToast(t("toast.recorded"));
-  },[showToast]);
+    const { billChoice, wallet, ...data }=txn, id=Date.now()+Math.random();
+    // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
+    // bill the entry may have created, and refuses if something else changed in the meantime, like the other undo windows.
+    const before=stateRef.current;
+    const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
+    setState(next);
+    showSnackbar(t("toast.recorded"),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },6000,"add");
+  },[showToast,showSnackbar]);
 
   const updateTransaction=useCallback((id,txn)=>{
-    const { billChoice, ...data }=txn;
-    setState(s=>withBill({...s,transactions:s.transactions.map(t=>t.id===id?{...t,...data}:t)},id,billChoice));
+    const { billChoice, wallet, ...data }=txn;
+    // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored).
+    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}) }; })},id,billChoice));
     showToast(t("toast.updated"));
   },[showToast]);
 
@@ -2554,7 +2630,7 @@ export default function App() {
   const exportJSON=useCallback(()=>{
     if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: native shell → the hand-over, never a dead download link
     const now=new Date().toISOString();
-    downloadFile(JSON.stringify(buildBackup(state,now),null,2),"application/json",`ledger-backup-${today()}.json`);
+    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
     // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
     // It is not a confirmed backup until the user says they have the file (see backupReminderDue).
     setState(s=>({...s,lastBackup:now}));
@@ -2566,7 +2642,7 @@ export default function App() {
   // the phone. Cancelled → nothing changes. No file sharing on this device → falls back to the download above.
   const shareBackup=useCallback(async ()=>{
     const now=new Date().toISOString();
-    const r=await shareBackupFile(JSON.stringify(buildBackup(state,now),null,2),`ledger-backup-${today()}.json`);
+    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats()},now),null,2),`ledger-backup-${today()}.json`);
     if (r==="unsupported") { exportJSON(); return; }
     if (r==="failed") { showToast(t("io.shareFailed"),6000); return; }   // Run 13: told, and nothing is recorded
     if (r!=="shared") return;
@@ -2604,6 +2680,8 @@ export default function App() {
     }
     const next=applyImport(before, plan, mode, { skipDuplicates:skipDup && plan.dupCount>0 });
     setState(next);
+    // Run 16: the file's own-subcategory suggestions are added to the ones on this phone (union; nothing is overwritten or removed).
+    if (plan.subcategories && Object.keys(plan.subcategories).length) writeSubcats(mergeSubcats(readSubcats(),plan.subcategories));
     setImportPending(null);
     const delta=next.transactions.length-before.transactions.length;
     showSnackbar(settingsOnly ? t("import.settingsApplied") : mode==="replace" ? tn("import.replaced",plan.transactions.length) : tn("import.added",delta), ()=>{
@@ -2695,7 +2773,7 @@ export default function App() {
         </header>
 
         <main className="page" key={tabKey}>
-          {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")}/>}
+          {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} onView={txn=>setViewTxn(txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
@@ -2703,7 +2781,7 @@ export default function App() {
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
             onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}/>}
-          {tab==="more"      && <MorePage onOpen={switchTab} onSettings={()=>setShowSettings(true)} version={runningVersion}/>}
+          {tab==="more"      && <MorePage onOpen={switchTab} onSettings={()=>setShowSettings(true)} onInfo={setInfoKind} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
@@ -2726,6 +2804,7 @@ export default function App() {
           <AddEditOverlay templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
             onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onClose={closeAdd}/>
         )}
+        {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
         {showSettings&&(
           <SettingsSheet state={state} onLanguageChange={changeLanguage}
             onCurrencyChange={c=>setState(s=>({...s,currency:c}))}
@@ -2875,7 +2954,7 @@ function cmpText(diff, kind, currency) {
 const cmpTitle = (kind) => t(kind==="same" ? "cmp.titleSame" : "cmp.titleFull");
 const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevSame" : "cmp.prevFull", { amount:fmt(amount,currency) });
 
-function HomePage({ transactions, bills=[], budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView, onOpenLedger }) {
+function HomePage({ transactions, bills=[], budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView, onOpenLedger, onInfo }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -2962,7 +3041,7 @@ function HomePage({ transactions, bills=[], budgets, templates, currency, safeTo
       <div className="section-enter section-enter-2" data-section="home-coach">
         <SmartHelper transactions={transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
       </div>
-      <HomeDetails hasTxns={transactions.length>0} onAdd={onAdd} onOpenLedger={onOpenLedger}/>
+      <HomeDetails hasTxns={transactions.length>0} onAdd={onAdd} onOpenLedger={onOpenLedger} onInfo={onInfo}/>
     </div>
   );
 }
@@ -3075,7 +3154,7 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
 // The rest of Home. Run 15: Home is the quick answer, not a second ledger. The full Goals and Budgets lists and the long
 // recent-transactions list were removed from here: each lives in its own tab (Goals, Transactions), and the coach cards above
 // still raise a goal or budget only when it needs attention. With entries, one route leads to the full list; without, the empty state.
-function HomeDetails({ hasTxns, onAdd, onOpenLedger }) {
+function HomeDetails({ hasTxns, onAdd, onOpenLedger, onInfo }) {
   return hasTxns?(
     <div className="section-enter section-enter-8" data-section="home-see-all">
       <button className="btn btn-ghost btn-full" onClick={onOpenLedger}>{t("home.seeAll")}<Icon name="chevRight" size={14}/></button>
@@ -3086,6 +3165,7 @@ function HomeDetails({ hasTxns, onAdd, onOpenLedger }) {
       <div className="empty-title">{t("home.emptyTitle")}</div>
       <div className="empty-body">{t("home.emptyBody")}</div>
       <button className="btn btn-primary btn-full" style={{maxWidth:220,marginTop:4}} onClick={onAdd}>{t("home.emptyBtn")}</button>
+      <button className="btn btn-ghost btn-full" data-section="home-how" style={{maxWidth:220,marginTop:8}} onClick={()=>onInfo&&onInfo("how")}>{t("home.howBtn")}</button>
     </div>
   );
 }
@@ -3124,6 +3204,7 @@ function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
     txn.merchant&&txn.note?maskText(txn.note):null,
     catName(txn.category),
     subName(txn.subcategory)||null,
+    txn.wallet?walletName(txn.wallet):null,
     !compact?fmtDate(txn.date):null,
   ].filter(Boolean).join(" · ");
   return (
@@ -3154,6 +3235,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [catFilter,  setCatFilter]  = useState("all");
+  const [walletFilter, setWalletFilter] = useState("all");   // Run 16: "all", a wallet id, or "none" (entries without one)
   const [dateFrom,   setDateFrom]   = useState("");
   const [dateTo,     setDateTo]     = useState("");
   const [showDates,  setShowDates]  = useState(false);
@@ -3182,10 +3264,14 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
     }
     if (typeFilter!=="all") list=list.filter(x=>x.type===typeFilter);
     if (catFilter!=="all")  list=list.filter(x=>x.category===catFilter);
+    if (walletFilter!=="all") list=list.filter(x=>(walletId(x.wallet)||"none")===walletFilter);
     if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
     if (dateTo)             list=list.filter(x=>x.date<=dateTo);
     return list;
-  },[transactions,search,typeFilter,catFilter,dateFrom,dateTo,locale()]);
+  },[transactions,search,typeFilter,catFilter,walletFilter,dateFrom,dateTo,locale()]);
+  // Run 16: the wallet filter is offered only when at least one entry has a wallet, and lists only the wallets in use.
+  const usedWallets=useMemo(()=>[...new Set(transactions.map(x=>walletId(x.wallet)).filter(Boolean))],[transactions]);
+  const hasUnsetWallet=useMemo(()=>transactions.some(x=>!walletId(x.wallet)),[transactions]);
 
   // The category list offers only categories used by the chosen type (Expenses / Income), and changing the type drops a
   // category filter that type has no transactions in, instead of leaving an empty list.
@@ -3221,11 +3307,18 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
         <button className={`chip${(showDates||hasDateFilter)?" on":""}`} aria-pressed={!!(showDates||hasDateFilter)} onClick={()=>setShowDates(s=>!s)}>
           <Icon name="calendar" size={11}/> {t("ledger.date")}
         </button>
-        {(hasCatFilter||hasDateFilter||typeFilter!=="all")&&(
+        {(hasCatFilter||hasDateFilter||typeFilter!=="all"||walletFilter!=="all")&&(
           <button className="chip on" style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)"}}
-            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");}}>{t("ledger.clear")} ×</button>
+            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");}}>{t("ledger.clear")} ×</button>
         )}
       </div>
+      {usedWallets.length>0&&(
+        <div className="filter-bar" role="group" aria-label={t("wallet.filterLabel")} data-section="tx-wallet-filter">
+          {["all",...usedWallets,...(hasUnsetWallet?["none"]:[])].map(w=>(
+            <button key={w} className={`chip${walletFilter===w?" on":""}`} aria-pressed={walletFilter===w} onClick={()=>setWalletFilter(w)}>{w==="all"?t("wallet.filterAll"):w==="none"?t("wallet.none"):walletName(w)}</button>
+          ))}
+        </div>
+      )}
       {showDates&&(
         <div className="date-inputs">
           <label className="date-input-wrap"><span className="date-lbl">{t("ledger.from")}</span><input type="date" lang={locale()} className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
@@ -3453,6 +3546,18 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   const [date,     setDate]     = useState(prefill?.date||today());
   const [recur,    setRecur]    = useState(prefill?.recurring||false);
   const [freq,     setFreq]     = useState(prefill?.recurFreq||"monthly");
+  // Run 16: how it was paid. A new entry starts with the wallet used last (one tap fewer); editing keeps the entry's own.
+  const [wallet,   setWallet]   = useState(isEditing ? walletId(prefill?.wallet) : (prefill && "wallet" in prefill ? walletId(prefill.wallet) : lastWallet(transactions)));
+  // Run 16: the user's own subcategory suggestions (separate storage key; entries keep the text itself).
+  const [mySubs, setMySubs] = useState(()=>readSubcats());
+  const [newSub, setNewSub] = useState(null);   // null = closed; otherwise the text being typed
+  const [subMsg, setSubMsg] = useState("");
+  const saveMySubs=(m)=>{ setMySubs(m); if (!writeSubcats(m)) setSubMsg(t("subcat.saveFailed")); };
+  const addMySub=()=>{
+    const r=addUserSubcat(mySubs,catId,newSub||"");
+    if (!r.added) { setSubMsg(t("subcat.err."+r.reason)); return; }
+    saveMySubs(r.map); setSubcat(newSub.trim().replace(/\s+/g," ")); setNewSub(null); setSubMsg("");
+  };
   const [err,      setErr]      = useState("");
   const [showMerchantSugs, setShowMerchantSugs] = useState(false);
   const amtRef=useRef();
@@ -3460,11 +3565,11 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
   // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
   // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
-  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq }).current;
+  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet }).current;
   const [askDiscard, setAskDiscard] = useState(false);
   const defaultCat=type===initial.type ? initial.catId : (type==="income"?"salary":"food");
   const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
-    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat;
+    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet;
   const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
 
   const expCats=CATEGORIES.filter(c=>!c.income);
@@ -3520,7 +3625,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
       const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
       if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
     }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,
       billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
@@ -3612,16 +3717,45 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
               </button>
             ))}
           </div>
-          {selectedCat?.subs?.length>0&&(
-            <>
+          {(selectedCat?.subs?.length>0 || (mySubs[catId]||[]).length>0 || selectedCat)&&(
+            <div data-section="add-subcat">
               <div className="field-lbl" style={{marginBottom:5,marginTop:4}}>{t("add.subcategory")} {optional}</div>
               <div className="sub-strip">
-                {selectedCat.subs.map(s=>(
+                {/* "+ My own" comes first, then the user's own, then the built-in ones: the strip scrolls sideways, so the button must not hide at its far end */}
+                {newSub===null&&<button type="button" className="sub-chip" data-section="add-subcat-new" onClick={()=>{ setNewSub(""); setSubMsg(""); }}>+ {t("subcat.mine")}</button>}
+                {(mySubs[catId]||[]).map(s=>(
+                  <span key={"my-"+s} className="sub-chip-wrap" style={{display:"inline-flex",alignItems:"center",gap:2}}>
+                    <button className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{s}</button>
+                    <button type="button" className="sub-chip-x" aria-label={t("subcat.remove",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>saveMySubs(removeUserSubcat(mySubs,catId,s))}>×</button>
+                  </span>
+                ))}
+                {(selectedCat?.subs||[]).map(s=>(
                   <button key={s} className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{subName(s)}</button>
                 ))}
               </div>
-            </>
+              {newSub!==null&&(
+                <div style={{display:"flex",gap:7,marginTop:8}}>
+                  <input className="field-input" autoFocus aria-label={t("subcat.mine")} placeholder={t("subcat.ph")} maxLength={SUBCAT_LEN} value={newSub} onChange={e=>{ setNewSub(e.target.value); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); addMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                  <button type="button" className="btn btn-sm btn-sm-primary" onClick={addMySub}>{t("common.save")}</button>
+                  <button type="button" className="btn btn-sm" onClick={()=>{ setNewSub(null); setSubMsg(""); }} aria-label={t("common.cancel")}>✕</button>
+                </div>
+              )}
+              {subMsg&&<div role="alert" className="list-sub" style={{marginTop:6,color:"var(--neg)"}}>{subMsg}</div>}
+            </div>
           )}
+        </div>
+
+        {/* Run 16: how it was paid (cash, bank card, mobile wallet, other). One tap; tapping the chosen one again clears it. */}
+        <div className="field" role="radiogroup" aria-labelledby="txn-wal-lbl" data-section="add-wallet">
+          <div className="field-lbl" id="txn-wal-lbl">{t(type==="income"?"wallet.labelIn":"wallet.label")} {optional}</div>
+          <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
+            {WALLET_IDS.map(id=>(
+              <button key={id} type="button" role="radio" aria-checked={wallet===id} className={`sub-chip${wallet===id?" sel":""}`} onClick={()=>setWallet(wallet===id?"":id)}>{t("wallet."+id)}</button>
+            ))}
+            {wallet&&!WALLET_IDS.includes(wallet)&&(
+              <button type="button" role="radio" aria-checked="true" className="sub-chip sel" onClick={()=>setWallet("")}>{walletName(wallet)}</button>
+            )}
+          </div>
         </div>
 
         <div className="field">
@@ -3737,6 +3871,7 @@ function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClos
             [t("add.merchant"),  maskText(txn.merchant)||"—"],
             [t("add.category"),  catName(txn.category)+(txn.subcategory?` / ${subName(txn.subcategory)}`:"")],
             [t("add.recurring"), txn.recurring?(txn.recurFreq?t("freqCap."+txn.recurFreq):t("common.yes")):t("common.no")],
+            ...(txn.wallet?[[t(txn.type==="income"?"wallet.labelIn":"wallet.label"), walletName(txn.wallet)]]:[]),
           ].map(([lbl,val])=>(
             <div key={lbl} style={{background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px"}}>
               <div style={{fontSize:12,fontWeight:500,color:"var(--ink-3)",marginBottom:3}}>{lbl}</div>
@@ -4033,7 +4168,31 @@ function ListRow({ icon, title, sub, onClick, color="var(--accent-text)", classN
 
 // More: the pages that do not have a tab of their own. There is no account, profile, dark-mode switch or help centre in
 // this app, so none is shown; the card at the top says where the data lives, which is true and useful.
-function MorePage({ onOpen, onSettings, version }) {
+// Run 16: "How it works" (four short steps) and the privacy notice, one simple sheet each. The notice describes what the app does
+// today (no account, no analytics, nothing sent); it is not legal advice and must be kept true if the app ever changes.
+function InfoSheet({ kind, onClose }) {
+  const n=kind==="how"?4:6;
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("info."+kind+".title")} data-section={"info-"+kind}>
+        <div className="sheet-grip"><div className="sheet-handle"/></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:14}}>
+          <div className="card-title" style={{fontSize:17}}>{t("info."+kind+".title")}</div>
+          <button onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
+        </div>
+        {Array.from({length:n},(_,i)=>i+1).map(i=>(
+          <div key={i} style={{marginBottom:14}}>
+            <div className="list-title">{t("info."+kind+"."+i+".h")}</div>
+            <div className="list-sub" style={{lineHeight:1.55,marginTop:2}}>{t("info."+kind+"."+i+".b")}</div>
+          </div>
+        ))}
+        <button className="btn btn-primary btn-full" style={{marginTop:4}} onClick={onClose}>{t("common.close")}</button>
+      </div>
+    </div>
+  );
+}
+
+function MorePage({ onOpen, onSettings, onInfo, version }) {
   return (
     <div className="more-page">
       <div className="card more-id">
@@ -4044,6 +4203,9 @@ function MorePage({ onOpen, onSettings, version }) {
         <ListRow icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
         <ListRow icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
         <ListRow icon="settings" title={t("nav.settings")} sub={t("more.settingsSub")} onClick={onSettings}/>
+        {/* Run 16: appended after the earlier rows, so the first three keep their places */}
+        <ListRow icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
+        <ListRow icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
       </div>
       {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}
     </div>
@@ -4414,6 +4576,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
   expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
   const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const monTxns = transactions.filter(t => t.date.startsWith(selectedMon));
+  const walletSpend = calcWalletSpend(transactions, selectedMon);   // Run 16
   const recurringCount = transactions.filter(x=>x.recurring&&x.date.startsWith(selectedMon)).length;
 
   // Trends: recent months up to today, independent of the selected month.
@@ -4582,6 +4745,21 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
               <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(cat.amt/maxCat)*100}%`,background:cat.color}}/></div>
               <div className="cat-bar-amt">{fmt(cat.amt,currency)}</div>
               <div className="cat-bar-pct">{fmtPct(curExp>0?Math.round((cat.amt/curExp)*100):0)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Run 16: spending by wallet for the selected month; shown only when at least one entry has a wallet */}
+      {walletSpend.used&&walletSpend.total>0&&(
+        <div className="a-card" data-section="an-wallet">
+          <div className="a-card-title">{t("wallet.analyticsTitle")}</div>
+          {Object.entries(walletSpend.byWallet).sort((a,b)=>b[1]-a[1]).map(([w,amt])=>(
+            <div key={w} className="cat-bar">
+              <div className="cat-bar-name">{w==="none"?t("wallet.none"):walletName(w)}</div>
+              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(amt/walletSpend.total)*100}%`,background:"var(--accent)"}}/></div>
+              <div className="cat-bar-amt">{fmt(amt,currency)}</div>
+              <div className="cat-bar-pct">{fmtPct(Math.round((amt/walletSpend.total)*100))}</div>
             </div>
           ))}
         </div>
