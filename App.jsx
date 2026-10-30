@@ -2026,6 +2026,8 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .topbar-right{display:flex;align-items:center;gap:7px}
 .fab-add{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 14px);left:calc(50% + min(215px,50vw) - 72px);width:56px;height:56px;border:none;border-radius:50%;background:var(--accent-fill);color:var(--on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,0.38),0 2px 8px rgba(76,201,196,0.3);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent;z-index:55}
 .fab-add:active{transform:scale(0.92)}
+.fab-add.fab-hide{transform:translateY(96px);opacity:0;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.fab-add{transition:none}}
 .topbar-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 120ms,color 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .topbar-btn:hover{background:var(--bg-inset);color:var(--ink)}.topbar-btn:active{transform:scale(0.88)}
 .tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(7,21,26,0.94);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
@@ -2822,6 +2824,13 @@ function AppInner() {
       document.removeEventListener("touchend",onEnd); document.removeEventListener("touchcancel",reset); };
   },[switchTab]);
 
+  // Run 18: the round add button slides away while the list is scrolled DOWN (so it never hides an amount under it) and returns on scrolling up.
+  const [fabHidden,setFabHidden]=useState(false);
+  useEffect(()=>{
+    let last=window.scrollY||0;
+    const onScroll=()=>{ const y=window.scrollY||0; if (y>last+8 && y>80) setFabHidden(true); else if (y<last-8 || y<=80) setFabHidden(false); last=y; };
+    window.addEventListener("scroll",onScroll,{ passive:true }); return ()=>window.removeEventListener("scroll",onScroll);
+  },[]);
   // Run 12: the add form may say which bill a recurring entry pays ("new" = make a bill from it, or a bill id). An entry
   // that is not recurring has no bill. billChoice null = grouped the earlier way (while old recurring payments exist).
   const withBill=(s,id,billChoice)=>{
@@ -3169,7 +3178,7 @@ function AppInner() {
             : tab==="goals" ? { label:t(goalsSeg==="goals"?"goals.addGoal":"goals.addBudget"), run:()=>setGoalsAdd(n=>n+1) }
             : tab==="recurring" ? { label:t("bill.add"), run:()=>setEditBill(null) }
             : null;
-          return a && <button className="fab-add" onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={26} color="var(--on-accent)"/></button>; })()}
+          return a && <button className={`fab-add${fabHidden?" fab-hide":""}`} tabIndex={fabHidden?-1:undefined} aria-hidden={fabHidden||undefined} onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={26} color="var(--on-accent)"/></button>; })()}
 
         {showAdd&&(
           <AddEditOverlay templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
