@@ -620,6 +620,64 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
 }
 function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }
 
+// ─── App lock (Run 19) ───────────────────────────────────────────────────────
+// A PIN (4–6 digits) and, where the phone allows, a fingerprint prompt keep other people out of the app's screens. It is NOT
+// encryption: the ledger stays readable in this browser's storage and the backup files are unchanged. The PIN is never stored;
+// only a salted PBKDF2-SHA-256 hash is, under its own key (expense_ledger_v5__lock), which a backup never contains and an import
+// never touches. Forgetting the PIN can be fixed on the lock screen (after a short wait) without deleting any record.
+const LOCK_KEY=`${KEY}__lock`;
+const LOCK_TIMEOUTS=[0,1,5,15];            // minutes; 0 = lock whenever the app is left or reopened
+const LOCK_ITER=150000;
+function validPin(p) { return typeof p==="string" && /^[0-9]{4,6}$/.test(p); }
+function lockSupported() { try { return typeof crypto!=="undefined" && !!crypto.subtle && typeof crypto.getRandomValues==="function"; } catch { return false; } }
+function toB64(buf) { let s=""; new Uint8Array(buf).forEach(b=>{ s+=String.fromCharCode(b); }); return btoa(s); }
+function fromB64(s) { const bin=atob(String(s)), out=new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; }
+async function pinHash(pin, saltB64, iter) {
+  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveBits"]);
+  return toB64(await crypto.subtle.deriveBits({ name:"PBKDF2", hash:"SHA-256", salt:fromB64(saltB64), iterations:iter },key,256));
+}
+function sameText(a, b) { a=String(a); b=String(b); let d=a.length^b.length; for (let i=0;i<Math.max(a.length,b.length);i++) d|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0); return d===0; }
+// null = no lock; { ok:true, rec } = a lock; { ok:false } = the lock record exists but cannot be read (the lock screen then offers the reset only).
+function readLock() {
+  let raw; try { raw=localStorage.getItem(LOCK_KEY); } catch { return { ok:false }; }
+  if (raw===null) return null;
+  try {
+    const r=JSON.parse(raw);
+    if (!isPlainObject(r) || r.v!==1 || typeof r.salt!=="string" || typeof r.hash!=="string" || !Number.isInteger(r.iter) || r.iter<1000 || r.iter>2000000) return { ok:false };
+    return { ok:true, rec:{ v:1, salt:r.salt, hash:r.hash, iter:r.iter, timeout:LOCK_TIMEOUTS.includes(r.timeout)?r.timeout:0,
+      bio:typeof r.bio==="string" && r.bio ? r.bio : null, fails:Number.isInteger(r.fails)&&r.fails>0?r.fails:0, until:Number.isFinite(r.until)&&r.until>0?r.until:0 } };
+  } catch { return { ok:false }; }
+}
+function writeLock(rec) { try { localStorage.setItem(LOCK_KEY,JSON.stringify(rec)); return true; } catch { return false; } }
+function removeLock() { try { localStorage.removeItem(LOCK_KEY); return true; } catch { return false; } }
+async function makeLockRecord(pin, timeout=0, bio=null) {
+  if (!validPin(pin) || !lockSupported()) return null;
+  const salt=toB64(crypto.getRandomValues(new Uint8Array(16)));
+  return { v:1, salt, hash:await pinHash(pin,salt,LOCK_ITER), iter:LOCK_ITER, timeout:LOCK_TIMEOUTS.includes(timeout)?timeout:0, bio, fails:0, until:0 };
+}
+async function verifyPin(rec, pin) { if (!rec || !validPin(pin) || !lockSupported()) return false; try { return sameText(await pinHash(pin,rec.salt,rec.iter),rec.hash); } catch { return false; } }
+// Wrong PINs: the first four are free, then the wait doubles from 30 s up to 5 minutes. Stored, so closing the app does not reset it.
+function lockWaitMs(fails) { return fails<5 ? 0 : Math.min(300000, 30000*Math.pow(2,fails-5)); }
+// When the app should lock. "away" = how long it was out of sight; "idle" = how long without a touch or key while open.
+function lockShouldEngage(timeoutMin, event, ms) {
+  if (event==="away") return timeoutMin===0 ? true : ms>=timeoutMin*60000;
+  if (event==="idle") return timeoutMin>0 && ms>=timeoutMin*60000;
+  return false;
+}
+// Fingerprint through the phone's own prompt (WebAuthn "platform" authenticator, user verification required). The app has no server
+// to check the result against, so this is a convenience in front of the PIN, never a replacement for it.
+async function bioAvailable() { try { return typeof PublicKeyCredential!=="undefined" && !!navigator.credentials && lockSupported() && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch { return false; } }
+async function bioRegister() {
+  const cred=await navigator.credentials.create({ publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), rp:{ name:"Expense Ledger" },
+    user:{ id:crypto.getRandomValues(new Uint8Array(16)), name:"ledger", displayName:"Expense Ledger" }, pubKeyCredParams:[{ type:"public-key", alg:-7 },{ type:"public-key", alg:-257 }],
+    authenticatorSelection:{ authenticatorAttachment:"platform", userVerification:"required", residentKey:"discouraged" }, timeout:60000 } });
+  return cred ? toB64(cred.rawId) : null;
+}
+async function bioCheck(idB64) {
+  const r=await navigator.credentials.get({ publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[{ type:"public-key", id:fromB64(idB64) }], userVerification:"required", timeout:30000 } });
+  return !!r;
+}
+
 // ─── Settings contract (used for stored data AND imported backups) ───────────
 // Each section is validated on its own. Invalid entries are skipped and reported; a section whose entries are ALL
 // invalid is rejected so your current value is kept. Sections absent from the source are simply not returned.
@@ -2211,6 +2269,16 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
 .numpad-key{min-height:50px;border:1px solid var(--rule);border-radius:14px;background:var(--bg-card);color:var(--ink);font-family:var(--font);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
 .numpad-key{transition:transform .08s ease-out,background .12s}
+.lock-screen{position:fixed;inset:0;z-index:1000;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px 20px;overflow-y:auto;font-family:var(--font)}
+.lock-card{width:100%;max-width:320px;text-align:center}
+.lock-title{font-size:22px;font-weight:700;margin:0 0 4px}
+.lock-sub{font-size:14px;color:var(--ink-3);margin:0 0 14px}
+.lock-dots{display:flex;gap:12px;justify-content:center;min-height:18px;margin-bottom:6px}
+.lock-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink-3);box-sizing:border-box}
+.lock-dot.on{background:var(--accent-fill);border-color:var(--accent-fill)}
+.lock-msg{color:var(--neg);font-size:13px;font-weight:600;min-height:20px;margin-bottom:6px}
+.lock-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
+.lock-pad .numpad-key:disabled{opacity:.45}
 .numpad-key:active{background:var(--bg-warm);transform:scale(.95)}
 @media (prefers-reduced-motion:reduce){.numpad-key{transition:none}.numpad-key:active{transform:none}}
 .numpad-key:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -2715,6 +2783,212 @@ function appendCrashLog(err) {
     localStorage.setItem(CRASH_LOG_KEY,JSON.stringify(log.slice(-5)));
   } catch { /* storage may be full or blocked: the recovery screen still works */ }
 }
+// ─── App lock screens (Run 19) ───────────────────────────────────────────────
+// The lock sits OUTSIDE the app: while locked the app stays mounted (nothing typed is lost) but is hidden, and the lock screen covers it.
+function lockLang() { try { const r=JSON.parse(localStorage.getItem(KEY)||"null"); return r && LANGS.includes(r.language) ? r.language : "en"; } catch { return "en"; } }
+const LOCK_AFTER_KEY={ 0:"lock.after0", 1:"lock.after1", 5:"lock.after5", 15:"lock.after15" };
+function LockGate({ children }) {
+  const [lock,setLock]=useState(()=>readLock());
+  const [locked,setLocked]=useState(()=>readLock()!==null);
+  const lockRef=useRef(lock), lockedRef=useRef(locked), seen=useRef({ hidden:0, active:Date.now() });
+  lockRef.current=lock; lockedRef.current=locked;
+  useEffect(()=>{
+    const arm=()=>{ const l=lockRef.current; return !!(l&&l.ok)&&!lockedRef.current; };
+    const onVis=()=>{
+      if (document.visibilityState==="hidden") { seen.current.hidden=Date.now(); return; }
+      const l=lockRef.current;
+      if (seen.current.hidden && arm() && lockShouldEngage(l.rec.timeout,"away",Date.now()-seen.current.hidden)) setLocked(true);
+      seen.current.hidden=0; seen.current.active=Date.now();
+    };
+    const touch=()=>{ seen.current.active=Date.now(); };
+    const tick=setInterval(()=>{ if (arm() && lockShouldEngage(lockRef.current.rec.timeout,"idle",Date.now()-seen.current.active)) setLocked(true); },5000);
+    const onChanged=()=>{ const l=readLock(); setLock(l); if (!l) setLocked(false); };
+    const onNow=()=>{ const l=readLock(); setLock(l); if (l) setLocked(true); };
+    document.addEventListener("visibilitychange",onVis);
+    ["pointerdown","keydown","touchstart","scroll"].forEach(e=>window.addEventListener(e,touch,{ passive:true, capture:true }));
+    window.addEventListener("ledger-lock-changed",onChanged); window.addEventListener("ledger-lock-now",onNow);
+    return ()=>{ clearInterval(tick); document.removeEventListener("visibilitychange",onVis);
+      ["pointerdown","keydown","touchstart","scroll"].forEach(e=>window.removeEventListener(e,touch,{ capture:true }));
+      window.removeEventListener("ledger-lock-changed",onChanged); window.removeEventListener("ledger-lock-now",onNow); };
+  },[]);
+  if (locked) setLang(lockLang());
+  return (
+    <>
+      <div style={{ display:locked?"none":"contents" }} aria-hidden={locked||undefined}>{children}</div>
+      {locked&&<LockScreen lock={lock} onUnlock={()=>{ seen.current.active=Date.now(); setLock(readLock()); setLocked(false); }} onRemoved={()=>{ setLock(null); setLocked(false); }}/>}
+    </>
+  );
+}
+function LockScreen({ lock, onUnlock, onRemoved }) {
+  const damaged=!lock||!lock.ok;
+  const [cur,setCur]=useState(()=>damaged?null:lock.rec);
+  const [pin,setPin]=useState(""), [msg,setMsg]=useState(""), [busy,setBusy]=useState(false);
+  const bioWait=useRef(false);
+  const [forgot,setForgot]=useState(damaged), [forgotAt,setForgotAt]=useState(()=>Date.now()), [now,setNow]=useState(()=>Date.now());
+  useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),500); return ()=>clearInterval(i); },[]);
+  const waitS=cur&&cur.until>now ? Math.ceil((cur.until-now)/1000) : 0;
+  const forgotS=Math.max(0,10-Math.floor((now-forgotAt)/1000));
+  const press=(d)=>{ if (busy) return; setMsg(""); setPin(p=>p.length<6?p+d:p); };
+  const back=()=>{ if (!busy) { setMsg(""); setPin(p=>p.slice(0,-1)); } };
+  const submit=async()=>{
+    if (busy||waitS>0||!cur||!validPin(pin)) return;
+    setBusy(true);
+    const good=await verifyPin(cur,pin);
+    if (good) { if (cur.fails||cur.until) writeLock({ ...cur, fails:0, until:0 }); onUnlock(); return; }
+    const fails=cur.fails+1, w=lockWaitMs(fails), next={ ...cur, fails, until:w?Date.now()+w:0 };
+    writeLock(next); setCur(next); setPin(""); setMsg(t("lock.wrong")); setNow(Date.now()); setBusy(false);
+  };
+  const bio=async()=>{
+    // The phone's prompt may stay open or never answer; the PIN keys must keep working meanwhile, so this does not use "busy".
+    if (bioWait.current||busy||!cur||!cur.bio) return;
+    bioWait.current=true; let good=false; try { good=await bioCheck(cur.bio); } catch { good=false; }
+    bioWait.current=false;
+    if (good) { onUnlock(); return; }
+    setMsg(t("lock.bioFail"));
+  };
+  useEffect(()=>{
+    const onKey=(e)=>{ if (forgot) return; if (/^[0-9]$/.test(e.key)) press(e.key); else if (e.key==="Backspace") back(); else if (e.key==="Enter") submit(); };
+    window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey);
+  });
+  const remove=()=>{ if (forgotS>0) return; removeLock(); onRemoved(); };
+  return (
+    <div className="lock-screen" role="dialog" aria-modal="true" aria-label={t("lock.screenTitle")} data-section="lock-screen">
+      <span className="more-mark" aria-hidden="true"><Icon name="safe" size={26} color="var(--accent)"/></span>
+      {forgot ? (
+        <div className="lock-card" data-section="lock-forgot">
+          <h1 className="lock-title">{t("lock.forgot")}</h1>
+          <p className="lock-sub" style={{lineHeight:1.55}}>{damaged?t("lock.damaged"):t("lock.forgotBody")}</p>
+          <button className="btn btn-primary btn-full" data-section="lock-remove" disabled={forgotS>0} onClick={remove}>{forgotS>0?t("lock.forgotWait",{s:forgotS}):t("lock.forgotGo")}</button>
+          {!damaged&&<button className="btn btn-full" style={{marginTop:8}} onClick={()=>setForgot(false)}>{t("lock.back")}</button>}
+        </div>
+      ) : (
+        <div className="lock-card">
+          <h1 className="lock-title">{t("lock.screenTitle")}</h1>
+          <p className="lock-sub">{t("lock.screenSub")}</p>
+          <div className="lock-dots" role="img" aria-label={t("lock.entered",{n:pin.length})} data-section="lock-dots">
+            {Array.from({length:Math.max(4,pin.length)},(_,i)=><span key={i} className={`lock-dot${i<pin.length?" on":""}`}/>)}
+          </div>
+          <div className="lock-msg" role="alert" data-section="lock-msg">{waitS>0?t("lock.wait",{s:waitS}):msg}</div>
+          <div className="lock-pad">
+            {["1","2","3","4","5","6","7","8","9"].map(d=><button key={d} type="button" className="numpad-key" onClick={()=>press(d)} disabled={waitS>0}>{d}</button>)}
+            {cur&&cur.bio ? <button type="button" className="numpad-key lock-bio" data-section="lock-bio" onClick={bio} aria-label={t("lock.useBio")} title={t("lock.useBio")}><Icon name="safe" size={22}/></button> : <span/>}
+            <button type="button" className="numpad-key" onClick={()=>press("0")} disabled={waitS>0}>0</button>
+            <button type="button" className="numpad-key" onClick={back} aria-label={t("lock.del")} title={t("lock.del")}><Icon name="close" size={18}/></button>
+          </div>
+          <button className="btn btn-primary btn-full" data-section="lock-go" style={{marginTop:12}} disabled={waitS>0||!validPin(pin)||busy} onClick={submit}>{t("lock.screenTitle")}</button>
+          <button className="btn btn-full" data-section="lock-forgot-btn" style={{marginTop:8}} onClick={()=>{ setForgot(true); setForgotAt(Date.now()); }}>{t("lock.forgot")}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+function LockSheet({ onClose, showToast }) {
+  const [lock,setLock]=useState(()=>readLock());
+  const rec=lock&&lock.ok?lock.rec:null;
+  const [a,setA]=useState(""), [b,setB]=useState(""), [c,setC]=useState(""), [err,setErr]=useState(""), [mode,setMode]=useState("main"), [bioOk,setBioOk]=useState(false);
+  useEffect(()=>{ let alive=true; bioAvailable().then(v=>{ if (alive) setBioOk(v); }); return ()=>{ alive=false; }; },[]);
+  const announce=()=>{ window.dispatchEvent(new Event("ledger-lock-changed")); setLock(readLock()); };
+  const digits=(s)=>s.replace(/[^0-9]/g,"").slice(0,6);
+  const reset=()=>{ setA(""); setB(""); setC(""); setErr(""); setMode("main"); };
+  const save=async(timeout,bio)=>{ const next=await makeLockRecord(a,timeout,bio); if (!next) { setErr(t("lock.unsupported")); return false; }
+    if (!writeLock(next)) { setErr(t("lock.saveFail")); return false; } return true; };
+  const doSet=async()=>{
+    if (!validPin(a)) return setErr(t("lock.badPin"));
+    if (a!==b) return setErr(t("lock.mismatch"));
+    if (!(await save(0,null))) return;
+    announce(); reset(); showToast(t("lock.saved"));
+  };
+  const doChange=async()=>{
+    if (!(await verifyPin(rec,c))) return setErr(t("lock.currentWrong"));
+    if (!validPin(a)) return setErr(t("lock.badPin"));
+    if (a!==b) return setErr(t("lock.mismatch"));
+    if (!(await save(rec.timeout,rec.bio))) return;
+    announce(); reset(); showToast(t("lock.changed"));
+  };
+  const doOff=async()=>{
+    if (!(await verifyPin(rec,c))) return setErr(t("lock.currentWrong"));
+    if (!removeLock()) return setErr(t("lock.saveFail"));
+    announce(); reset(); showToast(t("lock.offDone"));
+  };
+  const setTimeoutMin=(m)=>{ if (!rec) return; if (writeLock({ ...rec, timeout:m })) announce(); else setErr(t("lock.saveFail")); };
+  const toggleBio=async()=>{
+    if (!rec) return; setErr("");
+    if (rec.bio) { if (writeLock({ ...rec, bio:null })) announce(); return; }
+    try { const id=await bioRegister(); if (!id) throw new Error("none"); if (writeLock({ ...rec, bio:id })) announce(); else setErr(t("lock.saveFail")); }
+    catch { setErr(t("lock.bioSetupFail")); }
+  };
+  const field=(label,val,set,id)=>(
+    <div style={{marginBottom:10}}>
+      <label className="field-lbl" htmlFor={id}>{label}</label>
+      <input id={id} className="field-input" type="password" inputMode="numeric" autoComplete="off" maxLength={6} value={val} onChange={e=>{ set(digits(e.target.value)); setErr(""); }}/>
+    </div>
+  );
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("lock.title")} data-section="lock-sheet">
+        <div className="sheet-grip"><div className="sheet-handle"/></div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
+          <div className="card-title" style={{fontSize:17}}>{t("lock.title")}</div>
+          <button onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
+        </div>
+        <div className="list-sub" style={{lineHeight:1.55,marginBottom:12}} data-section="lock-notenc">{t("lock.notEnc")}</div>
+        {!lockSupported()&&<div className="field-error" role="alert">{t("lock.unsupported")}</div>}
+        {lock&&!lock.ok&&<div className="field-error" role="alert">{t("lock.damaged")}</div>}
+        {!lock&&lockSupported()&&(
+          <div data-section="lock-setup">
+            {field(t("lock.pin"),a,setA,"lock-pin-a")}
+            {field(t("lock.pin2"),b,setB,"lock-pin-b")}
+            {err&&<div className="field-error" role="alert">{err}</div>}
+            <button className="btn btn-primary btn-full" data-section="lock-save" onClick={doSet}>{t("lock.set")}</button>
+          </div>
+        )}
+        {rec&&mode==="main"&&(
+          <div data-section="lock-manage">
+            <div className="list-title" style={{marginBottom:6}}>{t("lock.on")}</div>
+            <div className="settings-section-lbl" id="lock-when-lbl" style={{marginTop:8}}>{t("lock.when")}</div>
+            <fieldset className="lang-switch" aria-labelledby="lock-when-lbl">
+              {LOCK_TIMEOUTS.map(m=>(
+                <label key={m} className={`lang-pill${rec.timeout===m?" sel":""}`}>
+                  <input type="radio" name="lock-after" value={m} checked={rec.timeout===m} onChange={()=>setTimeoutMin(m)}/>{t(LOCK_AFTER_KEY[m])}
+                </label>
+              ))}
+            </fieldset>
+            <div className="list-sub" style={{marginTop:6}}>{t("lock.whenSub")}</div>
+            <div className="settings-section-lbl" style={{marginTop:14}}>{t("lock.bio")}</div>
+            {bioOk
+              ? <button className={`btn btn-full${rec.bio?" btn-primary":""}`} role="switch" aria-checked={!!rec.bio} data-section="lock-bio-toggle" onClick={toggleBio}>{t("lock.bio")}: {rec.bio?t("lock.on"):t("lock.off")}</button>
+              : <div className="list-sub" data-section="lock-bio-no">{t("lock.bioNo")}</div>}
+            <div className="list-sub" style={{marginTop:6}}>{t("lock.bioSub")}</div>
+            {err&&<div className="field-error" role="alert">{err}</div>}
+            <button className="btn btn-full" style={{marginTop:14}} data-section="lock-now" onClick={()=>{ onClose(); window.dispatchEvent(new Event("ledger-lock-now")); }}>{t("lock.now")}</button>
+            <button className="btn btn-full" style={{marginTop:8}} data-section="lock-change-go" onClick={()=>{ reset(); setMode("change"); }}>{t("lock.change")}</button>
+            <button className="btn btn-full" style={{marginTop:8}} data-section="lock-off-go" onClick={()=>{ reset(); setMode("off"); }}>{t("lock.turnOff")}</button>
+          </div>
+        )}
+        {rec&&mode==="change"&&(
+          <div data-section="lock-change">
+            {field(t("lock.current"),c,setC,"lock-pin-c")}
+            {field(t("lock.newPin"),a,setA,"lock-pin-a")}
+            {field(t("lock.pin2"),b,setB,"lock-pin-b")}
+            {err&&<div className="field-error" role="alert">{err}</div>}
+            <button className="btn btn-primary btn-full" data-section="lock-change-save" onClick={doChange}>{t("lock.change")}</button>
+            <button className="btn btn-full" style={{marginTop:8}} onClick={reset}>{t("common.cancel")}</button>
+          </div>
+        )}
+        {rec&&mode==="off"&&(
+          <div data-section="lock-off">
+            <div className="list-sub" style={{marginBottom:10}}>{t("lock.turnOffHint")}</div>
+            {field(t("lock.current"),c,setC,"lock-pin-c")}
+            {err&&<div className="field-error" role="alert">{err}</div>}
+            <button className="btn btn-primary btn-full" data-section="lock-off-save" onClick={doOff}>{t("lock.turnOff")}</button>
+            <button className="btn btn-full" style={{marginTop:8}} onClick={reset}>{t("common.cancel")}</button>
+          </div>
+        )}
+        {lock&&!lock.ok&&<button className="btn btn-full" style={{marginTop:10}} data-section="lock-reset-damaged" onClick={()=>{ removeLock(); announce(); }}>{t("lock.forgotGo")}</button>}
+      </div>
+    </div>
+  );
+}
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state={ failed:false }; }
   static getDerivedStateFromError() { return { failed:true }; }
@@ -2730,7 +3004,7 @@ class ErrorBoundary extends Component {
     );
   }
 }
-export default function App() { return <ErrorBoundary><AppInner/></ErrorBoundary>; }
+export default function App() { return <ErrorBoundary><LockGate><AppInner/></LockGate></ErrorBoundary>; }
 function AppInner() {
   const [state,    setState]    = useState(() => migrateAndLoad());
   // The whole tree renders in the saved language. Changing it is an ordinary state update: everything re-renders in place,
@@ -2753,6 +3027,7 @@ function AppInner() {
   const [editId,   setEditId]   = useState(null);
   const [viewTxn,  setViewTxn]  = useState(null);
   const [infoKind, setInfoKind] = useState(null);   // Run 16: "how" | "privacy" | null
+  const [showLock, setShowLock] = useState(false);   // Run 19: the App lock sheet
   const [importPending, setImportPending] = useState(null);
   const [skipDup, setSkipDup] = useState(true);
   // Recovery messages stay on screen until the user dismisses them; ordinary toasts can never replace them.
@@ -3229,7 +3504,7 @@ function AppInner() {
             onAddTemplate={tpl=>setState(s=>({...s,templates:[...s.templates,{...tpl,id:"t"+Date.now()}]}))}
             onDeleteTemplate={id=>setState(s=>({...s,templates:s.templates.filter(t=>t.id!==id)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
-          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} onSettings={()=>setShowSettings(true)} onInfo={setInfoKind} version={runningVersion}/>}
+          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} onSettings={()=>setShowSettings(true)} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
@@ -3263,6 +3538,7 @@ function AppInner() {
             onOtherKind={k=>{ setDebtsStart(k); closeAdd(); switchTab("debts"); }}/>
         )}
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
+        {showLock&&<LockSheet onClose={()=>setShowLock(false)} showToast={showToast}/>}
         {showSettings&&(
           <SettingsSheet state={state}
             onCurrencyChange={c=>setState(s=>({...s,currency:c}))}
@@ -4968,7 +5244,7 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
   );
 }
 
-function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onSettings, onInfo, version }) {
+function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onSettings, onInfo, onLock, version }) {
   const [name,setName]=useState(profileName);
   return (
     <div className="more-page">
@@ -5008,6 +5284,8 @@ function MorePage({ language, profileName="", onLanguageChange, onProfileName, o
         <ListRow icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
         {/* Run 18: appended, so every earlier row keeps its place */}
         <ListRow icon="safe" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
+        {/* Run 19: appended last */}
+        <ListRow icon="safe" title={t("lock.title")} sub={t("lock.rowSub")} onClick={onLock}/>
       </div>
       {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}
     </div>
