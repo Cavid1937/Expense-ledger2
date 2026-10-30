@@ -1462,10 +1462,13 @@ function validateBill(b) {
   const amount=parseMoney(b.amount,{positive:true});
   const anchor=typeof b.anchorDate==="string" && isValidDateStr(b.anchorDate) ? b.anchorDate : null;
   const dueDayOk=b.dueDay===undefined || (Number.isInteger(b.dueDay) && b.dueDay>=1 && b.dueDay<=31);
-  if (!id || !name || name.length>80 || !type || amount===null || !RECUR_FREQS.has(b.freq) || !anchor || !dueDayOk || (b.active!==undefined && typeof b.active!=="boolean")) return null;
+  // Run 18: an optional last due date (the final instalment of a credit). Empty = none; anything else must be a real date on or after the first due date.
+  const endRaw=b.endDate===undefined||b.endDate===null||b.endDate==="" ? null : b.endDate;
+  const endOk=endRaw===null || (typeof endRaw==="string" && isValidDateStr(endRaw) && anchor!==null && endRaw>=anchor);
+  if (!id || !name || name.length>80 || !type || amount===null || !RECUR_FREQS.has(b.freq) || !anchor || !dueDayOk || !endOk || (b.active!==undefined && typeof b.active!=="boolean")) return null;
   const ids=CATEGORIES.map(c=>c.id);
   return { id, name, type, category:ids.includes(b.category) ? b.category : "other", subcategory:txt(b.subcategory).slice(0,40), amount, freq:b.freq,
-    anchorDate:anchor, ...(b.dueDay!==undefined ? { dueDay:b.dueDay } : {}), active:b.active!==false, createdAt:typeof b.createdAt==="string" ? b.createdAt : "" };
+    anchorDate:anchor, ...(b.dueDay!==undefined ? { dueDay:b.dueDay } : {}), ...(endRaw!==null ? { endDate:endRaw } : {}), active:b.active!==false, createdAt:typeof b.createdAt==="string" ? b.createdAt : "" };
 }
 function newBillId(taken) { let id; do { id="b"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); } while (taken && taken.has(id)); return id; }
 
@@ -1605,7 +1608,8 @@ function scheduleOccurrences(s, mon) {
     }
   } else if (s.freq==="monthly") out.push(new Date(y,mo-1,dueDay));
   else if (s.freq==="yearly" && anchor.getMonth()===mo-1) out.push(new Date(y,mo-1,dueDay));
-  return out;
+  const end=fromBill && s.bill.endDate ? s.bill.endDate : null;   // Run 18: nothing is due after a bill's last date
+  return end ? out.filter(d=>localDateStr(d)<=end) : out;
 }
 
 // Which expected occurrences in `mon` have no recorded payment yet. Monthly/yearly: any payment of the schedule in that month
@@ -1638,6 +1642,19 @@ function scheduleNextDue(s, transactions, now=new Date()) {
     if (c.length) return parseLocalDate(c[0]);
   }
   return null;
+}
+
+// Run 18: how many payments of a bill with an end date are still to come (today or later, none recorded for them yet). null = no end date.
+function billPaymentsLeft(s, transactions, now=new Date()) {
+  const end=s && s.bill && s.bill.endDate; if (!end) return null;
+  const todayStr=localDateStr(now), endMon=end.slice(0,7);
+  let n=0;
+  for (let i=0;i<600;i++) {
+    const mon=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i));
+    if (mon>endMon) break;
+    n+=scheduleMonthStatus(s,transactions,mon,now).remaining.filter(d=>d>=todayStr).length;
+  }
+  return n;
 }
 
 // S4: Safe to Spend = income received so far this month − savings reserve − spending recorded this month − commitments still to come.
@@ -3806,11 +3823,12 @@ function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast }) {
   const [name,setName]=useState(bill?.name||""), [type,setType]=useState(bill?.type||"expense"), [amount,setAmount]=useState(bill?String(bill.amount):"");
   const [category,setCategory]=useState(bill?.category||"housing"), [freq,setFreq]=useState(bill?.freq||"monthly");
   const [anchor,setAnchor]=useState(bill?.anchorDate||today()), [active,setActive]=useState(bill?bill.active!==false:true);
+  const [endDate,setEndDate]=useState(bill?.endDate||"");
   const cats=CATEGORIES.filter(c=>type==="income"?c.income:!c.income);
   const save=()=>{
     const b=validateBill({ id:bill?.id||"tmp", name, type, category:cats.some(c=>c.id===category)?category:cats[0].id, subcategory:bill?.subcategory||"",
-      amount:formMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), active, createdAt:bill?.createdAt||new Date().toISOString() });
-    if (!b) { showToast(t("bill.invalid"),3500); return; }
+      amount:formMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), endDate, active, createdAt:bill?.createdAt||new Date().toISOString() });
+    if (!b) { showToast(t(endDate && endDate<anchor ? "bill.endDateBad" : "bill.invalid"),3500); return; }
     onSave(isNew ? { ...b, id:null } : b);
   };
   return (
@@ -3833,6 +3851,8 @@ function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast }) {
           <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><input id="bill-date" className="field-input" type="date" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/>
             {isValidDateStr(anchor)&&<div className="list-sub" style={{marginTop:4}}>{fmtLongDate(parseLocalDate(anchor))}</div>}</div>
         </div>
+        <div className="field"><label className="field-lbl" htmlFor="bill-end">{t("bill.endDate")}</label><input id="bill-end" className="field-input" type="date" lang={locale()} value={endDate} min={isValidDateStr(anchor)?anchor:undefined} onChange={e=>setEndDate(e.target.value)}/>
+          <div className="list-sub" style={{marginTop:4}}>{t("bill.endDateSub")}</div></div>
         {!isNew&&(
           <div className="settings-row">
             <div><div className="settings-row-title">{t("bill.active")}</div><div className="settings-row-sub">{t("bill.activeSub")}</div></div>
@@ -3852,7 +3872,7 @@ function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedu
     const nowD=new Date();
     return buildSchedules(transactions,bills).map(x=>{
       const st=x.isActive ? scheduleMonthStatus(x,transactions,localMonthStr(nowD),nowD) : null;
-      return { ...x, nextDue:scheduleNextDue(x,transactions,nowD), monthly:scheduleMonthly(x), unrecordedThisMonth:st?st.overdue.length:0 };
+      return { ...x, nextDue:scheduleNextDue(x,transactions,nowD), monthly:scheduleMonthly(x), left:billPaymentsLeft(x,transactions,nowD), unrecordedThisMonth:st?st.overdue.length:0 };
     }).sort((a,b)=>{ if (a.isActive!==b.isActive) return a.isActive?-1:1; return (a.nextDue?a.nextDue.getTime():Infinity)-(b.nextDue?b.nextDue.getTime():Infinity); });
   },[transactions,bills]);
   const inferred=schedules.filter(x=>!x.billId).length;
@@ -3889,7 +3909,7 @@ function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedu
             {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""} · {t("freq."+x.freq)} · {tn("rec.paymentsRecorded",x.occurrences.length)}
           </div>
           <div style={{fontSize:11,marginTop:1,color:near&&x.isActive?"var(--warn)":"var(--ink-4)",fontWeight:near&&x.isActive?700:400}}>
-            {x.isActive?dueText(x):t("rec.paused")} · {x.occurrences.length?t("rec.last",{date:fmtDate(x.occurrences[x.occurrences.length-1])}):t("bill.noPayments")}
+            {x.isActive?dueText(x):t("rec.paused")}{x.left!=null&&x.isActive&&<span> · {x.left>0?tn("bill.paymentsLeft",x.left):t("bill.endedOn",{date:fmtDate(x.bill.endDate)})}</span>} · {x.occurrences.length?t("rec.last",{date:fmtDate(x.occurrences[x.occurrences.length-1])}):t("bill.noPayments")}
             {x.unrecordedThisMonth>0&&<span style={{color:"var(--warn)",fontWeight:700}}> · {tn("rec.notRecorded",x.unrecordedThisMonth)}</span>}
           </div>
         </div>
@@ -4646,7 +4666,7 @@ function ListRow({ icon, title, sub, onClick, color="var(--accent-text)", classN
 // Run 16: "How it works" (four short steps) and the privacy notice, one simple sheet each. The notice describes what the app does
 // today (no account, no analytics, nothing sent); it is not legal advice and must be kept true if the app ever changes.
 function InfoSheet({ kind, onClose }) {
-  const n=kind==="how"?4:6;
+  const n=kind==="how"?4:kind==="safe"?5:8;
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("info."+kind+".title")} data-section={"info-"+kind}>
@@ -4952,6 +4972,8 @@ function MorePage({ language, profileName="", onLanguageChange, onProfileName, o
         <ListRow icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
         {/* Run 17: appended, so the first five rows keep their places */}
         <ListRow icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
+        {/* Run 18: appended, so every earlier row keeps its place */}
+        <ListRow icon="safe" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
       </div>
       {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}
     </div>
@@ -5490,6 +5512,7 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
               </div>
             );
           })}
+          {wc.catChanges.slice(0,5).some(c=>c.merchantDiffs.length>0)&&<div className="list-sub" data-section="an-changes-tags" style={{marginTop:10}}>{t("wc.tagHelp")}</div>}
         </div>
       )}
 
