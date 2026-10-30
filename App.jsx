@@ -2420,7 +2420,7 @@ input[type=number]{-moz-appearance:textfield}
 .tabbar{border-top:1px solid var(--rule)}
 .card,.safe-card,.a-card,.pace-card,.helper-card,.month-stat,.stat-cell,.goal-card{background:var(--bg-card);border:1px solid var(--rule);border-radius:var(--radius)}
 .card{padding:16px;margin-bottom:14px}
-.card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+.card-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:8px}
 .card-title{font-size:16px;font-weight:600;color:var(--ink)}
 .card-sub-title{font-size:15px;font-weight:600;color:var(--ink);margin:16px 0 10px}
 .section-title{display:block;font-size:17px;font-weight:600;color:var(--ink);margin:18px 2px 10px}
