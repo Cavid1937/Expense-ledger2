@@ -632,6 +632,7 @@ function migrateAndLoad() {
       backupConfirmedAt,
       language,
       profileName:  cleanProfileName(current.profileName),
+      setupHidden:  current.setupHidden===true,                // Run 17: the Home "Get set up" list was hidden for good
     };
   }
 
@@ -693,6 +694,7 @@ function buildState(transactions=[], settings=null) {
     backupConfirmedAt: null,
     language:    null,
     profileName: "",
+    setupHidden: false,
   };
 }
 
@@ -3046,7 +3048,9 @@ function AppInner() {
         </header>
 
         <main className="page" key={tabKey}>
-          {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}/>}
+          {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+            setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
+            onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
@@ -3237,7 +3241,7 @@ function cmpText(diff, kind, currency) {
 const cmpTitle = (kind) => t(kind==="same" ? "cmp.titleSame" : "cmp.titleFull");
 const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevSame" : "cmp.prevFull", { amount:fmt(amount,currency) });
 
-function HomePage({ transactions, bills=[], budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView, onOpenLedger, onInfo }) {
+function HomePage({ transactions, bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -3324,6 +3328,31 @@ function HomePage({ transactions, bills=[], budgets, templates, currency, safeTo
       <div className="section-enter section-enter-2" data-section="home-coach">
         <SmartHelper transactions={transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
       </div>
+      {setup&&!setup.hidden&&(()=>{
+        // Run 17: first-run checklist. Each step ticks itself from what the person has actually done; nothing is stored except "hidden".
+        const steps=[
+          { id:"txn",    done:transactions.length>0,                                          label:t("setup.s1") },
+          { id:"income", done:transactions.some(x=>x.type==="income"),                       label:t("setup.s2") },
+          { id:"plan",   done:Object.values(budgets||{}).some(v=>v>0)||(goals||[]).length>0, label:t("setup.s3") },
+          { id:"backup", done:!!setup.backedUp,                                              label:t("setup.s4") },
+        ];
+        if (steps.every(x=>x.done)) return null;
+        return (
+          <div className="card section-enter section-enter-2" data-section="home-setup" role="group" aria-label={t("setup.title")}>
+            <div className="a-card-title">{t("setup.title")}</div>
+            <div className="list-sub" style={{marginBottom:6}}>{t("setup.sub")}</div>
+            {steps.map(x=>(
+              <button key={x.id} type="button" className="setup-step" data-step={x.id} data-done={x.done} disabled={x.done} onClick={()=>onSetupGo(x.id)}
+                aria-label={x.done?`${x.label} — ${t("setup.stepDone")}`:x.label}
+                style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"left",background:"none",border:"none",borderTop:"1px solid var(--rule)",padding:"10px 2px",minHeight:44,fontSize:14,color:x.done?"var(--ink-3)":"var(--ink)",cursor:x.done?"default":"pointer"}}>
+                <span aria-hidden="true" style={{width:20,textAlign:"center",color:x.done?"var(--pos)":"var(--ink-3)"}}>{x.done?"✓":"○"}</span>
+                <span style={{flex:1,textDecoration:x.done?"line-through":"none"}}>{x.label}</span>
+              </button>
+            ))}
+            <button type="button" className="btn btn-ghost btn-sm setup-hide" style={{marginTop:6}} onClick={onSetupHide}>{t("setup.hide")}</button>
+          </div>
+        );
+      })()}
       <HomeDetails hasTxns={transactions.length>0} onAdd={onAdd} onOpenLedger={onOpenLedger} onInfo={onInfo}/>
     </div>
   );
