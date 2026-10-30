@@ -325,6 +325,8 @@ function normaliseTxn(t, opts={}) {
     ...(walletId(t.wallet) ? { wallet:walletId(t.wallet) } : {}),
     // Run 17: a loan instalment marked paid on the Debts page. Optional; entries without it keep the shape older versions wrote.
     ...(loanRef(t.loan) ? { loan:loanRef(t.loan) } : {}),
+    // Run 18: a repayment of a person-to-person debt that the user chose to also record as cash flow. Optional, same rule.
+    ...(debtLinkRef(t.debtLink) ? { debtLink:debtLinkRef(t.debtLink) } : {}),
   };
 }
 // Run 17 (owner rule): a loan payment is recorded as the FULL instalment (money paid out). loan.interest is the part that is a real cost
@@ -335,8 +337,25 @@ function loanRef(v) {
   if (v.interest===null) return { interest:null };
   return (typeof v.interest==="number" && Number.isFinite(v.interest) && v.interest>=0 && v.interest<=1e9) ? { interest:Math.round(v.interest*100)/100 } : null;
 }
+// Run 18 (owner decision "ask each time"): repaying a person, or being repaid, may also be recorded as a cash-flow entry. The entry is the
+// principal only: it reduces the debt and is NOT ordinary spending or income (interest or fees are entered separately as normal entries).
+function debtLinkRef(v) {
+  if (!isPlainObject(v)) return null;
+  const ok=(x)=>typeof x==="string" && x.trim()!=="" && x.length<=64;
+  return ok(v.debtId) && ok(v.paymentId) ? { debtId:v.debtId, paymentId:v.paymentId } : null;
+}
+function debtCashFlow(list, mon) {
+  const out={ out:0, in:0, n:0 };
+  (Array.isArray(list)?list:[]).forEach(t=>{
+    if (!t || !t.debtLink || !debtLinkRef(t.debtLink) || String(t.date).slice(0,7)!==mon) return;
+    out.n++; if (t.type==="income") out.in+=Number(t.amount)||0; else out.out+=Number(t.amount)||0;
+  });
+  out.out=Math.round(out.out*100)/100; out.in=Math.round(out.in*100)/100;
+  return out;
+}
 function forSpending(list) {
   return (Array.isArray(list)?list:[]).flatMap(t=>{
+    if (t && t.debtLink && debtLinkRef(t.debtLink)) return [];
     const r=t&&t.loan?loanRef(t.loan):null;
     if (!r) return [t];
     const part=r.interest===null ? 0 : Math.min(r.interest,Number(t.amount)||0);
@@ -475,7 +494,7 @@ function cleanDebtData(raw) {
     const name=cleanText(d.name,60);
     if (!name || !["owe","owed"].includes(d.direction) || !isQapik(d.principal)) return;
     ids.add("d:"+d.id);
-    out.debts.push({ id:d.id, direction:d.direction, name, principal:d.principal, dueDate:(typeof d.dueDate==="string" && isValidDateStr(d.dueDate)) ? d.dueDate : "", note:cleanText(d.note,120), payments:cleanPayments(d.payments,false) });
+    out.debts.push({ id:d.id, direction:d.direction, name, principal:d.principal, dueDate:(typeof d.dueDate==="string" && isValidDateStr(d.dueDate)) ? d.dueDate : "", note:cleanText(d.note,120), payments:cleanPayments(d.payments,true) });
   });
   (Array.isArray(raw.loans)?raw.loans:[]).forEach(l=>{
     if (out.loans.length>=MAX_LOANS || !isPlainObject(l) || typeof l.id!=="string" || !l.id.trim() || l.id.length>64 || ids.has("l:"+l.id)) return;
@@ -2831,7 +2850,11 @@ function AppInner() {
   },[]);
   const removeLoanEntry=useCallback((id)=>setState(s=>({...s,transactions:s.transactions.filter(t=>t.id!==id)})),[]);
 
+  // Run 18: an entry linked to a debt repayment is changed only from the Debts page, so the debt balance and the entry cannot drift apart.
+  const debtLinked=(id)=>{ const tx=stateRef.current.transactions.find(x=>x.id===id); if (!tx || !debtLinkRef(tx.debtLink)) return false;
+    const dd=readDebts(), d=dd.debts.find(x=>x.id===tx.debtLink.debtId); return !!(d && d.payments.some(p=>p.id===tx.debtLink.paymentId)); };
   const updateTransaction=useCallback((id,txn)=>{
+    if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
     const { billChoice, wallet, ...data }=txn;
     // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored).
     setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}) }; })},id,billChoice));
@@ -2841,6 +2864,7 @@ function AppInner() {
   const deleteTransaction=useCallback((id)=>{
     const removed=stateRef.current.transactions.find(t=>t.id===id);
     if (!removed) return;
+    if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
     setState(s=>({...s,transactions:s.transactions.filter(t=>t.id!==id)}));
     // Deletions made while one undo window is open share it ("2 transactions deleted"), so none of them is lost.
     if (!snackActive.current || snackKind.current!=="delete") undoBuffer.current=[];
@@ -2855,7 +2879,7 @@ function AppInner() {
       });
       undoBuffer.current=[];
     }, 4000, "delete");
-  },[showSnackbar]);
+  },[showSnackbar,showToast]);
 
   // ── Run 12: explicit bills ──
   const [editBill, setEditBill] = useState(undefined);   // undefined = closed · null = new bill · a bill = editing it
@@ -2902,8 +2926,9 @@ function AppInner() {
   },[]);
 
   const openAdd=useCallback((prefillData=null,existingId=null)=>{
+    if (existingId!==null && debtLinked(existingId)) { showToast(t("debt.linkedLocked"),5000); return; }
     setPrefill(prefillData); setEditId(existingId); setShowAdd(true);
-  },[]);
+  },[showToast]);
   const closeAdd=useCallback(()=>{ setShowAdd(false); setPrefill(null); setEditId(null); },[]);
 
   // Run 10: storage protection (asked once at start; again from Import / Export, where a tap counts as a user gesture) and
@@ -3122,7 +3147,7 @@ function AppInner() {
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
-          {tab==="debts"     && <DebtsPage currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast}/>}
+          {tab==="debts"     && <DebtsPage currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
@@ -4603,7 +4628,7 @@ function InfoSheet({ kind, onClose }) {
 // (category Finance, merchant = the lender) and remembers its id; deleting the payment record removes that entry too.
 const LOAN_KIND_KEY={ cash:"loan.kind.cash", card:"loan.kind.card", taksit:"loan.kind.taksit", other:"loan.kind.other" };
 const LOAN_RT_KEY={ annuity:"loan.rt.annuity", equal:"loan.rt.equal", flat:"loan.rt.flat", none:"loan.rt.none" };
-function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
+function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackbar }) {
   const [data,setData]=useState(()=>readDebts());
   const [seg,setSeg]=useState("debts");
   const [showDebt,setShowDebt]=useState(false), [showLoan,setShowLoan]=useState(false);
@@ -4615,7 +4640,8 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
   const [health,setHealth]=useState(()=>debtsHealth());
   const blocked=health.status==="corrupt"||health.status==="unreadable";
   // Nothing is shown as saved unless it was really written; a refused write leaves the screen and the stored data as they were.
-  const save=(next)=>{ if (writeDebts(next)) { setData(next); setHealth(debtsHealth()); } else { setHealth(debtsHealth()); showToast(t(blocked?"debt.blockedToast":"banner.saveFailed")); } };
+  const save=(next)=>{ if (writeDebts(next)) { setData(next); setHealth(debtsHealth()); return true; } setHealth(debtsHealth()); showToast(t(blocked?"debt.blockedToast":"banner.saveFailed")); return false; };
+  const [ask,setAsk]=useState(null);   // Run 18: { id, amt } while the "also record in transactions?" question is open
   const toQ=(text,opts)=>{ const v=formMoney(text,opts); return v===null ? null : Math.round(v*100); };
 
   const addDebt=()=>{
@@ -4624,14 +4650,44 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
     save({ ...data, debts:[...data.debts,{ id:uid("d"), direction:dForm.dir, name, principal, dueDate:dForm.due, note:"", payments:[] }] });
     setDForm({ dir:"owe", name:"", amt:"", due:"" }); setDMsg(""); setShowDebt(false);
   };
+  // Run 18 (owner decision "ask each time"): a repayment always reduces the debt; the user chooses whether it ALSO becomes a cash-flow entry
+  // (money paid out when you repay, received when you are repaid). The entry is the principal only; it is not spending or income.
   const addPayment=(d)=>{
     const amt=toQ(pay[d.id]||"",{positive:true});
     if (amt===null || !debtCanPay(d,amt)) { setPayMsg(m=>({...m,[d.id]:t("debt.tooMuch",{left:q(debtRemaining(d))})})); return; }
-    save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,payments:[...x.payments,{ id:uid("p"), date:today(), amount:amt }]}:x) });
-    setPay(p=>({...p,[d.id]:""})); setPayMsg(m=>({...m,[d.id]:""}));
+    setPayMsg(m=>({...m,[d.id]:""})); setAsk({ id:d.id, amt });
   };
-  const delPayment=(d,pid)=>save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,payments:x.payments.filter(p=>p.id!==pid)}:x) });
-  const delDebt=(d)=>{ if (window.confirm(t("debt.confirmDelete"))) save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) }); };
+  const entryFor=(d,pid,amt,date)=>({ type:d.direction==="owe"?"expense":"income", amount:amt/100, category:d.direction==="owe"?"finance":"income", subcategory:"", merchant:d.name, note:t(d.direction==="owe"?"debt.entryNoteOwe":"debt.entryNoteOwed"), date, recurring:false, recurFreq:null, isActive:true, debtLink:{ debtId:d.id, paymentId:pid } });
+  const recordPayment=(d,link)=>{
+    if (!ask || ask.id!==d.id) return;
+    const amt=ask.amt, pid=uid("p"), date=today();
+    if (!debtCanPay(d,amt)) { setAsk(null); return; }
+    const txnId=link ? onAddEntry(entryFor(d,pid,amt,date)) : undefined;
+    const row={ id:pid, date, amount:amt, ...(txnId!==undefined?{ txnId }:{}) };
+    if (!save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,payments:[...x.payments,row]}:x) })) { if (txnId!==undefined) onRemoveEntry(txnId); return; }
+    setAsk(null); setPay(p=>({...p,[d.id]:""}));
+    showSnackbar(t("debt.recorded"),()=>{   // Undo removes the repayment AND its linked entry together
+      const cur=readDebts(), cd=cur.debts.find(x=>x.id===d.id), cp=cd&&cd.payments.find(x=>x.id===pid);
+      if (!cp) return;
+      if (writeDebts({ ...cur, debts:cur.debts.map(x=>x.id===d.id?{...x,payments:x.payments.filter(y=>y.id!==pid)}:x) })) { if (txnId!==undefined) onRemoveEntry(txnId); setData(readDebts()); }
+    },6000,"debtpay");
+  };
+  const delPayment=(d,pid)=>{
+    const p=d.payments.find(x=>x.id===pid); if (!p) return;
+    if (!save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,payments:x.payments.filter(y=>y.id!==pid)}:x) })) return;
+    if (p.txnId!==undefined) { onRemoveEntry(p.txnId);
+      showSnackbar(t("debt.payRemoved"),()=>{   // Undo puts the repayment back with a fresh linked entry (same amount and date)
+        const cur=readDebts(), cd=cur.debts.find(x=>x.id===d.id); if (!cd || cd.payments.some(x=>x.id===pid) || !debtCanPay(cd,p.amount)) return;
+        const e=entryFor(d,pid,p.amount,p.date), newId=onAddEntry(e);
+        if (writeDebts({ ...cur, debts:cur.debts.map(x=>x.id===d.id?{...x,payments:[...x.payments,{ ...p, txnId:newId }]}:x) })) setData(readDebts()); else onRemoveEntry(newId);
+      },6000,"debtpay");
+    }
+  };
+  const delDebt=(d)=>{
+    const linked=d.payments.filter(p=>p.txnId!==undefined);
+    if (!window.confirm(t(linked.length?"debt.confirmDeleteLinked":"debt.confirmDelete"))) return;
+    if (save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) })) linked.forEach(p=>onRemoveEntry(p.txnId));
+  };
 
   const addLoan=()=>{
     const principal=toQ(lForm.amt,{positive:true}), months=Number(lForm.months), bank=lForm.bank.trim()===""?null:toQ(lForm.bank,{positive:true});
@@ -4721,10 +4777,21 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
                 <button className="btn btn-sm btn-sm-primary debt-pay-btn" onClick={()=>addPayment(d)}>{t("debt.pay")}</button>
               </div>
             )}
+            {ask&&ask.id===d.id&&(
+              <div className="card debt-ask" role="group" aria-label={t("debt.askTitle")} data-section="debt-ask" style={{marginTop:8}}>
+                <div style={{fontSize:13,fontWeight:600}}>{t(d.direction==="owe"?"debt.askOwe":"debt.askOwed",{amount:q(ask.amt)})}</div>
+                <div className="list-sub" style={{margin:"4px 0 8px"}}>{t("debt.askHint")}</div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <button className="btn btn-sm btn-sm-primary debt-ask-yes" onClick={()=>recordPayment(d,true)}>{t("debt.askYes")}</button>
+                  <button className="btn btn-sm debt-ask-no" onClick={()=>recordPayment(d,false)}>{t("debt.askNo")}</button>
+                  <button className="btn btn-sm debt-ask-cancel" onClick={()=>setAsk(null)}>{t("common.cancel")}</button>
+                </div>
+              </div>
+            )}
             {payMsg[d.id]&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginTop:6}}>{payMsg[d.id]}</div>}
             {d.payments.map(p=>(
               <div key={p.id} className="debt-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
-                <span className="list-sub">{fmtDate(p.date)}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
+                <span className="list-sub">{fmtDate(p.date)}{p.txnId!==undefined?` · ${t("debt.linkedTag")}`:""}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
                 <button className="topbar-btn debt-pay-del" style={{color:"var(--ink-4)"}} onClick={()=>delPayment(d,p.id)} aria-label={t("debt.deletePay",{amount:q(p.amount)})}><Icon name="trash" size={14}/></button>
               </div>
             ))}
@@ -4790,7 +4857,7 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
               {l.payments.length>0&&<div className="list-sub" style={{marginTop:12}}>{t("loan.paymentsTitle")}</div>}
               {l.payments.map(p=>(
                 <div key={p.id} className="loan-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
-                  <span className="list-sub">{fmtDate(p.date)}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
+                  <span className="list-sub">{fmtDate(p.date)}{p.txnId!==undefined?` · ${t("debt.linkedTag")}`:""}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
                   <button className="topbar-btn loan-pay-del" style={{color:"var(--ink-4)"}} onClick={()=>delLoanPayment(l,p)} aria-label={t("loan.deletePay",{amount:q(p.amount)})}><Icon name="trash" size={14}/></button>
                 </div>
               ))}
@@ -5199,6 +5266,7 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
+  const debtCash    = useMemo(()=>debtCashFlow(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 18
   const loanCash    = useMemo(()=>loanCashOut(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 17
   const coach       = useMemo(()=>calcCoach(transactions,readDebts(),new Date()),[transactions]);              // Run 17: Debts-page data is read when the ledger changes
   const txnStats    = calcTxnStats(transactions,selectedMon);
@@ -5271,6 +5339,11 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
         </div>
       </div>
       <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
+      {debtCash.n>0&&(
+        <div className="list-sub" data-section="an-debtcash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
+          {t("an.debtCash",{out:fmt(debtCash.out,currency),inn:fmt(debtCash.in,currency)})}
+        </div>
+      )}
       {loanCash.n>0&&(
         <div className="list-sub" data-section="an-loancash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
           {t("an.loanCash",{paid:fmt(loanCash.paid,currency),interest:fmt(loanCash.interest,currency)})}
