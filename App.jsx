@@ -5396,8 +5396,9 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
   const { insights:patterns, anomalies, dayOfWeek, correlations } = patternsData;
   const now=curMon();
   const months6=Array.from({length:6},(_,i)=>nMon(5-i));
-  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce((s,t)=>s+t.amount,0),isCur:m===now,ym:m}));
-  const maxMonth=Math.max(...monthlyData.map(m=>m.exp),1);
+  // Run 18g: each month shows what was spent AND what came in, so a month is read as a pair, not just a cost.
+  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce((s,t)=>s+t.amount,0),inc:transactions.filter(t=>t.type==="income"&&happenedIn(m)(t)).reduce((s,t)=>s+t.amount,0),isCur:m===now,ym:m}));
+  const maxMonth=Math.max(...monthlyData.map(m=>Math.max(m.exp,m.inc)),1);
   const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
   const DAY_LBLS=WEEKDAYS.map((_,i)=>wdName(i,"narrow"));
   // Run 17: month calendar for the selected month (replaces the 8-week heatmap): spending per day, Monday first.
@@ -5684,23 +5685,25 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
           <div className="a-card-title">{t("an.sixMonth")}</div>
           {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>{t("an.sixMonthAvg")} <strong style={{fontFamily:"var(--font)",color:"var(--ink)"}}>{fmt(monthAvg,currency)}</strong></div>}
           {activeBar!==null&&monthlyData[activeBar]&&(
-            <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between"}}>
+            <div data-section="an-sixmonth-detail" style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
               <span>{monthName(monthlyData[activeBar].ym)}</span>
-              <span style={{fontFamily:"var(--font)",fontSize:14}}>{fmt(monthlyData[activeBar].exp,currency)}</span>
+              <span style={{fontFamily:"var(--font)",fontSize:13}}>{t("an.sixSpent")} {fmt(monthlyData[activeBar].exp,currency)} · {t("an.sixIncome")} {fmt(monthlyData[activeBar].inc,currency)} · {t("an.sixNet")} {monthlyData[activeBar].inc-monthlyData[activeBar].exp<0?"−":""}{fmt(Math.abs(monthlyData[activeBar].inc-monthlyData[activeBar].exp),currency)}</span>
             </div>
           )}
           <div className="month-bars">
             {monthlyData.map((m,i)=>(
               <div key={i} className="m-col" role="button" tabIndex={0} aria-pressed={activeBar===i} aria-label={`${monthName(m.ym)}: ${fmt(m.exp,currency)}`}
-                onKeyDown={activateKey(()=>{setActiveBar(activeBar===i?null:i);setActiveCell(null);})}
-                onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);setActiveCell(null);}}>
-                <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
+                onKeyDown={activateKey(()=>{setActiveBar(activeBar===i?null:i);})}
+                onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);}}>
+                <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end",gap:2}}>
                   <div className="m-bar" style={{height:m.exp>0?`${Math.max(5,(m.exp/maxMonth)*100)}%`:"3px",background:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",width:"100%",outline:activeBar===i?"2px solid var(--accent)":"none",outlineOffset:"1px"}}/>
+                  <div className="m-bar m-bar-inc" style={{height:m.inc>0?`${Math.max(5,(m.inc/maxMonth)*100)}%`:"3px",background:"var(--pos)",opacity:0.75,width:"100%"}}/>
                 </div>
                 <div className="m-lbl" style={{color:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",fontWeight:m.isCur||activeBar===i?700:600}}>{m.label}</div>
               </div>
             ))}
           </div>
+          <div className="trend-legend" data-section="an-sixmonth-legend"><span><i style={{background:"var(--ink-4)"}}/>{t("an.sixSpent")}</span><span><i style={{background:"var(--pos)",opacity:0.75}}/>{t("an.sixIncome")}</span></div>
         </div>
 
         {patterns.length>0&&(
