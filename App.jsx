@@ -535,7 +535,7 @@ function mergeDebtData(a, b) {
 // From the research rulebook: R0 data gate, R1 spent vs recorded income, R9 instalment due soon / overdue, R13 money owed to you is late.
 // Facts with their window, never a score. A rule without enough data says so rather than showing a figure. Returns plain cards
 // ({id, ...numbers}); the screen words them. Amounts from the Debts page are whole qapik.
-function calcCoach(transactions, debtData, now=new Date()) {
+function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
   const txns=Array.isArray(transactions)?transactions:[], dd=debtData&&typeof debtData==="object"?debtData:{};
   const todayS=localDateStr(now), t0=new Date(now); t0.setDate(t0.getDate()-29);
   const startS=localDateStr(t0), midnight=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
@@ -588,6 +588,14 @@ function calcCoach(transactions, debtData, now=new Date()) {
     if (!sc || k>=sc.payments.length-1) return;
     const row=sc.payments[k]; if (row.interest>=row.payment && row.interest>0) numbers.push({ id:"noCover", lender:l.lender });
   });
+  // Run 18g (rulebook R3): the monthly estimate of active expense bills against the average income of up to six completed months
+  // (at least two months with income recorded). A fact, with no threshold; paused bills and income schedules are left out.
+  if (firstK!==null) {
+    const from=Math.max(firstK,curK-6), vals=[]; for (let k=from;k<curK;k++) vals.push(incBy[k]||0);
+    const avg=vals.length>=2 ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+    const monthly=buildSchedules(txns,Array.isArray(bills)?bills:[]).filter(s=>s.isActive&&s.type==="expense"&&s.billId).reduce((a,s)=>a+scheduleMonthly(s),0);
+    if (avg>0 && monthly>0 && vals.filter(v=>v>0).length>=2) numbers.push({ id:"billsShare", pct:Math.round(monthly/avg*100) });
+  }
   // Run 18f (rulebook R7, R10). R7: a category this month at least 50% (and 20 or more) above its average of the three earlier months,
   // only with all three earlier months present; the biggest rise only. R10: interest still to pay on each running loan (qapik).
   {
@@ -2202,7 +2210,9 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .amount-input::placeholder{color:var(--ink-3)}   /* Run 9: was --ink-5, 1.66:1 on the dark page — unreadable */
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
 .numpad-key{min-height:50px;border:1px solid var(--rule);border-radius:14px;background:var(--bg-card);color:var(--ink);font-family:var(--font);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
-.numpad-key:active{background:var(--bg-warm)}
+.numpad-key{transition:transform .08s ease-out,background .12s}
+.numpad-key:active{background:var(--bg-warm);transform:scale(.95)}
+@media (prefers-reduced-motion:reduce){.numpad-key{transition:none}.numpad-key:active{transform:none}}
 .numpad-key:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .add-foot{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--rule);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));z-index:3;flex-shrink:0}
 .more-toggle{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:10px 14px;margin:6px 0 14px;border:1px dashed var(--rule-2);border-radius:14px;background:transparent;color:var(--ink-2);text-align:left;-webkit-tap-highlight-color:transparent}
@@ -2213,6 +2223,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 /* Type toggle */
+.type-other-row{display:flex;flex-wrap:wrap;gap:8px;margin:-6px 0 14px}
 .type-toggle{display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin-bottom:14px}
 .type-btn{flex:1;padding:9px;border:none;background:transparent;color:var(--ink-3);font-size:12px;font-weight:700;cursor:pointer;transition:background 120ms,color 120ms;font-family:var(--font);letter-spacing:0.3px;text-transform:uppercase}
 .type-btn:not(:last-child){border-right:1px solid var(--rule)}.type-btn.active{background:var(--accent-fill);color:var(--on-accent)}
@@ -2816,6 +2827,7 @@ function AppInner() {
   },[showToast]);
 
   const switchTab=useCallback((t)=>{ setTab(t); setTabKey(k=>k+1); },[]);
+  const [debtsStart,setDebtsStart]=useState("debts");   // Run 18: the add form can send you straight to the Debts or Loans list
   const tabRef=useRef(tab); tabRef.current=tab;
 
   // Phone Back button (and browser Back). While the app is open one extra history entry guards it: Back first closes the
@@ -3221,7 +3233,7 @@ function AppInner() {
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
-          {tab==="debts"     && <DebtsPage currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
+          {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
@@ -3247,7 +3259,8 @@ function AppInner() {
 
         {showAdd&&(
           <AddEditOverlay templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
-            onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onClose={closeAdd}/>
+            onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onClose={closeAdd}
+            onOtherKind={k=>{ setDebtsStart(k); closeAdd(); switchTab("debts"); }}/>
         )}
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
         {showSettings&&(
@@ -4030,7 +4043,7 @@ function NumPad({ value, onChange }) {
   );
 }
 
-function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose }) {
+function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose, onOtherKind }) {
   // Run 12: which bill a recurring entry pays. Offered only when every recurring payment is already linked to a bill
   // (nothing inferred the old way); otherwise the entry is grouped as before, so it can't start a second copy of a bill
   // that is still inferred. "new" makes a bill from this entry; an id links to that bill.
@@ -4149,6 +4162,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
           <button className={`type-btn${type==="expense"?" active":""}`} aria-pressed={type==="expense"} onClick={()=>setType("expense")}>{t("add.expense")}</button>
           <button className={`type-btn${type==="income"?" active":""}`} aria-pressed={type==="income"} onClick={()=>setType("income")}>{t("add.income")}</button>
         </div>
+        {!editId&&onOtherKind&&<div className="type-other-row">{["loans","debts"].map(k=><button key={k} type="button" className="btn btn-sm" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}>{t(k==="loans"?"add.loan":"add.debt")}</button>)}</div>}
         <div className="amount-zone" onClick={()=>{ setPadOpen(true); amtRef.current?.focus(); }}>
           <div className="amount-line">
             <input ref={amtRef} className="amount-input" type="text" inputMode={padOpen?"none":"decimal"} autoComplete="off"
@@ -4322,7 +4336,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
         <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
       </div>
       <div className="add-foot">
-        {padOpen&&<NumPad value={amount} onChange={v=>{ setAmount(v); setErr(""); }}/>}
+        {padOpen&&<><NumPad value={amount} onChange={v=>{ setAmount(v); setErr(""); }}/><button type="button" className="btn btn-sm pad-hide" data-section="pad-hide" style={{display:"block",margin:"0 auto 8px"}} onClick={()=>setPadOpen(false)}>{t("pad.hide")}</button></>}
         <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>submit()}>
           {isEditing?t("add.saveChanges"):t(type==="income"?"add.recordIncome":"add.recordExpense")}
         </button>
@@ -4713,9 +4727,9 @@ function InfoSheet({ kind, onClose }) {
 // (category Finance, merchant = the lender) and remembers its id; deleting the payment record removes that entry too.
 const LOAN_KIND_KEY={ cash:"loan.kind.cash", card:"loan.kind.card", taksit:"loan.kind.taksit", other:"loan.kind.other" };
 const LOAN_RT_KEY={ annuity:"loan.rt.annuity", equal:"loan.rt.equal", flat:"loan.rt.flat", none:"loan.rt.none" };
-function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackbar }) {
+function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackbar, initialSeg="debts" }) {
   const [data,setData]=useState(()=>readDebts());
-  const [seg,setSeg]=useState("debts");
+  const [seg,setSeg]=useState(initialSeg==="loans"?"loans":"debts");
   const [showDebt,setShowDebt]=useState(false), [showLoan,setShowLoan]=useState(false);
   const [dForm,setDForm]=useState({ dir:"owe", name:"", amt:"", due:"" }), [dMsg,setDMsg]=useState("");
   const [lForm,setLForm]=useState({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }), [lMsg,setLMsg]=useState("");
@@ -5355,7 +5369,11 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
   const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
   const debtCash    = useMemo(()=>debtCashFlow(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 18
   const loanCash    = useMemo(()=>loanCashOut(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 17
-  const coach       = useMemo(()=>calcCoach(transactions,readDebts(),new Date()),[transactions]);              // Run 17: Debts-page data is read when the ledger changes
+  // Run 18g: the user can hide a coach tip they do not want (stored only on this device; due-date warnings cannot be hidden).
+  const COACH_MUTE_KEY=`${KEY}__coachmute`, COACH_ACTIONS=["loanDue","loanOverdue","owedLate"];
+  const [muted,setMuted]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(COACH_MUTE_KEY)||"[]"); return Array.isArray(v)?v.filter(x=>typeof x==="string"):[]; } catch { return []; } });
+  const setMute=(next)=>{ setMuted(next); try { if (next.length) localStorage.setItem(COACH_MUTE_KEY,JSON.stringify(next)); else localStorage.removeItem(COACH_MUTE_KEY); } catch {} };
+  const coach       = useMemo(()=>calcCoach(transactions,readDebts(),new Date(),bills),[transactions,bills]);             // Run 17: Debts-page data is read when the ledger changes
   const txnStats    = calcTxnStats(transactions,selectedMon);
   const perDay      = calcWeekdayWeekend(transactions,selectedMon);
   const wc          = calcWhatChanged(transactions,selectedMon,prv);
@@ -5470,7 +5488,7 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
       {isCurrentMon&&coach.length>0&&(
         <div className="a-card" data-section="an-coach">
           <div className="a-card-title">{t("coach.title")}</div>
-          {coach.map((c,i)=>{
+          {coach.filter(c=>COACH_ACTIONS.includes(c.id)||!muted.includes(c.id)).map((c,i)=>{
             const num=(n)=>PRIVACY?"••":n, amt=(q)=>fmt(q/100,currency);
             const line = c.id==="incomplete" ? t("coach.incomplete",{days:c.days})
               : c.id==="noIncome" ? t("coach.noIncome")
@@ -5481,15 +5499,22 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
               : c.id==="incomeDip" ? t("coach.incomeDip",{have:c.have,of:c.of,pct:num(c.pct)})
               : c.id==="loanShare" ? t("coach.loanShare",{pct:num(c.pct)})
               : c.id==="loanShareHigh" ? t("coach.loanShareHigh",{pct:num(c.pct)})
+              : c.id==="billsShare" ? t("coach.billsShare",{pct:num(c.pct)})
               : c.id==="catUp" ? t("coach.catUp",{cat:catName(c.cat),pct:num(c.pct)})
               : c.id==="loanInterest" ? t("coach.loanInterest",{lender:maskText(c.lender),amount:amt(c.amount)})
               : c.id==="noCover" ? t("coach.noCover",{lender:maskText(c.lender)})
               : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
               : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
               : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
-            return <div key={i} className="coach-line" data-coach={c.id} style={{fontSize:13,lineHeight:1.5,padding:"8px 0",borderTop:i?"1px solid var(--rule)":"none",color:"var(--ink)"}}>{line}</div>;
+            return (
+              <div key={i} className="coach-line" data-coach={c.id} style={{fontSize:13,lineHeight:1.5,padding:"8px 0",borderTop:i?"1px solid var(--rule)":"none",color:"var(--ink)"}}>
+                {line}
+                {!COACH_ACTIONS.includes(c.id)&&<div><button className="btn btn-sm coach-hide" style={{marginTop:4}} onClick={()=>setMute([...muted,c.id])}>{t("coach.hide")}</button></div>}
+              </div>
+            );
           })}
           <div className="list-sub" style={{marginTop:6}}>{t("coach.window")}</div>
+          {muted.length>0&&<button className="btn btn-sm coach-unhide" style={{marginTop:6}} onClick={()=>setMute([])}>{t("coach.showHidden",{n:muted.length})}</button>}
         </div>
       )}
 
