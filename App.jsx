@@ -498,6 +498,7 @@ function migrateAndLoad() {
       lastBackup,
       backupConfirmedAt,
       language,
+      profileName:  cleanProfileName(current.profileName),
     };
   }
 
@@ -558,7 +559,16 @@ function buildState(transactions=[], settings=null) {
     lastBackup:  null,
     backupConfirmedAt: null,
     language:    null,
+    profileName: "",
   };
+}
+
+// Run 17: the optional name used in the Home greeting. Plain text only: control characters removed, spaces collapsed, 30 characters at most.
+// It lives in the app's own saved state and is NOT part of backups or exports (it is not financial data and a backup may be shared).
+const PROFILE_NAME_MAX=30;
+function cleanProfileName(v) {
+  if (typeof v!=="string") return "";
+  return Array.from(v.replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim()).slice(0,PROFILE_NAME_MAX).join("").trim();
 }
 
 const DEFAULT_TEMPLATES = [
@@ -2759,6 +2769,7 @@ function AppInner() {
   },[importPending,skipDup,showToast,showSnackbar]);
 
   const {transactions,budgets,templates,currency,goals,safeToSpend}=state; const bills=state.bills||[];
+  const changeProfileName=useCallback((v)=>{ const n=cleanProfileName(v); setState(s=>({...s,profileName:n})); showToast(t(n?"st.profileSaved":"st.profileRemoved")); },[showToast]);
   const changeLanguage=useCallback((l)=>{ setState(s=>({...s,language:l})); showToast(tIn(l,"lang.changed")); },[showToast]);
 
   // Genuinely fresh install: the language is chosen before anything else is shown. The starter quick-fill templates are
@@ -2826,7 +2837,7 @@ function AppInner() {
                 <button className="topbar-btn" onClick={()=>switchTab(SUBPAGE_PARENT[tab])} aria-label={t("common.back")} title={t("common.back")}><Icon name="chevLeft" size={22}/></button>
                 <h1 className="wordmark">{t(tab==="io"?"io.title":"rec.title")}</h1>
               </div>
-            : <h1 className="wordmark">{tab==="home"?t(greetingKey()):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
+            : <h1 className="wordmark">{tab==="home"?t(greetingKey())+(state.profileName?", "+state.profileName:""):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
             <button className={`topbar-btn privacy-toggle${privacy?" on":""}`} aria-pressed={privacy} aria-label={t(privacy?"privacy.show":"privacy.hide")} title={t(privacy?"privacy.show":"privacy.hide")}
               onClick={()=>{ setPrivacy(p=>!p); showToast(t(privacy?"privacy.offToast":"privacy.onToast")); }}><Icon name={privacy?"eyeOff":"eye"} size={20}/></button>
@@ -2841,8 +2852,11 @@ function AppInner() {
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
-            onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}/>}
-          {tab==="more"      && <MorePage onOpen={switchTab} onSettings={()=>setShowSettings(true)} onInfo={setInfoKind} version={runningVersion}/>}
+            onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}
+            onAddTemplate={tpl=>setState(s=>({...s,templates:[...s.templates,{...tpl,id:"t"+Date.now()}]}))}
+            onDeleteTemplate={id=>setState(s=>({...s,templates:s.templates.filter(t=>t.id!==id)}))}
+            onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
+          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} onSettings={()=>setShowSettings(true)} onInfo={setInfoKind} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
@@ -2875,10 +2889,8 @@ function AppInner() {
         )}
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
         {showSettings&&(
-          <SettingsSheet state={state} onLanguageChange={changeLanguage}
+          <SettingsSheet state={state}
             onCurrencyChange={c=>setState(s=>({...s,currency:c}))}
-            onAddTemplate={tpl=>setState(s=>({...s,templates:[...s.templates,{...tpl,id:"t"+Date.now()}]}))}
-            onDeleteTemplate={id=>setState(s=>({...s,templates:s.templates.filter(t=>t.id!==id)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}
             onClose={()=>setShowSettings(false)} showToast={showToast}/>
         )}
@@ -4108,84 +4120,28 @@ function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClos
   );
 }
 
-// ─── Settings Sheet ───────────────────────────────────────────────────────────
-// Settings (2026-10-27 redesign): budgets and goals moved to the Budgets & Goals tab, import / export and backups to
-// More → Import / Export. What remains here: language, overview, Safe to Spend, currency and quick-add templates.
-function SettingsSheet({ state, onLanguageChange, onCurrencyChange, onAddTemplate, onDeleteTemplate, onSafeToSpendChange, onClose, showToast }) {
-  const { transactions,templates,currency,safeToSpend={} }=state;
+// ─── Preferences sheet ────────────────────────────────────────────────────────
+// Run 17: language and the profile name live on the Settings page itself, the all-time overview is on Analytics, and the savings floor
+// and the quick-add templates are on Goals. What remains here: the currency and the Safe to Spend on/off switch.
+function SettingsSheet({ state, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
+  const { currency,safeToSpend={} }=state;
   const [curSym,      setCurSym]      = useState(currency);
-  const [showNewTpl,  setShowNewTpl]  = useState(false);
-  const [tplName,     setTplName]     = useState("");
-  const [tplAmt,      setTplAmt]      = useState("");
-  const [tplCatId,    setTplCatId]    = useState("food");
-  const [tplSubcat,   setTplSubcat]   = useState("");
-  const [tplMerchant, setTplMerchant] = useState("");
-  const [tplNote,     setTplNote]     = useState("");
-  const [savingsT,    setSavingsT]    = useState(String(safeToSpend.savingsTarget||0));
-
-  const totalInc=transactions.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
-  const totalExp=transactions.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
-  const expCats=CATEGORIES.filter(c=>!c.income);
-
-  const saveTpl=()=>{
-    const tAmt=formMoney(tplAmt,{positive:true});
-    if (!tplName.trim()||tAmt===null) { showToast(t("set.tplInvalid")); return; }
-    onAddTemplate({name:tplName.trim(),amount:tAmt,catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()});
-    setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);
-  };
 
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("nav.settings")}>
+      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("set.preferences")}>
         <div className="sheet-grip"><div className="sheet-handle"/></div>
-        <div className="sheet-title">{t("nav.settings")}</div>
+        <div className="sheet-title">{t("set.preferences")}</div>
 
-        {/* Language — changes only the interface text; data, currency and open forms are untouched */}
-        <div className="settings-section-lbl" id="set-lang-lbl">{t("lang.setting")}</div>
-        <div className="settings-row" style={{flexDirection:"column",alignItems:"flex-start",gap:8}}>
-          <fieldset className="lang-switch" aria-labelledby="set-lang-lbl">
-            {LANGS.map(l=>(
-              <label key={l} className={`lang-pill${state.language===l?" sel":""}`} lang={l}>
-                <input type="radio" name="settings-language" value={l} checked={state.language===l} onChange={()=>onLanguageChange(l)}/>
-                {LANG_NAMES[l]}
-              </label>
-            ))}
-          </fieldset>
-          <div className="settings-row-sub">{t("lang.settingSub")}</div>
-        </div>
-
-        {/* Overview */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.overview")}</div>
-        <div style={{background:"var(--bg-warm)",borderRadius:7,padding:"10px 13px",marginBottom:4}}>
-          {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
-            <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",borderBottom:"1px solid var(--rule)"}}>
-              <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
-              <span style={{fontSize:13,fontWeight:700,color:col,fontFamily:"var(--font)",whiteSpace:"nowrap"}}>{val}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Safe to Spend */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("safe.title")}</div>
+        {/* Safe to Spend: the switch only. The monthly savings floor is on Goals. */}
+        <div className="settings-section-lbl" style={{marginTop:6}}>{t("safe.title")}</div>
         <div className="settings-row">
           <div><div className="settings-row-title" id="set-safe-lbl">{t("set.safeEnable")}</div><div className="settings-row-sub">{t("set.safeEnableSub")}</div></div>
           <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-label={t("safe.title")} tabIndex={0}><div className="toggle-knob"/></div>
         </div>
-        {safeToSpend.enabled&&(
-          <div className="settings-row" style={{flexDirection:"column",alignItems:"flex-start",gap:8}}>
-            <div>
-              <div className="settings-row-title" id="set-floor-lbl">{t("set.floor")}</div>
-              <div className="settings-row-sub">{t("set.floorSub")}</div>
-            </div>
-            <div style={{display:"flex",gap:8,width:"100%"}}>
-              <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={savingsT} onChange={e=>setSavingsT(cleanMoneyText(e.target.value))} aria-labelledby="set-floor-lbl" style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-              <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=savingsT.trim()===""?0:formMoney(savingsT); if(v===null){showToast(t("set.zeroOrMore"));return;} onSafeToSpendChange({savingsTarget:v});showToast(t("set.saved"));}}>{t("common.save")}</button>
-            </div>
-          </div>
-        )}
 
         {/* Currency */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.preferences")}</div>
+        <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
         <div className="settings-row">
           <div><div className="settings-row-title" id="set-cur-lbl">{t("set.currency")}</div><div className="settings-row-sub">{t("set.currencySub",{currency})}</div></div>
           <div style={{display:"flex",gap:7,alignItems:"center"}}>
@@ -4194,41 +4150,89 @@ function SettingsSheet({ state, onLanguageChange, onCurrencyChange, onAddTemplat
           </div>
         </div>
 
-        {/* Templates */}
-        <div style={{padding:"12px 0"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
-            <span style={{fontSize:12,fontWeight:700,color:"var(--ink)"}}>{t("set.templates")}</span>
-            <button className="btn btn-sm" onClick={()=>setShowNewTpl(s=>!s)}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
+        <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:18}}>{t("common.close")}</button>
+      </div>
+    </div>
+  );
+}
+
+// Goals: the monthly savings floor used by Safe to Spend. Shown only while Safe to Spend is switched on.
+function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToast }) {
+  const [savingsT,setSavingsT]=useState(String(safeToSpend.savingsTarget||0));
+  if (!safeToSpend.enabled) return null;
+  return (
+    <div className="card" data-section="gl-floor">
+      <div className="settings-row-title" id="set-floor-lbl">{t("set.floor")}</div>
+      <div className="settings-row-sub" style={{marginBottom:8}}>{t("set.floorSub")}</div>
+      <div style={{display:"flex",gap:8,width:"100%"}}>
+        <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={savingsT} onChange={e=>setSavingsT(cleanMoneyText(e.target.value))} aria-labelledby="set-floor-lbl" style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+        <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=savingsT.trim()===""?0:formMoney(savingsT); if(v===null){showToast(t("set.zeroOrMore"));return;} onSafeToSpendChange({savingsTarget:v});showToast(t("set.saved"));}}>{t("common.save")}</button>
+      </div>
+    </div>
+  );
+}
+
+// Goals: quick-add templates (the buttons on Home). A template can carry a subcategory.
+function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate, showToast }) {
+  const [showNewTpl,  setShowNewTpl]  = useState(false);
+  const [tplName,     setTplName]     = useState("");
+  const [tplAmt,      setTplAmt]      = useState("");
+  const [tplCatId,    setTplCatId]    = useState("food");
+  const [tplSubcat,   setTplSubcat]   = useState("");
+  const [tplMerchant, setTplMerchant] = useState("");
+  const [tplNote,     setTplNote]     = useState("");
+  const expCats=CATEGORIES.filter(c=>!c.income);
+  const myOwn=useMemo(()=>showNewTpl?((readSubcats()[tplCatId])||[]):[],[showNewTpl,tplCatId]);
+  const builtIn=(CATEGORIES.find(c=>c.id===tplCatId)||{}).subs||[];
+  const saveTpl=()=>{
+    const tAmt=formMoney(tplAmt,{positive:true});
+    if (!tplName.trim()||tAmt===null) { showToast(t("set.tplInvalid")); return; }
+    onAddTemplate({name:tplName.trim(),amount:tAmt,catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()});
+    setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);
+  };
+  return (
+    <div data-section="gl-templates">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"14px 2px 10px"}}>
+        <span className="section-title" style={{margin:0}}>{t("set.templates")}</span>
+        <button className="btn btn-sm" onClick={()=>setShowNewTpl(s=>!s)}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
+      </div>
+      {showNewTpl&&(
+        <div className="card">
+          <div className="field-row" style={{marginBottom:10}}>
+            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-name">{t("set.name")}</label><input id="tpl-name" className="field-input" placeholder={t("set.tplNamePh")} value={tplName} onChange={e=>setTplName(e.target.value)} autoFocus/></div>
+            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-amt">{t("add.amount")}</label><input id="tpl-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={tplAmt} onChange={e=>setTplAmt(cleanMoneyText(e.target.value))}/></div>
           </div>
-          {showNewTpl&&(
-            <div style={{background:"var(--bg-warm)",borderRadius:7,padding:13,marginBottom:11}}>
-              <div className="field-row" style={{marginBottom:10}}>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-name">{t("set.name")}</label><input id="tpl-name" className="field-input" placeholder={t("set.tplNamePh")} value={tplName} onChange={e=>setTplName(e.target.value)} autoFocus/></div>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-amt">{t("add.amount")}</label><input id="tpl-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={tplAmt} onChange={e=>setTplAmt(cleanMoneyText(e.target.value))}/></div>
-              </div>
-              <div className="field-row" style={{marginBottom:10}}>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-cat">{t("add.category")}</label><select id="tpl-cat" className="field-input field-select" value={tplCatId} onChange={e=>setTplCatId(e.target.value)}>{expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</select></div>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-merchant">{t("add.merchant")}</label><input id="tpl-merchant" className="field-input" placeholder={t("set.optionalPh")} value={tplMerchant} onChange={e=>setTplMerchant(e.target.value)}/></div>
-              </div>
-              <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="tpl-note">{t("set.noteOptional")}</label><input id="tpl-note" className="field-input" placeholder={t("set.tplNotePh")} value={tplNote} onChange={e=>setTplNote(e.target.value)}/></div>
-              <button className="btn btn-primary btn-full" style={{marginTop:0,padding:"10px"}} onClick={saveTpl}>{t("set.saveTemplate")}</button>
-            </div>
-          )}
-          {templates.length===0&&!showNewTpl&&<div style={{fontSize:12,color:"var(--ink-3)",padding:"6px 0"}}>{t("set.noTemplates")}</div>}
+          <div className="field-row" style={{marginBottom:10}}>
+            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-cat">{t("add.category")}</label><select id="tpl-cat" className="field-input field-select" value={tplCatId} onChange={e=>{ setTplCatId(e.target.value); setTplSubcat(""); }}>{expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</select></div>
+            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-subcat">{t("add.subcategory")}</label>
+              <select id="tpl-subcat" className="field-input field-select" value={tplSubcat} onChange={e=>setTplSubcat(e.target.value)}>
+                <option value="">{t("set.noSubcat")}</option>
+                {myOwn.map(s=><option key={"my-"+s} value={s}>{s}</option>)}
+                {builtIn.map(s=><option key={s} value={s}>{subName(s)}</option>)}
+              </select></div>
+          </div>
+          <div className="field-row" style={{marginBottom:10}}>
+            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-merchant">{t("add.merchant")}</label><input id="tpl-merchant" className="field-input" placeholder={t("set.optionalPh")} value={tplMerchant} onChange={e=>setTplMerchant(e.target.value)}/></div>
+            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-note">{t("set.noteOptional")}</label><input id="tpl-note" className="field-input" placeholder={t("set.tplNotePh")} value={tplNote} onChange={e=>setTplNote(e.target.value)}/></div>
+          </div>
+          <button className="btn btn-primary btn-full" style={{marginTop:0,padding:"10px"}} onClick={saveTpl}>{t("set.saveTemplate")}</button>
+        </div>
+      )}
+      {templates.length===0&&!showNewTpl&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noTemplates")}</div>}
+      {templates.length>0&&(
+        <div className="card list-card">
           {templates.map(tpl=>(
-            <div key={tpl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:"1px solid var(--rule)"}}>
+            <div key={tpl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid var(--rule)"}}>
               <CatIcon catId={tpl.catId} size={14}/>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{tpl.name}</div>
-                <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(tpl.amount,currency)}{tpl.merchant?` · ${tpl.merchant}`:""} · {catName(tpl.catId)}</div>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{tpl.name}</div>
+                <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(tpl.amount,currency)}{tpl.merchant?` · ${tpl.merchant}`:""} · {catName(tpl.catId)}{tpl.subcat?` › ${subName(tpl.subcat)}`:""}</div>
               </div>
               <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteTemplate(tpl.id)} aria-label={t("set.deleteTemplate",{name:tpl.name})}><Icon name="trash" size={14}/></button>
             </div>
           ))}
         </div>
-
-        <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:18}}>{t("common.close")}</button>
-      </div>
+      )}
     </div>
   );
 }
@@ -4305,9 +4309,31 @@ function InfoSheet({ kind, onClose }) {
   );
 }
 
-function MorePage({ onOpen, onSettings, onInfo, version }) {
+function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onSettings, onInfo, version }) {
+  const [name,setName]=useState(profileName);
   return (
     <div className="more-page">
+      {/* Run 17: this tab is Settings. Profile name (used in the Home greeting) and the interface language are set here. */}
+      <div className="card st-card" data-section="st-profile" role="group" aria-label={t("st.profile")}>
+        <label className="field-lbl" htmlFor="profile-name">{t("st.profileName")}</label>
+        <div style={{display:"flex",gap:8}}>
+          <input id="profile-name" className="field-input" autoComplete="off" maxLength={PROFILE_NAME_MAX*2} placeholder={t("st.profilePh")} value={name} onChange={e=>setName(e.target.value)} style={{flex:1}}/>
+          <button className="btn btn-sm btn-sm-primary" onClick={()=>{ onProfileName(name); setName(cleanProfileName(name)); }}>{t("common.save")}</button>
+        </div>
+        <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
+      </div>
+      <div className="card st-card" data-section="st-language">
+        <div className="settings-section-lbl" id="set-lang-lbl" style={{marginTop:0}}>{t("lang.setting")}</div>
+        <fieldset className="lang-switch" aria-labelledby="set-lang-lbl">
+          {LANGS.map(l=>(
+            <label key={l} className={`lang-pill${language===l?" sel":""}`} lang={l}>
+              <input type="radio" name="settings-language" value={l} checked={language===l} onChange={()=>onLanguageChange(l)}/>
+              {LANG_NAMES[l]}
+            </label>
+          ))}
+        </fieldset>
+        <div className="list-sub" style={{marginTop:6}}>{t("lang.settingSub")}</div>
+      </div>
       <div className="card more-id">
         <span className="more-mark" aria-hidden="true"><Icon name="finance" size={22} color="var(--accent)"/></span>
         <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
@@ -4315,7 +4341,7 @@ function MorePage({ onOpen, onSettings, onInfo, version }) {
       <div className="card list-card">
         <ListRow icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
         <ListRow icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
-        <ListRow icon="settings" title={t("nav.settings")} sub={t("more.settingsSub")} onClick={onSettings}/>
+        <ListRow icon="settings" title={t("set.preferences")} sub={t("more.settingsSub")} onClick={onSettings}/>
         {/* Run 16: appended after the earlier rows, so the first three keep their places */}
         <ListRow icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
         <ListRow icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
@@ -4398,8 +4424,8 @@ function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onCo
 }
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
-function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal }) {
-  const { transactions, budgets={}, goals=[], currency }=state;
+function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onSafeToSpendChange }) {
+  const { transactions, budgets={}, goals=[], currency, templates=[], safeToSpend={} }=state;
   const setSeg=onSeg;
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
   const [showNewGoal,setShowNewGoal]=useState(false);
@@ -4582,6 +4608,8 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
             </div>
           );
         })}
+        <SavingsFloorCard safeToSpend={safeToSpend} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>
+        <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} showToast={showToast}/>
       </>)}
     </div>
   );
@@ -5012,6 +5040,21 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
             ))}
           </div>
         )}
+
+        {transactions.length>0&&(()=>{
+          const totalInc=transactions.filter(x=>x.type==="income").reduce((s,x)=>s+x.amount,0), totalExp=transactions.filter(x=>x.type==="expense").reduce((s,x)=>s+x.amount,0);
+          return (
+            <div className="a-card" data-section="an-overview">
+              <div className="a-card-title">{t("set.overview")}</div>
+              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
+                <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
+                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
         <div className="a-card" data-section="an-calendar">
           <div className="a-card-title">{t("an.calendar")}</div>
