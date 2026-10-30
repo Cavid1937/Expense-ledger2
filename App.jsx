@@ -588,6 +588,26 @@ function calcCoach(transactions, debtData, now=new Date()) {
     if (!sc || k>=sc.payments.length-1) return;
     const row=sc.payments[k]; if (row.interest>=row.payment && row.interest>0) numbers.push({ id:"noCover", lender:l.lender });
   });
+  // Run 18f (rulebook R7, R10). R7: a category this month at least 50% (and 20 or more) above its average of the three earlier months,
+  // only with all three earlier months present; the biggest rise only. R10: interest still to pay on each running loan (qapik).
+  {
+    const spend=forSpending(past.filter(x=>x.type==="expense")), byCat={}, seen=new Set();
+    spend.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); seen.add(k); if (!byCat[x.category]) byCat[x.category]={}; byCat[x.category][k]=(byCat[x.category][k]||0)+(Number(x.amount)||0); });
+    if ([1,2,3].every(i=>seen.has(curK-i))) {
+      let best=null;
+      Object.keys(byCat).forEach(c=>{
+        const cur=byCat[c][curK]||0, avg=([1,2,3].reduce((s,i)=>s+(byCat[c][curK-i]||0),0))/3;
+        if (avg>0 && cur>=1.5*avg && cur-avg>=20 && (!best || cur-avg>best.d)) best={ d:cur-avg, id:"catUp", cat:c, pct:Math.round((cur/avg-1)*100) };
+      });
+      if (best) numbers.push({ id:best.id, cat:best.cat, pct:best.pct });
+    }
+  }
+  (Array.isArray(dd.loans)?dd.loans:[]).forEach(l=>{
+    const sc=loanSchedule(l), k=Array.isArray(l.payments)?l.payments.length:0;
+    if (!sc || k>=sc.payments.length) return;
+    const amount=sc.payments.slice(k).reduce((s,p)=>s+(Number(p.interest)||0),0);
+    if (amount>0) numbers.push({ id:"loanInterest", lender:l.lender, amount:Math.round(amount) });
+  });
   return [...actions.sort((a,b)=>(a.id==="loanOverdue"?0:1)-(b.id==="loanOverdue"?0:1)), ...numbers];
 }
 function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }
@@ -5461,6 +5481,8 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
               : c.id==="incomeDip" ? t("coach.incomeDip",{have:c.have,of:c.of,pct:num(c.pct)})
               : c.id==="loanShare" ? t("coach.loanShare",{pct:num(c.pct)})
               : c.id==="loanShareHigh" ? t("coach.loanShareHigh",{pct:num(c.pct)})
+              : c.id==="catUp" ? t("coach.catUp",{cat:catName(c.cat),pct:num(c.pct)})
+              : c.id==="loanInterest" ? t("coach.loanInterest",{lender:maskText(c.lender),amount:amt(c.amount)})
               : c.id==="noCover" ? t("coach.noCover",{lender:maskText(c.lender)})
               : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
               : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
