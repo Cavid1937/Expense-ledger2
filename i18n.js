@@ -639,8 +639,11 @@ export const MESSAGES = {
   "freq.yearly":   { en: "yearly", az: "illik", ru: "ежегодно" },
 
   // ── Analytics
-  "an.dailyAvg":     { en: "Daily avg:", az: "Gündəlik orta:", ru: "В среднем в день:" },
-  "an.projected":    { en: "Projected:", az: "Proqnoz:", ru: "Прогноз:" },
+  "an.forecast":       { en: "Expected by month end", az: "Ay sonuna gözlənilən", ru: "Ожидается к концу месяца" },
+  "an.forecastRange":  { en: "Likely between {low} and {high}", az: "Çox güman ki, {low} ilə {high} arasında", ru: "Скорее всего от {low} до {high}" },
+  "an.forecastSingle": { en: "One estimate only: there is not yet enough past data to show a range.", az: "Yalnız bir təxmin: aralıq göstərmək üçün hələ kifayət qədər keçmiş məlumat yoxdur.", ru: "Только одна оценка: прошлых данных пока недостаточно, чтобы показать диапазон." },
+  "an.forecastHow":    { en: "Spent so far, plus entries already dated later this month, plus bills still to pay, plus the days left at your usual {daily} a day.", az: "İndiyədək xərclənən, üstəgəl bu ay üçün artıq daxil edilmiş sonrakı tarixli qeydlər, üstəgəl ödənilməmiş hesablar, üstəgəl qalan günlər üçün adi gündəlik {daily}.", ru: "Потрачено на сегодня, плюс записи с более поздней датой в этом месяце, плюс неоплаченные счета, плюс оставшиеся дни по вашим обычным {daily} в день." },
+  "an.forecastNeed":   { en: "Record about a week of spending to see a month-end forecast.", az: "Ay sonu proqnozunu görmək üçün təxminən bir həftəlik xərc qeyd edin.", ru: "Запишите расходы примерно за неделю, чтобы увидеть прогноз на конец месяца." },
   "an.totalSpending": { en: "Total spending", az: "Ümumi xərclər", ru: "Все расходы" },
   "an.vs":           { en: "{a} vs {b}", az: "{a} / {b}", ru: "{a} против {b}" },
   "an.transactions": { en: "Transactions", az: "Əməliyyatlar", ru: "Операции" },

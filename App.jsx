@@ -1069,6 +1069,60 @@ function calcSpendingPace(spent, mon=curMon(), budgetTotal=0, now=new Date()) {
   return { state:p.state, daysPassed:p.daysPassed, totalDays:p.totalDays, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAvg, projected, projectionReliable, expectedByToday, diff, onTrack };
 }
 
+// Run 17: month-end forecast for the CURRENT month. It replaces "daily average x days in month", which is thrown off by one big early
+// payment (rent on the 3rd made a 30-day forecast several times too high).
+//   forecast = spent so far + entries already dated later this month + bills still unpaid + days left x the usual daily spend.
+// Usual daily spend = the 28 days ending yesterday (at least 7 days of history), without bills/recurring entries (counted on their
+// own) and without unusually large single purchases (more than 5x the median purchase). The +/- range is one standard deviation of
+// the daily totals x sqrt(days left). `rangeShown` is true only when the same method, run on up to 3 earlier months as of their 10th
+// day, put the real total inside the range in at least 2/3 of them (and at least 2 months could be tested).
+const FORECAST_WINDOW=28, FORECAST_MIN_HISTORY=7, FORECAST_BIG=5;
+function forecastCore(transactions, bills, now) {
+  const mon=localMonthStr(now), todayStr=localDateStr(now), p=monthProgress(mon,now);
+  const cents=(x)=>Math.round(x*100)/100;
+  const expenses=transactions.filter(t=>t.type==="expense");
+  if (!expenses.length) return { available:false, reason:"history" };
+  const inMon=expenses.filter(t=>t.date.startsWith(mon));
+  const spentSoFar=inMon.filter(t=>t.date<=todayStr).reduce((s,t)=>s+t.amount,0);
+  const plannedLater=inMon.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
+  let commitments=0;
+  buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense").forEach(s=>{
+    const st=scheduleMonthStatus(s,transactions,mon,now);
+    commitments+=s.amount*(st.upcoming.length+st.overdue.length);
+  });
+  const end=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);              // yesterday: today is only partly over
+  const first=parseLocalDate(expenses.reduce((m,t)=>t.date<m?t.date:m,expenses[0].date));
+  const winStart=new Date(end.getFullYear(),end.getMonth(),end.getDate()-(FORECAST_WINDOW-1));
+  const start=first>winStart?first:winStart;
+  const days=daysBetween(start,end)+1;
+  if (days<FORECAST_MIN_HISTORY) return { available:false, reason:"history" };
+  const s0=localDateStr(start), e0=localDateStr(end);
+  const usual=expenses.filter(t=>t.date>=s0 && t.date<=e0 && !t.recurring && !t.billId);
+  const sorted=usual.map(t=>t.amount).sort((a,b)=>a-b);
+  const median=sorted.length ? (sorted.length%2 ? sorted[(sorted.length-1)/2] : (sorted[sorted.length/2-1]+sorted[sorted.length/2])/2) : 0;
+  const kept=median>0 ? usual.filter(t=>t.amount<=FORECAST_BIG*median) : usual;
+  const perDay=new Array(days).fill(0);
+  kept.forEach(t=>{ perDay[daysBetween(start,parseLocalDate(t.date))]+=t.amount; });
+  const mean=perDay.reduce((s,v)=>s+v,0)/days;
+  const sd=Math.sqrt(perDay.reduce((s,v)=>s+(v-mean)*(v-mean),0)/days);
+  const base=spentSoFar+plannedLater+commitments, point=base+mean*p.daysLeft, half=sd*Math.sqrt(p.daysLeft);
+  return { available:true, spentSoFar:cents(spentSoFar), plannedLater:cents(plannedLater), commitments:cents(commitments), usualDaily:cents(mean), daysLeft:p.daysLeft,
+    point:cents(point), low:cents(Math.max(base,point-half)), high:cents(point+half) };
+}
+function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
+  const f=forecastCore(transactions,bills,now);
+  if (!f.available) return { ...f, rangeShown:false, backtest:{ months:0, hits:0 } };
+  let months=0, hits=0;
+  for (let k=1;k<=3;k++) {
+    const m=new Date(now.getFullYear(),now.getMonth()-k,1), asOf=new Date(m.getFullYear(),m.getMonth(),10,12,0,0), mon=localMonthStr(m);
+    const known=transactions.filter(t=>t.date<=localDateStr(asOf));
+    const b=forecastCore(known,bills,asOf); if (!b.available) continue;
+    const actual=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon)).reduce((s,t)=>s+t.amount,0);
+    months++; if (actual>=b.low-0.005 && actual<=b.high+0.005) hits++;
+  }
+  return { ...f, backtest:{ months, hits }, rangeShown:months>=2 && hits*3>=months*2 };
+}
+
 function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
   const p=monthProgress(mon,now);
   const pacePct=p.totalDays ? Math.round((p.daysPassed/p.totalDays)*100) : 0;
@@ -2847,7 +2901,7 @@ function AppInner() {
         <main className="page" key={tabKey}>
           {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
-          {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} onView={txn=>setViewTxn(txn)}/>}
+          {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
@@ -4682,7 +4736,7 @@ function monthsBetween(from, to) {   // "YYYY-MM" inclusive, newest first
   while (y>fy || (y===fy && m>=fm)) { out.push(`${y}-${String(m).padStart(2,"0")}`); m--; if (m===0) { m=12; y--; } }
   return out;
 }
-function MonthlyView({ transactions, currency, budgets, onView }) {
+function MonthlyView({ transactions, currency, budgets, bills=[], onView }) {
   const [selectedMon, setSelectedMon] = useState(curMon());
   const [activeBar,  setActiveBar]  = useState(null);
   const [calDay, setCalDay] = useState(null);
@@ -4703,7 +4757,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
   const catSpend    = calcCategorySpend(transactions, selectedMon);
   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
-  const paceInfo    = calcSpendingPace(calcSpentToDate(transactions,selectedMon),selectedMon,budgetTotal);
+  const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
   const txnStats    = calcTxnStats(transactions,selectedMon);
   const perDay      = calcWeekdayWeekend(transactions,selectedMon);
   const wc          = calcWhatChanged(transactions,selectedMon,prv);
@@ -4775,10 +4829,16 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
       </div>
       <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
       <div data-section="an-trend"><SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/></div>
-      {isCurrentMon&&paceInfo.dailyAvg>0&&(
-        <div className="a-card" style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:"4px 12px",fontSize:12}}>
-          <span style={{color:"var(--ink-3)"}}>{t("an.dailyAvg")} <strong style={{fontFamily:"var(--font)",color:"var(--ink)"}}>{fmt(paceInfo.dailyAvg,currency)}</strong></span>
-          <span style={{color:"var(--ink-3)"}}>{t("an.projected")} <strong style={{fontFamily:"var(--font)",color:paceInfo.projected>prevFullExp+20?"var(--neg)":"var(--ink)"}}>{fmt(paceInfo.projected,currency)}</strong></span>
+      {isCurrentMon&&(
+        <div className="a-card" data-section="an-forecast">
+          <div className="a-card-title">{t("an.forecast")}</div>
+          {forecast.available?(<>
+            <div className="big-num" style={{marginBottom:2}}>{fmt(forecast.point,currency)}</div>
+            {forecast.rangeShown
+              ? <div style={{fontSize:12,color:"var(--ink-2)",fontWeight:600}}>{t("an.forecastRange",{low:fmt(forecast.low,currency),high:fmt(forecast.high,currency)})}</div>
+              : <div className="list-sub">{t("an.forecastSingle")}</div>}
+            <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("an.forecastHow",{daily:fmt(forecast.usualDaily,currency)})}</div>
+          </>):<div className="list-sub">{t("an.forecastNeed")}</div>}
         </div>
       )}
 
