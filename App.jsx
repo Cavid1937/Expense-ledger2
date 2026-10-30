@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, Fragment, Component } from "react";
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,6 +64,22 @@ function moneyReason(v, { positive=false } = {}) {
 
 // Money typed by the user: a finite number > 0 ({positive:true}) or ≥ 0; anything else → null (never silently 0).
 function parseMoney(v, opts) { return moneyReason(v,opts)===null ? strictNum(v) : null; }
+// Run 17: what a money box lets through while typing. Phones whose decimal key is a comma used to lose the mark (145,67 was saved as 14567 because the box was type=number).
+// Either "." or "," is the decimal mark; when both appear the LAST one is, the other is a thousands mark and goes. Digits are never changed, at most 2 decimals.
+function cleanMoneyText(raw) {
+  // A sign or an exponent is never turned into a different valid number (-5 must not become 5): it stays visible and is refused when saving.
+  if (/[-+eE]/.test(String(raw??""))) return String(raw).replace(/[\s\u00a0\u202f]/g,"").slice(0,24);
+  const s=String(raw??"").replace(/[\s\u00a0\u202f]/g,"").replace(/[^0-9.,]/g,"");
+  const dot=s.indexOf("."), com=s.indexOf(","), lastDot=s.lastIndexOf("."), lastCom=s.lastIndexOf(",");
+  let at;                                           // index of the character that is the decimal mark
+  if (dot>=0 && com>=0) at=Math.max(lastDot,lastCom);
+  else if (dot>=0) at=dot;                          // a repeated dot while typing (1.2.3): the first is the mark
+  else if (com>=0) { if (lastCom!==com) return s.replace(/,/g,""); at=com; }   // 1,234,567 pasted: thousands marks
+  else return s;
+  const intPart=s.slice(0,at).replace(/[.,]/g,""), dec=s.slice(at+1).replace(/[.,]/g,"").slice(0,2);
+  return (intPart===""?"0":intPart)+"."+dec;
+}// A form value that ends in the decimal mark ("145.") means 145; parseMoney itself stays strict for imports.
+function formMoney(v, opts) { return parseMoney(typeof v==="string" ? v.trim().replace(/\.$/,"") : v, opts); }
 
 function isPlainObject(x) { return x!==null && typeof x==="object" && !Array.isArray(x); }
 // Run 14: a clickable <div> that acts as a button must answer Enter and Space too. Only when the key was pressed ON the element
@@ -1740,8 +1756,8 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .topbar-back{display:flex;align-items:center;gap:2px;min-width:0;margin-left:-8px}
 .topbar-back .wordmark{font-size:22px}
 .topbar-right{display:flex;align-items:center;gap:7px}
-.topbar-add{width:36px;height:36px;border:none;border-radius:50%;background:var(--accent-fill);color:var(--on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(76,201,196,0.25);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent}
-.topbar-add:active{transform:scale(0.92)}
+.fab-add{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 14px);left:calc(50% + min(215px,50vw) - 72px);width:56px;height:56px;border:none;border-radius:50%;background:var(--accent-fill);color:var(--on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,0.38),0 2px 8px rgba(76,201,196,0.3);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent;z-index:55}
+.fab-add:active{transform:scale(0.92)}
 .topbar-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 120ms,color 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .topbar-btn:hover{background:var(--bg-inset);color:var(--ink)}.topbar-btn:active{transform:scale(0.88)}
 .tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(7,21,26,0.94);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
@@ -1756,7 +1772,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
    shrink, so it wraps inside its own tab rather than running into the next one. */
 .tab-lbl{font-size:clamp(5.5px,2.85vw,10.5px);font-weight:600;letter-spacing:0;text-transform:none;line-height:1.15;max-width:100%;text-align:center;overflow-wrap:anywhere}
 .tab-indicator{position:absolute;top:5px;left:calc((100% / var(--tab-count,5)) * var(--tab-index,0) + (100% / (var(--tab-count,5) * 2)) - 8px);width:16px;height:2px;background:var(--accent);border-radius:99px;pointer-events:none;transition:left 320ms cubic-bezier(0.22,1,0.36,1)}
-.page{flex:1;overflow-y:auto;padding:20px 20px calc(112px + env(safe-area-inset-bottom,0px));animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) backwards}
+.page{flex:1;overflow-y:auto;padding:20px 20px calc(148px + env(safe-area-inset-bottom,0px));animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) backwards}
 /* "backwards", not "both": a transform kept after the animation makes .page the box that position:fixed sheets are placed in,
    so a sheet opened from a long list landed thousands of pixels below the screen, under the tab bar. */
 @keyframes pageIn{from{opacity:0}to{opacity:1}}   /* Run 14: a short fade only; sliding every screen in made the numbers move while being read */
@@ -2061,7 +2077,7 @@ input[type=number]{-moz-appearance:textfield}
 .lang-pill input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
 .lang-pill.sel{border-color:var(--accent-fill);background:var(--accent-fill);color:var(--on-accent)}
 .lang-pill:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
-.topbar-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fab-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* Run 14: rows, bars, the import tile and switches are keyboard-reachable now; they get the same visible ring (inside the edge for rows, which sit in clipped cards) */
 .txn-row:focus-visible,.bill-row:focus-visible,.drop-zone:focus-visible,.list-row:focus-visible,.toggle-track:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .m-col:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
@@ -2071,10 +2087,10 @@ input[type=number]{-moz-appearance:textfield}
 /* Money reads as aligned, lining figures */
 .hero-amount,.hero-stat-val,.safe-amount,.safe-val,.stat-val,.month-stat-val,.txn-amt,.txn-date-total,.cat-bar-amt,.budget-nums,.amount-input,.wc-diff,.goal-meta{font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1}
 /* Touch targets: the look stays, the tappable area grows to 44px */
-.topbar-btn,.add-close,.toggle-track,.snackbar-undo,.topbar-add,.backup-banner-btn,.backup-dismiss{position:relative}
+.topbar-btn,.add-close,.toggle-track,.snackbar-undo,.backup-banner-btn,.backup-dismiss{position:relative}
 .topbar-btn::after{content:"";position:absolute;inset:-5px}
 .sheet .topbar-btn{z-index:1}   /* keeps the enlarged tap area above the goal progress bar drawn just below it */
-.topbar-add::after{content:"";position:absolute;inset:-6px}
+
 .add-close::after{content:"";position:absolute;inset:-8px}
 .topbar-right{gap:12px}
 .backup-banner-btn::after{content:"";position:absolute;inset:-6px -2px}
@@ -2322,7 +2338,33 @@ function useSheetGestures() {
 // ─────────────────────────────────────────────────────────────────────────────
 // ROOT APP
 // ─────────────────────────────────────────────────────────────────────────────
-export default function App() {
+// Run 17: an unexpected error while drawing a screen used to leave a blank page. The recovery screen touches NO stored data;
+// the error text (no amounts, no names) goes to a small local log so the cause can be found: key expense_ledger_v5__crashlog, newest 5.
+const CRASH_LOG_KEY="expense_ledger_v5__crashlog";
+function appendCrashLog(err) {
+  try {
+    let log=[]; try { const p=JSON.parse(localStorage.getItem(CRASH_LOG_KEY)||"[]"); if (Array.isArray(p)) log=p.filter(isPlainObject); } catch { log=[]; }
+    log.push({ at:new Date().toISOString(), message:String((err&&err.message)||err||"unknown").slice(0,300), stack:String((err&&err.stack)||"").slice(0,800) });
+    localStorage.setItem(CRASH_LOG_KEY,JSON.stringify(log.slice(-5)));
+  } catch { /* storage may be full or blocked: the recovery screen still works */ }
+}
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state={ failed:false }; }
+  static getDerivedStateFromError() { return { failed:true }; }
+  componentDidCatch(err) { appendCrashLog(err); }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="crash-screen" role="alert" style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:"24px 28px",textAlign:"center",background:"#07151A",color:"#E8F1F2",fontFamily:"system-ui,sans-serif"}}>
+        <h1 style={{fontSize:22,margin:0}}>{t("crash.title")}</h1>
+        <p style={{fontSize:15,lineHeight:1.5,margin:0,maxWidth:340,opacity:0.85}}>{t("crash.body")}</p>
+        <button onClick={()=>window.location.reload()} style={{minHeight:48,padding:"0 24px",border:"none",borderRadius:14,background:"#4CC9C4",color:"#07151A",fontSize:16,fontWeight:700}}>{t("crash.reload")}</button>
+      </div>
+    );
+  }
+}
+export default function App() { return <ErrorBoundary><AppInner/></ErrorBoundary>; }
+function AppInner() {
   const [state,    setState]    = useState(() => migrateAndLoad());
   // The whole tree renders in the saved language. Changing it is an ordinary state update: everything re-renders in place,
   // so the open screen, open sheets and anything typed into a form are kept.
@@ -2761,12 +2803,6 @@ export default function App() {
               </div>
             : <h1 className="wordmark">{tab==="home"?t(greetingKey()):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
-            {/* Run 9: the "+" creates what the screen is about (none where nothing is created); Settings lives under More only. */}
-            {(()=>{ const a=tab==="home"||tab==="ledger" ? { label:t("nav.addTxn"), run:()=>openAdd() }
-                : tab==="goals" ? { label:t(goalsSeg==="goals"?"goals.addGoal":"goals.addBudget"), run:()=>setGoalsAdd(n=>n+1) }
-                : tab==="recurring" ? { label:t("bill.add"), run:()=>setEditBill(null) }
-                : null;
-              return a && <button className="topbar-add" onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={18} color="var(--on-accent)"/></button>; })()}
             <button className={`topbar-btn privacy-toggle${privacy?" on":""}`} aria-pressed={privacy} aria-label={t(privacy?"privacy.show":"privacy.hide")} title={t(privacy?"privacy.show":"privacy.hide")}
               onClick={()=>{ setPrivacy(p=>!p); showToast(t(privacy?"privacy.offToast":"privacy.onToast")); }}><Icon name={privacy?"eyeOff":"eye"} size={20}/></button>
           </div>
@@ -2799,6 +2835,14 @@ export default function App() {
             </button>
           ); })}
         </nav>
+
+        {/* Run 17: the "+" moved from the top-right (out of thumb reach on a tall phone) to the bottom-right, just above the tab bar.
+            Run 9 rule kept: it creates what the screen is about (none where nothing is created). */}
+        {!showAdd && (()=>{ const a=tab==="home"||tab==="ledger" ? { label:t("nav.addTxn"), run:()=>openAdd() }
+            : tab==="goals" ? { label:t(goalsSeg==="goals"?"goals.addGoal":"goals.addBudget"), run:()=>setGoalsAdd(n=>n+1) }
+            : tab==="recurring" ? { label:t("bill.add"), run:()=>setEditBill(null) }
+            : null;
+          return a && <button className="fab-add" onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={26} color="var(--on-accent)"/></button>; })()}
 
         {showAdd&&(
           <AddEditOverlay templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
@@ -3370,7 +3414,7 @@ function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast }) {
   const cats=CATEGORIES.filter(c=>type==="income"?c.income:!c.income);
   const save=()=>{
     const b=validateBill({ id:bill?.id||"tmp", name, type, category:cats.some(c=>c.id===category)?category:cats[0].id, subcategory:bill?.subcategory||"",
-      amount:parseMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), active, createdAt:bill?.createdAt||new Date().toISOString() });
+      amount:formMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), active, createdAt:bill?.createdAt||new Date().toISOString() });
     if (!b) { showToast(t("bill.invalid"),3500); return; }
     onSave(isNew ? { ...b, id:null } : b);
   };
@@ -3384,7 +3428,7 @@ function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast }) {
         </div>
         <div className="field"><label className="field-lbl" htmlFor="bill-name">{t("bill.name")}</label><input id="bill-name" className="field-input" value={name} maxLength={80} placeholder={t("bill.namePh")} onChange={e=>setName(e.target.value)}/></div>
         <div className="field-row">
-          <div className="field"><label className="field-lbl" htmlFor="bill-amount">{t("add.amount")} ({currency})</label><input id="bill-amount" className="field-input" type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00" value={amount} onChange={e=>setAmount(e.target.value)}/></div>
+          <div className="field"><label className="field-lbl" htmlFor="bill-amount">{t("add.amount")} ({currency})</label><input id="bill-amount" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={amount} onChange={e=>setAmount(cleanMoneyText(e.target.value))}/></div>
           <div className="field"><label className="field-lbl" htmlFor="bill-freq">{t("add.frequency")}</label>
             <select id="bill-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)}>{["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}</select></div>
         </div>
@@ -3599,7 +3643,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
 
   // S0: Duplicate detection uses createdAt, not date
   const isDupe=useMemo(()=>{
-    const amt=parseMoney(amount,{positive:true});
+    const amt=formMoney(amount,{positive:true});
     if (isEditing||amt===null) return false;
     const tenMinAgo=Date.now()-10*60*1000;
     return transactions.some(t=>
@@ -3612,7 +3656,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   },[amount,catId,note,transactions,isEditing]);
 
   const submit=(override)=>{
-    const amt=parseMoney(amount,{positive:true});
+    const amt=formMoney(amount,{positive:true});
     if (amt===null) { setErr(t("add.errAmount")); return; }
     if (!isValidDateStr(String(date||""))) { setErr(t("add.errDate")); return; }
     // S0: Preserve isActive when editing — never silently reactivate a paused recurring
@@ -3646,8 +3690,8 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
         </div>
         <div className="amount-zone">
           <div className="amount-line">
-            <input ref={amtRef} className="amount-input" type="number" inputMode="decimal"
-              placeholder="0.00" value={amount} onChange={e=>{setAmount(e.target.value);setErr("");}}
+            <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off"
+              placeholder="0.00" value={amount} onChange={e=>{setAmount(cleanMoneyText(e.target.value));setErr("");}}
               min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}
               style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
             <span className="amount-cur">{currency}</span>
@@ -4024,7 +4068,7 @@ function SettingsSheet({ state, onLanguageChange, onCurrencyChange, onAddTemplat
   const expCats=CATEGORIES.filter(c=>!c.income);
 
   const saveTpl=()=>{
-    const tAmt=parseMoney(tplAmt,{positive:true});
+    const tAmt=formMoney(tplAmt,{positive:true});
     if (!tplName.trim()||tAmt===null) { showToast(t("set.tplInvalid")); return; }
     onAddTemplate({name:tplName.trim(),amount:tAmt,catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()});
     setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);
@@ -4074,8 +4118,8 @@ function SettingsSheet({ state, onLanguageChange, onCurrencyChange, onAddTemplat
               <div className="settings-row-sub">{t("set.floorSub")}</div>
             </div>
             <div style={{display:"flex",gap:8,width:"100%"}}>
-              <input className="field-input" type="number" min="0" step="1" placeholder="0.00" value={savingsT} onChange={e=>setSavingsT(e.target.value)} aria-labelledby="set-floor-lbl" style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-              <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=savingsT.trim()===""?0:parseMoney(savingsT); if(v===null){showToast(t("set.zeroOrMore"));return;} onSafeToSpendChange({savingsTarget:v});showToast(t("set.saved"));}}>{t("common.save")}</button>
+              <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={savingsT} onChange={e=>setSavingsT(cleanMoneyText(e.target.value))} aria-labelledby="set-floor-lbl" style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+              <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=savingsT.trim()===""?0:formMoney(savingsT); if(v===null){showToast(t("set.zeroOrMore"));return;} onSafeToSpendChange({savingsTarget:v});showToast(t("set.saved"));}}>{t("common.save")}</button>
             </div>
           </div>
         )}
@@ -4100,7 +4144,7 @@ function SettingsSheet({ state, onLanguageChange, onCurrencyChange, onAddTemplat
             <div style={{background:"var(--bg-warm)",borderRadius:7,padding:13,marginBottom:11}}>
               <div className="field-row" style={{marginBottom:10}}>
                 <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-name">{t("set.name")}</label><input id="tpl-name" className="field-input" placeholder={t("set.tplNamePh")} value={tplName} onChange={e=>setTplName(e.target.value)} autoFocus/></div>
-                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-amt">{t("add.amount")}</label><input id="tpl-amt" className="field-input" type="number" min="0" step="0.01" placeholder="0.00" value={tplAmt} onChange={e=>setTplAmt(e.target.value)}/></div>
+                <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-amt">{t("add.amount")}</label><input id="tpl-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={tplAmt} onChange={e=>setTplAmt(cleanMoneyText(e.target.value))}/></div>
               </div>
               <div className="field-row" style={{marginBottom:10}}>
                 <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-cat">{t("add.category")}</label><select id="tpl-cat" className="field-input field-select" value={tplCatId} onChange={e=>setTplCatId(e.target.value)}>{expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</select></div>
@@ -4310,9 +4354,9 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
   const budgeted=expCats.filter(c=>byCat[c.id]), unbudgeted=expCats.filter(c=>!byCat[c.id]);
 
   const saveGoal=()=>{
-    const gTarget=parseMoney(goalTarget,{positive:true});
-    const gSaved=goalSaved.trim()===""?0:parseMoney(goalSaved);
-    const gMonthly=goalMonthly.trim()===""?0:parseMoney(goalMonthly);
+    const gTarget=formMoney(goalTarget,{positive:true});
+    const gSaved=goalSaved.trim()===""?0:formMoney(goalSaved);
+    const gMonthly=goalMonthly.trim()===""?0:formMoney(goalMonthly);
     if (!goalName.trim()||gTarget===null) { showToast(t("set.goalInvalidTarget")); return; }
     if (gSaved===null||gMonthly===null) { showToast(t("set.goalInvalidAmounts")); return; }
     if (goalDate && !isValidDateStr(goalDate)) { showToast(t("set.goalInvalidDate")); return; }
@@ -4321,8 +4365,8 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
   };
   const editRow=(cat,limit)=>editBudget===cat.id&&(
     <div style={{display:"flex",gap:7,marginTop:9}}>
-      <input className="field-input" type="number" min="0" step="1" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(e.target.value)} autoFocus style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-      <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:parseMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
+      <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} autoFocus style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+      <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
       <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
     </div>
   );
@@ -4348,10 +4392,10 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
                   {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}{budgets[c.id]>0?` (${fmt(budgets[c.id],currency)})`:""}</option>)}
                 </select></div>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-val">{t("set.monthlyLimit")}</label>
-                <input id="nb-val" className="field-input" type="number" min="0" step="1" placeholder="0" value={newBudget.val} onChange={e=>setNewBudget(b=>({...b,val:e.target.value}))} autoFocus/></div>
+                <input id="nb-val" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={newBudget.val} onChange={e=>setNewBudget(b=>({...b,val:cleanMoneyText(e.target.value)}))} autoFocus/></div>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <button className="btn btn-primary" style={{flex:1,marginTop:0}} onClick={()=>{ const v=newBudget.val.trim()===""?null:parseMoney(newBudget.val,{positive:true}); if(v===null){showToast(t("add.errAmount"));return;} onSetBudget(newBudget.catId,v); setNewBudget(null); showToast(t("set.budgetSaved")); }}>{t("common.save")}</button>
+              <button className="btn btn-primary" style={{flex:1,marginTop:0}} onClick={()=>{ const v=newBudget.val.trim()===""?null:formMoney(newBudget.val,{positive:true}); if(v===null){showToast(t("add.errAmount"));return;} onSetBudget(newBudget.catId,v); setNewBudget(null); showToast(t("set.budgetSaved")); }}>{t("common.save")}</button>
               <button className="btn btn-ghost" style={{flex:1,marginTop:0}} onClick={()=>setNewBudget(null)}>{t("common.cancel")}</button>
             </div>
           </div>
@@ -4412,11 +4456,11 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
           <div className="card">
             <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="goal-name">{t("set.goalName")}</label><input id="goal-name" className="field-input" placeholder={t("set.goalNamePh")} value={goalName} onChange={e=>setGoalName(e.target.value)} autoFocus/></div>
             <div className="field-row" style={{marginBottom:10}}>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-target">{t("set.target",{currency})}</label><input id="goal-target" className="field-input" type="number" min="0" step="1" placeholder="0" value={goalTarget} onChange={e=>setGoalTarget(e.target.value)}/></div>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-saved">{t("set.savedSoFar")}</label><input id="goal-saved" className="field-input" type="number" min="0" step="1" placeholder="0" value={goalSaved} onChange={e=>setGoalSaved(e.target.value)}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-target">{t("set.target",{currency})}</label><input id="goal-target" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={goalTarget} onChange={e=>setGoalTarget(cleanMoneyText(e.target.value))}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-saved">{t("set.savedSoFar")}</label><input id="goal-saved" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={goalSaved} onChange={e=>setGoalSaved(cleanMoneyText(e.target.value))}/></div>
             </div>
             <div className="field-row" style={{marginBottom:10}}>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-monthly">{t("set.monthlyContribution")}</label><input id="goal-monthly" className="field-input" type="number" min="0" step="1" placeholder={t("set.optionalPh")} value={goalMonthly} onChange={e=>setGoalMonthly(e.target.value)}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-monthly">{t("set.monthlyContribution")}</label><input id="goal-monthly" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.optionalPh")} value={goalMonthly} onChange={e=>setGoalMonthly(cleanMoneyText(e.target.value))}/></div>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-date">{t("set.targetDate")}</label><input id="goal-date" className="field-input" lang={locale()} type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
             </div>
             <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={saveGoal}>{t("set.saveGoal")}</button>
@@ -4438,7 +4482,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
                 <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
                   <button className="btn btn-sm" onClick={()=>{
                     const newSaved=prompt(t("set.updatePrompt",{name:goal.name}),goal.saved||0);
-                    if (newSaved!==null) { const v=parseMoney(newSaved); if (v===null) showToast(t("set.updateInvalid")); else onUpdateGoal(goal.id,{saved:v}); }
+                    if (newSaved!==null) { const v=formMoney(newSaved); if (v===null) showToast(t("set.updateInvalid")); else onUpdateGoal(goal.id,{saved:v}); }
                   }}>{t("set.update")}</button>
                   <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>
                 </div>
@@ -4478,14 +4522,14 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
 // month-start rule and cents as the required monthly amount, says whether it meets the deadline, and says it is an estimate.
 function GoalScenario({ goal, currency }) {
   const [val,setVal]=useState("");
-  const amt=val.trim()===""?null:parseMoney(val,{positive:true});
+  const amt=val.trim()===""?null:formMoney(val,{positive:true});
   const s=amt!==null ? goalScenario(goal,amt) : null;
   const id="gs-"+String(goal.id).replace(/[^a-zA-Z0-9_-]/g,"");
   return (
     <details className="goal-scenario" data-section="goal-scenario">
       <summary>{t("goals.scenarioTitle")}</summary>
       <label className="field-lbl" htmlFor={id}>{t("goals.scenarioLabel")}</label>
-      <input id={id} className="field-input" type="number" inputMode="decimal" min="0" step="1" placeholder="0" value={val} onChange={e=>setVal(e.target.value)}/>
+      <input id={id} className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={val} onChange={e=>setVal(cleanMoneyText(e.target.value))}/>
       {val.trim()!==""&&amt===null&&<div className="list-sub" role="status">{t("add.errAmount")}</div>}
       {s&&s.valid&&(
         <div className="goal-scenario-out" role="status" aria-live="polite">

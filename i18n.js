@@ -318,6 +318,9 @@ export const MESSAGES = {
   "nav.addTxn":    { en: "Add transaction", az: "Əməliyyat əlavə et", ru: "Добавить операцию" },
   "nav.settings":  { en: "Settings", az: "Parametrlər", ru: "Настройки" },
   "common.back":   { en: "Back", az: "Geri", ru: "Назад" },
+  "crash.title":   { en: "Something went wrong", az: "Gözlənilməz xəta baş verdi", ru: "Что-то пошло не так" },
+  "crash.body":    { en: "Your records are safe: they are stored on this phone and were not changed. Reload the app to carry on.", az: "Qeydləriniz təhlükəsizdir: onlar bu telefonda saxlanılır və dəyişdirilməyib. Davam etmək üçün tətbiqi yenidən yükləyin.", ru: "Ваши записи в безопасности: они хранятся на этом телефоне и не изменились. Перезагрузите приложение, чтобы продолжить." },
+  "crash.reload":  { en: "Reload the app", az: "Tətbiqi yenidən yüklə", ru: "Перезагрузить приложение" },
   // ── Redesign (2026-10-27): page titles, Home cards, Budgets & Goals, More, Import / Export
   "home.greet.morning":   { en: "Good morning", az: "Sabahınız xeyir", ru: "Доброе утро" },
   "home.greet.afternoon": { en: "Good afternoon", az: "Günortanız xeyir", ru: "Добрый день" },
