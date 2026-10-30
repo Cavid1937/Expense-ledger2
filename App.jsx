@@ -487,8 +487,24 @@ function cleanDebtData(raw) {
   return out;
 }
 function readDebts() { try { const r=localStorage.getItem(DEBTS_KEY); return cleanDebtData(r ? JSON.parse(r) : null); } catch { return { debts:[], loans:[] }; } }
+// Run 18: unreadable or corrupt debts data is NEVER treated as an empty list that a later save may overwrite.
+//  corrupt / unreadable: the stored value stays exactly as it is, one safe copy is kept, every write is refused (an empty write too).
+//  partial (some records cannot be read): a safe copy of the original text is kept BEFORE the first write that would drop them.
+let DEBTS_PRESERVED=null;   // the raw text last kept as a safe copy, so repeated saves do not pile up copies
+function debtsHealth() {
+  let raw; try { raw=localStorage.getItem(DEBTS_KEY); } catch { return { status:"unreadable", dropped:0, raw:null }; }
+  if (raw===null || raw===undefined) return { status:"missing", dropped:0, raw:null };
+  let parsed; try { parsed=JSON.parse(raw); } catch { return { status:"corrupt", dropped:0, raw }; }
+  if (!isPlainObject(parsed) || (parsed.debts!==undefined && !Array.isArray(parsed.debts)) || (parsed.loans!==undefined && !Array.isArray(parsed.loans))) return { status:"corrupt", dropped:0, raw };
+  const c=cleanDebtData(parsed), total=(parsed.debts||[]).length+(parsed.loans||[]).length, kept=c.debts.length+c.loans.length;
+  return kept<total ? { status:"partial", dropped:total-kept, raw } : { status:"ok", dropped:0, raw };
+}
 function writeDebts(data) {   // nothing to keep removes the key instead of storing an empty shell
-  try { const c=cleanDebtData(data); if (!c.debts.length && !c.loans.length) localStorage.removeItem(DEBTS_KEY); else localStorage.setItem(DEBTS_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
+  try {
+    const h=debtsHealth();
+    if (h.status==="unreadable" || h.status==="corrupt") { if (h.raw!==null && h.raw!==DEBTS_PRESERVED && preserveRaw("debts_unreadable",h.raw)) DEBTS_PRESERVED=h.raw; return false; }
+    if (h.status==="partial" && h.raw!==DEBTS_PRESERVED) { if (!preserveRaw("debts_dropped",h.raw)) return false; DEBTS_PRESERVED=h.raw; }
+    const c=cleanDebtData(data); if (!c.debts.length && !c.loans.length) localStorage.removeItem(DEBTS_KEY); else localStorage.setItem(DEBTS_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
 }
 function mergeDebtData(a, b) {
   const A=cleanDebtData(a), B=cleanDebtData(b);
@@ -2986,16 +3002,25 @@ function AppInner() {
       pruneRecoveryCopies("before_import");
     }
     const next=applyImport(before, plan, mode, { skipDuplicates:skipDup && plan.dupCount>0 });
-    setState(next);
+    // Run 18: the import is all-or-nothing. The side stores are written FIRST and checked; if one cannot be written, the others are put
+    // back exactly as they were and the main data is not touched. Undo restores them too.
+    const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
+    const restore=(k,raw)=>{ try { if (raw===undefined) return; if (raw===null) localStorage.removeItem(k); else localStorage.setItem(k,raw); } catch {} };
+    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY) };
+    const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); };
     // Run 16: the file's own-subcategory suggestions are added to the ones on this phone (union; nothing is overwritten or removed).
-    if (plan.subcategories && Object.keys(plan.subcategories).length) writeSubcats(mergeSubcats(readSubcats(),plan.subcategories));
+    const hasSub=plan.subcategories && Object.keys(plan.subcategories).length;
     // Run 17: debts and loans from the file are added by id (what is already on this phone is never overwritten).
-    if (plan.debtData && (plan.debtData.debts.length || plan.debtData.loans.length)) writeDebts(mergeDebtData(readDebts(),plan.debtData));
+    const hasDebts=plan.debtData && (plan.debtData.debts.length || plan.debtData.loans.length);
+    if (hasSub && !writeSubcats(mergeSubcats(readSubcats(),plan.subcategories))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
+    if (hasDebts && !writeDebts(mergeDebtData(readDebts(),plan.debtData))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
+    setState(next);
     setImportPending(null);
     const delta=next.transactions.length-before.transactions.length;
     showSnackbar(settingsOnly ? t("import.settingsApplied") : mode==="replace" ? tn("import.replaced",plan.transactions.length) : tn("import.added",delta), ()=>{
       // Undo only if nothing has changed since; otherwise it would erase newer work.
       if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; }
+      undoAux();
       setState(before);
     }, 8000, "import");
   },[importPending,skipDup,showToast,showSnackbar]);
@@ -4587,7 +4612,10 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
   const [pay,setPay]=useState({}), [payMsg,setPayMsg]=useState({}), [intr,setIntr]=useState({});
   const uid=(p)=>`${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
   const q=(v)=>fmt(v/100,currency);
-  const save=(next)=>{ setData(next); if (!writeDebts(next)) showToast(t("banner.saveFailed")); };
+  const [health,setHealth]=useState(()=>debtsHealth());
+  const blocked=health.status==="corrupt"||health.status==="unreadable";
+  // Nothing is shown as saved unless it was really written; a refused write leaves the screen and the stored data as they were.
+  const save=(next)=>{ if (writeDebts(next)) { setData(next); setHealth(debtsHealth()); } else { setHealth(debtsHealth()); showToast(t(blocked?"debt.blockedToast":"banner.saveFailed")); } };
   const toQ=(text,opts)=>{ const v=formMoney(text,opts); return v===null ? null : Math.round(v*100); };
 
   const addDebt=()=>{
@@ -4637,6 +4665,8 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
 
   return (
     <div className="goals-page" data-section="debts-page">
+      {blocked&&(<div className="card" role="alert" data-section="debts-blocked" style={{borderColor:"var(--neg)",background:"var(--neg-bg)"}}><strong>{t(health.status==="corrupt"?"debt.corrupt":"debt.unreadable")}</strong></div>)}
+      {health.status==="partial"&&(<div className="card" role="status" data-section="debts-partial">{t("debt.partial",{n:health.dropped})}</div>)}
       <div className="card" data-section="debts-summary">
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
           {[[t("debt.totalOwe"),q(owe)],[t("debt.totalOwed"),q(owed)],[t("debt.totalLoans"),q(loanLeft)]].map(([lbl,val])=>(
