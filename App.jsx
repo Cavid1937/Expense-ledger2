@@ -1685,6 +1685,8 @@ const ICONS = {
   trash:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>`,
   repeat:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>`,
   chevDown:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>`,
+  chevUp:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="6 15 12 9 18 15"/></svg>`,
+  backspace:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 5H9l-6 7 6 7h12z"/><line x1="12" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="12" y2="15"/></svg>`,
   chevRight:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>`,
   home:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
   list:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`,
@@ -1867,6 +1869,15 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .amount-input{font-family:var(--font);font-size:clamp(32px,12vw,50px);font-weight:900;font-variant-numeric:tabular-nums;letter-spacing:-1.6px;background:transparent;border:0;border-radius:8px;outline:none;color:var(--ink);min-width:0;max-width:68vw;text-align:right;caret-color:var(--accent);transition:color 160ms,text-shadow 160ms,transform 160ms;appearance:textfield;-moz-appearance:textfield}
 .amount-input:focus{color:var(--ink);text-shadow:0 0 18px rgba(0,0,0,0.07)}
 .amount-input::placeholder{color:var(--ink-3)}   /* Run 9: was --ink-5, 1.66:1 on the dark page — unreadable */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.numpad-key{min-height:50px;border:1px solid var(--rule);border-radius:14px;background:var(--bg-card);color:var(--ink);font-family:var(--font);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
+.numpad-key:active{background:var(--bg-warm)}
+.numpad-key:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.add-foot{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--rule);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));z-index:3;flex-shrink:0}
+.more-toggle{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:10px 14px;margin:6px 0 14px;border:1px dashed var(--rule-2);border-radius:14px;background:transparent;color:var(--ink-2);text-align:left;-webkit-tap-highlight-color:transparent}
+.more-toggle-main{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap}
+.more-toggle-sub{flex:1;min-width:0;font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.more-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .amount-cur{font-family:var(--font);font-size:15px;font-weight:600;color:var(--ink-3);white-space:nowrap;position:relative;top:-2px}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
@@ -1952,12 +1963,15 @@ input[type=number]{-moz-appearance:textfield}
 .m-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%;cursor:pointer;position:relative}
 .m-bar{width:100%;border-radius:2px 2px 0 0;transition:height 0.5s ease,background 150ms;min-height:2px}
 .m-lbl{font-size:10px;font-weight:700;letter-spacing:0.2px}
-/* Heatmap */
-.heatmap{display:grid;grid-template-columns:22px repeat(7,1fr);gap:2px}
-.hm-corner{}.hm-day-hdr{font-size:10px;font-weight:700;color:var(--ink-4);text-align:center;padding-bottom:3px}
-.hm-wk-lbl{font-size:9px;color:var(--ink-3);text-align:right;padding-right:3px;display:flex;align-items:center;justify-content:flex-end}
-.hm-cell{aspect-ratio:1;border-radius:2px;cursor:pointer}
-/* Stats */
+/* Month calendar (Run 17) */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-size:10px;font-weight:700;color:var(--ink-4);text-align:center;padding-bottom:3px}
+.cal-day{min-height:40px;border:0;border-radius:8px;background:var(--bg-inset);color:var(--ink-2);font-family:inherit;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.cal-day.has-spend{color:var(--ink)}
+.cal-day.future{background:transparent;color:var(--ink-3);box-shadow:inset 0 0 0 1px var(--rule)}
+.cal-day.today{outline:1.5px solid var(--ink-3);outline-offset:1px}
+.cal-day.sel{outline:2px solid var(--ink);outline-offset:1px}
+.cal-day:focus-visible{outline:2px solid var(--accent);outline-offset:1px}/* Stats */
 .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px}
 .stat-cell{background:var(--bg-card);border:1px solid var(--rule);border-radius:7px;padding:11px 12px}
 .stat-val{font-family:var(--font);font-size:20px;font-weight:700;letter-spacing:-0.5px;margin-bottom:2px}
@@ -2140,6 +2154,17 @@ input[type=number]{-moz-appearance:textfield}
 .donut-wrap{display:flex;align-items:center;gap:16px}
 .donut{position:relative;width:132px;height:132px;flex-shrink:0}
 .donut-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--ink);text-align:center;padding:0 26px;font-variant-numeric:tabular-nums}
+.donut{transition:transform 260ms cubic-bezier(0.22,1,0.36,1)}
+.donut.has-sel{transform:scale(1.12)}
+.donut-slice{transition:stroke-width 220ms,opacity 220ms}
+.donut-center-sel{flex-direction:column;gap:1px;padding:0 22px;line-height:1.2}
+.dc-name{font-size:10px;font-weight:600;color:var(--ink-3);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dc-amt{font-size:12px;font-weight:700}
+.dc-pct{font-size:10px;font-weight:600;color:var(--ink-3)}
+.donut-row{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;padding:2px 4px;margin:0;border:0;border-radius:8px;background:transparent;color:inherit;font:inherit;font-size:13px;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.donut-row[aria-pressed="true"]{background:var(--bg-inset)}
+.donut-row:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@media (prefers-reduced-motion:reduce){.donut,.donut-slice{transition:none}}
 .donut-legend{list-style:none;flex:1;min-width:0;display:flex;flex-direction:column;gap:7px}
 .donut-legend li{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
 .donut-legend .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
@@ -2239,7 +2264,7 @@ input[type=number]{-moz-appearance:textfield}
    reveal proportions are blurred. Navigation, titles and buttons are never blurred. */
 .privacy-toggle.on{color:var(--accent-text);background:var(--accent-light);border-radius:50%}
 .privacy-on .donut svg,.privacy-on .trend-card svg,.privacy-on .bar,.privacy-on .cat-bar-track,.privacy-on .budget-track,
-.privacy-on .goal-progress,.privacy-on .pace-track,.privacy-on .month-bars,.privacy-on .heatmap{filter:blur(6px)}
+.privacy-on .goal-progress,.privacy-on .pace-track,.privacy-on .month-bars,.privacy-on .cal{filter:blur(6px)}
 /* Materials follow the user's preferences */
 @media (prefers-reduced-transparency: reduce){
   .topbar,.tabbar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -3573,6 +3598,28 @@ function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedu
   );
 }
 
+// Run 17: an in-app number pad, so no phone keyboard covers the form and the decimal mark is always the same key.
+// Keys: 0-9, the decimal point, delete. Same text rules as the typed amount (cleanMoneyText); at most 9 whole digits.
+function NumPad({ value, onChange }) {
+  const press=(k)=>{
+    if (k==="back") { onChange(String(value).slice(0,-1)); return; }
+    if (k===".") { if (String(value).includes(".")) return; onChange(cleanMoneyText((String(value)||"0")+".")); return; }
+    if (!String(value).includes(".") && String(value).replace(/\D/g,"").length>=9) return;
+    onChange(cleanMoneyText(value==="0" ? k : String(value)+k));
+  };
+  const keys=["1","2","3","4","5","6","7","8","9",".","0","back"];
+  return (
+    <div className="numpad" role="group" aria-label={t("pad.label")}>
+      {keys.map(k=>(
+        <button key={k} type="button" className="numpad-key" data-key={k} onClick={()=>press(k)}
+          aria-label={k==="back"?t("pad.back"):k==="."?t("pad.decimal"):k}>
+          {k==="back"?<Icon name="backspace" size={22}/>:k}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose }) {
   // Run 12: which bill a recurring entry pays. Offered only when every recurring payment is already linked to a bill
   // (nothing inferred the old way); otherwise the entry is grouped as before, so it can't start a second copy of a bill
@@ -3602,6 +3649,9 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
     if (!r.added) { setSubMsg(t("subcat.err."+r.reason)); return; }
     saveMySubs(r.map); setSubcat(newSub.trim().replace(/\s+/g," ")); setNewSub(null); setSubMsg("");
   };
+  // Run 17: details (merchant, note, date, wallet, repeat) are folded away unless editing or already filled; the pad is open until a text field needs the room.
+  const [more, setMore] = useState(!!(editId || prefill?.recurring || prefill?.billId || prefill?.merchant || prefill?.note));
+  const [padOpen, setPadOpen] = useState(true);
   const [err,      setErr]      = useState("");
   const [showMerchantSugs, setShowMerchantSugs] = useState(false);
   const amtRef=useRef();
@@ -3620,6 +3670,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   const incCats=CATEGORIES.filter(c=>c.income);
   const displayCats=type==="income"?incCats:expCats;
   const selectedCat=CAT(catId);
+  const moreSummary=[merchant.trim(), note.trim(), wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
 
   useEffect(()=>{ setTimeout(()=>amtRef.current?.focus(),60); },[]);
   useEffect(()=>{ if(!prefill) setCatId(type==="income"?"salary":"food"); },[type]);
@@ -3683,14 +3734,14 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
         <span className="add-title">{title}</span>
         <button className="add-close" onClick={requestClose} aria-label={t("common.close")}><Icon name="close" size={14}/></button>
       </div>
-      <div className="add-body">
+      <div className="add-body" onFocusCapture={e=>{ const el=e.target; if (el && el.matches && el.matches("input,select,textarea") && !el.classList.contains("amount-input")) setPadOpen(false); }}>
         <div className="type-toggle">
           <button className={`type-btn${type==="expense"?" active":""}`} aria-pressed={type==="expense"} onClick={()=>setType("expense")}>{t("add.expense")}</button>
           <button className={`type-btn${type==="income"?" active":""}`} aria-pressed={type==="income"} onClick={()=>setType("income")}>{t("add.income")}</button>
         </div>
-        <div className="amount-zone">
+        <div className="amount-zone" onClick={()=>{ setPadOpen(true); amtRef.current?.focus(); }}>
           <div className="amount-line">
-            <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off"
+            <input ref={amtRef} className="amount-input" type="text" inputMode={padOpen?"none":"decimal"} autoComplete="off"
               placeholder="0.00" value={amount} onChange={e=>{setAmount(cleanMoneyText(e.target.value));setErr("");}}
               min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}
               style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
@@ -3712,44 +3763,6 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
             </div>
           </div>
         )}
-
-        <div className="field merchant-wrap">
-          <label className="field-lbl" htmlFor="txn-merchant">{t("add.merchant")} {optional}</label>
-          <input id="txn-merchant" className="field-input" placeholder={t("add.merchantPh")} autoComplete="off"
-            value={merchant}
-            onChange={e=>{setMerchant(e.target.value);setShowMerchantSugs(true);}}
-            onBlur={()=>setTimeout(()=>setShowMerchantSugs(false),150)}
-            onFocus={()=>setShowMerchantSugs(true)}/>
-          {/* Merchant intelligence hint — shown when merchant is recognised */}
-          {merchant.trim()&&!showMerchantSugs&&(()=>{
-            const ml=merchant.trim().toLowerCase();
-            const match=merchantMemory[memKey(type,ml)];
-            if (!match||match.count<2) return null;
-            const profile=calcMerchantProfile(merchant.trim(),transactions);
-            if (!profile) return null;
-            const hints=[];
-            if (profile.avg>0) hints.push(t("add.hintUsually",{amount:fmt(profile.avg,currency)}));
-            if (profile.typicalDay&&profile.count>=3) hints.push(t("add.hintDay",{day:t("dow."+profile.typicalDay)}));
-            if (profile.estimatedNextVisit) hints.push(t("add.hintNext",{date:fmtDate(profile.estimatedNextVisit)}));
-            if (!hints.length) return null;
-            return (
-              <div style={{fontSize:11,color:"var(--ink-4)",marginTop:4,display:"flex",alignItems:"center",gap:5,fontStyle:"italic"}}>
-                <Icon name="merchant" size={11} color="var(--ink-4)"/>
-                {hints.join(" · ")}
-              </div>
-            );
-          })()}
-          {showMerchantSugs&&merchantMatches.length>0&&(
-            <div className="merchant-suggestions">
-              {merchantMatches.map((m,i)=>(
-                <div key={i} className="merchant-sug-item" onMouseDown={()=>applySuggestion(m)}>
-                  <div>{m.merchant}</div>
-                  <div className="merchant-sug-sub">{catName(m.category)}{m.subcategory?` / ${subName(m.subcategory)}`:""} · {t("add.usedTimes",{n:m.count})}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
         <div className="field" role="group" aria-labelledby="txn-cat-lbl">
           <div className="field-lbl" id="txn-cat-lbl">{t("add.category")} <span style={{fontWeight:600,color:"var(--ink-2)",letterSpacing:0.4}}>· {catName(catId)}</span></div>
@@ -3785,6 +3798,50 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
                 </div>
               )}
               {subMsg&&<div role="alert" className="list-sub" style={{marginTop:6,color:"var(--neg)"}}>{subMsg}</div>}
+            </div>
+          )}
+        </div>
+
+        {/* Run 17: the form shows what most entries need; the rest sits under one toggle (open when editing). */}
+        <button type="button" className="more-toggle" data-section="add-more-toggle" aria-expanded={more} aria-controls="add-more-body" onClick={()=>{ setMore(m=>!m); setPadOpen(false); }}>
+          <span className="more-toggle-main">{t(more?"add.lessDetails":"add.moreDetails")}</span>
+          <span className="more-toggle-sub">{moreSummary||t("add.moreHint")}</span>
+          <Icon name={more?"chevUp":"chevDown"} size={16}/>
+        </button>
+        <div id="add-more-body" data-section="add-more" style={more?undefined:{display:"none"}}>        <div className="field merchant-wrap">
+          <label className="field-lbl" htmlFor="txn-merchant">{t("add.merchant")} {optional}</label>
+          <input id="txn-merchant" className="field-input" placeholder={t("add.merchantPh")} autoComplete="off"
+            value={merchant}
+            onChange={e=>{setMerchant(e.target.value);setShowMerchantSugs(true);}}
+            onBlur={()=>setTimeout(()=>setShowMerchantSugs(false),150)}
+            onFocus={()=>setShowMerchantSugs(true)}/>
+          {/* Merchant intelligence hint — shown when merchant is recognised */}
+          {merchant.trim()&&!showMerchantSugs&&(()=>{
+            const ml=merchant.trim().toLowerCase();
+            const match=merchantMemory[memKey(type,ml)];
+            if (!match||match.count<2) return null;
+            const profile=calcMerchantProfile(merchant.trim(),transactions);
+            if (!profile) return null;
+            const hints=[];
+            if (profile.avg>0) hints.push(t("add.hintUsually",{amount:fmt(profile.avg,currency)}));
+            if (profile.typicalDay&&profile.count>=3) hints.push(t("add.hintDay",{day:t("dow."+profile.typicalDay)}));
+            if (profile.estimatedNextVisit) hints.push(t("add.hintNext",{date:fmtDate(profile.estimatedNextVisit)}));
+            if (!hints.length) return null;
+            return (
+              <div style={{fontSize:11,color:"var(--ink-4)",marginTop:4,display:"flex",alignItems:"center",gap:5,fontStyle:"italic"}}>
+                <Icon name="merchant" size={11} color="var(--ink-4)"/>
+                {hints.join(" · ")}
+              </div>
+            );
+          })()}
+          {showMerchantSugs&&merchantMatches.length>0&&(
+            <div className="merchant-suggestions">
+              {merchantMatches.map((m,i)=>(
+                <div key={i} className="merchant-sug-item" onMouseDown={()=>applySuggestion(m)}>
+                  <div>{m.merchant}</div>
+                  <div className="merchant-sug-sub">{catName(m.category)}{m.subcategory?` / ${subName(m.subcategory)}`:""} · {t("add.usedTimes",{n:m.count})}</div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -3851,12 +3908,15 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
           </div>
         </div>
 
-        <button className="btn btn-primary btn-full" onClick={()=>submit()}>
-          {isEditing?t("add.saveChanges"):t(type==="income"?"add.recordIncome":"add.recordExpense")}
-        </button>
+        </div>
         <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
       </div>
-      {askDiscard&&(
+      <div className="add-foot">
+        {padOpen&&<NumPad value={amount} onChange={v=>{ setAmount(v); setErr(""); }}/>}
+        <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>submit()}>
+          {isEditing?t("add.saveChanges"):t(type==="income"?"add.recordIncome":"add.recordExpense")}
+        </button>
+      </div>      {askDiscard&&(
         <div className="sheet-overlay discard-overlay" onClick={e=>e.target===e.currentTarget&&setAskDiscard(false)}>
           <div className="sheet" role="alertdialog" aria-modal="true" tabIndex={-1} aria-labelledby="discard-title" aria-describedby="discard-body">
             <div className="sheet-grip"><div className="sheet-handle"/></div>
@@ -4176,23 +4236,32 @@ function SettingsSheet({ state, onLanguageChange, onCurrencyChange, onAddTemplat
 // ─── Redesign pages (2026-10-27) ─────────────────────────────────────────────────────────────────────────────────────
 
 function SpendDonut({ catSpend, total, currency }) {
+  // Run 17: tap a slice (or its legend row) to focus it: the ring grows, that slice thickens, the rest fade and the centre names it;
+  // tap it again to go back. One selection at a time.
+  const [sel,setSel]=useState(null);
   const slices=donutSlices(catSpend);
   if (!slices.length) return null;
+  const cur=slices.find(s=>s.id===sel)||null;
+  const toggle=(id)=>setSel(s=>s===id?null:id);
   const R=46, C=2*Math.PI*R; let off=0;
   return (
     <div className="donut-wrap">
-      <div className="donut" role="img" aria-label={t("home.breakdown")+": "+slices.map(s=>`${s.name} ${fmtPct(s.pct)}`).join(", ")}>
+      <div className={`donut${cur?" has-sel":""}`} role="img" aria-label={t("home.breakdown")+": "+slices.map(s=>`${s.name} ${fmtPct(s.pct)}`).join(", ")}>
         <svg viewBox="0 0 120 120" width="100%" height="100%" aria-hidden="true">
           <circle cx="60" cy="60" r={R} fill="none" stroke="var(--bg-inset)" strokeWidth="14"/>
-          {slices.map(s=>{ const len=C*s.amt/total, gap=slices.length>1?Math.min(2,len/3):0; const el=(
-            <circle key={s.id} cx="60" cy="60" r={R} fill="none" stroke={s.color} strokeWidth="14" strokeDasharray={`${Math.max(len-gap,0.01)} ${C}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"/>
+          {slices.map(s=>{ const len=C*s.amt/total, gap=slices.length>1?Math.min(2,len/3):0; const on=cur&&cur.id===s.id; const el=(
+            <circle key={s.id} className="donut-slice" data-id={s.id} cx="60" cy="60" r={R} fill="none" stroke={s.color} strokeWidth={on?20:14} strokeDasharray={`${Math.max(len-gap,0.01)} ${C}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"
+              style={{opacity:cur&&!on?0.35:1,cursor:"pointer"}} onClick={()=>toggle(s.id)}/>
           ); off+=len; return el; })}
         </svg>
-        <div className="donut-center">{fmtShort(total,currency)}</div>
+        {cur
+          ? <div className="donut-center donut-center-sel"><span className="dc-name">{cur.name}</span><span className="dc-amt">{fmt(cur.amt,currency)}</span><span className="dc-pct">{fmtPct(cur.pct)}</span></div>
+          : <div className="donut-center">{fmtShort(total,currency)}</div>}
       </div>
       <ul className="donut-legend">
         {slices.map(s=>(
-          <li key={s.id}><span className="dot" style={{background:s.color}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{fmtPct(s.pct)}</span></li>
+          <li key={s.id}><button type="button" className="donut-row" data-id={s.id} aria-pressed={!!cur&&cur.id===s.id} onClick={()=>toggle(s.id)} style={{opacity:cur&&cur.id!==s.id?0.55:1}}>
+            <span className="dot" style={{background:s.color}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{fmtPct(s.pct)}</span></button></li>
         ))}
       </ul>
     </div>
@@ -4588,7 +4657,7 @@ function monthsBetween(from, to) {   // "YYYY-MM" inclusive, newest first
 function MonthlyView({ transactions, currency, budgets, onView }) {
   const [selectedMon, setSelectedMon] = useState(curMon());
   const [activeBar,  setActiveBar]  = useState(null);
-  const [activeCell, setActiveCell] = useState(null);
+  const [calDay, setCalDay] = useState(null);
   const lc=locale();
   const patternsData=useMemo(()=>calcPatterns(transactions,currency),[transactions,currency,lc]);   // insight text follows the language
 
@@ -4633,25 +4702,16 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
   const maxMonth=Math.max(...monthlyData.map(m=>m.exp),1);
   const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
   const DAY_LBLS=WEEKDAYS.map((_,i)=>wdName(i,"narrow"));
-  const heatRows=[];
-  const now_=new Date(),dow=now_.getDay(),toLastMon=dow===0?6:dow-1;
-  const lastMon=new Date(now_); lastMon.setDate(now_.getDate()-toLastMon);
-  for(let w=7;w>=0;w--) {
-    const row=[];
-    for(let d=0;d<7;d++){
-      const dt=new Date(lastMon); dt.setDate(lastMon.getDate()-(w*7)+d);
-      const ds=localDateStr(dt);
-      const amt=expenses.filter(t=>t.date===ds).reduce((s,t)=>s+t.amount,0);
-      const cats=expenses.filter(x=>x.date===ds).map(x=>catName(x.category)).filter((v,i,a)=>a.indexOf(v)===i).join(", ");
-      row.push({date:ds,amt,cats,isToday:ds===today()});
-    }
-    heatRows.push(row);
-  }
-  const maxHeat=Math.max(...heatRows.flat().map(c=>c.amt),1);
-  const hasTrends = expenses.length>0;
+  // Run 17: month calendar for the selected month (replaces the 8-week heatmap): spending per day, Monday first.
+  const [cy,cm]=selectedMon.split("-").map(Number);
+  const calDim=new Date(cy,cm,0).getDate(), calLead=(new Date(cy,cm-1,1).getDay()+6)%7;
+  const calDays=Array.from({length:calDim},(_,i)=>{ const ds=`${selectedMon}-${String(i+1).padStart(2,"0")}`;
+    const items=expenses.filter(x=>x.date===ds&&done(x));
+    return { date:ds, day:i+1, amt:items.reduce((s,x)=>s+x.amount,0), cats:items.map(x=>catName(x.category)).filter((v,j,arr)=>arr.indexOf(v)===j).join(", "), future:ds>today(), isToday:ds===today() }; });
+  const maxDay=Math.max(...calDays.map(c=>c.amt),1);  const hasTrends = expenses.length>0;
 
   return (
-    <div onClick={()=>{setActiveBar(null);setActiveCell(null);}}>
+    <div onClick={()=>{setActiveBar(null);setCalDay(null);}}>
       {/* Month selector — the one month setting for everything above the Trends section */}
       <div className="month-selector" data-section="an-month">
         <button className="month-nav-btn" onClick={prevM} disabled={idx===allMonths.length-1} aria-label={t("month.prev")} style={{opacity:idx===allMonths.length-1?0.3:1}}>‹</button>
@@ -4953,47 +5013,31 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
           </div>
         )}
 
-        <div className="a-card">
-          <div className="a-card-title">{t("an.weekly")}</div>
-          {activeCell!==null&&(()=>{
-            const cell=heatRows[activeCell.wi]?.[activeCell.di];
-            if(!cell) return null;
-            return (
-              <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:cell.cats?3:0}}>
-                  <span>{fmtDate(cell.date)}</span>
-                  <span style={{fontFamily:"var(--font)",fontSize:14}}>{cell.amt>0?fmt(cell.amt,currency):t("an.noSpending")}</span>
-                </div>
-                {cell.cats&&<div style={{fontSize:10,color:"var(--ink-3)"}}>{cell.cats}</div>}
-              </div>
-            );
-          })()}
-          <div className="heatmap" onClick={e=>e.stopPropagation()}>
-            <div className="hm-corner"/>
-            {DAY_LBLS.map((d,i)=><div key={i} className="hm-day-hdr">{d}</div>)}
-            {heatRows.map((row,wi)=>(
-              <Fragment key={`w${wi}`}>
-                <div className="hm-wk-lbl">{wi===7?<span style={{color:"var(--accent)",fontWeight:700,fontSize:7}}>{t("an.now")}</span>:""}</div>
-                {row.map((cell,di)=>{
-                  const intensity=cell.amt>0?Math.max(0.1,(cell.amt/maxHeat)*0.9):0;
-                  const isActive=activeCell?.wi===wi&&activeCell?.di===di;
-                  return (
-                    <div key={`${wi}-${di}`} className="hm-cell"
-                      onClick={e=>{e.stopPropagation();setActiveCell(isActive?null:{wi,di});setActiveBar(null);}}
-                      style={{background:cell.amt>0?`rgba(76,201,196,${intensity})`:"var(--bg-inset)",outline:isActive?"2px solid var(--ink)":cell.isToday?"1.5px solid var(--ink-3)":"none",outlineOffset:"1px"}}
-                    />
-                  );
-                })}
-              </Fragment>
-            ))}
+        <div className="a-card" data-section="an-calendar">
+          <div className="a-card-title">{t("an.calendar")}</div>
+          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.calendarHint")}</div>
+          <div className="cal" onClick={e=>e.stopPropagation()}>
+            {DAY_LBLS.map((d,i)=><div key={i} className="cal-dow">{d}</div>)}
+            {Array.from({length:calLead},(_,i)=><div key={"b"+i} className="cal-blank"/>)}
+            {calDays.map(c=>{
+              const on=calDay===c.date, intensity=c.amt>0?Math.max(0.15,(c.amt/maxDay)*0.85):0;
+              return <button key={c.date} type="button" data-date={c.date} className={`cal-day${c.amt>0?" has-spend":""}${c.future?" future":""}${c.isToday?" today":""}${on?" sel":""}`}
+                aria-current={c.isToday?"date":undefined} aria-pressed={on} aria-label={`${fmtDate(c.date)}: ${c.amt>0?fmt(c.amt,currency):t("an.noSpending")}`}
+                style={c.amt>0?{background:`rgba(76,201,196,${intensity})`,...(intensity>=0.4?{color:"#06201e"}:null)}:undefined}
+                onClick={e=>{ e.stopPropagation(); setCalDay(on?null:c.date); setActiveBar(null); }}>{c.day}</button>;
+            })}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,justifyContent:"flex-end"}}>
+          {calDay&&(()=>{ const c=calDays.find(x=>x.date===calDay); if(!c) return null; return (
+            <div data-section="an-calendar-detail" role="status" style={{background:"var(--bg-inset)",borderRadius:10,padding:"10px 12px",marginTop:10,fontSize:12,fontWeight:600}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span>{fmtDate(c.date)}</span><span style={{fontFamily:"var(--font)",fontSize:14}}>{c.amt>0?fmt(c.amt,currency):t("an.noSpending")}</span></div>
+              {c.cats&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:3,fontWeight:500}}>{c.cats}</div>}
+            </div>); })()}
+          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,justifyContent:"flex-end"}}>
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
-            {[0.1,0.3,0.6,0.9].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(76,201,196,${o})`}}/>)}
+            {[0.15,0.35,0.6,0.85].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(76,201,196,${o})`}}/>)}
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
           </div>
-        </div>
-      </>)}
+        </div>      </>)}
     </div>
   );
 }
