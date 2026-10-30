@@ -323,7 +323,36 @@ function normaliseTxn(t, opts={}) {
     ...(isBillId(t.billId) ? { billId:t.billId.trim() } : {}),
     // Run 16: how it was paid. Optional, so entries without one keep exactly the shape older versions wrote.
     ...(walletId(t.wallet) ? { wallet:walletId(t.wallet) } : {}),
+    // Run 17: a loan instalment marked paid on the Debts page. Optional; entries without it keep the shape older versions wrote.
+    ...(loanRef(t.loan) ? { loan:loanRef(t.loan) } : {}),
   };
+}
+// Run 17 (owner rule): a loan payment is recorded as the FULL instalment (money paid out). loan.interest is the part that is a real cost
+// (units, 2 decimals) or null when the person does not know the split. Spending views count only the interest; the principal reduces the
+// loan and is not ordinary spending. An unknown split adds nothing to spending: no allocation is invented.
+function loanRef(v) {
+  if (!isPlainObject(v)) return null;
+  if (v.interest===null) return { interest:null };
+  return (typeof v.interest==="number" && Number.isFinite(v.interest) && v.interest>=0 && v.interest<=1e9) ? { interest:Math.round(v.interest*100)/100 } : null;
+}
+function forSpending(list) {
+  return (Array.isArray(list)?list:[]).flatMap(t=>{
+    const r=t&&t.loan?loanRef(t.loan):null;
+    if (!r) return [t];
+    const part=r.interest===null ? 0 : Math.min(r.interest,Number(t.amount)||0);
+    return part>0 ? [{...t,amount:part}] : [];
+  });
+}
+function loanCashOut(list, mon) {
+  const out={ paid:0, n:0, interest:0, unknown:0 };
+  (Array.isArray(list)?list:[]).forEach(t=>{
+    const r=t&&t.loan?loanRef(t.loan):null;
+    if (!r || String(t.date).slice(0,7)!==mon) return;
+    out.n++; out.paid+=Number(t.amount)||0;
+    if (r.interest===null) out.unknown++; else out.interest+=Math.min(r.interest,Number(t.amount)||0);
+  });
+  out.paid=Math.round(out.paid*100)/100; out.interest=Math.round(out.interest*100)/100;
+  return out;
 }
 // Run 16: the wallet an entry was paid from. Only a tag (no balances, no transfers). The built-in ids are below; a short safe
 // text id this version does not know (a wallet from a newer version or file) is KEPT, never dropped or turned into another one,
@@ -2972,6 +3001,9 @@ function AppInner() {
   },[importPending,skipDup,showToast,showSnackbar]);
 
   const {transactions,budgets,templates,currency,goals,safeToSpend}=state; const bills=state.bills||[];
+  // Run 17: spending views see loan payments as only their interest part (see forSpending); Transactions and backups keep the full payment.
+  const spendTxns=useMemo(()=>forSpending(transactions),[transactions]);
+  const spendState=useMemo(()=>({...state,transactions:spendTxns}),[state,spendTxns]);
   const changeProfileName=useCallback((v)=>{ const n=cleanProfileName(v); setState(s=>({...s,profileName:n})); showToast(t(n?"st.profileSaved":"st.profileRemoved")); },[showToast]);
   const changeLanguage=useCallback((l)=>{ setState(s=>({...s,language:l})); showToast(tIn(l,"lang.changed")); },[showToast]);
 
@@ -3048,12 +3080,12 @@ function AppInner() {
         </header>
 
         <main className="page" key={tabKey}>
-          {tab==="home"      && <HomePage transactions={transactions} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+          {tab==="home"      && <HomePage transactions={spendTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
-          {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
-          {tab==="goals"     && <BudgetsGoalsPage state={state} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
+          {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
+          {tab==="goals"     && <BudgetsGoalsPage state={spendState} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
@@ -4552,7 +4584,7 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
   const [showDebt,setShowDebt]=useState(false), [showLoan,setShowLoan]=useState(false);
   const [dForm,setDForm]=useState({ dir:"owe", name:"", amt:"", due:"" }), [dMsg,setDMsg]=useState("");
   const [lForm,setLForm]=useState({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }), [lMsg,setLMsg]=useState("");
-  const [pay,setPay]=useState({}), [payMsg,setPayMsg]=useState({});
+  const [pay,setPay]=useState({}), [payMsg,setPayMsg]=useState({}), [intr,setIntr]=useState({});
   const uid=(p)=>`${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
   const q=(v)=>fmt(v/100,currency);
   const save=(next)=>{ setData(next); if (!writeDebts(next)) showToast(t("banner.saveFailed")); };
@@ -4584,7 +4616,11 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
   const markPaid=(l,sched)=>{
     const k=l.payments.length; if (k>=sched.payments.length) return;
     const row=sched.payments[k], date=today();
-    const txnId=onAddEntry({ type:"expense", amount:row.payment/100, category:"finance", subcategory:"", merchant:l.lender, note:t("loan.entryNote"), date, recurring:false, recurFreq:null, isActive:true });
+    // The interest part defaults to the schedule's estimate and can be edited; empty means "I do not know the split" (nothing is invented).
+    const text=(intr[l.id]!==undefined ? intr[l.id] : (row.interest/100).toFixed(2)).trim();
+    const iv=text==="" ? null : formMoney(text);
+    if (text!=="" && (iv===null || Math.round(iv*100)>row.payment)) { showToast(t("loan.interestInvalid")); return; }
+    const txnId=onAddEntry({ type:"expense", amount:row.payment/100, loan:{ interest:iv },  category:"finance", subcategory:"", merchant:l.lender, note:t("loan.entryNote"), date, recurring:false, recurFreq:null, isActive:true });
     save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:[...x.payments,{ id:uid("p"), date, amount:row.payment, txnId }]}:x) });
     showToast(t("loan.paidToast"));
   };
@@ -4712,6 +4748,14 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
               </div>
               {implied!==null&&<div className="list-sub" style={{marginTop:8}}>{t("loan.flatReal",{pct:fmtPct(Math.round(implied*10)/10)})}</div>}
               <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t("loan.estimate")}</div>
+              {!done&&(
+                <div className="field" style={{marginTop:10,marginBottom:0}}>
+                  <label className="field-lbl" htmlFor={"loan-int-"+l.id}>{t("loan.interestPart")}</label>
+                  <input id={"loan-int-"+l.id} className="field-input loan-interest-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00"
+                    value={intr[l.id]!==undefined ? intr[l.id] : (next.interest/100).toFixed(2)} onChange={e=>setIntr(m=>({...m,[l.id]:cleanMoneyText(e.target.value)}))}/>
+                  <div className="list-sub" style={{marginTop:4,lineHeight:1.5}}>{t("loan.interestHint")}</div>
+                </div>
+              )}
               {!done&&<button className="btn btn-primary btn-full loan-paid-btn" style={{marginTop:10}} onClick={()=>markPaid(l,sc)}>{t("loan.markPaid")}</button>}
               {l.payments.length>0&&<div className="list-sub" style={{marginTop:12}}>{t("loan.paymentsTitle")}</div>}
               {l.payments.map(p=>(
@@ -5103,7 +5147,7 @@ function monthsBetween(from, to) {   // "YYYY-MM" inclusive, newest first
   while (y>fy || (y===fy && m>=fm)) { out.push(`${y}-${String(m).padStart(2,"0")}`); m--; if (m===0) { m=12; y--; } }
   return out;
 }
-function MonthlyView({ transactions, currency, budgets, bills=[], onView }) {
+function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[], onView }) {
   const [selectedMon, setSelectedMon] = useState(curMon());
   const [activeBar,  setActiveBar]  = useState(null);
   const [calDay, setCalDay] = useState(null);
@@ -5125,6 +5169,7 @@ function MonthlyView({ transactions, currency, budgets, bills=[], onView }) {
   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
+  const loanCash    = useMemo(()=>loanCashOut(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 17
   const coach       = useMemo(()=>calcCoach(transactions,readDebts(),new Date()),[transactions]);              // Run 17: Debts-page data is read when the ledger changes
   const txnStats    = calcTxnStats(transactions,selectedMon);
   const perDay      = calcWeekdayWeekend(transactions,selectedMon);
@@ -5196,6 +5241,12 @@ function MonthlyView({ transactions, currency, budgets, bills=[], onView }) {
         </div>
       </div>
       <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
+      {loanCash.n>0&&(
+        <div className="list-sub" data-section="an-loancash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
+          {t("an.loanCash",{paid:fmt(loanCash.paid,currency),interest:fmt(loanCash.interest,currency)})}
+          {loanCash.unknown>0&&<> {t("an.loanCashUnknown",{n:loanCash.unknown})}</>}
+        </div>
+      )}
       <div data-section="an-trend"><SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/></div>
       {isCurrentMon&&(
         <div className="a-card" data-section="an-forecast">
