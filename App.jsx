@@ -467,6 +467,39 @@ function mergeDebtData(a, b) {
   return cleanDebtData({ debts:[...A.debts,...B.debts.filter(d=>!dh.has(d.id))], loans:[...A.loans,...B.loans.filter(l=>!lh.has(l.id))] });
 }
 
+// ─── Financial Coach, first rules (Run 17) ────────────────────────────────────
+// From the research rulebook: R0 data gate, R1 spent vs recorded income, R9 instalment due soon / overdue, R13 money owed to you is late.
+// Facts with their window, never a score. A rule without enough data says so rather than showing a figure. Returns plain cards
+// ({id, ...numbers}); the screen words them. Amounts from the Debts page are whole qapik.
+function calcCoach(transactions, debtData, now=new Date()) {
+  const txns=Array.isArray(transactions)?transactions:[], dd=debtData&&typeof debtData==="object"?debtData:{};
+  const todayS=localDateStr(now), t0=new Date(now); t0.setDate(t0.getDate()-29);
+  const startS=localDateStr(t0), midnight=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+  const daysTo=(ds)=>{ const [y,m,d]=String(ds).split("-").map(Number); return Math.round((new Date(y,m-1,d).getTime()-midnight)/86400000); };
+  const actions=[], numbers=[];
+  (Array.isArray(dd.loans)?dd.loans:[]).forEach(l=>{
+    const sc=loanSchedule(l), k=Array.isArray(l.payments)?l.payments.length:0;
+    if (!sc || k>=sc.payments.length) return;
+    const next=sc.payments[k], dt=daysTo(next.date);
+    if (dt<0) actions.push({ id:"loanOverdue", lender:l.lender, amount:next.payment, date:next.date });
+    else if (dt<=7) actions.push({ id:"loanDue", lender:l.lender, amount:next.payment, date:next.date });
+  });
+  (Array.isArray(dd.debts)?dd.debts:[]).forEach(d=>{
+    if (d.direction==="owed" && d.dueDate && d.dueDate<todayS && debtRemaining(d)>0) actions.push({ id:"owedLate", name:d.name, amount:debtRemaining(d), date:d.dueDate });
+  });
+  const win=txns.filter(x=>x.date>=startS && x.date<=todayS), future=txns.filter(x=>x.date>todayS).length;
+  if (win.length>0) {
+    const days=new Set(win.map(x=>x.date)).size;
+    if (days<14 || win.length<15) numbers.push({ id:"incomplete", days });
+    else {
+      const inc=win.filter(x=>x.type==="income").reduce((a,x)=>a+x.amount,0), exp=win.filter(x=>x.type==="expense").reduce((a,x)=>a+x.amount,0);
+      if (!(inc>0)) numbers.push({ id:"noIncome" });
+      else { const pct=Math.round(exp/inc*100); numbers.push(exp<=inc ? { id:"spent", pct, kept:100-pct } : { id:"over", pct }); }
+    }
+  }
+  if (future>0) numbers.push({ id:"future", n:future });
+  return [...actions.sort((a,b)=>(a.id==="loanOverdue"?0:1)-(b.id==="loanOverdue"?0:1)), ...numbers];
+}
 function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }
 
 // ─── Settings contract (used for stored data AND imported backups) ───────────
@@ -5063,6 +5096,7 @@ function MonthlyView({ transactions, currency, budgets, bills=[], onView }) {
   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
+  const coach       = useMemo(()=>calcCoach(transactions,readDebts(),new Date()),[transactions]);              // Run 17: Debts-page data is read when the ledger changes
   const txnStats    = calcTxnStats(transactions,selectedMon);
   const perDay      = calcWeekdayWeekend(transactions,selectedMon);
   const wc          = calcWhatChanged(transactions,selectedMon,prv);
@@ -5144,6 +5178,25 @@ function MonthlyView({ transactions, currency, budgets, bills=[], onView }) {
               : <div className="list-sub">{t("an.forecastSingle")}</div>}
             <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("an.forecastHow",{daily:fmt(forecast.usualDaily,currency)})}</div>
           </>):<div className="list-sub">{t("an.forecastNeed")}</div>}
+        </div>
+      )}
+
+      {isCurrentMon&&coach.length>0&&(
+        <div className="a-card" data-section="an-coach">
+          <div className="a-card-title">{t("coach.title")}</div>
+          {coach.map((c,i)=>{
+            const num=(n)=>PRIVACY?"••":n, amt=(q)=>fmt(q/100,currency);
+            const line = c.id==="incomplete" ? t("coach.incomplete",{days:c.days})
+              : c.id==="noIncome" ? t("coach.noIncome")
+              : c.id==="spent" ? t("coach.spent",{pct:num(c.pct),kept:num(c.kept)})
+              : c.id==="over" ? t("coach.over",{pct:num(c.pct)})
+              : c.id==="future" ? t("coach.future",{n:c.n})
+              : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
+              : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
+              : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
+            return <div key={i} className="coach-line" data-coach={c.id} style={{fontSize:13,lineHeight:1.5,padding:"8px 0",borderTop:i?"1px solid var(--rule)":"none",color:"var(--ink)"}}>{line}</div>;
+          })}
+          <div className="list-sub" style={{marginTop:6}}>{t("coach.window")}</div>
         </div>
       )}
 
