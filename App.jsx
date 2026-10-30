@@ -170,19 +170,19 @@ function ensureUniqueIds(list) {
   return { list:out, rekeyed };
 }
 
-function partitionTransactions(list) {
+function partitionTransactions(list, opts={}) {
   const good=[], bad=[];
   list.forEach(t=>{
     const reason=checkRawTxn(t);
     if (reason) { bad.push({ record:t, reason }); return; }
-    good.push(normaliseTxn(t));
+    good.push(normaliseTxn(t,opts));
   });
   const u=ensureUniqueIds(good);
   return { good:u.list, bad, rekeyed:u.rekeyed };
 }
 
 function sanitizeTransactions(list, label) {
-  const { good, bad, rekeyed }=partitionTransactions(list);
+  const { good, bad, rekeyed }=partitionTransactions(list,{ keepCategoryId:true });   // the app's own saved data: keep category ids a later version added
   setAside(label, bad.map(b=>b.record), summariseReasons(bad));
   if (rekeyed) noteLoad(tn("load.rekeyed",rekeyed));
   return good;
@@ -286,14 +286,19 @@ const CATEGORY_LOOKUP = (() => {
   CATEGORIES.forEach(c=>{ m[catKey(c.name)]=c.id; m[c.id]=c.id; });
   return m;
 })();
-function resolveCategory(raw) {
+function resolveCategory(raw, keepUnknownId=false) {
   if (!raw) return "other";
-  return CATEGORY_LOOKUP[catKey(raw)] || "other";
+  const known=CATEGORY_LOOKUP[catKey(raw)];
+  if (known) return known;
+  // Run 17: in the app's OWN saved data (never in imports) an id this version does not know is kept as it is, so an older copy of the app
+  // never rewrites a later version's category to "Other". Only id-shaped text qualifies; it is shown as Other until the version knows it.
+  if (keepUnknownId && typeof raw==="string" && /^[a-z][a-z0-9_]{1,31}$/.test(raw)) return raw;
+  return "other";
 }
 
 // Callers validate with checkRawTxn() first (see partitionTransactions). normaliseTxn never takes abs(),
 // never defaults a date and never turns an unknown type into an expense.
-function normaliseTxn(t) {
+function normaliseTxn(t, opts={}) {
   // Keep the record's own id whenever it is usable: a finite number or a non-blank string (legacy and imported ids, UUIDs).
   // Anything else (missing, blank, NaN/Infinity, booleans, objects) gets a fresh numeric id.
   const rawId=t.id;
@@ -304,7 +309,7 @@ function normaliseTxn(t) {
     id,
     type:        normType(t.type)==="income" ? "income" : "expense",
     amount:      strictNum(t.amount ?? t.amt),
-    category:    resolveCategory(t.category||t.catId||t.cat),
+    category:    resolveCategory(t.category||t.catId||t.cat, !!opts.keepCategoryId),
     subcategory: txt(t.subcategory||t.subcat),
     merchant:    txt(t.merchant||t.merchantName),
     note:        txt(t.note||t.description||t.name),
@@ -367,6 +372,101 @@ function readSubcats() { try { const r=localStorage.getItem(SUBCAT_KEY); return 
 function writeSubcats(map) {   // an empty list removes the key instead of keeping an empty shell
   try { const c=cleanSubcats(map); if (!Object.keys(c).length) localStorage.removeItem(SUBCAT_KEY); else localStorage.setItem(SUBCAT_KEY,JSON.stringify({ version:1, byCategory:c })); return true; } catch { return false; }
 }
+// ─── Debts and loans (Run 17) ─────────────────────────────────────────────────
+// Informal DEBTS (person to person) and formal LOANS (a rate and a schedule). All money is whole qapik (integers); interest is rounded
+// half-up to the qapik each month. Stored under their own key, so the main saved-data key is never touched by this feature. The
+// remaining balance of a debt is always derived from its payments, never stored. The schedule of a loan is an ESTIMATE from the terms
+// the person typed: the bank's contract (its effective rate, day count and fees) is what counts, so a typed bank payment overrides ours.
+const DEBTS_KEY="expense_ledger_v5__debts";
+const LOAN_RATE_TYPES=["annuity","equal","flat","none"], LOAN_KINDS=["cash","card","taksit","other"], MAX_DEBTS=200, MAX_LOANS=100, MAX_QAPIK=1e12;
+const isQapik=(v)=>Number.isInteger(v) && v>0 && v<=MAX_QAPIK;
+function loanDate(first, i) {   // same day of the month, shortened to the month's last day when it is shorter (no drift)
+  const [y,m,d]=first.split("-").map(Number); const idx=(m-1)+i, yy=y+Math.floor(idx/12), mm=((idx%12)+12)%12;
+  const day=Math.min(d,new Date(yy,mm+1,0).getDate());
+  return `${String(yy).padStart(4,"0")}-${String(mm+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+}
+function loanSchedule(l) {
+  if (!isPlainObject(l) || !isQapik(l.principal) || !Number.isInteger(l.months) || l.months<1 || l.months>600 || !LOAN_RATE_TYPES.includes(l.rateType)) return null;
+  const rate=l.rateType==="none" ? 0 : l.ratePct;
+  if (typeof rate!=="number" || !Number.isFinite(rate) || rate<0 || rate>100) return null;
+  if (typeof l.firstPayment!=="string" || !isValidDateStr(l.firstPayment)) return null;
+  if (l.bankPayment!==null && l.bankPayment!==undefined && !isQapik(l.bankPayment)) return null;
+  const P=l.principal, n=l.months, r=rate/1200, rows=[];
+  let bal=P;
+  const push=(i,payment,interest,principal)=>{ bal-=principal; rows.push({ n:i, date:loanDate(l.firstPayment,i-1), payment, interest, principal, balance:bal }); };
+  if (l.rateType==="annuity") {
+    const A=(l.bankPayment>0) ? l.bankPayment : (r===0 ? Math.round(P/n) : Math.round(P*r/(1-Math.pow(1+r,-n))));
+    for (let i=1;i<=n && bal>0;i++) {
+      const interest=Math.round(bal*r);
+      if (i===n || A-interest>=bal) { push(i,bal+interest,interest,bal); break; }
+      if (A<=interest) return null;                       // the payment never reduces the balance: refuse instead of inventing a plan
+      push(i,A,interest,A-interest);
+    }
+  } else if (l.rateType==="equal") {
+    const pr=Math.round(P/n);
+    for (let i=1;i<=n && bal>0;i++) { const interest=Math.round(bal*r), part=(i===n||pr>=bal) ? bal : pr; push(i,part+interest,interest,part); }
+  } else if (l.rateType==="flat") {
+    const I=Math.round(P*rate/100*n/12), total=P+I, pay=Math.round(total/n), ip=Math.round(I/n);
+    let paid=0, intPaid=0;
+    for (let i=1;i<=n;i++) { const last=i===n, payment=last ? total-paid : pay, interest=last ? I-intPaid : ip; paid+=payment; intPaid+=interest; push(i,payment,interest,payment-interest); }
+  } else {
+    const base=Math.floor(P/n);
+    for (let i=1;i<=n;i++) { const payment=i===n ? bal : base; push(i,payment,0,payment); }
+  }
+  const totalInterest=rows.reduce((s,p)=>s+p.interest,0), totalPaid=rows.reduce((s,p)=>s+p.payment,0);
+  return { payments:rows, totalInterest, totalPaid };
+}
+// The yearly rate (in %) on the FALLING balance that an equal payment implies: used to show what "18% flat" really costs.
+function impliedNominalPct(principal, months, payment) {
+  const pv=(r)=>{ let s=0; for (let k=1;k<=months;k++) s+=payment/Math.pow(1+r,k); return s; };
+  let lo=0, hi=1; if (pv(0)<principal) return null;
+  for (let i=0;i<80;i++) { const mid=(lo+hi)/2; if (pv(mid)>principal) lo=mid; else hi=mid; }
+  return ((lo+hi)/2)*1200;
+}
+function debtRemaining(d) { return Math.max(0,d.principal-(d.payments||[]).reduce((s,p)=>s+p.amount,0)); }
+function debtCanPay(d, amount) { return isQapik(amount) && amount<=debtRemaining(d); }
+
+function cleanPayments(list, withTxn) {
+  if (!Array.isArray(list)) return [];
+  const seen=new Set(), out=[];
+  list.forEach(p=>{
+    if (!isPlainObject(p) || typeof p.id!=="string" || !p.id.trim() || p.id.length>64 || seen.has(p.id) || typeof p.date!=="string" || !isValidDateStr(p.date) || !isQapik(p.amount)) return;
+    seen.add(p.id);
+    out.push({ id:p.id, date:p.date, amount:p.amount, ...(withTxn && (typeof p.txnId==="number"||typeof p.txnId==="string") && String(p.txnId).length<=64 ? { txnId:p.txnId } : {}) });
+  });
+  return out;
+}
+const cleanText=(v,max)=>typeof v==="string" ? Array.from(v.replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim()).slice(0,max).join("") : "";
+function cleanDebtData(raw) {
+  const out={ debts:[], loans:[] };
+  if (!isPlainObject(raw)) return out;
+  const ids=new Set();
+  (Array.isArray(raw.debts)?raw.debts:[]).forEach(d=>{
+    if (out.debts.length>=MAX_DEBTS || !isPlainObject(d) || typeof d.id!=="string" || !d.id.trim() || d.id.length>64 || ids.has("d:"+d.id)) return;
+    const name=cleanText(d.name,60);
+    if (!name || !["owe","owed"].includes(d.direction) || !isQapik(d.principal)) return;
+    ids.add("d:"+d.id);
+    out.debts.push({ id:d.id, direction:d.direction, name, principal:d.principal, dueDate:(typeof d.dueDate==="string" && isValidDateStr(d.dueDate)) ? d.dueDate : "", note:cleanText(d.note,120), payments:cleanPayments(d.payments,false) });
+  });
+  (Array.isArray(raw.loans)?raw.loans:[]).forEach(l=>{
+    if (out.loans.length>=MAX_LOANS || !isPlainObject(l) || typeof l.id!=="string" || !l.id.trim() || l.id.length>64 || ids.has("l:"+l.id)) return;
+    const lender=cleanText(l.lender,60); if (!lender) return;
+    const c={ id:l.id, lender, kind:LOAN_KINDS.includes(l.kind)?l.kind:"other", principal:l.principal, ratePct:l.rateType==="none"?0:l.ratePct, rateType:l.rateType, months:l.months, firstPayment:l.firstPayment, bankPayment:isQapik(l.bankPayment)?l.bankPayment:null, payments:cleanPayments(l.payments,true) };
+    if (loanSchedule(c)===null) return;
+    ids.add("l:"+l.id); out.loans.push(c);
+  });
+  return out;
+}
+function readDebts() { try { const r=localStorage.getItem(DEBTS_KEY); return cleanDebtData(r ? JSON.parse(r) : null); } catch { return { debts:[], loans:[] }; } }
+function writeDebts(data) {   // nothing to keep removes the key instead of storing an empty shell
+  try { const c=cleanDebtData(data); if (!c.debts.length && !c.loans.length) localStorage.removeItem(DEBTS_KEY); else localStorage.setItem(DEBTS_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
+}
+function mergeDebtData(a, b) {
+  const A=cleanDebtData(a), B=cleanDebtData(b);
+  const dh=new Set(A.debts.map(d=>d.id)), lh=new Set(A.loans.map(l=>l.id));
+  return cleanDebtData({ debts:[...A.debts,...B.debts.filter(d=>!dh.has(d.id))], loans:[...A.loans,...B.loans.filter(l=>!lh.has(l.id))] });
+}
+
 function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }
 
 // ─── Settings contract (used for stored data AND imported backups) ───────────
@@ -699,7 +799,7 @@ function parseCsvImport(raw) {
 function planImport(raw, filename="") {
   const text=String(raw).replace(/^\uFEFF/,"");
   const isCSV=/\.csv$/i.test(filename) || text.trimStart().toLowerCase().startsWith("date,");
-  let list=[], settings={}, problems=[], warnings=[], subcategories={};
+  let list=[], settings={}, problems=[], warnings=[], subcategories={}, debtData={ debts:[], loans:[] };
   if (isCSV) {
     const r=parseCsvImport(text);
     if (r.error) return { ok:false, error:r.error };
@@ -718,6 +818,7 @@ function planImport(raw, filename="") {
       else { const v=Object.values(parsed).find(v=>Array.isArray(v) && v.length>0 && isPlainObject(v[0]) && v[0].amount!==undefined); if (v) list=v; }
       const v=validateSettings(parsed); settings=v.settings; problems=v.problems; warnings=v.warnings.slice();
       subcategories=cleanSubcats(parsed.subcategories);   // Run 16: the user's own subcategory suggestions (optional)
+      debtData=cleanDebtData({ debts:parsed.debts, loans:parsed.loans });   // Run 17: debts and loans (optional)
       // Run 13: an entry list that is present but not a list used to be skipped without a word when the file also held
       // settings (and had no entry count to disagree with). The user is told no entries could be read.
       if ((parsed.transactions!==undefined && !Array.isArray(parsed.transactions) && !Array.isArray(parsed.entries)) || (parsed.entries!==undefined && !Array.isArray(parsed.entries) && !Array.isArray(parsed.transactions)))
@@ -751,7 +852,7 @@ function planImport(raw, filename="") {
   // never replace the ledger: Replace would otherwise delete every transaction on the device.
   // Run 8: nor can a file where some rows were refused — Replace would quietly drop those rows along with the whole ledger.
   // Merge (adds the readable rows) stays available; the sheet explains why Replace is not offered.
-  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings, subcategories };
+  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings, subcategories, debtData };
 }
 
 // Run 8: whether an entry repeats (and how often) is part of what it is, so a monthly bill and an identical one-off purchase
@@ -811,8 +912,10 @@ function backupReminderDue(s, now=new Date()) {
 function buildBackup(state, now=new Date().toISOString()) {
   const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
   const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
+  const dd=cleanDebtData(state.debtData);   // Run 17: debts and loans, optional in the same way
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
-    transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}), lastBackup:now };
+    transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}),
+    ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
 }
 
 function buildCsv(transactions) {
@@ -1779,7 +1882,7 @@ const ICONS = {
 // More tab stays selected, Back (or the title's back arrow) returns to More, and a sideways swipe moves from More's position.
 const TABS = [{id:"home",icon:"home"},{id:"ledger",icon:"list"},{id:"monthly",icon:"chart"},{id:"goals",icon:"goal"},{id:"more",icon:"menu"}];
 const TAB_ORDER = TABS.map(x=>x.id);
-const SUBPAGE_PARENT = { recurring:"more", io:"more" };
+const SUBPAGE_PARENT = { recurring:"more", io:"more", debts:"more" };
 
 function Icon({ name, size=16, color="currentColor", style={} }) {
   return (
@@ -2639,6 +2742,15 @@ function AppInner() {
     showSnackbar(t("toast.recorded"),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },6000,"add");
   },[showToast,showSnackbar]);
 
+  // Run 17: a loan payment marked paid adds one plain expense and returns its id (so the payment record can point at it); removing
+  // the record removes that entry again. No undo window here: the confirmation on the Debts page already asked.
+  const addLoanEntry=useCallback((data)=>{
+    const id=Date.now()+Math.random();
+    setState(s=>({...s,transactions:[{...data,id,createdAt:new Date().toISOString()},...s.transactions]}));
+    return id;
+  },[]);
+  const removeLoanEntry=useCallback((id)=>setState(s=>({...s,transactions:s.transactions.filter(t=>t.id!==id)})),[]);
+
   const updateTransaction=useCallback((id,txn)=>{
     const { billChoice, wallet, ...data }=txn;
     // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored).
@@ -2761,7 +2873,7 @@ function AppInner() {
   const exportJSON=useCallback(()=>{
     if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: native shell → the hand-over, never a dead download link
     const now=new Date().toISOString();
-    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
+    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
     // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
     // It is not a confirmed backup until the user says they have the file (see backupReminderDue).
     setState(s=>({...s,lastBackup:now}));
@@ -2773,7 +2885,7 @@ function AppInner() {
   // the phone. Cancelled → nothing changes. No file sharing on this device → falls back to the download above.
   const shareBackup=useCallback(async ()=>{
     const now=new Date().toISOString();
-    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats()},now),null,2),`ledger-backup-${today()}.json`);
+    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts()},now),null,2),`ledger-backup-${today()}.json`);
     if (r==="unsupported") { exportJSON(); return; }
     if (r==="failed") { showToast(t("io.shareFailed"),6000); return; }   // Run 13: told, and nothing is recorded
     if (r!=="shared") return;
@@ -2813,6 +2925,8 @@ function AppInner() {
     setState(next);
     // Run 16: the file's own-subcategory suggestions are added to the ones on this phone (union; nothing is overwritten or removed).
     if (plan.subcategories && Object.keys(plan.subcategories).length) writeSubcats(mergeSubcats(readSubcats(),plan.subcategories));
+    // Run 17: debts and loans from the file are added by id (what is already on this phone is never overwritten).
+    if (plan.debtData && (plan.debtData.debts.length || plan.debtData.loans.length)) writeDebts(mergeDebtData(readDebts(),plan.debtData));
     setImportPending(null);
     const delta=next.transactions.length-before.transactions.length;
     showSnackbar(settingsOnly ? t("import.settingsApplied") : mode==="replace" ? tn("import.replaced",plan.transactions.length) : tn("import.added",delta), ()=>{
@@ -2889,7 +3003,7 @@ function AppInner() {
           {SUBPAGE_PARENT[tab]
             ? <div className="topbar-back">
                 <button className="topbar-btn" onClick={()=>switchTab(SUBPAGE_PARENT[tab])} aria-label={t("common.back")} title={t("common.back")}><Icon name="chevLeft" size={22}/></button>
-                <h1 className="wordmark">{t(tab==="io"?"io.title":"rec.title")}</h1>
+                <h1 className="wordmark">{t(tab==="io"?"io.title":tab==="debts"?"debt.title":"rec.title")}</h1>
               </div>
             : <h1 className="wordmark">{tab==="home"?t(greetingKey())+(state.profileName?", "+state.profileName:""):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
@@ -2914,6 +3028,7 @@ function AppInner() {
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
+          {tab==="debts"     && <DebtsPage currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
@@ -4363,6 +4478,194 @@ function InfoSheet({ kind, onClose }) {
   );
 }
 
+// ─── Debts & loans page (Run 17) ──────────────────────────────────────────────
+// Settings → Debts & loans. Debts are person-to-person (no interest); loans have a rate and a schedule (an ESTIMATE from the typed terms).
+// Money is stored as whole qapik under its own key (see cleanDebtData). Marking a loan payment adds ONE ordinary expense to Transactions
+// (category Finance, merchant = the lender) and remembers its id; deleting the payment record removes that entry too.
+const LOAN_KIND_KEY={ cash:"loan.kind.cash", card:"loan.kind.card", taksit:"loan.kind.taksit", other:"loan.kind.other" };
+const LOAN_RT_KEY={ annuity:"loan.rt.annuity", equal:"loan.rt.equal", flat:"loan.rt.flat", none:"loan.rt.none" };
+function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast }) {
+  const [data,setData]=useState(()=>readDebts());
+  const [seg,setSeg]=useState("debts");
+  const [showDebt,setShowDebt]=useState(false), [showLoan,setShowLoan]=useState(false);
+  const [dForm,setDForm]=useState({ dir:"owe", name:"", amt:"", due:"" }), [dMsg,setDMsg]=useState("");
+  const [lForm,setLForm]=useState({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }), [lMsg,setLMsg]=useState("");
+  const [pay,setPay]=useState({}), [payMsg,setPayMsg]=useState({});
+  const uid=(p)=>`${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
+  const q=(v)=>fmt(v/100,currency);
+  const save=(next)=>{ setData(next); if (!writeDebts(next)) showToast(t("banner.saveFailed")); };
+  const toQ=(text,opts)=>{ const v=formMoney(text,opts); return v===null ? null : Math.round(v*100); };
+
+  const addDebt=()=>{
+    const principal=toQ(dForm.amt,{positive:true}), name=dForm.name.trim();
+    if (!name || principal===null || !isQapik(principal)) { setDMsg(t("debt.invalid")); return; }
+    save({ ...data, debts:[...data.debts,{ id:uid("d"), direction:dForm.dir, name, principal, dueDate:dForm.due, note:"", payments:[] }] });
+    setDForm({ dir:"owe", name:"", amt:"", due:"" }); setDMsg(""); setShowDebt(false);
+  };
+  const addPayment=(d)=>{
+    const amt=toQ(pay[d.id]||"",{positive:true});
+    if (amt===null || !debtCanPay(d,amt)) { setPayMsg(m=>({...m,[d.id]:t("debt.tooMuch",{left:q(debtRemaining(d))})})); return; }
+    save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,payments:[...x.payments,{ id:uid("p"), date:today(), amount:amt }]}:x) });
+    setPay(p=>({...p,[d.id]:""})); setPayMsg(m=>({...m,[d.id]:""}));
+  };
+  const delPayment=(d,pid)=>save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,payments:x.payments.filter(p=>p.id!==pid)}:x) });
+  const delDebt=(d)=>{ if (window.confirm(t("debt.confirmDelete"))) save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) }); };
+
+  const addLoan=()=>{
+    const principal=toQ(lForm.amt,{positive:true}), months=Number(lForm.months), bank=lForm.bank.trim()===""?null:toQ(lForm.bank,{positive:true});
+    const rate=lForm.type==="none" ? 0 : Number(String(lForm.rate).replace(",","."));
+    const loan={ id:uid("l"), lender:lForm.lender.trim(), kind:lForm.kind, principal, ratePct:rate, rateType:lForm.type, months, firstPayment:lForm.first, bankPayment:bank, payments:[] };
+    if (!loan.lender || principal===null || (lForm.type!=="none" && lForm.rate.trim()==="") || (lForm.bank.trim()!=="" && bank===null) || loanSchedule(loan)===null) { setLMsg(t("loan.invalid")); return; }
+    save({ ...data, loans:[...data.loans,loan] });
+    setLForm({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }); setLMsg(""); setShowLoan(false);
+  };
+  const markPaid=(l,sched)=>{
+    const k=l.payments.length; if (k>=sched.payments.length) return;
+    const row=sched.payments[k], date=today();
+    const txnId=onAddEntry({ type:"expense", amount:row.payment/100, category:"finance", subcategory:"", merchant:l.lender, note:t("loan.entryNote"), date, recurring:false, recurFreq:null, isActive:true });
+    save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:[...x.payments,{ id:uid("p"), date, amount:row.payment, txnId }]}:x) });
+    showToast(t("loan.paidToast"));
+  };
+  const delLoanPayment=(l,p)=>{
+    if (!window.confirm(t("loan.confirmDeletePay"))) return;
+    if (p.txnId!==undefined) onRemoveEntry(p.txnId);
+    save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:x.payments.filter(y=>y.id!==p.id)}:x) });
+  };
+  const delLoan=(l)=>{ if (window.confirm(t("debt.confirmDelete"))) save({ ...data, loans:data.loans.filter(x=>x.id!==l.id) }); };
+
+  const owe=data.debts.filter(d=>d.direction==="owe").reduce((s,d)=>s+debtRemaining(d),0), owed=data.debts.filter(d=>d.direction==="owed").reduce((s,d)=>s+debtRemaining(d),0);
+  const loanLeft=data.loans.reduce((s,l)=>{ const sc=loanSchedule(l), k=l.payments.length; return s+(sc ? (k===0 ? l.principal : k>=sc.payments.length ? 0 : sc.payments[k-1].balance) : 0); },0);
+  const upd=(setter)=>(e)=>{ const k=e.target.name; const v=e.target.value; setter(f=>({...f,[k]:v})); };
+
+  return (
+    <div className="goals-page" data-section="debts-page">
+      <div className="card" data-section="debts-summary">
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
+          {[[t("debt.totalOwe"),q(owe)],[t("debt.totalOwed"),q(owed)],[t("debt.totalLoans"),q(loanLeft)]].map(([lbl,val])=>(
+            <div key={lbl}><div className="list-sub">{lbl}</div><div style={{fontSize:14,fontWeight:700,color:"var(--ink)"}}>{val}</div></div>
+          ))}
+        </div>
+      </div>
+      <div className="seg" role="tablist" aria-label={t("debt.title")}>
+        {[["debts",t("debt.segDebts")],["loans",t("debt.segLoans")]].map(([id,lbl])=>(
+          <button key={id} role="tab" aria-selected={seg===id} className={`seg-btn${seg===id?" on":""}`} onClick={()=>setSeg(id)}>{lbl}</button>
+        ))}
+      </div>
+
+      {seg==="debts"&&(<>
+        <div style={{display:"flex",justifyContent:"flex-end",margin:"4px 2px 10px"}}>
+          <button className="btn btn-sm" data-section="debt-add-btn" onClick={()=>setShowDebt(s=>!s)}>{showDebt?t("common.cancel"):t("set.add")}</button>
+        </div>
+        {showDebt&&(
+          <div className="card" data-section="debt-form">
+            <fieldset className="lang-switch" style={{marginBottom:10}} aria-label={t("debt.dirLabel")}>
+              {[["owe",t("debt.dirOwe")],["owed",t("debt.dirOwed")]].map(([v,lbl])=>(
+                <label key={v} className={`lang-pill${dForm.dir===v?" sel":""}`}><input type="radio" name="debt-dir" value={v} checked={dForm.dir===v} onChange={()=>setDForm(f=>({...f,dir:v}))}/>{lbl}</label>
+              ))}
+            </fieldset>
+            <div className="field-row" style={{marginBottom:10}}>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-name">{t("debt.person")}</label><input id="debt-name" name="name" className="field-input" value={dForm.name} maxLength={60} onChange={upd(setDForm)}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-amt">{t("debt.amount")}</label><input id="debt-amt" name="amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={dForm.amt} onChange={e=>setDForm(f=>({...f,amt:cleanMoneyText(e.target.value)}))}/></div>
+            </div>
+            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-due">{t("debt.due")}</label><input id="debt-due" name="due" className="field-input" lang={locale()} type="date" value={dForm.due} onChange={upd(setDForm)}/></div>
+            {dMsg&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginBottom:8}}>{dMsg}</div>}
+            <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="debt-save" onClick={addDebt}>{t("common.save")}</button>
+          </div>
+        )}
+        {data.debts.length===0&&!showDebt&&<div className="list-sub" style={{margin:"0 2px"}}>{t("debt.none")}</div>}
+        {data.debts.map(d=>{ const left=debtRemaining(d); return (
+          <div key={d.id} className="card" data-section="debt-card" data-id={d.id}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+              <div style={{minWidth:0}}>
+                <div className="goal-name">{maskText(d.name)}</div>
+                <div className="list-sub">{t(d.direction==="owe"?"debt.badgeOwe":"debt.badgeOwed")}{d.dueDate?` · ${t("debt.dueOn",{date:fmtDate(d.dueDate)})}`:""}</div>
+              </div>
+              <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delDebt(d)} aria-label={t("debt.delete",{name:maskText(d.name)})}><Icon name="trash" size={15}/></button>
+            </div>
+            <div style={{marginTop:8}}>
+              <div className="list-sub">{t("debt.remaining")}</div>
+              {left>0 ? <div className="big-num debt-remaining">{q(left)} <span className="list-sub">{t("debt.of",{total:q(d.principal)})}</span></div> : <div className="big-num debt-remaining" style={{color:"var(--pos)"}}>{t("debt.settled")}</div>}
+              <div className="bar" style={{marginTop:6}}><div className="bar-fill" style={{width:`${Math.min(100,(d.principal-left)/d.principal*100)}%`,background:"var(--accent)"}}/></div>
+            </div>
+            {left>0&&(
+              <div style={{display:"flex",gap:8,marginTop:10}}>
+                <input className="field-input debt-pay-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" aria-label={t("debt.payAmount")} value={pay[d.id]||""} onChange={e=>setPay(p=>({...p,[d.id]:cleanMoneyText(e.target.value)}))} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                <button className="btn btn-sm btn-sm-primary debt-pay-btn" onClick={()=>addPayment(d)}>{t("debt.pay")}</button>
+              </div>
+            )}
+            {payMsg[d.id]&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginTop:6}}>{payMsg[d.id]}</div>}
+            {d.payments.map(p=>(
+              <div key={p.id} className="debt-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
+                <span className="list-sub">{fmtDate(p.date)}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
+                <button className="topbar-btn debt-pay-del" style={{color:"var(--ink-4)"}} onClick={()=>delPayment(d,p.id)} aria-label={t("debt.deletePay",{amount:q(p.amount)})}><Icon name="trash" size={14}/></button>
+              </div>
+            ))}
+          </div>
+        ); })}
+      </>)}
+
+      {seg==="loans"&&(<>
+        <div style={{display:"flex",justifyContent:"flex-end",margin:"4px 2px 10px"}}>
+          <button className="btn btn-sm" data-section="loan-add-btn" onClick={()=>setShowLoan(s=>!s)}>{showLoan?t("common.cancel"):t("set.add")}</button>
+        </div>
+        {showLoan&&(
+          <div className="card" data-section="loan-form">
+            <div className="field-row" style={{marginBottom:10}}>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-lender">{t("loan.lender")}</label><input id="loan-lender" name="lender" className="field-input" value={lForm.lender} maxLength={60} onChange={upd(setLForm)}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-kind">{t("loan.kind")}</label><select id="loan-kind" name="kind" className="field-input field-select" value={lForm.kind} onChange={upd(setLForm)}>{LOAN_KINDS.map(k=><option key={k} value={k}>{t(LOAN_KIND_KEY[k])}</option>)}</select></div>
+            </div>
+            <div className="field-row" style={{marginBottom:10}}>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-amt">{t("loan.amount")}</label><input id="loan-amt" name="amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={lForm.amt} onChange={e=>setLForm(f=>({...f,amt:cleanMoneyText(e.target.value)}))}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-months">{t("loan.months")}</label><input id="loan-months" name="months" className="field-input" type="text" inputMode="numeric" autoComplete="off" value={lForm.months} onChange={e=>setLForm(f=>({...f,months:e.target.value.replace(/[^0-9]/g,"")}))}/></div>
+            </div>
+            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-type">{t("loan.rateType")}</label><select id="loan-type" name="type" className="field-input field-select" value={lForm.type} onChange={upd(setLForm)}>{LOAN_RATE_TYPES.map(k=><option key={k} value={k}>{t(LOAN_RT_KEY[k])}</option>)}</select></div>
+            <div className="field-row" style={{marginBottom:10}}>
+              {lForm.type!=="none"&&<div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-rate">{t("loan.rate")}</label><input id="loan-rate" name="rate" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={lForm.rate} onChange={e=>setLForm(f=>({...f,rate:cleanMoneyText(e.target.value)}))}/></div>}
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-first">{t("loan.first")}</label><input id="loan-first" name="first" className="field-input" lang={locale()} type="date" value={lForm.first} onChange={upd(setLForm)}/></div>
+            </div>
+            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-bank">{t("loan.bank")}</label><input id="loan-bank" name="bank" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={lForm.bank} onChange={e=>setLForm(f=>({...f,bank:cleanMoneyText(e.target.value)}))}/><div className="list-sub" style={{marginTop:4}}>{t("loan.bankHint")}</div></div>
+            {lMsg&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginBottom:8}}>{lMsg}</div>}
+            <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="loan-save" onClick={addLoan}>{t("common.save")}</button>
+          </div>
+        )}
+        {data.loans.length===0&&!showLoan&&<div className="list-sub" style={{margin:"0 2px"}}>{t("loan.none")}</div>}
+        {data.loans.map(l=>{
+          const sc=loanSchedule(l); if (!sc) return null;
+          const k=l.payments.length, done=k>=sc.payments.length, next=done?null:sc.payments[k], balance=k===0?l.principal:done?0:sc.payments[k-1].balance;
+          const implied=l.rateType==="flat" ? impliedNominalPct(l.principal,l.months,sc.payments[0].payment) : null;
+          return (
+            <div key={l.id} className="card" data-section="loan-card" data-id={l.id}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div style={{minWidth:0}}><div className="goal-name">{maskText(l.lender)}</div><div className="list-sub">{t(LOAN_KIND_KEY[l.kind])} · {q(l.principal)}</div></div>
+                <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delLoan(l)} aria-label={t("debt.delete",{name:maskText(l.lender)})}><Icon name="trash" size={15}/></button>
+              </div>
+              <div style={{marginTop:8}}>
+                <div className="list-sub">{t("loan.monthly")}</div>
+                <div className="big-num loan-monthly">{q(sc.payments[0].payment)}</div>
+                <div className="list-sub loan-next" style={{marginTop:2}}>{done ? t("loan.allPaid") : t("loan.next",{amount:q(next.payment),date:fmtDate(next.date)})}</div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
+                <div><div className="list-sub">{t("loan.balance")}</div><div className="loan-balance" style={{fontSize:14,fontWeight:700}}>{q(balance)}</div></div>
+                <div><div className="list-sub">{t("loan.totalInterest")}</div><div className="loan-interest" style={{fontSize:14,fontWeight:700}}>{q(sc.totalInterest)}</div></div>
+              </div>
+              {implied!==null&&<div className="list-sub" style={{marginTop:8}}>{t("loan.flatReal",{pct:fmtPct(Math.round(implied*10)/10)})}</div>}
+              <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t("loan.estimate")}</div>
+              {!done&&<button className="btn btn-primary btn-full loan-paid-btn" style={{marginTop:10}} onClick={()=>markPaid(l,sc)}>{t("loan.markPaid")}</button>}
+              {l.payments.length>0&&<div className="list-sub" style={{marginTop:12}}>{t("loan.paymentsTitle")}</div>}
+              {l.payments.map(p=>(
+                <div key={p.id} className="loan-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
+                  <span className="list-sub">{fmtDate(p.date)}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
+                  <button className="topbar-btn loan-pay-del" style={{color:"var(--ink-4)"}} onClick={()=>delLoanPayment(l,p)} aria-label={t("loan.deletePay",{amount:q(p.amount)})}><Icon name="trash" size={14}/></button>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </>)}
+    </div>
+  );
+}
+
 function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onSettings, onInfo, version }) {
   const [name,setName]=useState(profileName);
   return (
@@ -4399,6 +4702,8 @@ function MorePage({ language, profileName="", onLanguageChange, onProfileName, o
         {/* Run 16: appended after the earlier rows, so the first three keep their places */}
         <ListRow icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
         <ListRow icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
+        {/* Run 17: appended, so the first five rows keep their places */}
+        <ListRow icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
       </div>
       {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}
     </div>
