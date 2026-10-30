@@ -1,0 +1,1456 @@
+﻿diff --git a/App.jsx b/App.jsx
+index 9d29737..b9250e0 100644
+--- a/App.jsx
++++ b/App.jsx
+@@ -1,4 +1,4 @@
+-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
++import { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
+ import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
+ 
+ // ─────────────────────────────────────────────────────────────────────────────
+@@ -19,21 +19,25 @@ const KEYS_LEGACY = [
+   "finance_editorial_v3","finance_editorial_v4","finance_os_v3",
+ ];
+ 
+-function readRaw(k) { try { const r=localStorage.getItem(k); return r?JSON.parse(r):null; } catch { return null; } }
+ function writeRaw(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); return true; } catch { return false; } }
+ 
+ // Set when stored data needed recovery on load; the App shows it once.
+ let LOAD_NOTICE = null;
+ // True when a recovery copy could not be written: saving is then paused so the original data is never overwritten.
+ let SAVE_BLOCKED = false;
++// True when saving is paused because stored data could not be READ (not because a copy failed): the banner then says so.
++let SAVE_BLOCKED_READ = false;
+ 
+ // ─── Money grammar ────────────────────────────────────────────────────────────
+ // Text typed by the user or read from a CSV cell: digits with an optional decimal point and at most 2 decimals,
+ // up to 9 integer digits. Accepted: "12" "12.5" "12.50" ".5" "0.05".
+ // Rejected: "" "12." "-5" "+5" "1e3" "0x10" "1,5" "1 000" "NaN" "Infinity" "25abc", and anything above MAX_AMOUNT.
+-// JSON numbers (stored data and backups) may carry any finite value; their sign and range are still enforced.
++// JSON numbers (stored data, older versions, backups, settings) must be whole cents too (Run 6, D13/D22): the number must be
++// exactly the 2-decimal value it prints as. 12.345, 10.005 and 0.1+0.2 (= 0.30000000000000004) are refused, never rounded —
++// rounding would silently change the figure. This is the rule imports already used (Phase 3), now applied everywhere.
+ const MAX_AMOUNT = 999999999.99;
+ const MONEY_TEXT_RE = /^(?:\d{1,9}|\d{0,9}\.\d{1,2})$/;
++const isWholeCents = (n) => Number(n.toFixed(2))===n;
+ 
+ function strictNum(v) {
+   if (typeof v==="number") return Number.isFinite(v) ? v : NaN;
+@@ -52,6 +56,7 @@ function moneyReason(v, { positive=false } = {}) {
+   } else return "invalid amount";
+   const n=strictNum(v);
+   if (n<0) return "negative amount";
++  if (!isWholeCents(n)) return "more than 2 decimal places";
+   if (positive && n===0) return "zero amount";
+   if (n>MAX_AMOUNT) return "amount too large";
+   return null;
+@@ -61,7 +66,9 @@ function moneyReason(v, { positive=false } = {}) {
+ function parseMoney(v, opts) { return moneyReason(v,opts)===null ? strictNum(v) : null; }
+ 
+ function isPlainObject(x) { return x!==null && typeof x==="object" && !Array.isArray(x); }
+-const isTrue = (v) => v===true || v==="true";
++// A yes/no field: true/false, or the words "true"/"false" (any case, trimmed). Anything else → null (not guessed).
++const flagValue = (v) => { if (typeof v==="boolean") return v; if (typeof v==="string") { const s=v.trim().toLowerCase(); if (s==="true") return true; if (s==="false") return false; } return null; };
++const isTrue = (v) => flagValue(v)===true;
+ const txt = (v) => typeof v==="string" ? v : (typeof v==="number" && Number.isFinite(v) ? String(v) : "");
+ const norm = (v) => txt(v).trim().toLowerCase().replace(/\s+/g," ");
+ 
+@@ -95,6 +102,11 @@ function checkRawTxn(t) {
+   const r=moneyReason(t.amount ?? t.amt, { positive:true });
+   if (r) return r;
+   if (normType(t.type)===null) return "unsupported type";
++  // isActive: missing = active (as always). An explicit value must be a yes/no: null, 0, 1, "yes", {} … used to be read by
++  // truthiness, which could silently re-activate a paused payment. recurring: missing or null = not recurring (null always
++  // meant that and it is also the default); any other non-yes/no value is refused.
++  if (t.isActive!==undefined && flagValue(t.isActive)===null) return "invalid active flag";
++  if (t.recurring!==undefined && t.recurring!==null && flagValue(t.recurring)===null) return "invalid recurrence flag";
+   if (isTrue(t.recurring) && !RECUR_FREQS.has(t.recurFreq||t.frequency)) return "invalid recurrence";
+   return null;
+ }
+@@ -266,7 +278,7 @@ function normaliseTxn(t) {
+     date:        String(t.date).trim().slice(0,10),
+     recurring:   isTrue(t.recurring),
+     recurFreq:   RECUR_FREQS.has(f) ? f : null,
+-    isActive:    t.isActive!==undefined ? !!t.isActive : true,
++    isActive:    t.isActive!==undefined ? flagValue(t.isActive) : true,       // checkRawTxn has refused anything else
+     createdAt:   t.createdAt||new Date().toISOString(),
+   };
+ }
+@@ -349,11 +361,21 @@ function validateSettings(src) {
+   return { settings, problems, warnings };
+ }
+ 
++// Reads one key: { value } (null = nothing stored) or { failed:true } when the browser refused the read. A refused read is
++// never treated as "nothing stored": that would look like a fresh install and the next save would overwrite the real data.
++function readKey(k) { try { return { value:localStorage.getItem(k) }; } catch { return { failed:true }; } }
++
+ function migrateAndLoad() {
+-  let rawStr=null;
+-  try { rawStr=localStorage.getItem(KEY); } catch {}
++  const cur=readKey(KEY);
++  if (cur.failed) {
++    // The data may well be there; it just cannot be read right now. Show an empty view, pause saving, migrate nothing.
++    SAVE_BLOCKED=true; SAVE_BLOCKED_READ=true; noteLoad(t("load.readFailed"));
++    return { ...buildState([], null), language:"en" };
++  }
++  const rawStr=cur.value;
+   let current=null;
+-  if (rawStr) { try { current=JSON.parse(rawStr); } catch { current=null; } }
++  // An empty string is present-but-unusable data, not absence: it goes through the corrupt path below and is preserved.
++  if (rawStr!==null && rawStr!=="") { try { current=JSON.parse(rawStr); } catch { current=null; } }
+ 
+   if (isPlainObject(current) && Array.isArray(current.transactions)) {
+     // Interface language: a saved choice is used (and set first, so load notices appear in it). Data saved by an earlier
+@@ -383,16 +405,27 @@ function migrateAndLoad() {
+   }
+ 
+   // Something is stored under the current key but we cannot use it: keep a copy before anything overwrites it.
+-  if (rawStr) {
++  if (rawStr!==null) {
+     if (preserveRaw("corrupt", rawStr)) noteLoad(t("load.corruptKept"));
+     else { SAVE_BLOCKED=true; noteLoad(t("load.corruptBlocked")); }
+   }
+ 
+-  // Legacy key migration
+-  let merged=[], bestSettings=null;
++  // Legacy key migration. Older keys are only read, never modified or removed.
++  let merged=[], bestSettings=null, legacyFound=false;
+   const seenIds=new Set();   // de-duplicate on the ORIGINAL id, before normalisation may replace it
+   for (const k of KEYS_LEGACY) {
+-    const d=readRaw(k); if (!isPlainObject(d)) continue;
++    const r=readKey(k);
++    // A refused read could hide that version's data behind the new key written on the next save: pause saving instead.
++    if (r.failed) { SAVE_BLOCKED=true; SAVE_BLOCKED_READ=true; noteLoad(t("load.legacyReadFailed")); legacyFound=true; continue; }
++    if (r.value===null) continue;
++    let d=null; try { d=JSON.parse(r.value); } catch { d=null; }
++    if (!isPlainObject(d)) {
++      // Unparseable older data stays in its key, but the new key would hide it from then on: keep a recovery copy first.
++      legacyFound=true;
++      if (preserveRaw(`legacy_${k}_corrupt`, r.value)) noteLoad(t("load.legacyCorruptKept"));
++      else { SAVE_BLOCKED=true; noteLoad(t("load.corruptBlocked")); }
++      continue;
++    }
+     const list=Array.isArray(d.transactions)?d.transactions:Array.isArray(d.entries)?d.entries:[];
+     const bad=[];
+     list.forEach(t=>{
+@@ -410,7 +443,7 @@ function migrateAndLoad() {
+   merged.sort((a,b)=>b.date.localeCompare(a.date));
+   // Anything found (unreadable current data or older versions' data) means an existing user → English, no chooser.
+   // Nothing at all means a genuinely fresh install → language null → the first-launch chooser is shown.
+-  const existingUser=!!rawStr || merged.length>0 || !!bestSettings;
++  const existingUser=rawStr!==null || merged.length>0 || !!bestSettings || legacyFound;
+   return { ...buildState(merged, bestSettings), language: existingUser ? "en" : null };
+ }
+ 
+@@ -543,7 +576,14 @@ function planImport(raw, filename="") {
+   const unknownCat=list.filter(t=>checkRawTxn(t)===null).filter(t=>{ const c=txt(t.category||t.catId||t.cat).trim(); return c && resolveCategory(c)==="other" && !/^(other|miscellaneous)$/i.test(c); }).length;
+   if (unknownCat) warnings.push(tn("import.unknownCat",unknownCat));
+   if (rekeyed) warnings.push(tn("import.rekeyed",rekeyed));
+-  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings };
++  // Rows identical to another row of the same file are all imported (two coffees at the same price on the same day are real),
++  // but the user is told, since a file exported twice into one can look the same (Run 6, D10: policy — tell, never auto-remove).
++  const seenFp=new Set(); let sameFile=0;
++  good.forEach(t=>{ const f=txnFingerprint(t); if (seenFp.has(f)) sameFile++; else seenFp.add(f); });
++  if (sameFile) warnings.push(tn("import.sameFileDup",sameFile));
++  // A file with no usable transactions (settings only, an empty list, or only refused rows) may update settings, but it can
++  // never replace the ledger: Replace would otherwise delete every transaction on the device.
++  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings };
+ }
+ 
+ function txnFingerprint(t) { return [t.date,t.type,Number(t.amount).toFixed(2),t.category,norm(t.merchant),norm(t.note),norm(t.subcategory)].join("|"); }
+@@ -557,7 +597,8 @@ function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
+   const sortDesc=(l)=>[...l].sort((a,b)=>b.date.localeCompare(a.date));
+   const S=plan.settings||{};
+   if (mode==="replace") {
+-    const next={ ...state, transactions:sortDesc(plan.transactions) };
++    // Defence in depth (the sheet does not offer Replace then): zero usable rows never empties the ledger.
++    const next={ ...state, transactions:plan.transactions.length ? sortDesc(plan.transactions) : state.transactions };
+     ["budgets","templates","currency","goals","safeToSpend"].forEach(k=>{ if (S[k]!==undefined) next[k]=S[k]; });
+     return next;
+   }
+@@ -767,11 +808,23 @@ function happenedIn(mon, now=new Date()) {
+   return (t)=>t.date.startsWith(mon) && (p.state==="past" || (p.state==="current" && t.date<=todayStr));
+ }
+ 
++// How month `mon` is compared with the month before it (Run 7, V9): while `mon` is under way, with the SAME DAYS of the
++// previous month (1–27 Oct vs 1–27 Sep — all of a shorter month when today's day is past its end); a finished month with
++// the whole previous month; a future month not at all. Returns the filter for the previous month's entries.
++function comparisonWindow(mon, prv, now=new Date()) {
++  const p=monthProgress(mon,now), donePrv=happenedIn(prv,now);
++  if (p.state==="future") return { kind:null, days:0, inPrev:()=>false };
++  if (p.state==="current") return { kind:"same", days:p.daysPassed, inPrev:t=>donePrv(t) && Number(t.date.slice(8,10))<=p.daysPassed };
++  return { kind:"full", days:0, inPrev:donePrv };
++}
++
+ // cur* = happened (to date), planned* = dated later in the month, total* = the whole month (Safe to Spend uses totalExp:
+-// an expense entered ahead of time is money already committed).
++// an expense entered ahead of time is money already committed). prev* = the previous month over the comparison window
++// (see comparisonWindow); prevFullExp = the whole previous month, for display.
+ function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
+   const isExp=t=>t.type==="expense", isInc=t=>t.type==="income", inMon=t=>t.date.startsWith(mon);
+-  const done=happenedIn(mon,now), donePrv=happenedIn(prv,now), sum=l=>l.reduce((s,t)=>s+t.amount,0);
++  const cw=comparisonWindow(mon,prv,now);
++  const done=happenedIn(mon,now), donePrv=cw.inPrev, sum=l=>l.reduce((s,t)=>s+t.amount,0);
+   const curExp =sum(transactions.filter(t=>isExp(t)&&done(t)));
+   const curInc =sum(transactions.filter(t=>isInc(t)&&done(t)));
+   const plannedExp=sum(transactions.filter(t=>isExp(t)&&inMon(t)&&!done(t)));
+@@ -779,10 +832,11 @@ function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Dat
+   const totalExp=sum(transactions.filter(t=>isExp(t)&&inMon(t))), totalInc=sum(transactions.filter(t=>isInc(t)&&inMon(t)));
+   const prevExp=sum(transactions.filter(t=>isExp(t)&&donePrv(t)));
+   const prevInc=sum(transactions.filter(t=>isInc(t)&&donePrv(t)));
+-  const momDiff=prevExp>0?curExp-prevExp:null;
++  const prevFullExp=sum(transactions.filter(t=>isExp(t)&&happenedIn(prv,now)(t)));
++  const momDiff=cw.kind&&prevExp>0?curExp-prevExp:null;
+   // Negative when expenses exceed income — don't clamp, show the deficit
+   const surplusRate=curInc>0?Math.round(((curInc-curExp)/curInc)*100):null;
+-  return { curExp,curInc,plannedExp,plannedInc,totalExp,totalInc,prevExp,prevInc,momDiff,surplusRate };
++  return { curExp,curInc,plannedExp,plannedInc,totalExp,totalInc,prevExp,prevInc,prevFullExp,momDiff,surplusRate,cmpKind:cw.kind,cmpDays:cw.days };
+ }
+ 
+ function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
+@@ -871,10 +925,11 @@ function calcWeekdayWeekend(transactions, mon=curMon(), now=new Date()) {
+ 
+ // S3: What Changed — category + merchant-level explanation + recurring/one-off flag
+ function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
++  // The previous month is taken over the same comparison window as the totals (Run 7, V9).
++  const donePrv=comparisonWindow(mon,prv,now).inPrev, doneMon=happenedIn(mon,now);
+   const catSpendMon=calcCategorySpend(transactions,mon,now);
+-  const catSpendPrv=calcCategorySpend(transactions,prv,now);
+-  const { curExp,prevExp,curInc,prevInc }=calcMonthSummary(transactions,mon,prv,now);
+-  const doneMon=happenedIn(mon,now), donePrv=happenedIn(prv,now);
++  const catSpendPrv={}; transactions.filter(t=>t.type==="expense"&&donePrv(t)).forEach(t=>{ catSpendPrv[t.category]=(catSpendPrv[t.category]||0)+t.amount; });
++  const { curExp,prevExp,curInc,prevInc,cmpKind,cmpDays }=calcMonthSummary(transactions,mon,prv,now);
+ 
+   // Build a set of merchant names that have any recurring transaction
+   const recurringMerchants=new Set(
+@@ -909,17 +964,19 @@ function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=new Date
+     isRecurring: recurringMerchants.has(m.toLowerCase()),
+   })).filter(c=>Math.abs(c.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,5);
+ 
+-  return { curExp,prevExp,curInc,prevInc,catChanges,merchantChanges,totalDiff:curExp-prevExp };
++  return { curExp,prevExp,curInc,prevInc,catChanges,merchantChanges,totalDiff:curExp-prevExp,cmpKind,cmpDays };
+ }
+ 
+ // S4: Safe to Spend — distinguishes available, future commitments, savings
+ // ─── Recurring model: a SCHEDULE (the repeating commitment) vs its OCCURRENCES (individual dated payments) ───
+ // Transactions flagged "recurring" are grouped into schedules by what they are — type, category, merchant (or note) and
+ // frequency — so recording the same rent three months running is ONE schedule with three occurrences, not three commitments.
+-// Unnamed entries also split by amount so two different unnamed bills never merge.
++// The subcategory is part of what a bill is, so electricity and water from the same utility stay two schedules (Run 6, D1);
++// the amount is not (a price change keeps one schedule). Unnamed entries also split by amount so two different unnamed bills
++// never merge. The key is computed on the fly and never stored.
+ function scheduleKey(t) {
+   const who=norm(t.merchant)||norm(t.note);
+-  const tail=who ? "" : `${norm(t.subcategory)}|${Number(t.amount).toFixed(2)}`;
++  const tail=who ? norm(t.subcategory) : `${norm(t.subcategory)}|${Number(t.amount).toFixed(2)}`;
+   return [t.type,t.category,who,t.recurFreq,tail].join("|");
+ }
+ function buildSchedules(transactions) {
+@@ -934,11 +991,24 @@ function buildSchedules(transactions) {
+ }
+ const scheduleMonthly = (s) => toMonthlyAmountHelper({ amount:s.amount, recurFreq:s.freq });   // an ESTIMATE of a typical month
+ 
+-// Dates a schedule is expected to fall on inside month `mon`, projected from its latest occurrence (month-end safe).
++// The day of the month a monthly/yearly schedule is due on. It is the latest payment's day — except when that payment fell
++// on the last day of a short month (28 Feb, 30 Apr), which is only where a later due day was clamped to: then the run of
++// month-end payments before it shows the intended day (31 Jan, 28 Feb → 31; 29 Feb 2024, 28 Feb 2025 → 29). A payment on
++// a day that is not its month's last day (28 Mar) is a deliberate change and becomes the new due day.
++function scheduleDueDay(s) {
++  const ds=s.occurrences.map(parseLocalDate), isMonthEnd=(d)=>d.getDate()===new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
++  let day=ds[ds.length-1].getDate();
++  for (let i=ds.length-1; i>=0 && isMonthEnd(ds[i]); i--) day=Math.max(day, ds[i].getDate());
++  return day;
++}
++
++// Dates a schedule is expected to fall on inside month `mon`, projected from its latest occurrence on its due day
++// (clamped to the month's length: due on the 31st → 30 Apr, 28/29 Feb).
+ function scheduleOccurrences(s, mon) {
+   const [y,mo]=mon.split("-").map(Number);
+   const first=new Date(y,mo-1,1), last=new Date(y,mo,0);
+   const anchor=parseLocalDate(s.occurrences[s.occurrences.length-1]), start=parseLocalDate(s.occurrences[0]);
++  const dueDay=Math.min(scheduleDueDay(s), last.getDate());
+   if (mon<localMonthStr(start)) return [];                       // the commitment did not exist yet
+   const out=[];
+   if (s.freq==="weekly" || s.freq==="biweekly") {
+@@ -948,8 +1018,8 @@ function scheduleOccurrences(s, mon) {
+       if (d>last) break;
+       if (d>=first && d>=start) out.push(d);
+     }
+-  } else if (s.freq==="monthly") out.push(addMonths(anchor,(y-anchor.getFullYear())*12+(mo-1-anchor.getMonth())));
+-  else if (s.freq==="yearly" && anchor.getMonth()===mo-1) out.push(new Date(y,mo-1,Math.min(anchor.getDate(),last.getDate())));
++  } else if (s.freq==="monthly") out.push(new Date(y,mo-1,dueDay));
++  else if (s.freq==="yearly" && anchor.getMonth()===mo-1) out.push(new Date(y,mo-1,dueDay));
+   return out;
+ }
+ 
+@@ -993,7 +1063,8 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
+   const { savingsTarget=0 }=safeConfig||{};
+   const mon=localMonthStr(now), todayStr=localDateStr(now);
+   // Every expense recorded for this month, including ones dated later: money entered ahead of time is already committed.
+-  const { totalExp:curExp }=calcMonthSummary(transactions,mon,prevMon(),now);
++  // laterExp is the part of it dated after today, shown on the card so it is not mistaken for money already spent.
++  const { totalExp:curExp, plannedExp:laterExp }=calcMonthSummary(transactions,mon,prevMon(),now);
+   const monthInc=transactions.filter(t=>t.type==="income"&&t.date.startsWith(mon));
+   const curInc=monthInc.filter(t=>t.date<=todayStr).reduce((s,t)=>s+t.amount,0);
+   const expectedInc=monthInc.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
+@@ -1020,7 +1091,7 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
+   const dailyAllowance=p.daysRemaining>0 ? remaining/p.daysRemaining : 0;
+ 
+   return {
+-    curInc, expectedInc, curExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
++    curInc, expectedInc, curExp, laterExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
+     futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount,
+     scheduleCount:schedules.length, recurringMonthly,
+     disposable, remaining, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAllowance,
+@@ -1192,9 +1263,11 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
+ function fmt(n, sym="₼") {
+   return `${Math.abs(n||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})} ${sym}`;
+ }
++// The three small Home tiles. Exact below 10,000 (1,050.00 used to show as "1.1k", which reads as 1,100 — Run 7, V4);
++// above that the short form is marked "≈" so it is never taken for an exact figure.
+ function fmtShort(n, sym="₼") {
+   const a=Math.abs(n||0);
+-  return a>=1e6?`${(a/1e6).toFixed(1)}M ${sym}`:a>=1000?`${(a/1000).toFixed(1)}k ${sym}`:`${a.toFixed(2)} ${sym}`;
++  return a>=1e6?`≈${(a/1e6).toFixed(1)}M ${sym}`:a>=10000?`≈${(a/1000).toFixed(1)}k ${sym}`:fmt(a,sym);
+ }
+ // Dates and month names follow the interface language. They are built from the catalog (mon.* / monShort.* / monGen.*)
+ // rather than toLocaleDateString, because Chrome ships without Azerbaijani date data and would show "2026 M10".
+@@ -1841,7 +1914,7 @@ export default function App() {
+   // open, on form fields, on rows that scroll sideways (e.g. the filter chips), and from the screen edges (the system's own
+   // back gesture lives there).
+   useEffect(()=>{
+-    const ORDER=["home","ledger","monthly","analytics","recurring"];
++    const ORDER=["home","ledger","monthly","recurring"];
+     let s=null;
+     const scrollsSideways=(el)=>{ for (;el && el!==document.body;el=el.parentElement) { const ox=getComputedStyle(el).overflowX; if ((ox==="auto"||ox==="scroll") && el.scrollWidth>el.clientWidth+1) return true; } return false; };
+     const onStart=(e)=>{
+@@ -1935,9 +2008,13 @@ export default function App() {
+     reader.readAsText(file);
+   },[]);
+ 
++  // mode: "merge" · "replace" · "settings" (a file with no usable transactions: apply its settings, keep every transaction).
+   const commitImport=useCallback((mode)=>{
+     const plan=importPending;
+     if (!plan || plan.error) return;
++    if (mode==="replace" && !plan.canReplace) return;
++    const settingsOnly=mode==="settings";
++    if (settingsOnly) mode="replace";      // applyImport's replace keeps the transactions when the file has none
+     const before=stateRef.current;
+     if (mode==="replace") {
+       // Never overwrite without a recoverable copy of what is being replaced.
+@@ -1948,7 +2025,7 @@ export default function App() {
+     setState(next);
+     setImportPending(null);
+     const delta=next.transactions.length-before.transactions.length;
+-    showSnackbar(mode==="replace" ? tn("import.replaced",plan.transactions.length) : tn("import.added",delta), ()=>{
++    showSnackbar(settingsOnly ? t("import.settingsApplied") : mode==="replace" ? tn("import.replaced",plan.transactions.length) : tn("import.added",delta), ()=>{
+       // Undo only if nothing has changed since; otherwise it would erase newer work.
+       if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; }
+       setState(before);
+@@ -1983,7 +2060,7 @@ export default function App() {
+         )}
+         {storageFailed&&(
+           <div className="backup-banner" role="alert" style={{background:"var(--neg-bg)",borderBottomColor:"var(--neg)",color:"var(--neg)"}}>
+-            <span>{SAVE_BLOCKED?t("banner.savePaused"):t("banner.saveFailed")}</span>
++            <span>{SAVE_BLOCKED?t(SAVE_BLOCKED_READ?"banner.readPaused":"banner.savePaused"):t("banner.saveFailed")}</span>
+             <button className="backup-banner-btn" style={{background:"var(--neg)"}} onClick={exportJSON}>{t("banner.backUp")}</button>
+           </div>
+         )}
+@@ -2013,14 +2090,14 @@ export default function App() {
+         <main className="page" key={tabKey}>
+           {tab==="home"      && <HomePage transactions={transactions} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)}/>}
+           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
+-          {tab==="analytics" && <AnalyticsPage transactions={transactions} currency={currency} budgets={budgets}/>}
+           {tab==="monthly"   && <MonthlyView transactions={transactions} currency={currency} budgets={budgets} onView={txn=>setViewTxn(txn)}/>}
+-          {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}/>}
++          {tab==="recurring" && <RecurringHub transactions={transactions} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
++            onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq })}/>}
+         </main>
+ 
+ 
+-        <nav className="tabbar" role="navigation" style={{"--tab-index":tab==="home"?0:tab==="ledger"?1:tab==="monthly"?2:tab==="analytics"?3:4,"--tab-count":5}}>
+-          {[{id:"home",icon:"home"},{id:"ledger",icon:"list"},{id:"monthly",icon:"calendar"},{id:"analytics",icon:"chart"},{id:"recurring",icon:"repeat"}].map(tb=>(
++        <nav className="tabbar" role="navigation" style={{"--tab-index":tab==="home"?0:tab==="ledger"?1:tab==="monthly"?2:3,"--tab-count":4}}>
++          {[{id:"home",icon:"home"},{id:"ledger",icon:"list"},{id:"monthly",icon:"chart"},{id:"recurring",icon:"repeat"}].map(tb=>(
+             <button key={tb.id} className={`tab-btn${tab===tb.id?" active":""}`} onClick={()=>switchTab(tb.id)} aria-label={t("nav."+tb.id)} aria-current={tab===tb.id?"page":undefined}>
+               <Icon name={tb.icon} size={18}/><span className="tab-lbl">{t("nav."+tb.id)}</span>
+             </button>
+@@ -2066,7 +2143,9 @@ export default function App() {
+                   </div>
+                   <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
+                     <strong>{t("import.mergeLabel")}</strong> {t("import.mergeText")}<br/>
+-                    <strong>{t("import.replaceLabel")}</strong> {t("import.replaceText")}
++                    {importPending.canReplace
++                      ? <><strong>{t("import.replaceLabel")}</strong> {t("import.replaceText")}</>
++                      : <><strong>{t("import.settingsOnlyLabel")}</strong> {t("import.settingsOnlyText")}</>}
+                   </div>
+                   {importPending.dupCount>0&&(
+                     <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12,color:"var(--ink-2)",marginBottom:14,lineHeight:1.45}}>
+@@ -2075,7 +2154,9 @@ export default function App() {
+                     </label>
+                   )}
+                   <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>commitImport("merge")}>{t("import.mergeBtn")}</button>
+-                  <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>{t("import.replaceBtn")}</button>
++                  {importPending.canReplace
++                    ? <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>{t("import.replaceBtn")}</button>
++                    : <button className="btn btn-ghost btn-full import-settings-only" style={{marginTop:8}} onClick={()=>commitImport("settings")}>{t("import.settingsOnlyBtn")}</button>}
+                   <button className="btn btn-ghost btn-full" onClick={()=>setImportPending(null)}>{t("common.cancel")}</button>
+                 </>
+               )}
+@@ -2145,9 +2226,18 @@ function PlannedNote({ plannedExp, plannedInc, currency, style }) {
+   );
+ }
+ 
++// Comparison sentences (Run 7, V1/V9). They name the window ("the same days last month" / "the previous month") instead of
++// slotting a short month name into a sentence, which read as a word in Azerbaijani ("sen ilə müqayisədə").
++function cmpText(diff, kind, currency) {
++  const key=diff<=0 ? (kind==="same"?"cmp.lessSame":"cmp.lessFull") : (kind==="same"?"cmp.moreSame":"cmp.moreFull");
++  return t(key,{ amount:fmt(Math.abs(diff),currency) });
++}
++const cmpTitle = (kind) => t(kind==="same" ? "cmp.titleSame" : "cmp.titleFull");
++const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevSame" : "cmp.prevFull", { amount:fmt(amount,currency) });
++
+ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goals, onAdd, onTemplate, onView }) {
+   const now=curMon(), prv=prevMon();
+-  const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc }=calcMonthSummary(transactions,now,prv);
++  const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
+   const catSpend    =calcCategorySpend(transactions,now);
+   const budgetTotal =Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
+   const spentToDate =calcSpentToDate(transactions,now);
+@@ -2178,7 +2268,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
+           {momDiff!==null&&(
+             <span className={`mom-badge ${momDiff<=0?"better":"worse"}`}>
+               <Icon name={momDiff<=0?"arrowDown":"arrowUp"} size={10}/>
+-              {t(momDiff<=0?"home.momLess":"home.momMore",{ amount:fmt(Math.abs(momDiff),currency), month:monthShort(prv) })}
++              {cmpText(momDiff,cmpKind,currency)}
+             </span>
+           )}
+         </div>
+@@ -2195,7 +2285,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
+             {hasIncome?(
+               <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":(surplusRate||0)<0?" neg":""}`}>{surplusRate??0}%</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curInc,curExp))}</div></>
+             ):(
+-              <><div className={`hero-stat-val${curInc>curExp?" pos":curInc<curExp?" neg":""}`}>{fmtShort(Math.abs(curInc-curExp),currency)}</div><div className="hero-stat-lbl">{t("home.balance")}</div></>
++              <><div className={`hero-stat-val${curInc>curExp?" pos":curInc<curExp?" neg":""}`}>{curInc<curExp?"−":""}{fmtShort(Math.abs(curInc-curExp),currency)}</div><div className="hero-stat-lbl">{t("home.balance")}</div></>
+             )}
+           </div>
+         </div>
+@@ -2250,6 +2340,13 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
+               <span className="safe-lbl">{t("safe.recordedSpend")}</span>
+               <span className="safe-val" style={{color:"var(--neg)"}}>−{fmt(safeInfo.curExp,currency)}</span>
+             </div>
++            {/* Part of the row above, not a further deduction: expenses entered for later this month are set aside, not spent. */}
++            {safeInfo.laterExp>0&&(
++              <div className="safe-row">
++                <span className="safe-lbl">{t("safe.laterExpenses")}</span>
++                <span className="safe-val" style={{color:"var(--ink-4)"}}>{fmt(safeInfo.laterExp,currency)}</span>
++              </div>
++            )}
+             {/* De-emphasised by colour (still ≥ 4.5:1), not by opacity: at 40% opacity this row was 1.8:1 and hard to read. */}
+             <div className="safe-row">
+               <span className="safe-lbl" style={safeInfo.futureCommitments>0?undefined:{color:"var(--ink-4)"}}>{t("safe.upcoming")}</span>
+@@ -2367,7 +2464,7 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
+       {/* LEVEL 6: What changed — compact signal */}
+       {wc.catChanges.length>0&&prevExp>0&&(
+         <div className="section-enter section-enter-6" style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+-          <div className="label-sm" style={{marginBottom:10}}>{t("wc.title",{month:monthShort(prv)})}</div>
++          <div className="label-sm" style={{marginBottom:10}}>{cmpTitle(wc.cmpKind)}</div>
+           {wc.catChanges.slice(0,3).map(({catId,diff,merchantDiffs})=>{
+             const cat=CAT(catId);
+             // Show top merchant driver if available
+@@ -2617,365 +2714,8 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
+   );
+ }
+ 
+-// ─── Analytics Page ───────────────────────────────────────────────────────────
+-function AnalyticsPage({ transactions, currency, budgets }) {
+-  const now=curMon(),prv=prevMon();
+-  const {curExp,curInc,prevExp,momDiff,plannedExp,plannedInc}=calcMonthSummary(transactions,now,prv);
+-  const catSpend   =calcCategorySpend(transactions,now);
+-  const budgetTotal=Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
+-  const paceInfo   =calcSpendingPace(calcSpentToDate(transactions,now),now,budgetTotal);
+-  const txnStats   =calcTxnStats(transactions,now);
+-  const perDay     =calcWeekdayWeekend(transactions,now);
+-  const budgetItems=calcBudgetStatus(budgets||{},catSpend,now);
+-  const wc         =calcWhatChanged(transactions,now,prv);
+-  const lc=locale();
+-  const patternsData=useMemo(()=>calcPatterns(transactions,currency),[transactions,currency,lc]);   // insight text follows the language
+-  const patterns    =patternsData.insights;
+-  const anomalies   =patternsData.anomalies;
+-  const dayOfWeek   =patternsData.dayOfWeek;
+-  const correlations=patternsData.correlations;
+-  const expenses   =transactions.filter(t=>t.type==="expense");
+-  const [activeBar,  setActiveBar]  = useState(null);
+-  const [activeCell, setActiveCell] = useState(null);
+-  // Weekday names from the catalog (i = 0 is Monday); the browser's own data lacks Azerbaijani.
+-  const WEEKDAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+-  const wdName=(i,style)=>t(style==="long"?"dow."+WEEKDAYS[i]:style==="short"?"wdShort."+WEEKDAYS[i]:"wdNarrow."+WEEKDAYS[i]);
+-
+-  const catData=Object.entries(catSpend).map(([id,amt])=>({...CAT(id)||{id,name:id,color:"#8A8A8A"},amt})).sort((a,b)=>b.amt-a.amt);
+-  const maxCat=catData[0]?.amt||1;
+-  const topExpenses=expenses.filter(happenedIn(now)).sort((a,b)=>b.amount-a.amount).slice(0,5);   // spent so far, not entries dated later
+-  const months6=Array.from({length:6},(_,i)=>nMon(5-i));
+-  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce((s,t)=>s+t.amount,0),isCur:m===now,ym:m}));
+-  const maxMonth=Math.max(...monthlyData.map(m=>m.exp),1);
+-  const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
+-  const daysInMon=daysInMonth(now);
+-
+-  const DAY_LBLS=WEEKDAYS.map((_,i)=>wdName(i,"narrow"));
+-  const heatRows=[];
+-  const now_=new Date(),dow=now_.getDay(),toLastMon=dow===0?6:dow-1;
+-  const lastMon=new Date(now_); lastMon.setDate(now_.getDate()-toLastMon);
+-  for(let w=7;w>=0;w--) {
+-    const row=[];
+-    for(let d=0;d<7;d++){
+-      const dt=new Date(lastMon); dt.setDate(lastMon.getDate()-(w*7)+d);
+-      const ds=localDateStr(dt);
+-      const amt=expenses.filter(t=>t.date===ds).reduce((s,t)=>s+t.amount,0);
+-      const cats=expenses.filter(x=>x.date===ds).map(x=>catName(x.category)).filter((v,i,a)=>a.indexOf(v)===i).join(", ");
+-      row.push({date:ds,amt,cats,isToday:ds===today()});
+-    }
+-    heatRows.push(row);
+-  }
+-  const maxHeat=Math.max(...heatRows.flat().map(c=>c.amt),1);
+-
+-  if (expenses.length===0) return (
+-    <div className="empty">
+-      <div className="empty-icon"><Icon name="chart" size={30}/></div>
+-      <div className="empty-title">{t("an.emptyTitle")}</div>
+-      <div className="empty-body">{t("an.emptyBody")}</div>
+-    </div>
+-  );
+-
+-  return (
+-    <div onClick={()=>{setActiveBar(null);setActiveCell(null);}}>
+-      <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,margin:"0 0 18px"}}>{t("nav.analytics")}</h1>
+-
+-      {/* Monthly summary */}
+-      <div className="a-card">
+-        <div className="a-card-title">{monthName(now)}</div>
+-        <div style={{fontFamily:"'Playfair Display',serif",fontSize:"clamp(28px,9.2vw,36px)",fontWeight:900,letterSpacing:-1.5,marginBottom:4}}>{fmt(curExp,currency)}</div>
+-        <div style={{fontSize:12,color:"var(--ink-3)",marginBottom:momDiff!==null?8:0}}>{t("an.totalSpent")}</div>
+-        <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginBottom:8}}/>
+-        {momDiff!==null&&(
+-          <div style={{display:"flex",alignItems:"center",gap:7,fontSize:12,flexWrap:"wrap"}}>
+-            <span className={`mom-badge ${momDiff<=0?"better":"worse"}`}>
+-              <Icon name={momDiff<=0?"arrowDown":"arrowUp"} size={10}/>
+-              {t(momDiff<=0?"home.momLess":"home.momMore",{ amount:fmt(Math.abs(momDiff),currency), month:monthShort(prv) })}
+-            </span>
+-            {prevExp>0&&<span style={{color:"var(--ink-3)"}}>({t("an.lastMonth",{amount:fmt(prevExp,currency)})})</span>}
+-          </div>
+-        )}
+-        {paceInfo.dailyAvg>0&&(
+-          <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid var(--rule)",display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:"4px 12px",fontSize:12}}>
+-            <span style={{color:"var(--ink-3)"}}>{t("an.dailyAvg")} <strong style={{fontFamily:"'Playfair Display',serif",color:"var(--ink)"}}>{fmt(paceInfo.dailyAvg,currency)}</strong></span>
+-            <span style={{color:"var(--ink-3)"}}>{t("an.projected")} <strong style={{fontFamily:"'Playfair Display',serif",color:paceInfo.projected>prevExp+20?"var(--neg)":"var(--ink)"}}>{fmt(paceInfo.projected,currency)}</strong></span>
+-          </div>
+-        )}
+-        {curInc>0&&<div style={{marginTop:6,fontSize:12,color:"var(--ink-3)"}}>{t("an.rate."+surplusLabel(curInc,curExp))} <strong style={{fontFamily:"'Playfair Display',serif",color:surplusColor(curInc,curExp)}}>{Math.round(((curInc-curExp)/curInc)*100)}%</strong></div>}
+-      </div>
+-
+-      {/* S3: What Changed — with merchant-level explanation */}
+-      {(wc.totalDiff!==0||wc.catChanges.length>0)&&prevExp>0&&(
+-        <div className="a-card">
+-          <div className="a-card-title">{t("wc.title",{month:monthShort(prv)})}</div>
+-          <div className="wc-row" style={{paddingTop:0}}>
+-            <span className="wc-name" style={{fontWeight:700}}>{t("an.totalSpending")}</span>
+-            <div style={{textAlign:"right"}}>
+-              <div className={`wc-diff ${wc.totalDiff<=0?"pos":"neg"}`}>{wc.totalDiff>0?"+":""}{fmt(wc.totalDiff,currency)}</div>
+-              <div style={{fontSize:10,color:"var(--ink-3)"}}>{t("an.vs",{a:fmt(wc.curExp,currency),b:fmt(wc.prevExp,currency)})}</div>
+-            </div>
+-          </div>
+-          {wc.catChanges.slice(0,5).map(({catId,cur,prev,diff,merchantDiffs})=>{
+-            const cat=CAT(catId);
+-            return (
+-              <div key={catId}>
+-                <div className="wc-row">
+-                  <div className="wc-name"><CatIcon catId={catId} size={13} color={cat?.color}/>{catName(catId)}</div>
+-                  <div style={{textAlign:"right"}}>
+-                    <div className={`wc-diff ${diff<=0?"pos":"neg"}`}>{diff>0?"+":""}{fmt(diff,currency)}</div>
+-                    <div style={{fontSize:10,color:"var(--ink-3)"}}>{t("an.vs",{a:fmt(cur,currency),b:fmt(prev,currency)})}</div>
+-                  </div>
+-                </div>
+-                {merchantDiffs.length>0&&(
+-                  <div className="wc-merchants">
+-                    {merchantDiffs.map(m=>(
+-                      <div key={m.merchant} className="wc-m-row">
+-                        <span style={{display:"flex",alignItems:"center",gap:4}}>
+-                          <Icon name="merchant" size={10} color="var(--ink-4)"/>
+-                          {m.merchant}
+-                          {/* Fix 3: recurring vs one-off label */}
+-                          <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,
+-                            background:m.isRecurring?"var(--warn-bg)":"var(--bg-inset)",
+-                            color:m.isRecurring?"var(--warn)":"var(--ink-4)"}}>
+-                            {m.isRecurring?t("wc.recurring"):t("wc.oneOff")}
+-                          </span>
+-                        </span>
+-                        <span style={{color:m.diff<=0?"var(--pos)":"var(--neg)",fontWeight:600}}>{m.diff>0?"+":""}{fmt(m.diff,currency)}</span>
+-                      </div>
+-                    ))}
+-                  </div>
+-                )}
+-              </div>
+-            );
+-          })}
+-        </div>
+-      )}
+-
+-      {/* Transaction stats */}
+-      {txnStats.count>0&&(
+-        <div className="stat-row">
+-          <div className="stat-cell"><div className="stat-val">{txnStats.count}</div><div className="stat-lbl">{t("an.transactions")}</div></div>
+-          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.avgTxn,currency)}</div><div className="stat-lbl">{t("an.avgPerTxn")}</div></div>
+-          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.medTxn,currency)}</div><div className="stat-lbl">{t("an.median")}</div></div>
+-          <div className="stat-cell" title={t("an.perDayTitle")}>
+-            <div className="stat-val">{perDay.heavier===null?"—":fmt(perDay.heavier==="weekday"?perDay.wdAvg:perDay.weAvg,currency)}</div>
+-            <div className="stat-lbl">{t(perDay.heavier===null?"an.perDay.null":"an.perDay."+perDay.heavier)}</div>
+-          </div>
+-        </div>
+-      )}
+-
+-      {/* S5: Financial patterns — insights */}
+-      {patterns.length>0&&(
+-        <div className="a-card">
+-          <div className="a-card-title">{t("an.patterns")}</div>
+-          {patterns.map(p=>(
+-            <div key={p.id} className="pattern-item">
+-              <Icon name="pattern" size={14} color="var(--ink-3)"/>
+-              <span>{p.text}</span>
+-            </div>
+-          ))}
+-        </div>
+-      )}
+-
+-      {/* S5: Day of week breakdown */}
+-      {Object.values(dayOfWeek).some(d=>d.count>0)&&(
+-        <div className="a-card">
+-          <div className="a-card-title">{t("an.byDay",{month:monthName(now)})}</div>
+-          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.byDaySub")}</div>
+-          {WEEKDAYS.map((day,di)=>{
+-            const d=dayOfWeek[day];
+-            if (!d||d.count===0) return null;
+-            // the typical (median) transaction, as in the insight: one unusual purchase must not make a day's bar tower over the rest
+-            const maxMed=Math.max(...Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.median),1);
+-            return (
+-              <div key={day} className="dow-row" style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+-                <div style={{minWidth:28,fontSize:11,color:"var(--ink-3)",fontWeight:600,flexShrink:0}} title={wdName(di,"long")}>{wdName(di,"short")}</div>
+-                <div style={{flex:1,height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden"}}>
+-                  <div style={{height:"100%",width:`${(d.median/maxMed)*100}%`,background:"var(--accent)",borderRadius:99}}/>
+-                </div>
+-                <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"'Playfair Display',serif",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.median,currency)}</div>
+-                <div style={{width:24,textAlign:"right",fontSize:10,color:"var(--ink-4)",flexShrink:0}}>{d.count}×</div>
+-              </div>
+-            );
+-          })}
+-        </div>
+-      )}
+-
+-      {/* S5: Anomalies */}
+-      {anomalies.length>0&&(
+-        <div className="a-card">
+-          <div className="a-card-title">{t("an.unusual")}</div>
+-          {anomalies.slice(0,5).map((a,i)=>{
+-            const cat=CAT(a.category)||{color:"#8A8A8A"};
+-            return (
+-              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<Math.min(anomalies.length,5)-1?"1px solid var(--rule)":"none"}}>
+-                <div style={{width:30,height:30,borderRadius:7,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+-                  <CatIcon catId={a.category} size={14} color={cat.color}/>
+-                </div>
+-                <div style={{flex:1,minWidth:0}}>
+-                  <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{a.merchant||catName(a.category)}</div>
+-                  <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(a.date)} · {a.reason}</div>
+-                </div>
+-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:"var(--neg)",flexShrink:0}}>−{fmt(a.amount,currency)}</div>
+-              </div>
+-            );
+-          })}
+-        </div>
+-      )}
+-
+-      {/* S5: Same-day category patterns */}
+-      {correlations.length>0&&(
+-        <div className="a-card">
+-          <div className="a-card-title">{t("an.together")}</div>
+-          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.togetherSub")}</div>
+-          {correlations.map((c,i)=>(
+-            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"8px 0",borderBottom:i<correlations.length-1?"1px solid var(--rule)":"none"}}>
+-              <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:6,fontSize:12,fontWeight:600,color:"var(--ink)",minWidth:0}}>
+-                <CatIcon catId={c.category1} size={13}/>
+-                {catName(c.category1)}
+-                <span style={{color:"var(--ink-4)",fontWeight:400}}>+</span>
+-                <CatIcon catId={c.category2} size={13}/>
+-                {catName(c.category2)}
+-              </div>
+-              <div style={{fontSize:11,color:"var(--ink-3)",flexShrink:0}}>{t("an.ofDays",{pct:Math.round(c.correlation*100)})}</div>
+-            </div>
+-          ))}
+-        </div>
+-      )}
+-
+-      {/* Budget insights */}
+-      {budgetItems.length>0&&(
+-        <div className="a-card">
+-          <div className="a-card-title">{t("an.budgetStatus",{month:monthName(now)})}</div>
+-          {budgetItems.map(({catId,limit,spent,pct,over,warn,aheadOfPace,daysLeft})=>{
+-            const cat=CAT(catId);
+-            return (
+-              <div key={catId} style={{marginBottom:13,paddingBottom:13,borderBottom:"1px solid var(--rule)"}}>
+-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
+-                  <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6,minWidth:0}}><CatIcon catId={catId} size={13}/>{catName(catId)}</div>
+-                  <div style={{fontSize:11,color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:600,flexShrink:0}}>{t("an.pctUsed",{pct:Math.round(pct)})}</div>
+-                </div>
+-                <div style={{height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden",marginBottom:4}}>
+-                  <div style={{height:"100%",width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)"),borderRadius:99}}/>
+-                </div>
+-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
+-                  <span style={{color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:over||warn?600:400}}>
+-                    {over?t("budgets.over",{amount:fmt(spent-limit,currency)}):t("budgets.remaining",{amount:fmt(limit-spent,currency)})}
+-                  </span>
+-                  <span style={{color:"var(--ink-4)",flexShrink:0}}>{over?t("an.exceeded"):t("an.daysLeft",{n:daysLeft})}</span>
+-                </div>
+-                {aheadOfPace&&!over&&<div style={{fontSize:10,color:"var(--warn)",fontWeight:600,marginTop:2}}>{t("an.aheadOfPace")}</div>}
+-              </div>
+-            );
+-          })}
+-        </div>
+-      )}
+-
+-      {/* Category breakdown */}
+-      {catData.length>0&&(
+-        <div className="a-card">
+-          <div className="a-card-title">{t("an.byCategory")}</div>
+-          {catData.map((cat,i)=>(
+-            <div key={i} className="cat-bar">
+-              <div className="cat-bar-name"><CatIcon catId={cat.id} size={13} color={cat.color}/>{catName(cat.id)}</div>
+-              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(cat.amt/maxCat)*100}%`,background:cat.color}}/></div>
+-              <div className="cat-bar-amt">{fmt(cat.amt,currency)}</div>
+-              <div className="cat-bar-pct">{Math.round((cat.amt/curExp)*100)}%</div>
+-            </div>
+-          ))}
+-        </div>
+-      )}
+-
+-      {/* Top expenses */}
+-      {topExpenses.length>0&&(
+-        <div className="a-card">
+-          <div className="a-card-title">{t("an.topExpenses")}</div>
+-          {topExpenses.map((x,i)=>{
+-            const cat=CAT(x.category)||{color:"#8A8A8A"};
+-            return (
+-              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<topExpenses.length-1?"1px solid var(--rule)":"none"}}>
+-                <div style={{width:32,height:32,borderRadius:7,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+-                  <CatIcon catId={x.category} size={15} color={cat.color}/>
+-                </div>
+-                <div style={{flex:1,minWidth:0}}>
+-                  <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.merchant||x.note||catName(x.category)}</div>
+-                  <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(x.date)} · {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""}</div>
+-                </div>
+-                <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:600,flexShrink:0}}>−{fmt(x.amount,currency)}</div>
+-              </div>
+-            );
+-          })}
+-        </div>
+-      )}
+-
+-      {/* 6-month chart — tap interaction */}
+-      <div className="a-card">
+-        <div className="a-card-title">{t("an.sixMonth")}</div>
+-        {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>{t("an.sixMonthAvg")} <strong style={{fontFamily:"'Playfair Display',serif",color:"var(--ink)"}}>{fmt(monthAvg,currency)}</strong></div>}
+-        {activeBar!==null&&monthlyData[activeBar]&&(
+-          <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between"}}>
+-            <span>{monthName(monthlyData[activeBar].ym)}</span>
+-            <span style={{fontFamily:"'Playfair Display',serif",fontSize:14}}>{fmt(monthlyData[activeBar].exp,currency)}</span>
+-          </div>
+-        )}
+-        <div className="month-bars">
+-          {monthlyData.map((m,i)=>(
+-            <div key={i} className="m-col" onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);setActiveCell(null);}}>
+-              <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
+-                <div className="m-bar" style={{height:m.exp>0?`${Math.max(5,(m.exp/maxMonth)*100)}%`:"3px",background:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",width:"100%",outline:activeBar===i?"2px solid var(--accent)":"none",outlineOffset:"1px"}}/>
+-              </div>
+-              <div className="m-lbl" style={{color:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",fontWeight:m.isCur||activeBar===i?700:600}}>{m.label}</div>
+-            </div>
+-          ))}
+-        </div>
+-      </div>
+-
+-      {/* Heatmap — tap interaction */}
+-      <div className="a-card">
+-        <div className="a-card-title">{t("an.weekly")}</div>
+-        {activeCell!==null&&(()=>{
+-          const cell=heatRows[activeCell.wi]?.[activeCell.di];
+-          if(!cell) return null;
+-          return (
+-            <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10}}>
+-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:cell.cats?3:0}}>
+-                <span>{fmtDate(cell.date)}</span>
+-                <span style={{fontFamily:"'Playfair Display',serif",fontSize:14}}>{cell.amt>0?fmt(cell.amt,currency):t("an.noSpending")}</span>
+-              </div>
+-              {cell.cats&&<div style={{fontSize:10,color:"rgba(247,244,238,0.7)"}}>{cell.cats}</div>}
+-            </div>
+-          );
+-        })()}
+-        <div className="heatmap" onClick={e=>e.stopPropagation()}>
+-          <div className="hm-corner"/>
+-          {DAY_LBLS.map((d,i)=><div key={i} className="hm-day-hdr">{d}</div>)}
+-          {heatRows.map((row,wi)=>(
+-            <>
+-              <div key={`w${wi}`} className="hm-wk-lbl">{wi===7?<span style={{color:"var(--accent)",fontWeight:700,fontSize:7}}>{t("an.now")}</span>:""}</div>
+-              {row.map((cell,di)=>{
+-                const intensity=cell.amt>0?Math.max(0.1,(cell.amt/maxHeat)*0.9):0;
+-                const isActive=activeCell?.wi===wi&&activeCell?.di===di;
+-                return (
+-                  <div key={`${wi}-${di}`} className="hm-cell"
+-                    onClick={e=>{e.stopPropagation();setActiveCell(isActive?null:{wi,di});setActiveBar(null);}}
+-                    style={{background:cell.amt>0?`rgba(107,31,42,${intensity})`:"var(--bg-inset)",outline:isActive?"2px solid var(--ink)":cell.isToday?"1.5px solid var(--ink-3)":"none",outlineOffset:"1px"}}
+-                  />
+-                );
+-              })}
+-            </>
+-          ))}
+-        </div>
+-        <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,justifyContent:"flex-end"}}>
+-          <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
+-          {[0.1,0.3,0.6,0.9].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(107,31,42,${o})`}}/>)}
+-          <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
+-        </div>
+-      </div>
+-    </div>
+-  );
+-}
+-
+ // ─── Recurring Hub ────────────────────────────────────────────────────────────
+-function RecurringHub({ transactions, currency, onView, onToggleSchedule }) {
++function RecurringHub({ transactions, currency, onView, onToggleSchedule, onRecordPayment }) {
+   const schedules=useMemo(()=>{
+     const nowD=new Date();
+     return buildSchedules(transactions).map(x=>{
+@@ -3023,6 +2763,13 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule }) {
+         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
+           <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(x.amount,currency)}</div>
+           {x.freq!=="monthly"&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}}>{t("rec.perMonthApprox",{amount:fmt(x.monthly,currency)})}</div>}
++          {/* Run 6 (D20): a payment only settles a bill when it is recorded as that bill (same details, Recurring on).
++              This opens the Add form filled in exactly that way, dated today; the user can still change anything. */}
++          {x.isActive&&onRecordPayment&&(
++            <button className="rec-record" onClick={e=>{e.stopPropagation();onRecordPayment(x);}} style={{fontSize:11,fontWeight:700,color:"var(--ink)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}>
++              {t(isInc?"rec.recordIncome":"rec.recordPayment")}
++            </button>
++          )}
+           <button onClick={e=>{e.stopPropagation();onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"'DM Sans',sans-serif",textDecoration:"underline",textUnderlineOffset:2}}>
+             {x.isActive?t("rec.pause"):t("rec.reactivate")}
+           </button>
+@@ -3059,6 +2806,7 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule }) {
+       )}
+       {active.length>0&&(<>
+         <div className="label-sm" style={{marginBottom:8}}>{t("rec.active")}</div>
++        <div className="rec-hint" style={{fontSize:12,color:"var(--ink-3)",lineHeight:1.5,margin:"-2px 2px 10px"}}>{t("rec.recordHint")}</div>
+         <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>{active.map(x=><Row key={x.key} x={x}/>)}</div>
+       </>)}
+       {paused.length>0&&(<>
+@@ -3265,6 +3013,10 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
+           <div className="field" style={{marginBottom:0}}>
+             <label className="field-lbl" htmlFor="txn-date">{t("add.date")}</label>
+             <input id="txn-date" className="field-input" lang={locale()} type="date" value={date} onChange={e=>setDate(e.target.value)}/>
++            {/* Run 7, V3: the date box is the phone's own control and follows the phone's language, not the app's (Chrome on
++                Android ignores lang), so it can read 10/27/2026 in the Azerbaijani interface. The chosen date is repeated
++                here in the interface language. Display only: the stored value stays YYYY-MM-DD. */}
++            {isValidDateStr(date)&&<div className="date-readout" style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmtLongDate(parseLocalDate(date))}</div>}
+           </div>
+           <div className="field" style={{marginBottom:0}}>
+             <div className="field-lbl" id="txn-rec-lbl">{t("add.recurring")}</div>
+@@ -3512,7 +3264,7 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
+         {/* Overview */}
+         <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.overview")}</div>
+         <div style={{background:"var(--bg-warm)",borderRadius:7,padding:"10px 13px",marginBottom:4}}>
+-          {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("set.net"),fmt(Math.abs(totalInc-totalExp),currency),totalInc>=totalExp?"var(--pos)":"var(--neg)"],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
++          {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
+             <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",borderBottom:"1px solid var(--rule)"}}>
+               <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
+               <span style={{fontSize:13,fontWeight:700,color:col,fontFamily:"'Playfair Display',serif",whiteSpace:"nowrap"}}>{val}</span>
+@@ -3731,60 +3483,91 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
+ // ─────────────────────────────────────────────────────────────────────────────
+ // MONTHLY VIEW — browse any month, see full breakdown
+ // ─────────────────────────────────────────────────────────────────────────────
++// ─── Monthly (Run 7: Monthly and Analytics merged into one month-aware screen) ──────────────────────────────────────
++// One selected month drives every month figure on the page: summary and comparison, what changed, statistics, budgets,
++// categories, merchants, top expenses and the transaction list. The "Trends" section below them covers recent months up
++// to today and says so; it does not change with the selected month. Every calendar month from the first entry to today
++// (or to the last month with planned entries) can be selected, including months with no entries.
++function monthsBetween(from, to) {   // "YYYY-MM" inclusive, newest first
++  const out=[]; let [y,m]=to.split("-").map(Number); const [fy,fm]=from.split("-").map(Number);
++  while (y>fy || (y===fy && m>=fm)) { out.push(`${y}-${String(m).padStart(2,"0")}`); m--; if (m===0) { m=12; y--; } }
++  return out;
++}
+ function MonthlyView({ transactions, currency, budgets, onView }) {
+   const [selectedMon, setSelectedMon] = useState(curMon());
++  const [activeBar,  setActiveBar]  = useState(null);
++  const [activeCell, setActiveCell] = useState(null);
++  const lc=locale();
++  const patternsData=useMemo(()=>calcPatterns(transactions,currency),[transactions,currency,lc]);   // insight text follows the language
+ 
+   const allMonths = useMemo(() => {
+-    const monSet = new Set(transactions.map(t => t.date.slice(0,7)));
+-    monSet.add(curMon());
+-    return [...monSet].sort((a,b) => b.localeCompare(a));
++    const ms=transactions.map(t=>t.date.slice(0,7)).sort(), cur=curMon();
++    const first=ms.length && ms[0]<cur ? ms[0] : cur, last=ms.length && ms[ms.length-1]>cur ? ms[ms.length-1] : cur;
++    return monthsBetween(first,last);
+   }, [transactions]);
++  const idx=allMonths.indexOf(selectedMon);
++  const prevM = () => { if (idx < allMonths.length - 1) setSelectedMon(allMonths[idx + 1]); };
++  const nextM = () => { if (idx > 0) setSelectedMon(allMonths[idx - 1]); };
++  const prv = useMemo(() => { const [y,m]=selectedMon.split("-").map(Number); return localMonthStr(new Date(y,m-2,1)); }, [selectedMon]);
+ 
+-  const prevM = () => {
+-    const idx = allMonths.indexOf(selectedMon);
+-    if (idx < allMonths.length - 1) setSelectedMon(allMonths[idx + 1]);
+-  };
+-  const nextM = () => {
+-    const idx = allMonths.indexOf(selectedMon);
+-    if (idx > 0) setSelectedMon(allMonths[idx - 1]);
+-  };
+-
+-  const prv = useMemo(() => {
+-    const d = new Date(selectedMon + "-02");
+-    d.setMonth(d.getMonth() - 1);
+-    return localMonthStr(d);
+-  }, [selectedMon]);
+-
+-  const { curExp, curInc, prevExp, momDiff, plannedExp, plannedInc } = calcMonthSummary(transactions, selectedMon, prv);
++  const { curExp, curInc, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
+   const catSpend    = calcCategorySpend(transactions, selectedMon);
+   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
++  const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
++  const paceInfo    = calcSpendingPace(calcSpentToDate(transactions,selectedMon),selectedMon,budgetTotal);
++  const txnStats    = calcTxnStats(transactions,selectedMon);
++  const perDay      = calcWeekdayWeekend(transactions,selectedMon);
++  const wc          = calcWhatChanged(transactions,selectedMon,prv);
+   const expenses    = transactions.filter(t => t.type === "expense");
++  const done        = happenedIn(selectedMon);
++  const isCurrentMon = selectedMon === curMon();
+ 
+-  const catData = Object.entries(catSpend)
+-    .map(([id, amt]) => ({ ...CAT(id) || { id, name: id, color:"#8A8A8A" }, amt }))
+-    .sort((a,b) => b.amt - a.amt);
++  const catData = Object.entries(catSpend).map(([id, amt]) => ({ ...CAT(id) || { id, name: id, color:"#8A8A8A" }, amt })).sort((a,b) => b.amt - a.amt);
+   const maxCat = catData[0]?.amt || 1;
+-
+-  // Merchant breakdown for selected month
+   const merchantTotals = {};
+-  transactions.filter(t => t.type==="expense" && happenedIn(selectedMon)(t) && t.merchant)
+-    .forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
++  expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
+   const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
+-
++  const topExpenses = expenses.filter(done).sort((a,b)=>b.amount-a.amount).slice(0,5);   // happened, not entries dated later
+   const monTxns = transactions.filter(t => t.date.startsWith(selectedMon));
+-  const isCurrentMon = selectedMon === curMon();
++  const recurringCount = transactions.filter(x=>x.recurring&&x.date.startsWith(selectedMon)).length;
++
++  // Trends: recent months up to today, independent of the selected month.
++  const WEEKDAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
++  const wdName=(i,style)=>t(style==="long"?"dow."+WEEKDAYS[i]:style==="short"?"wdShort."+WEEKDAYS[i]:"wdNarrow."+WEEKDAYS[i]);
++  const { insights:patterns, anomalies, dayOfWeek, correlations } = patternsData;
++  const now=curMon();
++  const months6=Array.from({length:6},(_,i)=>nMon(5-i));
++  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce((s,t)=>s+t.amount,0),isCur:m===now,ym:m}));
++  const maxMonth=Math.max(...monthlyData.map(m=>m.exp),1);
++  const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
++  const DAY_LBLS=WEEKDAYS.map((_,i)=>wdName(i,"narrow"));
++  const heatRows=[];
++  const now_=new Date(),dow=now_.getDay(),toLastMon=dow===0?6:dow-1;
++  const lastMon=new Date(now_); lastMon.setDate(now_.getDate()-toLastMon);
++  for(let w=7;w>=0;w--) {
++    const row=[];
++    for(let d=0;d<7;d++){
++      const dt=new Date(lastMon); dt.setDate(lastMon.getDate()-(w*7)+d);
++      const ds=localDateStr(dt);
++      const amt=expenses.filter(t=>t.date===ds).reduce((s,t)=>s+t.amount,0);
++      const cats=expenses.filter(x=>x.date===ds).map(x=>catName(x.category)).filter((v,i,a)=>a.indexOf(v)===i).join(", ");
++      row.push({date:ds,amt,cats,isToday:ds===today()});
++    }
++    heatRows.push(row);
++  }
++  const maxHeat=Math.max(...heatRows.flat().map(c=>c.amt),1);
++  const hasTrends = expenses.length>0;
+ 
+   return (
+-    <div>
+-      {/* Month selector */}
++    <div onClick={()=>{setActiveBar(null);setActiveCell(null);}}>
++      {/* Month selector — the one month setting for everything above the Trends section */}
+       <div className="month-selector">
+-        <button className="month-nav-btn" onClick={prevM} aria-label={t("month.prev")}>‹</button>
++        <button className="month-nav-btn" onClick={prevM} disabled={idx===allMonths.length-1} aria-label={t("month.prev")} style={{opacity:idx===allMonths.length-1?0.3:1}}>‹</button>
+         <div style={{textAlign:"center"}}>
+           <h1 className="month-name" style={{margin:0}}>{monthName(selectedMon)}</h1>
+           {isCurrentMon && <div style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.5px",marginTop:2,textTransform:"uppercase"}}>{t("month.current")}</div>}
+         </div>
+-        <button className="month-nav-btn" onClick={nextM} disabled={selectedMon===allMonths[0]} aria-label={t("month.next")}
+-          style={{opacity:selectedMon===allMonths[0]?0.3:1}}>›</button>
++        <button className="month-nav-btn" onClick={nextM} disabled={idx===0} aria-label={t("month.next")} style={{opacity:idx===0?0.3:1}}>›</button>
+       </div>
+ 
+       {/* Summary stats */}
+@@ -3792,8 +3575,8 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
+         <div className="month-stat">
+           <div className="month-stat-val" style={{color:"var(--neg)"}}>{fmt(curExp,currency)}</div>
+           <div className="month-stat-lbl">{t("home.spent")}</div>
+-          {momDiff!==null&&<div style={{fontSize:11,color:momDiff<=0?"var(--pos)":"var(--neg)",fontWeight:600,marginTop:4}}>
+-            {momDiff<=0?"↓":"↑"} {t("month.vs",{amount:fmt(Math.abs(momDiff),currency),month:monthShort(prv)})}
++          {momDiff!==null&&<div className="month-cmp" style={{fontSize:11,color:momDiff<=0?"var(--pos)":"var(--neg)",fontWeight:600,marginTop:4}}>
++            {momDiff<=0?"↓":"↑"} {cmpText(momDiff,cmpKind,currency)}
+           </div>}
+         </div>
+         <div className="month-stat">
+@@ -3806,10 +3589,102 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
+         <div className="month-stat" style={{gridColumn:"1 / -1"}}>
+           <div className="month-stat-val" style={{color:surplusColor(curInc,curExp)}}>{fmt(Math.abs(curInc-curExp),currency)}</div>
+           <div className="month-stat-lbl">{t("month.net."+(curInc>curExp?"Net surplus":curInc<curExp?"Net deficit":"Break-even"))}</div>
+-          {prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{t("month.vsSpentIn",{amount:fmt(prevExp,currency),month:monthShort(prv)})}</div>}
++          {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
++          {momDiff!==null&&cmpKind==="same"&&<div className="cmp-window" style={{fontSize:11,color:"var(--ink-3)",marginTop:2}}>{t("cmp.window",{d:cmpDays})}</div>}
+         </div>
+       </div>
+       <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
++      {isCurrentMon&&paceInfo.dailyAvg>0&&(
++        <div className="a-card" style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:"4px 12px",fontSize:12}}>
++          <span style={{color:"var(--ink-3)"}}>{t("an.dailyAvg")} <strong style={{fontFamily:"'Playfair Display',serif",color:"var(--ink)"}}>{fmt(paceInfo.dailyAvg,currency)}</strong></span>
++          <span style={{color:"var(--ink-3)"}}>{t("an.projected")} <strong style={{fontFamily:"'Playfair Display',serif",color:paceInfo.projected>prevFullExp+20?"var(--neg)":"var(--ink)"}}>{fmt(paceInfo.projected,currency)}</strong></span>
++        </div>
++      )}
++
++      {/* What changed — same comparison window as the summary */}
++      {(wc.totalDiff!==0||wc.catChanges.length>0)&&prevExp>0&&momDiff!==null&&(
++        <div className="a-card">
++          <div className="a-card-title">{cmpTitle(wc.cmpKind)}</div>
++          <div className="wc-row" style={{paddingTop:0}}>
++            <span className="wc-name" style={{fontWeight:700}}>{t("an.totalSpending")}</span>
++            <div style={{textAlign:"right"}}>
++              <div className={`wc-diff ${wc.totalDiff<=0?"pos":"neg"}`}>{wc.totalDiff>0?"+":""}{fmt(wc.totalDiff,currency)}</div>
++              <div style={{fontSize:10,color:"var(--ink-3)"}}>{t("an.vs",{a:fmt(wc.curExp,currency),b:fmt(wc.prevExp,currency)})}</div>
++            </div>
++          </div>
++          {wc.catChanges.slice(0,5).map(({catId,cur,prev,diff,merchantDiffs})=>{
++            const cat=CAT(catId);
++            return (
++              <div key={catId}>
++                <div className="wc-row">
++                  <div className="wc-name"><CatIcon catId={catId} size={13} color={cat?.color}/>{catName(catId)}</div>
++                  <div style={{textAlign:"right"}}>
++                    <div className={`wc-diff ${diff<=0?"pos":"neg"}`}>{diff>0?"+":""}{fmt(diff,currency)}</div>
++                    <div style={{fontSize:10,color:"var(--ink-3)"}}>{t("an.vs",{a:fmt(cur,currency),b:fmt(prev,currency)})}</div>
++                  </div>
++                </div>
++                {merchantDiffs.length>0&&(
++                  <div className="wc-merchants">
++                    {merchantDiffs.map(m=>(
++                      <div key={m.merchant} className="wc-m-row">
++                        <span style={{display:"flex",alignItems:"center",gap:4}}>
++                          <Icon name="merchant" size={10} color="var(--ink-4)"/>
++                          {m.merchant}
++                          <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,background:m.isRecurring?"var(--warn-bg)":"var(--bg-inset)",color:m.isRecurring?"var(--warn)":"var(--ink-4)"}}>
++                            {m.isRecurring?t("wc.recurring"):t("wc.oneOff")}
++                          </span>
++                        </span>
++                        <span style={{color:m.diff<=0?"var(--pos)":"var(--neg)",fontWeight:600}}>{m.diff>0?"+":""}{fmt(m.diff,currency)}</span>
++                      </div>
++                    ))}
++                  </div>
++                )}
++              </div>
++            );
++          })}
++        </div>
++      )}
++
++      {/* Transaction stats for the month */}
++      {txnStats.count>0&&(
++        <div className="stat-row">
++          <div className="stat-cell"><div className="stat-val">{txnStats.count}</div><div className="stat-lbl">{t("an.transactions")}</div></div>
++          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.avgTxn,currency)}</div><div className="stat-lbl">{t("an.avgPerTxn")}</div></div>
++          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.medTxn,currency)}</div><div className="stat-lbl">{t("an.median")}</div></div>
++          <div className="stat-cell" title={t("an.perDayTitle")}>
++            <div className="stat-val">{perDay.heavier===null?"—":fmt(perDay.heavier==="weekday"?perDay.wdAvg:perDay.weAvg,currency)}</div>
++            <div className="stat-lbl">{t(perDay.heavier===null?"an.perDay.null":"an.perDay."+perDay.heavier)}</div>
++          </div>
++        </div>
++      )}
++
++      {/* Budget status for the month */}
++      {budgetItems.length>0&&(
++        <div className="a-card">
++          <div className="a-card-title">{t("an.budgetStatus",{month:monthName(selectedMon)})}</div>
++          {budgetItems.map(({catId,limit,spent,pct,over,warn,aheadOfPace,daysLeft,state})=>{
++            const cat=CAT(catId);
++            return (
++              <div key={catId} style={{marginBottom:13,paddingBottom:13,borderBottom:"1px solid var(--rule)"}}>
++                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
++                  <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6,minWidth:0}}><CatIcon catId={catId} size={13}/>{catName(catId)}</div>
++                  <div style={{fontSize:11,color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:600,flexShrink:0}}>{t("an.pctUsed",{pct:Math.round(pct)})}</div>
++                </div>
++                <div style={{height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden",marginBottom:4}}>
++                  <div style={{height:"100%",width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)"),borderRadius:99}}/>
++                </div>
++                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
++                  <span style={{color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:over||warn?600:400}}>
++                    {over?t("budgets.over",{amount:fmt(spent-limit,currency)}):t("budgets.remaining",{amount:fmt(limit-spent,currency)})}
++                  </span>
++                  {state==="current"&&<span style={{color:"var(--ink-4)",flexShrink:0}}>{over?t("an.exceeded"):t("an.daysLeft",{n:daysLeft})}</span>}
++                </div>
++                {aheadOfPace&&!over&&<div style={{fontSize:10,color:"var(--warn)",fontWeight:600,marginTop:2}}>{t("an.aheadOfPace")}</div>}
++              </div>
++            );
++          })}
++        </div>
++      )}
+ 
+       {/* Category breakdown */}
+       {catData.length>0&&(
+@@ -3847,36 +3722,35 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
+         </div>
+       )}
+ 
+-      {/* Budget status for month */}
+-      {budgetItems.length>0&&(
++      {/* Top expenses of the month */}
++      {topExpenses.length>0&&(
+         <div className="a-card">
+-          <div className="a-card-title">{t("month.budgetStatus")}</div>
+-          {budgetItems.map(({catId,limit,spent,pct,over,warn})=>{
+-            const cat=CAT(catId);
++          <div className="a-card-title">{t("an.topExpenses")}</div>
++          {topExpenses.map((x,i)=>{
++            const cat=CAT(x.category)||{color:"#8A8A8A"};
+             return (
+-              <div key={catId} style={{marginBottom:11}}>
+-                <div className="budget-hdr">
+-                  <div className="budget-name"><CatIcon catId={catId} size={12}/>{catName(catId)}</div>
+-                  <span className="budget-nums"><strong>{fmt(spent,currency)}</strong> / {fmt(limit,currency)}</span>
++              <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 0",borderBottom:i<topExpenses.length-1?"1px solid var(--rule)":"none"}}>
++                <div style={{width:32,height:32,borderRadius:7,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
++                  <CatIcon catId={x.category} size={15} color={cat.color}/>
+                 </div>
+-                <div className="budget-track"><div className="budget-fill" style={{width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)")}}/></div>
+-                <div className={`budget-msg${over?" over":warn?" warn":""}`}>
+-                  {over?t("budgets.over",{amount:fmt(spent-limit,currency)}):warn?t("budgets.warn",{amount:fmt(limit-spent,currency)}):t("budgets.remaining",{amount:fmt(limit-spent,currency)})}
++                <div style={{flex:1,minWidth:0}}>
++                  <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.merchant||x.note||catName(x.category)}</div>
++                  <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(x.date)} · {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""}</div>
+                 </div>
++                <div style={{fontFamily:"'Playfair Display',serif",fontSize:15,fontWeight:600,flexShrink:0}}>−{fmt(x.amount,currency)}</div>
+               </div>
+             );
+           })}
+         </div>
+       )}
+ 
+-      {/* Recurring tab link */}
+-      {transactions.filter(x=>x.recurring&&x.date.startsWith(selectedMon)).length>0&&(
++      {recurringCount>0&&(
+         <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"var(--ink-3)"}}>
+-          <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",transactions.filter(x=>x.recurring&&x.date.startsWith(selectedMon)).length)}
++          <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",recurringCount)}
+         </div>
+       )}
+ 
+-      {/* Transaction list */}
++      {/* Transaction list of the month */}
+       {monTxns.length>0?(
+         <>
+           <div className="label-sm" style={{marginBottom:10}}>{t("month.allTxns",{month:monthName(selectedMon)})}</div>
+@@ -3889,6 +3763,151 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
+           <div className="empty-body">{t("month.emptyBody",{month:monthName(selectedMon)})}</div>
+         </div>
+       )}
++
++      {/* Trends — recent months up to today; not affected by the month selected above */}
++      {hasTrends&&(<>
++        <div className="trends-head" style={{marginTop:22,marginBottom:10}}>
++          <div className="label-sm">{t("month.trendsTitle")}</div>
++          <div style={{fontSize:11,color:"var(--ink-3)",lineHeight:1.5,marginTop:4}}>{t("month.trendsSub")}</div>
++        </div>
++
++        <div className="a-card">
++          <div className="a-card-title">{t("an.sixMonth")}</div>
++          {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>{t("an.sixMonthAvg")} <strong style={{fontFamily:"'Playfair Display',serif",color:"var(--ink)"}}>{fmt(monthAvg,currency)}</strong></div>}
++          {activeBar!==null&&monthlyData[activeBar]&&(
++            <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between"}}>
++              <span>{monthName(monthlyData[activeBar].ym)}</span>
++              <span style={{fontFamily:"'Playfair Display',serif",fontSize:14}}>{fmt(monthlyData[activeBar].exp,currency)}</span>
++            </div>
++          )}
++          <div className="month-bars">
++            {monthlyData.map((m,i)=>(
++              <div key={i} className="m-col" onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);setActiveCell(null);}}>
++                <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end"}}>
++                  <div className="m-bar" style={{height:m.exp>0?`${Math.max(5,(m.exp/maxMonth)*100)}%`:"3px",background:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",width:"100%",outline:activeBar===i?"2px solid var(--accent)":"none",outlineOffset:"1px"}}/>
++                </div>
++                <div className="m-lbl" style={{color:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",fontWeight:m.isCur||activeBar===i?700:600}}>{m.label}</div>
++              </div>
++            ))}
++          </div>
++        </div>
++
++        {patterns.length>0&&(
++          <div className="a-card">
++            <div className="a-card-title">{t("an.patterns")}</div>
++            {patterns.map(p=>(
++              <div key={p.id} className="pattern-item">
++                <Icon name="pattern" size={14} color="var(--ink-3)"/>
++                <span>{p.text}</span>
++              </div>
++            ))}
++          </div>
++        )}
++
++        {Object.values(dayOfWeek).some(d=>d.count>0)&&(
++          <div className="a-card">
++            <div className="a-card-title">{t("an.byDay",{month:monthName(now)})}</div>
++            <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.byDaySub")}</div>
++            {WEEKDAYS.map((day,di)=>{
++              const d=dayOfWeek[day];
++              if (!d||d.count===0) return null;
++              // the typical (median) transaction, as in the insight: one unusual purchase must not make a day's bar tower over the rest
++              const maxMed=Math.max(...Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.median),1);
++              return (
++                <div key={day} className="dow-row" style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
++                  <div style={{minWidth:28,fontSize:11,color:"var(--ink-3)",fontWeight:600,flexShrink:0}} title={wdName(di,"long")}>{wdName(di,"short")}</div>
++                  <div style={{flex:1,height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden"}}>
++                    <div style={{height:"100%",width:`${(d.median/maxMed)*100}%`,background:"var(--accent)",borderRadius:99}}/>
++                  </div>
++                  <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"'Playfair Display',serif",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.median,currency)}</div>
++                  <div style={{width:24,textAlign:"right",fontSize:10,color:"var(--ink-4)",flexShrink:0}}>{d.count}×</div>
++                </div>
++              );
++            })}
++          </div>
++        )}
++
++        {anomalies.length>0&&(
++          <div className="a-card">
++            <div className="a-card-title">{t("an.unusual")}</div>
++            {anomalies.slice(0,5).map((a,i)=>{
++              const cat=CAT(a.category)||{color:"#8A8A8A"};
++              return (
++                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<Math.min(anomalies.length,5)-1?"1px solid var(--rule)":"none"}}>
++                  <div style={{width:30,height:30,borderRadius:7,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
++                    <CatIcon catId={a.category} size={14} color={cat.color}/>
++                  </div>
++                  <div style={{flex:1,minWidth:0}}>
++                    <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{a.merchant||catName(a.category)}</div>
++                    <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(a.date)} · {a.reason}</div>
++                  </div>
++                  <div style={{fontFamily:"'Playfair Display',serif",fontSize:14,fontWeight:700,color:"var(--neg)",flexShrink:0}}>−{fmt(a.amount,currency)}</div>
++                </div>
++              );
++            })}
++          </div>
++        )}
++
++        {correlations.length>0&&(
++          <div className="a-card">
++            <div className="a-card-title">{t("an.together")}</div>
++            <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.togetherSub")}</div>
++            {correlations.map((c,i)=>(
++              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"8px 0",borderBottom:i<correlations.length-1?"1px solid var(--rule)":"none"}}>
++                <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:6,fontSize:12,fontWeight:600,color:"var(--ink)",minWidth:0}}>
++                  <CatIcon catId={c.category1} size={13}/>
++                  {catName(c.category1)}
++                  <span style={{color:"var(--ink-4)",fontWeight:400}}>+</span>
++                  <CatIcon catId={c.category2} size={13}/>
++                  {catName(c.category2)}
++                </div>
++                <div style={{fontSize:11,color:"var(--ink-3)",flexShrink:0}}>{t("an.ofDays",{pct:Math.round(c.correlation*100)})}</div>
++              </div>
++            ))}
++          </div>
++        )}
++
++        <div className="a-card">
++          <div className="a-card-title">{t("an.weekly")}</div>
++          {activeCell!==null&&(()=>{
++            const cell=heatRows[activeCell.wi]?.[activeCell.di];
++            if(!cell) return null;
++            return (
++              <div style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10}}>
++                <div style={{display:"flex",justifyContent:"space-between",marginBottom:cell.cats?3:0}}>
++                  <span>{fmtDate(cell.date)}</span>
++                  <span style={{fontFamily:"'Playfair Display',serif",fontSize:14}}>{cell.amt>0?fmt(cell.amt,currency):t("an.noSpending")}</span>
++                </div>
++                {cell.cats&&<div style={{fontSize:10,color:"rgba(247,244,238,0.7)"}}>{cell.cats}</div>}
++              </div>
++            );
++          })()}
++          <div className="heatmap" onClick={e=>e.stopPropagation()}>
++            <div className="hm-corner"/>
++            {DAY_LBLS.map((d,i)=><div key={i} className="hm-day-hdr">{d}</div>)}
++            {heatRows.map((row,wi)=>(
++              <Fragment key={`w${wi}`}>
++                <div className="hm-wk-lbl">{wi===7?<span style={{color:"var(--accent)",fontWeight:700,fontSize:7}}>{t("an.now")}</span>:""}</div>
++                {row.map((cell,di)=>{
++                  const intensity=cell.amt>0?Math.max(0.1,(cell.amt/maxHeat)*0.9):0;
++                  const isActive=activeCell?.wi===wi&&activeCell?.di===di;
++                  return (
++                    <div key={`${wi}-${di}`} className="hm-cell"
++                      onClick={e=>{e.stopPropagation();setActiveCell(isActive?null:{wi,di});setActiveBar(null);}}
++                      style={{background:cell.amt>0?`rgba(107,31,42,${intensity})`:"var(--bg-inset)",outline:isActive?"2px solid var(--ink)":cell.isToday?"1.5px solid var(--ink-3)":"none",outlineOffset:"1px"}}
++                    />
++                  );
++                })}
++              </Fragment>
++            ))}
++          </div>
++          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,justifyContent:"flex-end"}}>
++            <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
++            {[0.1,0.3,0.6,0.9].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(107,31,42,${o})`}}/>)}
++            <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
++          </div>
++        </div>
++      </>)}
+     </div>
+   );
+ }
+diff --git a/i18n.js b/i18n.js
+index e972bc2..9642d7c 100644
+--- a/i18n.js
++++ b/i18n.js
+@@ -60,6 +60,8 @@ export const MESSAGES = {
+   "reason.amount too large": { en: "{n} amount too large", az: "məbləğ çox böyükdür: {n}", ru: "слишком большая сумма: {n}" },
+   "reason.unsupported type": { en: "{n} unsupported type", az: "dəstəklənməyən növ: {n}", ru: "неподдерживаемый тип: {n}" },
+   "reason.invalid recurrence": { en: "{n} invalid recurrence", az: "təkrarlanma yanlışdır: {n}", ru: "некорректная периодичность: {n}" },
++  "reason.invalid active flag":     { en: "{n} unreadable active/paused flag", az: "aktiv/dayandırılmış işarəsi oxunmur: {n}", ru: "нечитаемый признак «активно/приостановлено»: {n}" },
++  "reason.invalid recurrence flag": { en: "{n} unreadable recurring flag", az: "təkrarlanma işarəsi oxunmur: {n}", ru: "нечитаемый признак повторения: {n}" },
+   "reason.more than 2 decimal places": { en: "{n} more than 2 decimal places", az: "2-dən çox onluq rəqəm: {n}", ru: "больше 2 знаков после запятой: {n}" },
+ 
+   // ── Loading saved data
+@@ -78,6 +80,9 @@ export const MESSAGES = {
+   "load.settingsResetKept": { en: "Some saved settings were not valid and were reset (the originals were kept)", az: "Bəzi saxlanmış parametrlər yanlış idi və sıfırlandı (orijinallar saxlanıldı)", ru: "Некоторые сохранённые настройки были некорректны и сброшены (исходные значения сохранены)" },
+   "load.settingsResetBlocked": { en: "Some saved settings were not valid and were reset — saving is paused because they could not be copied", az: "Bəzi saxlanmış parametrlər yanlış idi və sıfırlandı — onların surəti çıxarıla bilmədiyi üçün yadda saxlama dayandırıldı", ru: "Некоторые сохранённые настройки были некорректны и сброшены — сохранение приостановлено, так как их не удалось скопировать" },
+   "load.corruptKept":    { en: "Saved data could not be read — a recovery copy was kept", az: "Saxlanmış məlumatları oxumaq mümkün olmadı — bərpa surəti saxlanıldı", ru: "Не удалось прочитать сохранённые данные — копия для восстановления сохранена" },
++  "load.readFailed":     { en: "Your saved data could not be read right now — saving is paused so nothing is overwritten. Close and reopen the app; if this keeps happening, check the browser's storage settings", az: "Saxlanmış məlumatlarınızı hazırda oxumaq mümkün olmadı — heç nəyin üzərinə yazılmaması üçün yadda saxlama dayandırıldı. Tətbiqi bağlayıb yenidən açın; bu təkrarlanarsa, brauzerin yaddaş parametrlərini yoxlayın", ru: "Сейчас не удалось прочитать сохранённые данные — сохранение приостановлено, чтобы ничего не перезаписать. Закройте и снова откройте приложение; если это повторяется, проверьте настройки хранилища браузера" },
++  "load.legacyReadFailed": { en: "Data from an older version of the app could not be read — saving is paused so it is not hidden or overwritten", az: "Tətbiqin köhnə versiyasının məlumatlarını oxumaq mümkün olmadı — gizlənməməsi və üzərinə yazılmaması üçün yadda saxlama dayandırıldı", ru: "Не удалось прочитать данные из старой версии приложения — сохранение приостановлено, чтобы они не были скрыты или перезаписаны" },
++  "load.legacyCorruptKept": { en: "Data from an older version of the app could not be read — a recovery copy was kept", az: "Tətbiqin köhnə versiyasının məlumatlarını oxumaq mümkün olmadı — bərpa surəti saxlanıldı", ru: "Не удалось прочитать данные из старой версии приложения — копия для восстановления сохранена" },
+   "load.corruptBlocked": { en: "Saved data could not be read and a recovery copy could not be made (storage may be full) — saving is paused so nothing is overwritten", az: "Saxlanmış məlumatları oxumaq və bərpa surəti yaratmaq mümkün olmadı (yaddaş dolu ola bilər) — heç nəyin üzərinə yazılmaması üçün yadda saxlama dayandırıldı", ru: "Не удалось прочитать сохранённые данные и создать копию для восстановления (возможно, хранилище заполнено) — сохранение приостановлено, чтобы ничего не перезаписать" },
+ 
+   // ── Settings found in stored data or a backup file
+@@ -109,6 +114,7 @@ export const MESSAGES = {
+   "import.nothing":       { en: "Nothing could be imported — {summary}.", az: "Heç nə idxal edilə bilmədi — {summary}.", ru: "Ничего не удалось импортировать — {summary}." },
+   "import.empty":         { en: "No transactions or settings were found in this file.", az: "Bu faylda əməliyyat və ya parametr tapılmadı.", ru: "В этом файле не найдено ни операций, ни настроек." },
+   "import.unknownCat":    { en: { one: "{n} transaction has a category the app does not recognise and was filed under Other.", other: "{n} transactions have a category the app does not recognise and were filed under Other." }, az: "Tətbiqin tanımadığı kateqoriyası olan {n} əməliyyat «Digər» bölməsinə əlavə edildi.", ru: "Операций с нераспознанной категорией: {n}, они отнесены к категории «Другое»." },
++  "import.sameFileDup":   { en: { one: "{n} row is identical to another row in this file (same date, amount, category and text). Both will be imported — check the file if that is not expected.", other: "{n} rows are identical to another row in this file (same date, amount, category and text). All will be imported — check the file if that is not expected." }, az: "Bu faylda {n} sətir başqa sətirlə eynidir (eyni tarix, məbləğ, kateqoriya və mətn). Hamısı idxal ediləcək — gözlənilmirsə, faylı yoxlayın.", ru: "Строк, совпадающих с другой строкой этого файла (та же дата, сумма, категория и текст): {n}. Все будут импортированы — проверьте файл, если это неожиданно." },
+   "import.rekeyed":       { en: { one: "{n} duplicate id was re-assigned.", other: "{n} duplicate ids were re-assigned." }, az: "{n} təkrarlanan identifikator yenidən təyin edildi.", ru: "Повторяющихся идентификаторов заменено: {n}." },
+ 
+   // ── Insights (Analytics, Smart Helper). Each variant is a whole sentence so no language has to glue fragments.
+@@ -307,7 +313,6 @@ export const MESSAGES = {
+   "nav.home":      { en: "Home", az: "Ana səhifə", ru: "Главная" },
+   "nav.ledger":    { en: "Ledger", az: "Əməliyyatlar", ru: "Операции" },
+   "nav.monthly":   { en: "Monthly", az: "Aylıq", ru: "По месяцам" },
+-  "nav.analytics": { en: "Analytics", az: "Təhlil", ru: "Аналитика" },
+   "nav.recurring": { en: "Recurring", az: "Təkrarlanan", ru: "Регулярные" },
+   "nav.addTxn":    { en: "Add transaction", az: "Əməliyyat əlavə et", ru: "Добавить операцию" },
+   "nav.settings":  { en: "Settings", az: "Parametrlər", ru: "Настройки" },
+@@ -330,6 +335,7 @@ export const MESSAGES = {
+     az: "Ehtiyat nüsxə faylı yaradıldı — {n} əməliyyat. «Yükləmələr» qovluğunu yoxlayın: tətbiq faylın saxlanıldığını təsdiqləyə bilmir.",
+     ru: { one: "Файл резервной копии создан — {n} операция. Проверьте папку «Загрузки»: приложение не может подтвердить, что файл сохранён.", few: "Файл резервной копии создан — {n} операции. Проверьте папку «Загрузки»: приложение не может подтвердить, что файл сохранён.", many: "Файл резервной копии создан — {n} операций. Проверьте папку «Загрузки»: приложение не может подтвердить, что файл сохранён.", other: "Файл резервной копии создан — {n} операции. Проверьте папку «Загрузки»: приложение не может подтвердить, что файл сохранён." } },
+   "banner.savePaused":  { en: "Saving is paused so your original data is not overwritten (a recovery copy could not be made — storage may be full). Export a backup, free some space, then reload.", az: "Orijinal məlumatlarınızın üzərinə yazılmaması üçün yadda saxlama dayandırılıb (bərpa surəti yaradıla bilmədi — yaddaş dolu ola bilər). Ehtiyat nüsxə ixrac edin, yer boşaldın və səhifəni yeniləyin.", ru: "Сохранение приостановлено, чтобы не перезаписать исходные данные (не удалось создать копию для восстановления — возможно, хранилище заполнено). Экспортируйте резервную копию, освободите место и перезагрузите страницу." },
++  "banner.readPaused":  { en: "Saving is paused because your saved data could not be read. Nothing has been overwritten. Close and reopen the app; if this keeps happening, check the browser's storage settings.", az: "Saxlanmış məlumatlarınız oxuna bilmədiyi üçün yadda saxlama dayandırılıb. Heç nəyin üzərinə yazılmayıb. Tətbiqi bağlayıb yenidən açın; bu təkrarlanarsa, brauzerin yaddaş parametrlərini yoxlayın.", ru: "Сохранение приостановлено, так как не удалось прочитать сохранённые данные. Ничего не перезаписано. Закройте и снова откройте приложение; если это повторяется, проверьте настройки хранилища браузера." },
+   "banner.saveFailed":  { en: "Could not save changes — storage may be full. Back up your data now.", az: "Dəyişiklikləri yadda saxlamaq mümkün olmadı — yaddaş dolu ola bilər. Məlumatlarınızın ehtiyat nüsxəsini indi yaradın.", ru: "Не удалось сохранить изменения — возможно, хранилище заполнено. Сделайте резервную копию прямо сейчас." },
+   "banner.backUp":      { en: "Back up", az: "Ehtiyat nüsxə", ru: "Сделать копию" },
+   "banner.backupDue":   { en: "Back up your data to avoid losing it", az: "Məlumatlarınızı itirməmək üçün ehtiyat nüsxəsini yaradın", ru: "Сделайте резервную копию, чтобы не потерять данные" },
+@@ -353,12 +359,27 @@ export const MESSAGES = {
+   "import.replaceText": { en: "swaps your transactions for the file's. Budgets, goals, templates, currency and Safe to Spend are replaced only if the file has a valid section for them. A recovery copy of your current data is kept first, and you can undo straight after.", az: "əməliyyatlarınızı fayldakılarla əvəz edir. Büdcələr, məqsədlər, şablonlar, valyuta və «Xərcləmək olar» yalnız faylda onlar üçün düzgün bölmə olduqda əvəz olunur. Əvvəlcə cari məlumatlarınızın bərpa surəti saxlanılır və dərhal sonra geri qaytara bilərsiniz.", ru: "заменяет ваши операции операциями из файла. Бюджеты, цели, шаблоны, валюта и «Можно потратить» заменяются, только если в файле есть для них корректный раздел. Сначала сохраняется копия текущих данных для восстановления, и сразу после этого действие можно отменить." },
+   "import.skipDup":     { en: "When merging, skip {n} that look like transactions you already have (same date, amount, merchant and note)", az: "Birləşdirərkən artıq mövcud olanlara bənzəyən {n} əməliyyatı buraxın (eyni tarix, məbləğ, satıcı və qeyd)", ru: "При объединении пропустить похожие на уже имеющиеся операции: {n} (та же дата, сумма, продавец и заметка)" },
+   "import.mergeBtn":    { en: "Merge — add new, keep existing", az: "Birləşdir — yeniləri əlavə et, mövcudları saxla", ru: "Объединить — добавить новые, сохранить текущие" },
++  "import.settingsOnlyLabel": { en: "No transactions in this file.", az: "Bu faylda əməliyyat yoxdur.", ru: "В этом файле нет операций." },
++  "import.settingsOnlyText":  { en: "It can only update settings. Your transactions are kept either way.", az: "O, yalnız parametrləri yeniləyə bilər. Əməliyyatlarınız hər halda saxlanılır.", ru: "Он может обновить только настройки. Ваши операции в любом случае сохраняются." },
++  "import.settingsOnlyBtn":   { en: "Use the file's settings — keep my transactions", az: "Fayldakı parametrləri istifadə et — əməliyyatlarımı saxla", ru: "Использовать настройки из файла — сохранить мои операции" },
++  "import.settingsApplied":   { en: "Settings from the file applied — your transactions were not changed", az: "Fayldakı parametrlər tətbiq edildi — əməliyyatlarınız dəyişmədi", ru: "Настройки из файла применены — ваши операции не изменены" },
+   "import.replaceBtn":  { en: "Replace — use the file's data", az: "Əvəz et — fayldakı məlumatları istifadə et", ru: "Заменить — использовать данные из файла" },
+ 
+   // ── Home
+   "home.spentThisMonth": { en: "spent this month", az: "bu ay xərclənib", ru: "потрачено в этом месяце" },
+-  "home.momLess":   { en: "{amount} less than {month}", az: "{month} ilə müqayisədə {amount} az", ru: "на {amount} меньше, чем в {month}" },
+-  "home.momMore":   { en: "{amount} more than {month}", az: "{month} ilə müqayisədə {amount} çox", ru: "на {amount} больше, чем в {month}" },
++  // Month comparisons (Run 7): a month under way is compared with the same days of the previous month; a finished month
++  // with the whole previous month. No short month name is slotted into the sentence (az "sen ilə müqayisədə" read as a word).
++  "month.trendsTitle": { en: "Trends up to today", az: "Bu günə qədər meyillər", ru: "Тенденции на сегодня" },
++  "month.trendsSub":   { en: "Recent months up to today. This section does not change with the month selected above.", az: "Son aylar, bu günə qədər. Bu bölmə yuxarıda seçilən aydan asılı deyil.", ru: "Последние месяцы по сегодняшний день. Этот раздел не зависит от выбранного выше месяца." },
++  "cmp.lessSame":   { en: "{amount} less than the same days last month", az: "keçən ayın eyni günləri ilə müqayisədə {amount} az", ru: "на {amount} меньше, чем за те же дни прошлого месяца" },
++  "cmp.moreSame":   { en: "{amount} more than the same days last month", az: "keçən ayın eyni günləri ilə müqayisədə {amount} çox", ru: "на {amount} больше, чем за те же дни прошлого месяца" },
++  "cmp.lessFull":   { en: "{amount} less than the previous month", az: "əvvəlki ayla müqayisədə {amount} az", ru: "на {amount} меньше, чем в предыдущем месяце" },
++  "cmp.moreFull":   { en: "{amount} more than the previous month", az: "əvvəlki ayla müqayisədə {amount} çox", ru: "на {amount} больше, чем в предыдущем месяце" },
++  "cmp.titleSame":  { en: "What changed vs the same days last month", az: "Keçən ayın eyni günləri ilə müqayisədə nə dəyişib", ru: "Что изменилось по сравнению с теми же днями прошлого месяца" },
++  "cmp.titleFull":  { en: "What changed vs the previous month", az: "Əvvəlki ayla müqayisədə nə dəyişib", ru: "Что изменилось по сравнению с предыдущим месяцем" },
++  "cmp.prevSame":   { en: "same days last month: {amount}", az: "keçən ayın eyni günləri: {amount}", ru: "те же дни прошлого месяца: {amount}" },
++  "cmp.prevFull":   { en: "previous month: {amount}", az: "əvvəlki ay: {amount}", ru: "предыдущий месяц: {amount}" },
++  "cmp.window":     { en: "Days 1–{d} of both months compared", az: "Hər iki ayın 1–{d} arası günləri müqayisə edilir", ru: "Сравниваются дни 1–{d} обоих месяцев" },
+   "home.income":    { en: "Income", az: "Gəlir", ru: "Доход" },
+   "home.spent":     { en: "Spent", az: "Xərclənib", ru: "Потрачено" },
+   "home.balance":   { en: "Balance", az: "Balans", ru: "Баланс" },
+@@ -380,7 +401,8 @@ export const MESSAGES = {
+   "safe.expectedLater":  { en: "Expected later this month (not counted)", az: "Bu ay daha sonra gözlənilir (hesablanmır)", ru: "Ожидается позже в этом месяце (не учтено)" },
+   "safe.goalContributions": { en: "Goal contributions", az: "Məqsədlərə ayırmalar", ru: "Взносы на цели" },
+   "safe.savingsTarget":  { en: "Savings target", az: "Yığım hədəfi", ru: "Цель накоплений" },
+-  "safe.recordedSpend":  { en: "Recorded spend", az: "Qeydə alınmış xərclər", ru: "Записанные расходы" },
++  "safe.recordedSpend":  { en: "Recorded expenses", az: "Qeydə alınmış xərclər", ru: "Записанные расходы" },
++  "safe.laterExpenses":  { en: "of which dated later this month (set aside, not spent yet)", az: "o cümlədən bu ayın sonrakı tarixlərinə yazılan (ayrılıb, hələ xərclənməyib)", ru: "в том числе на более поздние даты месяца (отложено, ещё не потрачено)" },
+   "safe.upcoming":       { en: "Upcoming & unrecorded payments", az: "Qarşıdakı və qeydə alınmamış ödənişlər", ru: "Предстоящие и незаписанные платежи" },
+   "safe.noneThisMonth":  { en: "none this month", az: "bu ay yoxdur", ru: "в этом месяце нет" },
+   "safe.discretionary":  { en: "Discretionary remaining", az: "Sərbəst qalıq", ru: "Свободный остаток" },
+@@ -407,7 +429,6 @@ export const MESSAGES = {
+   "budgets.over":       { en: "{amount} over limit", az: "Limit {amount} keçilib", ru: "Лимит превышен на {amount}" },
+   "budgets.warn":       { en: "{amount} left — approaching limit", az: "{amount} qalıb — limitə yaxınlaşırsınız", ru: "Осталось {amount} — лимит почти исчерпан" },
+   "budgets.remaining":  { en: "{amount} remaining", az: "{amount} qalıb", ru: "Осталось {amount}" },
+-  "wc.title":           { en: "What Changed vs {month}", az: "{month} ilə müqayisədə nə dəyişib", ru: "Что изменилось по сравнению с {month}" },
+   "wc.recurring":       { en: "recurring", az: "təkrarlanan", ru: "регулярный" },
+   "wc.oneOff":          { en: "one-off", az: "birdəfəlik", ru: "разовый" },
+   "pace.title":         { en: "Spending Pace", az: "Xərcləmə tempi", ru: "Темп расходов" },
+@@ -445,15 +466,8 @@ export const MESSAGES = {
+   "freq.yearly":   { en: "yearly", az: "illik", ru: "ежегодно" },
+ 
+   // ── Analytics
+-  "an.emptyTitle":   { en: "No data yet", az: "Hələ məlumat yoxdur", ru: "Данных пока нет" },
+-  "an.emptyBody":    { en: "Add a few transactions to see spending patterns.", az: "Xərc qanunauyğunluqlarını görmək üçün bir neçə əməliyyat əlavə edin.", ru: "Добавьте несколько операций, чтобы увидеть закономерности расходов." },
+-  "an.totalSpent":   { en: "total spent", az: "cəmi xərclənib", ru: "всего потрачено" },
+-  "an.lastMonth":    { en: "{amount} last month", az: "keçən ay {amount}", ru: "в прошлом месяце {amount}" },
+   "an.dailyAvg":     { en: "Daily avg:", az: "Gündəlik orta:", ru: "В среднем в день:" },
+   "an.projected":    { en: "Projected:", az: "Proqnoz:", ru: "Прогноз:" },
+-  "an.rate.Surplus":    { en: "Surplus rate:", az: "Qənaət faizi:", ru: "Доля профицита:" },
+-  "an.rate.Deficit":    { en: "Deficit rate:", az: "Kəsir faizi:", ru: "Доля дефицита:" },
+-  "an.rate.Break-even": { en: "Break-even rate:", az: "Bərabərlik faizi:", ru: "Баланс:" },
+   "an.totalSpending": { en: "Total spending", az: "Ümumi xərclər", ru: "Все расходы" },
+   "an.vs":           { en: "{a} vs {b}", az: "{a} / {b}", ru: "{a} против {b}" },
+   "an.transactions": { en: "Transactions", az: "Əməliyyatlar", ru: "Операции" },
+@@ -497,6 +511,9 @@ export const MESSAGES = {
+   "rec.activeSchedules": { en: "Active schedules", az: "Aktiv ödəniş cədvəlləri", ru: "Активные графики" },
+   "rec.active":        { en: "Active", az: "Aktiv", ru: "Активные" },
+   "rec.paused":        { en: "Paused", az: "Dayandırılıb", ru: "Приостановлено" },
++  "rec.recordPayment": { en: "Record payment", az: "Ödənişi qeyd et", ru: "Записать платёж" },
++  "rec.recordIncome":  { en: "Record receipt", az: "Daxilolmanı qeyd et", ru: "Записать поступление" },
++  "rec.recordHint":    { en: "Paid one of these? Tap “Record payment” so it counts as paid. An ordinary expense with the same name is not linked to the bill, and the bill would still be set aside in Safe to Spend.", az: "Bunlardan birini ödədiniz? Ödənilmiş sayılması üçün «Ödənişi qeyd et» düyməsinə toxunun. Eyni adlı adi xərc bu ödənişlə əlaqələndirilmir və o, «Xərcləmək olar» hesabında yenə ayrılmış qalır.", ru: "Оплатили что-то из этого? Нажмите «Записать платёж», чтобы платёж считался оплаченным. Обычный расход с тем же названием с ним не связывается, и сумма по-прежнему будет зарезервирована в «Можно потратить»." },
+   "rec.pause":         { en: "Pause", az: "Dayandır", ru: "Приостановить" },
+   "rec.reactivate":    { en: "Reactivate", az: "Bərpa et", ru: "Возобновить" },
+   "rec.noDate":        { en: "No upcoming date", az: "Yaxın tarix yoxdur", ru: "Ближайшей даты нет" },
+@@ -571,7 +588,6 @@ export const MESSAGES = {
+   "set.overview":      { en: "Overview", az: "İcmal", ru: "Обзор" },
+   "set.totalIncome":   { en: "Total income", az: "Ümumi gəlir", ru: "Всего доходов" },
+   "set.totalExpenses": { en: "Total expenses", az: "Ümumi xərclər", ru: "Всего расходов" },
+-  "set.net":           { en: "Net", az: "Xalis fərq", ru: "Итог" },
+   "set.safeEnable":    { en: "Enable Safe to Spend", az: "«Xərcləmək olar»-ı aktivləşdir", ru: "Включить «Можно потратить»" },
+   "set.safeEnableSub": { en: "Shows discretionary budget on Dashboard", az: "Ana səhifədə sərbəst büdcəni göstərir", ru: "Показывает свободный бюджет на главном экране" },
+   "set.floor":         { en: "Monthly savings floor", az: "Aylıq minimum yığım", ru: "Минимум накоплений в месяц" },
+@@ -643,13 +659,10 @@ export const MESSAGES = {
+   "month.prev":         { en: "Previous month", az: "Əvvəlki ay", ru: "Предыдущий месяц" },
+   "month.next":         { en: "Next month", az: "Növbəti ay", ru: "Следующий месяц" },
+   "month.current":      { en: "Current", az: "Cari ay", ru: "Текущий" },
+-  "month.vs":           { en: "{amount} vs {month}", az: "{month} ilə müqayisədə {amount}", ru: "{amount} к {month}" },
+   "month.net.Net surplus": { en: "Net surplus", az: "Xalis qənaət", ru: "Чистый профицит" },
+   "month.net.Net deficit": { en: "Net deficit", az: "Xalis kəsir", ru: "Чистый дефицит" },
+   "month.net.Break-even":  { en: "Break-even", az: "Bərabər", ru: "В ноль" },
+-  "month.vsSpentIn":    { en: "vs {amount} spent in {month}", az: "{month}: {amount} xərclənmişdi", ru: "в {month} потрачено {amount}" },
+   "month.byMerchant":   { en: "By Merchant", az: "Satıcılar üzrə", ru: "По продавцам" },
+-  "month.budgetStatus": { en: "Budget Status", az: "Büdcə vəziyyəti", ru: "Состояние бюджета" },
+   "month.recurringCount": { en: { one: "{n} recurring transaction recorded this month", other: "{n} recurring transactions recorded this month" }, az: "Bu ay {n} təkrarlanan əməliyyat qeydə alınıb", ru: "Регулярных операций в этом месяце: {n}" },
+   "month.allTxns":      { en: "All Transactions — {month}", az: "Bütün əməliyyatlar — {month}", ru: "Все операции — {month}" },
+   "month.emptyTitle":   { en: "No transactions", az: "Əməliyyat yoxdur", ru: "Операций нет" },

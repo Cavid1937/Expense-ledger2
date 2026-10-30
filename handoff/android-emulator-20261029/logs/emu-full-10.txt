@@ -1,0 +1,11 @@
+
+E5e. Back button on the final Android build, real touches (5)
+  ✓ opened the add form with a real touch
+   keyboard presses used to hide the soft keyboard: 3
+  ✗ Back closes the add form; the app stays open
+      ↳ {"page":"gone"}
+  ✗ Back on Home with nothing open: 'Press Back again to exit', app stays
+      ↳ {"page":"gone"}
+  ✓ a second Back within 2 seconds leaves the app
+
+emu E5e: 2 FAILED, 2 passed

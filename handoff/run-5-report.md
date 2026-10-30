@@ -1,0 +1,115 @@
+# Claude Implementation Report — 2026-10-27 — Run 5
+
+Authorization: owner, 2026-10-27 (relaying ChatGPT): "Yes. Tell Claude to start Run 5 now, following that order, without publishing anything." Work order: the "Run 5 authorization" block at the top of *Expense Ledger — Work Plan for 2026-10-27*. **Nothing was committed, pushed, merged or deployed in Run 5.** main/production `86af1c1` and the preview branch `a1b16e2` are unchanged; Run 5's changes are local and uncommitted.
+
+## 1. Source identity
+| Item | Value |
+|---|---|
+| Worktree / branch | `Expense-ledger2-fixes`, local branch `fix/financial-correctness-2026-10-26`, HEAD `a1b16e2066ad9c2c3611c9a69caab6739dbe8a00` (= GitHub preview branch `preview-run3-add-guard-future-dates`) |
+| Run 4 candidate (exact, committed) | App.jsx blob `9d29737121d0638566e28e90ffd1ca8ea37deeb4`, i18n.js blob `e972bc241b6d81e2d6833375674bb78faf0a117f` |
+| **Run 5 candidate (local, uncommitted)** | App.jsx git blob `904d47fe1e46d742052dd3d84c1ea2770556bfc1` (working file, CRLF: 280,431 bytes, SHA-256 `d185509fd950713c6ffb2f5f743ec0d6f3162cd9f4f57a2d0233c04ea43d43ee`); i18n.js git blob `2e41b10f43a7b2a82dfcb93152e9bbc7f8d84a33` (98,204 bytes, SHA-256 `19f2f98f6de96dc3ff1d6b126bd0eb3c38118619edb9107981ec6fc9e5713f29`) |
+| Line endings | `core.autocrlf=true`: working files are CRLF, git stores LF. Every run now prints the raw id and `gitblob-lf` (= what `git ls-tree` shows). The unchanged a1b16e2 App.jsx prints raw `3b9796fa…`, gitblob-lf `9d297371…` = the commit. |
+| Runtime | Node v24.22.1, npm 11.19.1, Google Chrome (installed), Windows 11 |
+
+## 2. Dispositions
+**ChatGPT Review — Runs 3–4** (https://app.notion.com/p/4067ff36825e8169a208c76ade90a5bf)
+| Finding | Disposition | Run 5 result |
+|---|---|---|
+| R1 test reproducibility (HIGH) | ACCEPT | One hashed package (44 files), clean-room rerun from `git archive a1b16e2` — §4. **VERIFIED** for the package and both candidates. Tests still not on GitHub (owner approval needed). |
+| R2 Add-form guard | ACCEPT | Unchanged code; e2e_run3 passes in the clean room on a1b16e2 and Run 5. Real phone: NOT ASSESSED. |
+| R3 future-dated rows | ACCEPT | Rule kept; new before/after proof and card wording — §3. |
+| R4 real device | ACCEPT | Still NOT ASSESSED (owner's phone). |
+| R5 checkpoint chronology | ACCEPT | Current-state block updated again; history kept. |
+| Localization / number format | ACCEPT | No change to the money-format decision; new az/ru strings are drafts pending native review. |
+| Run 4 D26 enlarged text | ACCEPT | e2e_bigtext 25/25 in the clean room; real device NOT ASSESSED. |
+
+**ChatGPT Review — Run 4** (https://app.notion.com/p/4067ff36825e8128a30cd89b9bfc62a1)
+| Finding | Disposition | Run 5 result |
+|---|---|---|
+| R1 supplied combined bundle is not the Run 3/4 pack (HIGH) | ACCEPT | Correct: that bundle is the old harness, kept unchanged in `tests/original/` (run.sh, harness.py, build.mjs with the `/mnt/user-data/…/expense-tracker.jsx` default). It is **not run**. The authoritative suite is `tests/run-logic.mjs` + `tests/run-browser.mjs`, which always set `CANDIDATE` to the App.jsx under test; all logic tests call functions extracted from that App.jsx by `tests/harness.mjs` (no test reimplements app rules — checked: no test file defines its own functions). Hardening in §4. |
+| R2 Safe to Spend meaning (MEDIUM) | ACCEPT | §3: tested pair + wording fix. |
+| R3 emulation only (MEDIUM) | ACCEPT | Status kept; phone steps in §7. |
+| R4 stale checkpoint next action | ACCEPT | Fixed (Living Checkpoint + PHASE_CHECKPOINT current block). |
+| R5 persist() is not a backup | ACCEPT | §5: assessed, design written, **not implemented** — needs the owner's yes. |
+
+## 3. Future-dated expenses and Safe to Spend (Review Run 4 R2)
+**Rule (unchanged):** "spent" and every actuals-based figure = what happened up to today; Safe to Spend also subtracts expenses already entered for later this month (committed money). Later-dated income is shown as "expected", not counted.
+
+**Before/after proof — `tests/logic/run5.test.mjs` (16 checks, hand-worked numbers, today = 13 Oct 2026).** Base: income 2,000; spent to date 90.
+- Adding 300 dated 20 Oct: spent to date stays 90, planned +300, whole month 390; category spend, transaction count, `calcSpentToDate`, every insight/anomaly/pattern and "what changed" are **identical** (deep-equal) to the base; Safe to Spend's Recorded expenses = 390 and discretionary remaining 1,910 → 1,610.
+- Control, the same 300 dated today: spent to date 390, housing 300, count +1; Safe to Spend also 1,610.
+- A recurring 500 bill is set aside **exactly once**: not yet entered → 500 as an upcoming payment; entered ahead for 20 Oct → 500 as a recorded expense, upcoming 0; remaining 1,410 both ways.
+- Later-dated income 1,000 → "expected", Safe to Spend unchanged.
+- **On the unchanged a1b16e2:** 11 passed, 5 failed — every calculation property already held; only the new `laterExp` figure did not exist yet (logs 123, and clean room 128/138).
+
+**Wording finding:** the card's "Recorded spend" line silently included later-dated expenses and never said so; "spend" reads as money already gone.
+**Fix (smallest, no calculation change):**
+- `calcSafeToSpend` also returns `laterExp` (= `plannedExp` from `calcMonthSummary`, already computed).
+- When `laterExp > 0` a muted line appears under the row, mirroring the existing "Expected later this month (not counted)" income line: en "of which dated later this month (set aside, not spent yet)" · az "o cümlədən bu ayın sonrakı tarixlərinə yazılan (ayrılıb, hələ xərclənməyib)" · ru "в том числе на более поздние даты месяца (отложено, ещё не потрачено)". It is part of the row above, not a further deduction.
+- en "Recorded spend" → "Recorded expenses" (az/ru already said "recorded expenses").
+- Diff: App.jsx +10/−2, i18n.js +2/−1 (`handoff/run-5-App-i18n.diff.txt`).
+**Browser proof — `tests/browser/e2e_run5.mjs` (12 checks):** en/az/ru card shows "−330.00" then the 300.00 line and Safe to Spend 1,170.00; no line without later-dated expenses; Monthly still lists +300 as "dated later … not counted yet"; az at 260 px (≈150 % zoom): no sideways scroll, every line on screen. On a1b16e2: 4 of these fail (no line yet).
+**Left open:** the Monthly line says "(not counted yet)" while Safe to Spend does count the expense — each is accurate for its screen, but native-speaker and user review should confirm the pair is understood.
+
+## 4. Test integrity and reproducibility (Review R1s)
+**Changes to the test harness (tests/ is still local, untracked):**
+1. **Expected-count guard** — `tests/expected-counts.json` + `tests/count-guard.mjs`, used by both runners. Each file must exit 0, print its summary and execute exactly the recorded number of checks; output per file: `passed= failed= missing= expected=`. Self-test with fake files: 38 of 39 → PROBLEM; a file that stops early with exit 0 → PROBLEM; 39 of 39 → ok.
+2. **Silent conditional checks removed** — `e2e_phase2.mjs` ("weekend higher" only ran if the month already had a weekend day: now an else-check runs) and `e2e_run2.mjs` (chip-swipe check only ran if the chips overflowed: now the overflow is an asserted precondition, +1 check). Both ran today; they could have vanished early in a month or after a layout change.
+3. **No stale fallbacks** — `tests/browser/build.mjs` and `tests/logic/lib.mjs` no longer default to `/mnt/user-data/outputs/expense-tracker.jsx`; they stop with an error unless `CANDIDATE`/`HARNESS` are set.
+4. **Source identity printed by every run** — `tests/identity.mjs`.
+5. **Package builder/verifier** — `tests/make-package.mjs` (`--verify` fails on any changed, missing or unlisted file).
+6. **Intermittent `e2e_ux.mjs` checks found by the clean room and fixed** (pre-existing; not caused by Run 5 code):
+   - Touch target "Pause 34×29" (3 of 8 repeats failed): measured while the Recurring section was still sliding in (pageIn starts 12 px low), when the Rent row's Pause button was momentarily under the tab bar; at rest it is 36 px and clear. Fix: `settle()` (wait for finite CSS animations, max 2 s) before measuring; `openSettings`/`openAdd` also settle.
+   - "a fast swipe down dismisses the sheet" / "reduced motion: a long swipe still dismisses": fixed 900/150 ms sleeps. A pointer recorder (now permanent) captured one failure in full: the whole 440 px swipe and the release reached the app. Cause: the dismiss spring advances ≤ 32 ms of simulated time per frame, so on a busy machine it takes longer in real time. Fix: wait for the sheet to go (up to 3 s / 1.5 s). The reduced-motion check now also asserts it closes within 250 ms (measured: 14–25 ms reduced, ~510 ms with the spring — so 250 ms tells them apart).
+   - Repeats: before 3/8 and 2/15 failed; after the first fixes 20/20 passed (log 136); final clean room in §4 table.
+   - Product note (LOW, not a defect): on a slow phone the sheet's close spring also slows down rather than dropping frames.
+
+**Runs (all with the count guard):**
+| # | Where / candidate | Logic | Browser | Build | Logs |
+|---|---|---|---|---|---|
+| 1 | Worktree, a1b16e2 (unchanged) | 414/414, 7 files | 313/313, 10 files | — | 121, 122 |
+| 2 | Worktree, Run 5 | 430/430, 8 files | 325/325, 11 files | OK `index-vlrTbmbI.js` 408.68 kB | 124–126 |
+| 3 | Clean room 1, a1b16e2 | 425 + **5 failed** (run5 only) | 320 + **5 failed** (4 e2e_run5 + 1 e2e_ux swipe) | — | 127–129 |
+| 4 | Clean room 1, Run 5 | 430/430 | 324 + **1 failed** (e2e_ux touch target, intermittent) | OK same bundle | 130–132 |
+| 5 | Clean room 2, a1b16e2 | 425 + 5 failed (run5 only) | 320 + 5 failed (4 e2e_run5 + 1 e2e_ux swipe, recorded) | — | 137–139 |
+| 6 | Clean room 2, Run 5 | 430/430 | **325/325** | OK same bundle | 140–142 |
+| 7 | Clean room 3, a1b16e2 | 425 + 5 failed (run5 only) | 321 + 4 failed (e2e_run5 only) | — | 143–145 |
+| 8 | Clean room 3, Run 5 | 430/430 | 300 passed, 0 failed, **25 missing** — `e2e_bigtext.mjs` hung and was killed at the 10-min limit (the count guard reported it; it did not look green) | OK same bundle | 143, 146–148 |
+
+**Browser hang (found in run 8, investigated):** 3 timed reruns of `e2e_bigtext.mjs` on the same clean-room copy: run 1 hung for 1,147 s at 200 % zoom and ended with `TargetCloseError: Target closed`; runs 2–3 passed 25/25 in 68 s and 72 s (log 150). This matches Run 4's earlier crash. The app has no resize or animation loop that could cause it (only the short sheet-swipe animation, which stops when done), so it is a headless-Chrome hang. Fixed in the test (Run 6): one fresh browser per scenario, a 90 s protocol timeout, and **one** reported retry only when the browser itself hangs or closes — a failed layout check is never retried.
+
+**Clean-room status for Run 5:** logic fully reproduced 3×; browser fully reproduced in clean room 2 (325/325); run 4 and run 8 each lost one file to a test-infrastructure fault that is now fixed. The final reproduction is in the Run 6 report (same test package plus the fixes).
+
+Clean-room procedure (script reproduced in log 127/137/143): new empty folder under %TEMP%; `node tests/make-package.mjs <pkg>` + `--verify` (44 files, 0 problems); `git archive a1b16e2` → extract; package.json identical to the package copy; copy tests + package-lock; `npm install` + `npm install --no-save puppeteer-core @fontsource/playfair-display @fontsource/dm-sans`; A = run both runners on the archived App.jsx/i18n.js (gitblob-lf 9d29737… / e972bc2…); B = copy the Run 5 App.jsx/i18n.js over, run both runners and `npx vite build`.
+
+Downloads folder 109 before / 109 after every run. Protected baseline `Expense-ledger2` untouched.
+
+## 5. Data-safety step: `navigator.storage.persist()` (Review R5, work-order step 4) — assessed, NOT implemented
+- **Current state (inspected):** data lives only in localStorage `expense_ledger_v5` (`readRaw`/`writeRaw`, App.jsx l.22–23); write failures already show "Could not save changes" with a Back-up button; no `navigator.storage` call exists.
+- **Why not implemented today:** the master prompt does not require it (§8 covers recovery, quota and backup honesty, not eviction); the Run 3 plan and the work order both make it conditional. On Firefox the call can show a **permission prompt to the user** — a visible product change the owner should approve. Chrome decides silently (engagement / installed app); Safari's handling of non-installed sites was not verified here. (Browser behaviour is from general knowledge, not tested in this run.)
+- **Proposed design (for approval):** call once after the first successful save, never at first launch; outcomes unsupported / granted / denied / error are all silent except a one-line Settings status ("Browser keeps your data: yes / not guaranteed — back up regularly"); never claim it is a backup; tests for all four outcomes with a stubbed `navigator.storage`. Effort ≈ 1 short run.
+- **Status:** DEFERRED WITH REASON (owner decision). Offline launch (AUD-OFF): NEEDS WORK, unchanged.
+
+## 6. Requirement status
+| Item | Status |
+|---|---|
+| Test package for a1b16e2 and Run 5, hashed, clean-room rerun | VERIFIED (§4) |
+| No silent skips / count accounting in the authoritative suite | VERIFIED (guard + self-test) |
+| Safe to Spend / future-dated semantics (calculation) | VERIFIED in tests (logic + browser, a1b16e2 vs Run 5) |
+| Safe to Spend wording en | IMPLEMENTED BUT UNVERIFIED on a real phone |
+| Safe to Spend wording az/ru | IMPLEMENTED BUT UNVERIFIED — native-speaker review pending |
+| D22 Add-form guard, D23–D25, D26 enlarged text | VERIFIED in tests; real phone NOT ASSESSED |
+| Test sources on GitHub | BLOCKED — needs owner approval to commit `tests/` |
+| storage.persist() | DEFERRED WITH REASON (owner approval) |
+| Offline launch, self-hosted fonts | NEEDS WORK |
+| Number format, Russian font, native wording | Owner decisions — unchanged |
+| `expense_ledger_full_test_pack.xlsx` | Located by ChatGPT in its Library (legacy manual checklist, all cases "Not run"); not on this computer. 42-screen layout audit: still not located |
+
+## 7. Next actions
+1. **Owner:** test the preview on the phone (the preview is Run 4; Run 5's card line is not on it). Steps: Add form — type an amount, then ×, Cancel, phone Back: each must ask; Keep editing / Close without saving. Turn phone text size to maximum: Home, Ledger, Monthly, Analytics, Recurring, Add (Save reachable), Settings — nothing cut off, no sideways scrolling, in az and ru too.
+2. **Owner decisions:** (a) commit Run 5 locally and push it to the preview branch so it can be phone-tested together; (b) commit `tests/` (without evidence logs); (c) approve the persist() design in §5.
+3. **ChatGPT:** review §3 wording (en/az/ru) and §4 test fixes; challenge the "Monthly says not counted / Safe to Spend counts it" pairing.
+4. **Claude, next run:** whatever the owner approves of 2(a)–(c); otherwise the next master-prompt item (§8 recovery-notice priority vs ordinary toasts) — inspect and test.
+
+## Attachments
+`run-5-report.md` (this), `run-5-App-i18n.diff.txt`, `run-5-MANIFEST.sha256`, `run-5-test-package.zip` (44 files), `run-5-test-logs.txt` (key logs concatenated).

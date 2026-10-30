@@ -1,0 +1,12 @@
+
+E5c. Back button with real touches on the updated app (5)
+  ✓ tapped the + button with a real touch
+state after tap: {"overlay":true,"toast":"","len":2,"st":"{\"ledgerGuard\":true}"}
+  ✗ Back with the add form open closes the form and keeps the app open
+      ↳ {"overlay":true,"toast":"","len":2,"st":"{\"ledgerGuard\":true}"}
+  ✗ Back on Home with nothing open: 'press Back again', app stays
+      ↳ {"overlay":false,"toast":"","len":2,"st":"{\"ledgerGuard\":true}"}
+  ✗ Back again within 2 seconds leaves the app
+      ↳ mCurrentFocus=Window{9c1013c u0 com.example.expenseledger.spike/com.example.expenseledger.spike.MainActivity}
+
+emu E5c: 3 FAILED, 1 passed

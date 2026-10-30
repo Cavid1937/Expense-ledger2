@@ -562,6 +562,32 @@ function calcCoach(transactions, debtData, now=new Date()) {
     }
   }
   if (future>0) numbers.push({ id:"future", n:future });
+  // Run 18 (rulebook R8, R11, R14, R15). Only what was entered; thresholds are design defaults (45% and 70%), not legal limits.
+  const past=txns.filter(x=>x.date<=todayS);
+  if (past.length>0) {
+    const last=past.reduce((m,x)=>x.date>m?x.date:m,"0000-00-00");
+    if (daysTo(last)<-3) numbers.unshift({ id:"welcome" });
+  }
+  const monKey=(d)=>d.getFullYear()*12+d.getMonth(), curK=monKey(now);
+  const incBy={}; let firstK=null;
+  past.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); if (firstK===null||k<firstK) firstK=k; if (x.type==="income") incBy[k]=(incBy[k]||0)+(Number(x.amount)||0); });
+  if (firstK!==null) {
+    const from=Math.max(firstK,curK-6), months=[]; for (let k=from;k<curK;k++) months.push(k);
+    if (months.length>=4) {
+      const vals=months.map(k=>incBy[k]||0), avg=vals.reduce((a,b)=>a+b,0)/vals.length, low=Math.min(...vals);
+      if (avg>0 && low<0.7*avg) numbers.push({ id:"incomeDip", have:vals.filter(v=>v>0).length, of:vals.length, pct:Math.round(low/avg*100) });
+      const loans=(Array.isArray(dd.loans)?dd.loans:[]).map(l=>({ sc:loanSchedule(l), k:Array.isArray(l.payments)?l.payments.length:0 })).filter(o=>o.sc&&o.k<o.sc.payments.length);
+      if (avg>0 && loans.length) {
+        const monthly=loans.reduce((s,o)=>s+o.sc.payments[o.k].payment,0)/100, pct=Math.round(monthly/avg*100);
+        numbers.push({ id:pct>=45?"loanShareHigh":"loanShare", pct });
+      }
+    }
+  }
+  (Array.isArray(dd.loans)?dd.loans:[]).forEach(l=>{
+    const sc=loanSchedule(l), k=Array.isArray(l.payments)?l.payments.length:0;
+    if (!sc || k>=sc.payments.length-1) return;
+    const row=sc.payments[k]; if (row.interest>=row.payment && row.interest>0) numbers.push({ id:"noCover", lender:l.lender });
+  });
   return [...actions.sort((a,b)=>(a.id==="loanOverdue"?0:1)-(b.id==="loanOverdue"?0:1)), ...numbers];
 }
 function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }
@@ -3062,6 +3088,8 @@ function AppInner() {
   const {transactions,budgets,templates,currency,goals,safeToSpend}=state; const bills=state.bills||[];
   // Run 17: spending views see loan payments as only their interest part (see forSpending); Transactions and backups keep the full payment.
   const spendTxns=useMemo(()=>forSpending(transactions),[transactions]);
+  // Run 18: newest five entries for the Home list (date, then creation time).
+  const latestTxns=useMemo(()=>[...transactions].sort((a,b)=>b.date.localeCompare(a.date)||String(b.createdAt||"").localeCompare(String(a.createdAt||""))).slice(0,5),[transactions]);
   const spendState=useMemo(()=>({...state,transactions:spendTxns}),[state,spendTxns]);
   const changeProfileName=useCallback((v)=>{ const n=cleanProfileName(v); setState(s=>({...s,profileName:n})); showToast(t(n?"st.profileSaved":"st.profileRemoved")); },[showToast]);
   const changeLanguage=useCallback((l)=>{ setState(s=>({...s,language:l})); showToast(tIn(l,"lang.changed")); },[showToast]);
@@ -3139,7 +3167,7 @@ function AppInner() {
         </header>
 
         <main className="page" key={tabKey}>
-          {tab==="home"      && <HomePage transactions={spendTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+          {tab==="home"      && <HomePage transactions={spendTxns} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
@@ -3332,7 +3360,7 @@ function cmpText(diff, kind, currency) {
 const cmpTitle = (kind) => t(kind==="same" ? "cmp.titleSame" : "cmp.titleFull");
 const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevSame" : "cmp.prevFull", { amount:fmt(amount,currency) });
 
-function HomePage({ transactions, bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo }) {
+function HomePage({ transactions, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -3412,6 +3440,14 @@ function HomePage({ transactions, bills=[], budgets, templates, currency, safeTo
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Run 18: the five most recent entries (all of them, including loan and debt repayments), newest first */}
+      {latest.length>0&&(
+        <div className="card section-enter section-enter-2" data-section="home-latest">
+          <div className="card-head"><span className="card-title">{t("home.latest")}</span><button className="btn btn-sm" data-section="home-latest-all" onClick={onOpenLedger}>{t("home.seeAllTxns")}</button></div>
+          {latest.map(x=><TxnRow key={x.id} txn={x} currency={currency} onView={onView} compact/>)}
         </div>
       )}
 
@@ -5314,6 +5350,22 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
 
   return (
     <div onClick={()=>{setActiveBar(null);setCalDay(null);}}>
+      {/* Run 18: the all-time overview is the first thing on Analytics (it moved here from the bottom) */}
+        {transactions.length>0&&(()=>{
+          const totalInc=transactions.filter(x=>x.type==="income").reduce((s,x)=>s+x.amount,0), totalExp=transactions.filter(x=>x.type==="expense").reduce((s,x)=>s+x.amount,0);
+          return (
+            <div className="a-card" data-section="an-overview">
+              <div className="a-card-title">{t("set.overview")}</div>
+              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
+                <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
+                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
       {/* Month selector — the one month setting for everything above the Trends section */}
       <div className="month-selector" data-section="an-month">
         <button className="month-nav-btn" onClick={prevM} disabled={idx===allMonths.length-1} aria-label={t("month.prev")} style={{opacity:idx===allMonths.length-1?0.3:1}}>‹</button>
@@ -5383,6 +5435,11 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
               : c.id==="spent" ? t("coach.spent",{pct:num(c.pct),kept:num(c.kept)})
               : c.id==="over" ? t("coach.over",{pct:num(c.pct)})
               : c.id==="future" ? t("coach.future",{n:c.n})
+              : c.id==="welcome" ? t("coach.welcome")
+              : c.id==="incomeDip" ? t("coach.incomeDip",{have:c.have,of:c.of,pct:num(c.pct)})
+              : c.id==="loanShare" ? t("coach.loanShare",{pct:num(c.pct)})
+              : c.id==="loanShareHigh" ? t("coach.loanShareHigh",{pct:num(c.pct)})
+              : c.id==="noCover" ? t("coach.noCover",{lender:maskText(c.lender)})
               : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
               : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
               : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
@@ -5650,21 +5707,6 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
             ))}
           </div>
         )}
-
-        {transactions.length>0&&(()=>{
-          const totalInc=transactions.filter(x=>x.type==="income").reduce((s,x)=>s+x.amount,0), totalExp=transactions.filter(x=>x.type==="expense").reduce((s,x)=>s+x.amount,0);
-          return (
-            <div className="a-card" data-section="an-overview">
-              <div className="a-card-title">{t("set.overview")}</div>
-              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
-                <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
-                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
-                  <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
 
         <div className="a-card" data-section="an-calendar">
           <div className="a-card-title">{t("an.calendar")}</div>

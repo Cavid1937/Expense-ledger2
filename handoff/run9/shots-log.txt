@@ -1,0 +1,24 @@
+﻿320 en  : no page errors
+320 en privacy : no page errors
+320 az  : no page errors
+320 az privacy : no page errors
+320 ru  : no page errors
+320 ru privacy : no page errors
+360 en  : no page errors
+360 en privacy : no page errors
+360 az  : no page errors
+360 az privacy : no page errors
+360 ru  : no page errors
+360 ru privacy : no page errors
+390 en  : no page errors
+390 en privacy : no page errors
+390 az  : no page errors
+390 az privacy : no page errors
+390 ru  : no page errors
+390 ru privacy : no page errors
+1024 en  : no page errors
+1024 en privacy : no page errors
+1024 az  : no page errors
+1024 az privacy : no page errors
+1024 ru  : no page errors
+1024 ru privacy : no page errors

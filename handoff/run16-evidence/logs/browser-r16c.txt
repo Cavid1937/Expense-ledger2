@@ -1,0 +1,1018 @@
+﻿[run-browser] node=v24.22.1
+[run-browser] source C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\App.jsx bytes=376046 sha256=a5bcfd9e77a8ad95a9e27910bf549b75168a3df213fc6e3aa86af75eba40dfc0 gitblob=7580f8796f1edc62af89ff962a669c65d26e07f3 gitblob-lf=6da20172102677818805adcc3921bf3510d02426
+[run-browser] source C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\i18n.js bytes=144947 sha256=d4be3e180052109341e6223b6d42e80224d943530a0872fcf6b53ed1db053544 gitblob=3a4db6282b32578d58f2745f1f33953507bbc648 gitblob-lf=3a4db6282b32578d58f2745f1f33953507bbc648
+built App.jsx (626333 bytes bundled) -> C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\page
+
+A. Add-transaction form
+  ✓ cleared date → 'Please choose a valid date' shown
+  ✓ …nothing saved, form stays open
+  ✓ amount "-5" → nothing saved
+  ✓ amount "1e999" → nothing saved
+  ✓ amount "1e3" → nothing saved
+  ✓ amount "0" → nothing saved
+  ✓ amount "12." → nothing saved
+  ✓ valid amount + date → saved normally (regression check)
+
+B. Settings entry points
+  ✓ add form closed after the valid save
+  ✓ savings floor −300 → rejected, stays 300
+  ✓ savings floor 450 → saved
+  ✓ empty currency → rejected, stays ₼
+  ✓ currency row says 'Display only — amounts are not converted'
+  ✓ template amount −5 → rejected
+  ✓ template amount 0 → rejected
+  ✓ template amount 3.5 → saved
+  ✓ budget −50 → rejected, budgets unchanged
+  ✓ budget 120 → saved
+  ✓ goal target −100 → rejected
+  ✓ goal monthly −5 → rejected
+  ✓ goal saved −1 → rejected
+  ✓ valid goal → saved with exact values
+  ✓ prompt 'abc' → rejected, saved amount stays 3200
+  ✓ prompt −500 → rejected
+  ✓ prompt 1e3 (scientific) → rejected
+  ✓ prompt 4500 → saved
+  ✓ no JavaScript errors during the whole run
+
+e2e: ALL 27 CHECKS PASSED
+[run-browser] e2e.mjs exit=0 passed=27 failed=0 missing=0 expected=27
+
+Z. Page zoom 130% / 150% / 200% (390px phone → narrower CSS viewport)
+  ✓ 130% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 130% zoom, en: no JavaScript errors
+  ✓ 130% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 130% zoom, az: no JavaScript errors
+  ✓ 130% zoom, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 130% zoom, ru: no JavaScript errors
+  ✓ 150% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 150% zoom, en: no JavaScript errors
+  ✓ 150% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 150% zoom, az: no JavaScript errors
+  ✓ 150% zoom, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 150% zoom, ru: no JavaScript errors
+  ✓ 200% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 200% zoom, en: no JavaScript errors
+  ✓ 200% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 200% zoom, az: no JavaScript errors
+  ✓ 200% zoom, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 200% zoom, ru: no JavaScript errors
+
+M. Minimum font size 16px (text grows, boxes do not), 390px
+  ✓ (setting is active: a tab button reports font-size 16px; rendered glyphs are raised to ≥16px by the preference)
+  ✓ minimum 16px text, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ minimum 16px text, en: no JavaScript errors
+  ✓ minimum 16px text, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ minimum 16px text, az: no JavaScript errors
+  ✓ minimum 16px text, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ minimum 16px text, ru: no JavaScript errors
+
+e2e_bigtext: ALL 25 CHECKS PASSED
+[run-browser] e2e_bigtext.mjs exit=0 passed=25 failed=0 missing=0 expected=25
+  ✓ the previous app version (version 9: the exact files of commit 12a0c19) builds for this test
+
+DG-1. The current app writes the ledger and its mirror
+  ✓ start: bills set electricity (90) aside → discretionary +1,892
+  ✓ the ledger holds 2 bills and 3 linked payments
+  ✓ the mirror (own key) holds the same 2 bills and the 3 links
+  ✓ the mirror holds only bills and links, no other ledger data
+
+DG-2. Starting the previous app version (cannot be patched: it is already live) on that ledger
+  ✓ (guard) the old app really reads the ledger the new app wrote: it sees the 2 bills at start
+  ✓ KNOWN, version 9 cannot change: just opening it rewrites the ledger without the bills and without any payment link (the 4 entries stay)
+  ✓ every entry keeps its id, amount, date, name, note and category
+  ✓ the old app leaves the mirror key untouched
+  ✓ and its Safe to Spend shows the old collision again: +1,982 (electricity not set aside)
+
+DG-3. Back on the current app: the loss is offered back, never applied silently
+  ✓ a banner says an older version removed 2 bills and offers to restore them
+  ✓ nothing was restored by itself
+  ✓ while the offer is open the mirror is kept as it was (ignoring the banner loses nothing)
+  ✓ Restore brings back the same 2 bills (same ids and fields) and the same 3 links; no entry changed
+  ✓ Safe to Spend is +1,892 again
+  ✓ a recovery copy of the data was kept first, and the banner is gone
+  ✓ Undo puts the data back as it was before restoring, and the offer is open again (the mirror still has the bills)
+  ✓ after reloading: the 2 bills are there, no banner, +1,892
+  ✓ no JavaScript errors
+
+DG-4. 'No thanks' is final, and nothing is offered without a real loss
+  ✓ after another rollback the offer appears again
+  ✓ No thanks: nothing restored, the banner closes, and the mirror now follows the ledger (no repeated nagging)
+  ✓ after reloading there is no banner
+  ✓ a brand-new install: no banner and no mirror key (users without bills get no extra storage)
+  ✓ deleting a bill on purpose updates the mirror too (1 bill left)
+  ✓ after reloading there is no banner: a deliberate delete is not mistaken for a rollback
+  ✓ no JavaScript errors
+
+e2e_downgrade: ALL 26 CHECKS PASSED
+[run-browser] e2e_downgrade.mjs exit=0 passed=26 failed=0 missing=0 expected=26
+
+I1. CSV with BOM and bad rows
+  ✓ sheet: '2 transactions ready to import'
+  ✓ sheet explains each skipped row by reason (−5, 0, empty, abc+1e3, no date)
+  ✓ sheet explains what Merge and Replace do
+  ✓ merge adds exactly the 2 valid rows with exact amounts 12.5 and 7
+  ✓ no rejected row slipped in; the −5 did not become +5; no row got today's date
+  ✓ snackbar confirms 'Added 2 transactions'
+
+I2. Replace keeps a recovery copy and can be undone
+  ✓ replace: transactions, budgets and currency replaced; goals and templates (absent from the file) kept
+  ✓ a recovery copy of the previous data was stored before replacing
+  ✓ …and it equals the pre-import data exactly
+  ✓ snackbar offers Undo
+  ✓ Undo restores the previous data exactly
+  ✓ Undo after a later change refuses (it would erase newer work)
+  ✓ …and says why
+
+I3. Malformed settings in an otherwise valid backup
+  ✓ each rejected section is reported
+  ✓ merge adds the valid transaction and leaves every current setting untouched
+
+I4. Files that must be refused
+  ✓ unterminated.csv: refused with a clear message
+  ✓ unterminated.csv: saved data unchanged
+  ✓ nocols.csv: refused with a clear message
+  ✓ nocols.csv: saved data unchanged
+  ✓ future.json: refused with a clear message
+  ✓ future.json: saved data unchanged
+  ✓ junk.json: refused with a clear message
+  ✓ junk.json: saved data unchanged
+  ✓ allbad.csv: refused with a clear message
+  ✓ allbad.csv: saved data unchanged
+
+I5. Look-alike transactions (re-importing the same CSV)
+  ✓ sheet counts the look-alike and offers to skip it (checked by default)
+  ✓ merge with the box checked adds only the new one
+
+I6. Export files, then import them back
+  ✓ JSON backup file was downloaded
+  ✓ …its content equals the saved state (transactions, budgets, goals, currency) and carries version and count
+  ✓ message says the file was CREATED and that the app can't confirm it was saved (no 'backup saved')
+  ✓ Import / Export labels the date 'Last backup file created'
+  ✓ importing the same backup back → every transaction is recognised as already present
+  ✓ merging your own backup changes nothing
+  ✓ CSV export: BOM, CategoryId column, one row per transaction
+  ✓ re-importing the CSV: every row accepted, none skipped
+
+R1. Recovery notices stay until dismissed
+  ✓ recovery banner explains what was set aside and why
+  ✓ …and it is still there after several toasts (nothing can replace it)
+  ✓ dismissing it removes it
+  ✓ the set-aside records remain recoverable in storage
+
+R2. localStorage unavailable
+  ✓ app still starts; a visible banner says saving is paused because the saved data could not be read
+  ✓ the app keeps working in memory (a recorded entry appears in the Ledger)
+  ✓ no JavaScript errors
+
+R3. Save fails (quota)
+  ✓ a failed write shows 'Could not save changes' with a Back up button
+
+R4. Recovery copy cannot be made → saving is paused
+  ✓ banner says saving is paused so nothing is overwritten
+  ✓ after making a change, the ORIGINAL stored data is byte-for-byte untouched
+
+U1. Undo restores exactly what was deleted
+  ✓ delete shows 'Transaction deleted' with Undo
+  ✓ Undo brings back the identical record AND keeps the entry added after the delete
+  ✓ two quick deletes share one undo window ('2 transactions deleted')
+  ✓ one Undo restores both, exactly
+  ✓ after the window closes the Undo is gone (no stale undo)
+  ✓ no JavaScript errors
+
+e2e_import: ALL 51 CHECKS PASSED
+[run-browser] e2e_import.mjs exit=0 passed=51 failed=0 missing=0 expected=51
+
+F1. First launch: chooser before anything else, nothing preselected, Continue disabled
+  ✓ a fresh install shows the language chooser, not the app
+  ✓ three choices with native names: Azərbaycan dili · English · Русский
+  ✓ no language is preselected
+  ✓ Continue is disabled until a choice is made
+  ✓ the three options are equally prominent (same size, weight, width and height ≥ 44 px)
+  ✓ no flags (no images or flag emoji)
+  ✓ before a choice, the heading is shown in all three languages
+  ✓ selecting Azərbaycan dili enables Continue and marks only that option
+  ✓ selecting English enables Continue and marks only that option
+  ✓ selecting Русский enables Continue and marks only that option
+  ✓ the selected option looks different from the others (border and background)
+  ✓ after choosing Русский the Continue button reads 'Продолжить'
+  ✓ keyboard: Tab focuses the first option and a visible focus ring appears
+  ✓ keyboard: the arrow key moves the choice to English (native radio behaviour)
+  ✓ Enter continues; the app opens in English and the choice is saved
+
+F2. The chosen language applies everywhere and survives a reload
+  ✓ choosing Русский: the navigation is in Russian
+  ✓ language 'ru' is stored with the app's settings (expense_ledger_v5), nothing else is created
+  ✓ a new user's starter templates are named in the chosen language (a proper name like 'Manatlıq B-S' and merchants/amounts stay)
+  ✓ the page's lang attribute is 'ru' (screen readers pronounce it correctly)
+  ✓ after a reload the chooser does not reappear and the app opens in Russian
+
+F3. Existing users are not sent through onboarding
+  ✓ stored data from before this feature (no language) opens directly in English, as before
+  ✓ a saved Azerbaijani preference opens directly in Azerbaijani
+  ✓ an existing user's templates are never renamed
+
+F4. Switching in Settings: everything changes at once, nothing else does
+  ✓ switch to Azərbaycan dili: Settings stays open and the whole interface changes (Parametrlər)
+  ✓ …the half-filled template form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ switch to Русский: Settings stays open and the whole interface changes (Настройки)
+  ✓ …the half-filled template form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ switch to English: Settings stays open and the whole interface changes (Settings)
+  ✓ …the half-filled template form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ the Settings switch shows the current language as selected
+
+F5. No untranslated English on any screen (az and ru)
+  ✓ Azərbaycan dili: no English interface text on Home, Ledger, Monthly, Recurring, Settings or the add form
+  ✓ Azərbaycan dili: accessible names (aria-label) are translated too
+  ✓ Azərbaycan dili: the month name is written in that language ("Oktyabr 2026")
+  ✓ Azərbaycan dili: amounts keep the 1,234.56 form that matches how amounts are typed (documented decision)
+  ✓ Azərbaycan dili: no JavaScript errors
+  ✓ Русский: no English interface text on Home, Ledger, Monthly, Recurring, Settings or the add form
+  ✓ Русский: accessible names (aria-label) are translated too
+  ✓ Русский: the month name is written in that language ("Октябрь 2026")
+  ✓ Русский: amounts keep the 1,234.56 form that matches how amounts are typed (documented decision)
+  ✓ Русский: no JavaScript errors
+
+F6. Narrow screens: 320 / 360 / 390 px in all three languages
+  ✓ the overflow detector catches a clipped label and ignores invisible enlarged tap areas
+  ✓ Azərbaycan dili @ 320px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+  ✓ Azərbaycan dili @ 360px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+  ✓ Azərbaycan dili @ 390px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+  ✓ English @ 320px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+  ✓ English @ 360px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+  ✓ English @ 390px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+  ✓ Русский @ 320px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+  ✓ Русский @ 360px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+  ✓ Русский @ 390px: nothing clipped or overflowing on the chooser, 4 tabs, Settings and the add form
+
+F7. Add form with the keyboard open (short viewport) in Azerbaijani and Russian
+  ✓ Azərbaycan dili: the focused note field is visible in a 320×420 viewport
+  ✓ Azərbaycan dili: the translated save button ("Xərci qeyd et") can be scrolled into reach
+  ✓ Русский: the focused note field is visible in a 320×420 viewport
+  ✓ Русский: the translated save button ("Записать расход") can be scrolled into reach
+
+e2e_lang: ALL 57 CHECKS PASSED
+[run-browser] e2e_lang.mjs exit=0 passed=57 failed=0 missing=0 expected=57
+
+N-B1. Share succeeded
+  ✓ with the native hook the 'save a backup somewhere else' button is offered
+  ✓ the hook gets one call: a ledger-backup-<date>.json file of type application/json
+  ✓ the text is the complete version-10 backup (all entries, the bills list)
+  ✓ only now does the app say the backup was sent and record the time
+  ✓ no browser download was started as well
+  ✓ the plain 'Create backup file' button also goes through the native hand-over (a download link would do nothing there)
+  ✓ no JavaScript errors
+
+N-B2. The user closes the share sheet
+  ✓ nothing is recorded and no success message is shown
+
+N-B3. The native step fails
+  ✓ the user is told it failed (and not that it was sent)
+  ✓ the backup time is not updated
+  ✓ the same through the plain button: told, nothing recorded
+
+N-B4. CSV export goes the same way
+  ✓ the hook gets a ledger-<date>.csv file of type text/csv whose first row is the header
+  ✓ success message after "shared"; no browser download
+  ✓ a failed CSV hand-over is reported as a failure, not as created
+
+e2e_native: ALL 14 CHECKS PASSED
+[run-browser] e2e_native.mjs exit=0 passed=14 failed=0 missing=0 expected=14
+
+E2-B. Safe to Spend card: income dated later this month is shown but not counted
+  ✓ row 'Income received so far' shows 2,000.00 (today's income only)
+  ✓ a separate row shows the 1,000.00 dated later as expected, not counted
+  ✓ Safe to Spend = 2000 − 500 reserve − 30 spent = 1,470.00 (not 2,470.00)
+  ✓ no JavaScript errors
+  ✓ without future-dated income the 'expected' row is not shown
+
+E2-A. Analytics per-day tile
+  ✓ ₼10 every day so far → 'Per day, weekdays = weekends' (no 'heavier' claim)
+  ✓ weekends 30/day vs weekdays 10/day → '30.00 ₼ Per weekend day (higher)'; the 5,000 planned later is ignored
+  ✓ no JavaScript errors
+
+E2-D. Analytics 'by day of week' card shows the typical purchase, not an outlier-driven average
+  ✓ the card is titled 'Typical Purchase by Day of Week' and says it shows the median per transaction
+  ✓ every weekday shows 5.00 ₼ (typical), including the day with one 1,000 purchase
+  ✓ every weekday bar is equally long (same typical purchase); no bar towers because of one purchase
+  ✓ no JavaScript errors
+
+E2-C. Backup reminder
+  ✓ file created but never confirmed → the banner asks the user to confirm (not hidden for 7 days)
+  ✓ tapping 'I have the file' stores backupConfirmedAt (not earlier than the file's creation)
+  ✓ …and the reminder disappears
+  ✓ …with a short confirmation toast
+  ✓ after a reload the confirmed backup still suppresses the reminder (persisted)
+  ✓ Import / Export shows the file's creation date and that the user confirmed it
+  ✓ a new export records a newer file date; the earlier confirmation is not carried over to it
+  ✓ …so the confirm banner returns for the new file
+  ✓ last confirmed backup 8 days ago → 'Back up your data' reminder
+  ✓ dismiss hides it for this visit
+  ✓ confirmed yesterday → no reminder
+  ✓ no JavaScript errors
+
+e2e_phase2: ALL 24 CHECKS PASSED
+[run-browser] e2e_phase2.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+
+width 320px
+  ✓ 320px Home: no horizontal page scroll
+  ✓ 320px Home: Safe to Spend rows and backup banner fit (large amounts, long labels)
+  ✓ 320px Home: every Safe to Spend amount stays on one line (an amount split from its ₼ is misleading)
+  ✓ 320px Monthly (with the former Analytics content): no horizontal page scroll
+  ✓ 320px Monthly: stat tiles (incl. the per-day tile with a 6-digit amount) fit
+  ✓ 320px no JavaScript errors
+
+width 360px
+  ✓ 360px Home: no horizontal page scroll
+  ✓ 360px Home: Safe to Spend rows and backup banner fit (large amounts, long labels)
+  ✓ 360px Home: every Safe to Spend amount stays on one line (an amount split from its ₼ is misleading)
+  ✓ 360px Monthly (with the former Analytics content): no horizontal page scroll
+  ✓ 360px Monthly: stat tiles (incl. the per-day tile with a 6-digit amount) fit
+  ✓ 360px no JavaScript errors
+
+width 390px
+  ✓ 390px Home: no horizontal page scroll
+  ✓ 390px Home: Safe to Spend rows and backup banner fit (large amounts, long labels)
+  ✓ 390px Home: every Safe to Spend amount stays on one line (an amount split from its ₼ is misleading)
+  ✓ 390px Monthly (with the former Analytics content): no horizontal page scroll
+  ✓ 390px Monthly: stat tiles (incl. the per-day tile with a 6-digit amount) fit
+  ✓ 390px no JavaScript errors
+
+width 1280px
+  ✓ 1280px Home: no horizontal page scroll
+  ✓ 1280px Home: Safe to Spend rows and backup banner fit (large amounts, long labels)
+  ✓ 1280px Home: every Safe to Spend amount stays on one line (an amount split from its ₼ is misleading)
+  ✓ 1280px Monthly (with the former Analytics content): no horizontal page scroll
+  ✓ 1280px Monthly: stat tiles (incl. the per-day tile with a 6-digit amount) fit
+  ✓ 1280px no JavaScript errors
+
+e2e_phase2_layout: ALL 24 CHECKS PASSED
+[run-browser] e2e_phase2_layout.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+
+R10-1. Storage protection: asked once at start; shown honestly; can be asked again
+  ✓ the app asked the browser once when it started
+  ✓ refused → 'Off', with what that means and an 'Ask the browser again' button
+  ✓ asking again (a tap) → 'On'; the button goes away
+  ✓ no JavaScript errors
+  ✓ a browser without storage protection → says so plainly, no error
+
+R10-2. Backup through the share menu
+  ✓ the share button is offered where files can be shared
+  ✓ one JSON file named ledger-backup-<date>.json goes to the share menu
+  ✓ the file holds exactly the saved transactions and settings (same as a downloaded backup)
+  ✓ the backup date is recorded (not 'confirmed' — the app can't see that it arrived); nothing else changes
+  ✓ the message says to check that it arrived
+  ✓ closing the share menu without choosing → nothing is recorded
+  ✓ where files can't be shared, the share button is hidden and 'Create backup file' is the main action
+
+R10-3. Install offer
+  ✓ the steps to install are shown; no Install button until the browser offers one
+  ✓ when the browser offers installing, an 'Install the app' button appears
+  ✓ tapping it opens the browser's own install dialog
+  ✓ no JavaScript errors
+
+e2e_run10: ALL 16 CHECKS PASSED
+[run-browser] e2e_run10.mjs exit=0 passed=16 failed=0 missing=0 expected=16
+
+R12-1. Old data: convert to bills (with Undo), then split the merged pair
+  ✓ before: the two utility bills are one inferred schedule → discretionary +1,982 (electricity not set aside)
+  ✓ the Recurring page explains the old grouping and offers 'Convert to bills'
+  ✓ one bill is created, every old recurring payment points to it, the offer disappears
+  ✓ no entry's id, amount, date, name or note changed
+  ✓ a recovery copy of the data was kept before converting
+  ✓ Undo puts the data back exactly as before the conversion
+  ✓ the payment says which bill it belongs to
+  ✓ the electricity payment now has its own bill (90)
+  ✓ Safe to Spend now sets electricity aside: discretionary +1,892 (was +1,982, overstated by 90)
+  ✓ after reloading the page (the real load path): the same two bills, the same three links, the same +1,892
+  ✓ no JavaScript errors
+
+R12-2. A new user: add two bills from the same company, pay one
+  ✓ two bills saved with the chosen due date
+  ✓ both are set aside: 2,000 − 90 − 18 = +1,892
+  ✓ Record payment on the water bill opens the form with that bill already chosen
+  ✓ one payment, linked to the water bill only
+  ✓ water counted once as spent, electricity still set aside: 2,000 − 18 − 90 = +1,892
+  ✓ deleting the electricity bill keeps every entry; it is no longer set aside (+1,982)
+  ✓ no JavaScript errors
+
+R12-3. Mixed state: some bills, some recurring payments still grouped the old way (the real starting point)
+  ✓ start: rent paid, the Gym bill (50, due on day 28) not yet paid → +1,150 (2,000 − 800 − 50)
+  ✓ Record payment on the Gym bill opens the form with that bill chosen — even though old-style groups still exist
+  ✓ the payment is linked to the Gym bill (was: saved with no link)
+  ✓ Recurring still shows exactly two schedules — Rent and the Gym bill — not a third copy of Gym
+  ✓ Gym is counted once, as paid: +1,150 (was: paid AND still set aside → +1,100)
+  ✓ linking an ordinary expense to a bill from its detail sheet works in the mixed state too (was: the link was lost)
+  ✓ no JavaScript errors
+
+R12-4. Adding the same recurring bill again asks; it never silently multiplies bills
+  ✓ saving 'Rent 800, recurring' while a Rent bill exists asks first: payment of that bill, or a separate bill? Nothing is saved yet
+  ✓ 'It is a payment of Rent' → saved as that bill's payment; still one bill
+  ✓ 'It is a separate bill' → a second bill, and that payment points to it
+  ✓ no JavaScript errors
+
+R12-5. Deleting a bill that has payments does not bring the money back into Safe to Spend
+  ✓ start: the Gym bill is unpaid this month → set aside: +1,950
+  ✓ the bill is gone; its payment stays in the history as an ordinary entry (same amount, date, name)
+  ✓ the Recurring page does NOT offer to convert anything (the deleted bill is not resurrected as a paused group)
+  ✓ the add form still offers "A new bill (from this entry)" — adding bills is not blocked afterwards
+  ✓ nothing is set aside for a bill the user deleted: +2,000 (was: +1,950, regrouped as a live schedule)
+  ✓ Undo brings the bill and the payment back exactly
+
+e2e_run12: ALL 35 CHECKS PASSED
+[run-browser] e2e_run12.mjs exit=0 passed=35 failed=0 missing=0 expected=35
+
+R13-B1. Replace with an older (version 9) backup while the device has bills
+  ✓ the Replace sheet says: this file has no bills, so your 2 bills stay and its payments will not be linked to them
+  ✓ after Replace: the 2 entries of the file, the 2 bills still there, no entry linked to a bill
+  ✓ a recovery copy was kept first
+  ✓ Undo brings back all 3 entries, both links and both bills
+  ✓ Safe to Spend is back to +1,892
+  ✓ no JavaScript errors
+  ✓ a device without bills sees no such note
+
+R13-B2. Converting to bills when the recovery copy cannot be kept
+  ✓ nothing is converted: no bills, no links
+  ✓ the user is told why, and the Convert offer is still there
+  ✓ once copies can be kept again, the same step works (1 bill, 3 links)
+  ✓ no JavaScript errors
+
+R13-B3. The ledger itself cannot be saved (storage full)
+  ✓ a red banner says the data could not be saved
+  ✓ the saved ledger and the mirror are exactly as they were (nothing half-written)
+  ✓ after reloading: the 2 earlier bills are intact (the unsaved third is gone, as the banner said) and no restore offer appears
+
+R13-B4. Restoring bills when the recovery copy cannot be kept
+  ✓ (setup) the ledger without bills plus its mirror: the restore offer is shown
+  ✓ no recovery copy possible: nothing is restored, the user is told why, and the offer stays
+  ✓ once a copy can be kept, Restore brings back the 2 bills and the 2 links
+  ✓ no JavaScript errors
+
+R13-B5. The whole chain: version-9 backup → import (Replace) → convert to bills → export a version-10 backup → restore it on another device
+  ✓ 1. the version-9 file replaced the data: 4 entries, no bills, budgets kept; Safe to Spend +1,982 (the old merged grouping)
+  ✓ 2. converted: 1 bill (the already-merged pair is not guessed apart), 3 payments linked, Safe to Spend unchanged +1,982
+  ✓ 3. the exported file is a version-10 backup holding the 4 entries, the bill and the 3 links
+  ✓ 4. restored on the other device: identical bills, identical links, identical ids, identical expense total
+  ✓ 5. Safe to Spend, budgets and currency are the same there too
+  ✓ no JavaScript errors
+
+e2e_run13: ALL 24 CHECKS PASSED
+[run-browser] e2e_run13.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+
+R15-B1. Home is the quick answer, not a second ledger (en)
+  ✓ Home has Safe to Spend, this month, the spending breakdown, the coach and one route to Transactions
+  ✓ no empty state when there are entries
+  ✓ no goal cards on Home
+  ✓ no budget list on Home
+  ✓ no transaction rows on Home
+  ✓ a goal without a deadline needs no alert and does not appear on Home
+  ✓ the goal alert names the goal and repeats no amount or date (those are on the Goals tab)
+  ✓ the coach stays short
+  ✓ an over-budget category (food, limit 20) is still raised by the coach on Home
+  ✓ 'See all transactions' opens the Transactions tab, which lists the entries
+  ✓ a brand-new ledger still shows the empty state with its button, not the 'see all' route
+
+R15-B2. Analytics keeps aggregates and drops the repeated lists (en)
+  ✓ Analytics still has the month, summary, trend, categories, merchants and the trends block
+  ✓ no transaction rows on Analytics (they live in Transactions)
+  ✓ no 'Top Expenses' or 'All Transactions' lists
+  ✓ at most one budget block, and it follows the selected month
+
+R15-B3. Goals: the required monthly amount first, optional what-if second (en)
+  ✓ two goal cards
+  ✓ Trip (1,200 left, 8 month-starts) says: Save 150.00 a month, 8 monthly savings, counted on the 1st
+  ✓ Laptop (no date) asks for a date and invents no amount
+  ✓ says it is a plan, not an automatic transfer
+  ✓ the milestone tiles and the fixed what-if rows are gone
+  ✓ the what-if is a collapsed, optional block on each goal
+  ✓ 100 a month: 12 months, after the target date, labelled an estimate
+  ✓ 150 a month: 8 months, reaches the target date
+  ✓ 0 gives no estimate
+  ✓ a negative amount gives no estimate
+  ✓ an empty field gives no estimate
+  ✓ privacy mode hides the required amount
+
+R15-B4. The same sections and no missing translations in az and ru
+  ✓ az: Home has the same sections and no goal or budget blocks
+  ✓ az: the required monthly amount renders with real text and 150.00
+  ✓ az: the what-if title is translated
+  ✓ az: no horizontal overflow on the Goals screen at 390 px
+  ✓ ru: Home has the same sections and no goal or budget blocks
+  ✓ ru: the required monthly amount renders with real text and 150.00
+  ✓ ru: the what-if title is translated
+  ✓ ru: no horizontal overflow on the Goals screen at 390 px
+
+e2e_run15: ALL 35 CHECKS PASSED
+[run-browser] e2e_run15.mjs exit=0 passed=35 failed=0 missing=0 expected=35
+
+R15-A1. Accessibility tree (en)
+  ✓ en: Home has one named 'see all transactions' button
+  ✓ en: the required-monthly block has role=note, so it is announced as supporting information
+  ✓ en: the what-if opener has an accessible name and a disclosure role
+  ✓ en: the what-if is reported as collapsed until opened
+  ✓ en: the amount field is labelled 'amount per month'
+  ✓ en: the estimate is a polite live status, so it is announced when it appears
+
+R15-A1. Accessibility tree (az)
+  ✓ az: Home has one named 'see all transactions' button
+  ✓ az: the required-monthly block has role=note, so it is announced as supporting information
+  ✓ az: the what-if opener has an accessible name and a disclosure role
+  ✓ az: the what-if is reported as collapsed until opened
+  ✓ az: the amount field is labelled 'amount per month'
+  ✓ az: the estimate is a polite live status, so it is announced when it appears
+
+R15-A1. Accessibility tree (ru)
+  ✓ ru: Home has one named 'see all transactions' button
+  ✓ ru: the required-monthly block has role=note, so it is announced as supporting information
+  ✓ ru: the what-if opener has an accessible name and a disclosure role
+  ✓ ru: the what-if is reported as collapsed until opened
+  ✓ ru: the amount field is labelled 'amount per month'
+  ✓ ru: the estimate is a polite live status, so it is announced when it appears
+
+e2e_run15_a11y: ALL 18 CHECKS PASSED
+[run-browser] e2e_run15_a11y.mjs exit=0 passed=18 failed=0 missing=0 expected=18
+
+R15-N1. The hook exists
+  ✓ window.__ledgerNativeBack is defined once the app has started
+
+R15-N2. Back closes what is open first, then leaves a tab, then warns, then lets the app close
+  ✓ add form open: Back closes it and the app stays
+  ✓ on another tab: Back returns to Home
+  ✓ on Home with nothing open: the first press warns 'press Back again'
+  ✓ a second press within 2 seconds lets the app close
+  ✓ after the warning has expired the next press warns again instead of closing
+
+R15-N3. A bottom sheet is closed before anything else
+  ✓ an entry sheet is open
+  ✓ Back closes the sheet, not the app
+
+e2e_run15_back: ALL 8 CHECKS PASSED
+[run-browser] e2e_run15_back.mjs exit=0 passed=8 failed=0 missing=0 expected=8
+
+R15-F1. Add from Home: clear confirmation, and the entry is one tap away
+  ✓ 'Transaction recorded' with an Undo button appears right after saving (announced to screen readers)
+  ✓ exactly one entry was added, amount 25, newest first
+  ✓ the user is still on Home, which does not list entries (so the message and the route below matter)
+  ✓ the undo window closes by itself after about 6 seconds
+  ✓ 'See all transactions' opens the list with the new 25.00 entry first
+
+R15-F1b. Undo after adding (Run 16)
+  ✓ an entry was added
+  ✓ Undo removes exactly that entry and nothing else
+  ✓ after a later change the earlier Undo cannot wipe the newer edit (the entry is still there)
+
+R15-F2. An entry can be opened and edited from the Transactions list (the toast after editing is covered by the existing suites)
+  ✓ an entry opens a detail sheet that offers Edit
+
+e2e_run15_feedback: ALL 9 CHECKS PASSED
+[run-browser] e2e_run15_feedback.mjs exit=0 passed=9 failed=0 missing=0 expected=9
+
+R16-I1. More lists the two new rows after the first three, and each opens a sheet (en)
+  ✓ five rows; Recurring, Import / Export and Settings keep places 1 to 3
+  ✓ How it works: four steps, the second explains Safe to Spend
+  ✓ it tells the user there is no account and to keep a backup file
+  ✓ Close closes it
+  ✓ Privacy: six short sections; says no account, no ads, no analytics, nothing is sent, and names the website host
+  ✓ the x button closes it
+  ✓ the phone's Back button closes the sheet first
+
+R16-I2. A brand-new ledger offers 'How it works' on Home
+  ✓ the empty Home has a 'How it works' button next to 'Add first transaction'
+  ✓ it opens the same sheet
+
+R16-I3. az and ru show real text, nothing overflows, and the app asks for nothing from the network
+  ✓ az: six translated sections, no raw keys
+  ✓ az: no horizontal overflow
+  ✓ ru: six translated sections, no raw keys
+  ✓ ru: no horizontal overflow
+  ✓ opening and using the app in the test bundle makes no request to any outside address (supports the privacy text; the real site also checks its own page for updates)
+
+e2e_run16_info: ALL 14 CHECKS PASSED
+[run-browser] e2e_run16_info.mjs exit=0 passed=14 failed=0 missing=0 expected=14
+
+R16-S1. Add your own subcategory in the add form
+  ✓ the subcategory row offers a '+ My own' button
+  ✓ the new name (trimmed, inner spaces collapsed) appears as a chip
+  ✓ and is selected for this entry
+  ✓ it is stored in its own key
+  ✓ the entry keeps the text as its subcategory (same field as built-in ones)
+  ✓ nothing about the list is written into the ledger key
+  ✓ next time the chip is still offered
+  ✓ the same name again says it is already in the list
+  ✓ a built-in name (Coffee) is refused the same way
+  ✓ removing it from the list removes the chip and the stored key (the old entry still has its text)
+  ✓ the earlier entry still shows Street food
+
+R16-S2. Backup export carries them; az and ru show real words
+  ✓ az: the saved name and the translated '+ My own' button are shown
+  ✓ az: no horizontal overflow
+  ✓ ru: the translated '+ My own' button is shown
+
+e2e_run16_subcat: ALL 14 CHECKS PASSED
+[run-browser] e2e_run16_subcat.mjs exit=0 passed=14 failed=0 missing=0 expected=14
+
+R16-B1. The add form offers four wallets; nothing is chosen the first time; the last one is remembered
+  ✓ four wallets: Cash, Bank card, Mobile wallet, Other
+  ✓ no entry has a wallet yet, so none is pre-selected
+  ✓ the chips form a radio group (one choice) for screen readers
+  ✓ tapping Cash selects it
+  ✓ the new entry is saved with wallet cash
+  ✓ the older entry was not touched: it still has no wallet field
+  ✓ the next new entry starts with Cash selected (the wallet used last)
+  ✓ choosing Bank card instead saves card
+  ✓ tapping the chosen wallet again clears it
+  ✓ a cleared wallet is not stored at all (no empty text)
+
+R16-B2. Edit and duplicate keep or change the wallet; an unknown wallet from a newer version is kept
+  ✓ the entry's detail shows Paid with: Mobile wallet
+  ✓ editing opens with the entry's own wallet selected (not the last used)
+  ✓ changing the wallet while editing saves it
+  ✓ a wallet this version does not know is shown as a selected extra chip
+  ✓ saving without touching it keeps the unknown wallet exactly (e-wallet)
+  ✓ Duplicate starts with the same wallet
+
+R16-B3. The entry list, the filter and Analytics
+  ✓ a row shows its wallet next to the category; an entry without one shows nothing extra
+  ✓ the wallet filter lists All, only the wallets in use, and Not set
+  ✓ filtering by Bank card shows only that entry
+  ✓ Not set shows the entries without a wallet
+  ✓ Clear shows everything again
+  ✓ Analytics shows 'Spending by wallet' with Cash, Bank card and Not set
+  ✓ no entry has a wallet: no wallet filter is shown
+  ✓ and no wallet card on Analytics
+
+R16-B4. az and ru show real words, not keys
+  ✓ az: four translated wallet chips
+  ✓ az: no horizontal overflow in the add form at 390 px
+  ✓ ru: four translated wallet chips
+  ✓ ru: no horizontal overflow in the add form at 390 px
+
+e2e_run16_wallet: ALL 28 CHECKS PASSED
+[run-browser] e2e_run16_wallet.mjs exit=0 passed=28 failed=0 missing=0 expected=28
+
+R2-A. A sheet opened from a long Ledger list is on screen and above the tab bar
+  ✓ list scrolled to the top: the category sheet sits at the bottom of the screen (top 314, bottom 844, screen 844)
+  ✓ …and it covers the tab bar (the tab bar is not drawn over it)
+  ✓ list scrolled to the bottom: the category sheet sits at the bottom of the screen (top 314, bottom 844, screen 844)
+  ✓ …and it covers the tab bar (the tab bar is not drawn over it)
+  ✓ no JavaScript errors
+
+R2-B. The category list follows Expenses / Income
+  ✓ All: both expense and income categories are listed
+  ✓ Expenses: only expense categories (no Salary)
+  ✓ Income: only income categories (no Food & Dining)
+  ✓ switching to Income drops a Transport filter instead of showing an empty list
+
+R2-C. A search with no match shows 'No results' and does not crash
+  ✓ searching 'zzqq' shows 'No results' with no JavaScript error
+  ✓ searching part of a month name works too (it reaches the month-name check)
+
+R2-D. The phone's Back button
+  ✓ Settings is open (precondition)
+  ✓ Back closes the Settings sheet and stays in the app
+  ✓ Back closes the Ledger category sheet and stays on Ledger
+  ✓ Back on Ledger returns to Home
+  ✓ Back closes the Add form
+  ✓ Back on Home with nothing open does not leave at once: it says 'Press Back again to exit'
+  ✓ no JavaScript errors
+
+R2-E. Swiping left / right moves between sections
+  ✓ starts on Home
+  ✓ swipe left on Home → Transactions
+  ✓ swipe left again → Analytics
+  ✓ swipe right → back to Transactions
+  ✓ a mostly vertical drag (scrolling) does not change section
+  ✓ a short sideways nudge (30px) does not change section
+  ✓ precondition: the filter chips are wider than the screen (they scroll sideways)
+  ✓ a swipe on the sideways-scrolling filter chips scrolls them instead of changing section
+  ✓ with a sheet open, a sideways swipe does not change section
+  ✓ swipe right on Home (the first section) stays on Home
+  ✓ swipe left on Recurring (under More, the last section) stays there
+  ✓ no JavaScript errors
+
+e2e_run2: ALL 30 CHECKS PASSED
+[run-browser] e2e_run2.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+
+B1. Untouched form closes at once by every route
+  ✓ untouched form + × → closed, no question
+  ✓ untouched form + Cancel → closed, no question
+  ✓ untouched form + Escape → closed, no question
+  ✓ untouched form + phone Back → closed, no question
+  ✓ no JavaScript errors
+
+B2. Something typed: every route asks; Keep editing keeps the values; Close without saving discards
+  ✓ typed 12.50 + × → the form stays open and asks "This entry isn't saved"
+  ✓ …Keep editing closes the question and keeps the amount 12.50
+  ✓ …Close without saving closes the form and saves nothing (3 entries before and after)
+  ✓ no JavaScript errors
+  ✓ typed 12.50 + Cancel → the form stays open and asks "This entry isn't saved"
+  ✓ …Keep editing closes the question and keeps the amount 12.50
+  ✓ …Close without saving closes the form and saves nothing (3 entries before and after)
+  ✓ no JavaScript errors
+  ✓ typed 12.50 + Escape → the form stays open and asks "This entry isn't saved"
+  ✓ …Keep editing closes the question and keeps the amount 12.50
+  ✓ …Close without saving closes the form and saves nothing (3 entries before and after)
+  ✓ no JavaScript errors
+  ✓ typed 12.50 + phone Back → the form stays open and asks "This entry isn't saved"
+  ✓ …Keep editing closes the question and keeps the amount 12.50
+  ✓ …Close without saving closes the form and saves nothing (3 entries before and after)
+  ✓ no JavaScript errors
+
+B2b. Back and Escape while the question is shown mean Keep editing
+  ✓ Back on a typed form → the question appears
+  ✓ Back again → the question closes, the form and its amount stay
+  ✓ Escape on the typed form → the question appears
+  ✓ Escape again → the question closes, the form stays
+
+B3. What counts as typed input
+  ✓ switching Expense/Income only (no typing) closes without a question
+  ✓ an existing entry opens in the edit form (precondition)
+  ✓ edit form with nothing changed closes without a question
+  ✓ edit form with the amount changed (23.40 → 25) asks before closing
+  ✓ …and Close without saving leaves the stored entry at 23.40
+
+B4. Saving is unaffected; the question exists in Azerbaijani and Russian
+  ✓ typed + Record → saved and closed with no question
+  ✓ az: the question is shown in az with no English left
+  ✓ ru: the question is shown in ru with no English left
+
+C. Home and Analytics show what has happened; entries dated later this month are listed apart
+  ✓ Home: '10.00 ₼ spent this month' (the 670 dated tomorrow is not spent yet)
+  ✓ Home: '+670.00 ₼ in expenses dated later this month (not counted yet)'
+  ✓ Monthly: no concentration claim and no merchant entry from the payment dated tomorrow (the merchants card lists Cafe)
+  ✓ no JavaScript errors
+
+e2e_run3: ALL 37 CHECKS PASSED
+[run-browser] e2e_run3.mjs exit=0 passed=37 failed=0 missing=0 expected=37
+
+R5-B1. The card shows the later-dated part of Recorded expenses, in each language
+  ✓ en: 'Recorded expenses −330.00' followed by the later-dated 300.00 (set aside, not spent yet)
+  ✓ en: Safe to Spend = 2000 − 500 reserve − 330 = 1,170.00 (the 300 is still set aside)
+  ✓ en: no JavaScript errors
+  ✓ az: 'Recorded expenses −330.00' followed by the later-dated 300.00 (set aside, not spent yet)
+  ✓ az: Safe to Spend = 2000 − 500 reserve − 330 = 1,170.00 (the 300 is still set aside)
+  ✓ az: no JavaScript errors
+  ✓ ru: 'Recorded expenses −330.00' followed by the later-dated 300.00 (set aside, not spent yet)
+  ✓ ru: Safe to Spend = 2000 − 500 reserve − 330 = 1,170.00 (the 300 is still set aside)
+  ✓ ru: no JavaScript errors
+
+R5-B2. Without later-dated expenses the extra line is not shown
+  ✓ only today's 30.00 recorded → no 'dated later' line
+
+R5-B3. Elsewhere the 300 is planned, not spent
+  ✓ Monthly lists +300.00 as dated later this month, not counted yet
+
+R5-B4. The new line fits at enlarged text (az, 260 CSS px ≈ 150 % zoom)
+  ✓ no sideways scroll and every Safe to Spend line stays on screen
+
+e2e_run5: ALL 12 CHECKS PASSED
+[run-browser] e2e_run5.mjs exit=0 passed=12 failed=0 missing=0 expected=12
+
+R6-B1. D16: a failed read of the saved data pauses saving in the real app
+  ✓ the app says the saved data could not be read and saving is paused
+  ✓ after adding an expense, the stored ledger is byte-for-byte unchanged (the empty view was never written over it)
+  ✓ a 'saving is paused' banner is shown
+  ✓ control: a normal start reads the ledger and shows no notice
+
+R6-B2. D8/D14: a settings-only file offers no Replace and keeps every transaction
+  ✓ the sheet explains there are no transactions and offers 'Use the file's settings — keep my transactions' instead of Replace
+  ✓ after applying: all transactions kept, currency $ and the food budget 250 applied
+  ✓ a recovery copy of the previous state was kept first
+  ✓ control: a backup with transactions still offers Replace
+
+R6-B3. D20: 'Record payment' on the Recurring screen settles the bill
+  ✓ before: the unpaid 90.00 bill is set aside in Safe to Spend
+  ✓ the Recurring screen explains how to mark a bill as paid
+  ✓ the Add form opens filled in: 90, Kommunal, Recurring on
+  ✓ saved as the same bill, dated today
+  ✓ after: the bill is no longer set aside (paid once, reserved once)
+  ✓ no JavaScript errors
+
+e2e_run6: ALL 14 CHECKS PASSED
+[run-browser] e2e_run6.mjs exit=0 passed=14 failed=0 missing=0 expected=14
+
+R7-1. One month-aware screen instead of Monthly + Analytics
+  ✓ the tab bar has 5 sections (Home, Transactions, Analytics, Goals, More); one month-aware analytics screen
+  ✓ Monthly shows the month summary AND the former Analytics trends, which say they do not follow the selected month
+
+R7-2. Every calendar month can be selected, including an empty one; figures follow the month
+  ✓ this month 40.00 → previous month 600.00 (no stale figure)
+  ✓ two months back (no entries) can be selected and shows an empty month, not skipped
+  ✓ three months back shows its 300.00
+  ✓ …and is the first selectable month (Previous is disabled)
+  ✓ a finished month: '400.00 ₼ more than the previous month' (600 vs 200, whole months) — no 'same days' wording
+
+R7-3. V9: the current month is compared with the same days of last month (en)
+  ✓ Home: 40.00 vs 100.00 (days 1–29 of last month) → 60.00 less than the same days last month
+  ✓ Monthly names the window (days 1–29) and last month's figure for it (100.00)
+  ✓ the 'What changed' title names the same window
+
+R7-4. V1: Azerbaijani sentences no longer contain a short month name
+  ✓ Home (az): 'keçən ayın eyni günləri ilə müqayisədə … az' and no 'sen ilə müqayisədə'
+  ✓ Monthly (az): the window line is shown, no short month name in a sentence
+
+R7-5. V2: Settings names a surplus or a deficit in words
+  ✓ income 400, expenses 900 → 'Net deficit 500.00' (not an unsigned 'Net 500.00' in red only)
+  ✓ income 400, expenses 100 → 'Net surplus 300.00'
+
+R7-6. V4: Home tiles show exact amounts below 10,000, and they fit at 320 px
+  ✓ 320px: income tile "1,050.00 ₼" (was "1.1k ₼"), expenses "9,999.99 ₼", nothing cut off
+  ✓ 390px: income tile "1,050.00 ₼" (was "1.1k ₼"), expenses "9,999.99 ₼", nothing cut off
+  ✓ 25,500 still shortens, marked as approximate: '≈25.5k ₼'
+
+R7-7. V3: the Add form repeats the chosen date in the interface language
+  ✓ az: under the date box "29 oktyabr 2026" (the box itself follows the phone's language)
+
+R7-8. The 4-tab bar fits in Azerbaijani at 320 / 360 / 390 px
+  ✓ 320px az: all 4 tab labels inside their tab, no JavaScript errors
+  ✓ 360px az: all 4 tab labels inside their tab, no JavaScript errors
+  ✓ 390px az: all 4 tab labels inside their tab, no JavaScript errors
+
+e2e_run7: ALL 21 CHECKS PASSED
+[run-browser] e2e_run7.mjs exit=0 passed=21 failed=0 missing=0 expected=21
+
+R8-B1. Item 6: an import during a delete's undo window does not take the delete's Undo away
+  ✓ delete shows 'Transaction deleted · Undo'
+  ✓ the import is applied, but the delete's Undo is still the one on screen (was: replaced by the import's message)
+  ✓ Undo brings AAA back and leaves the imported currency in place
+  ✓ then the import's own message (with its Undo) is shown
+  ✓ no JavaScript errors
+
+R8-B2. Item 3: a file with refused rows does not offer Replace
+  ✓ the sheet says Replace is not offered because 1 row could not be read; Merge is still there
+  ✓ Merge adds the 2 readable rows and keeps all 3 existing ones
+
+R8-B3. Item 2: an unknown category goes to Other and the import says so
+  ✓ the sheet warns: 1 category not recognised → Other
+  ✓ 'Payment' → Other (was: Salary, guessed from 'pay'); 'Groceries' → Food
+
+e2e_run8: ALL 9 CHECKS PASSED
+[run-browser] e2e_run8.mjs exit=0 passed=9 failed=0 missing=0 expected=9
+
+R9-1. Placeholders are readable (Add form and Ledger search)
+  ✓ en: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+  ✓ az: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+  ✓ ru: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+
+R9-2. Header: no Settings gear anywhere; the + matches the screen
+  ✓ no screen has a Settings gear in its title bar; every screen has the privacy eye there
+  ✓ + adds a transaction on Home and Transactions; Analytics, More and Import / Export have no +
+  ✓ Budgets & Goals: '+' = Add budget; Recurring: '+' = Add bill (Run 12: bills are their own records)
+  ✓ Recurring '+' opens the bill form (name, amount, how often, due date)
+  ✓ on the Goals segment '+' = Add goal and opens the new-goal form
+  ✓ on the Budgets segment '+' opens a 'new budget' form (category + monthly limit)
+  ✓ Settings opens from More → Settings
+  ✓ no JavaScript errors
+
+R9-3. Privacy mode hides amounts, names and chart values on every screen (en / az / ru)
+  ✓ en: the eye button says what it will do and reports its state (aria-pressed)
+  ✓ en: with privacy on, no amount, percentage, merchant, note or goal name is shown or read out on 10 screens
+  ✓ en: the spending ring is blurred and privacy is still on after visiting every screen
+  ✓ en: tab labels stay readable (navigation is not blurred)
+  ✓ en: turning privacy on writes nothing to storage (ledger data untouched)
+  ✓ en: turning it off shows the amounts again
+  ✓ en: privacy is for this session only — after a reload it is off
+  ✓ en: no JavaScript errors
+  ✓ az: the eye button says what it will do and reports its state (aria-pressed)
+  ✓ az: with privacy on, no amount, percentage, merchant, note or goal name is shown or read out on 10 screens
+  ✓ az: the spending ring is blurred and privacy is still on after visiting every screen
+  ✓ az: tab labels stay readable (navigation is not blurred)
+  ✓ az: turning privacy on writes nothing to storage (ledger data untouched)
+  ✓ az: turning it off shows the amounts again
+  ✓ az: privacy is for this session only — after a reload it is off
+  ✓ az: no JavaScript errors
+  ✓ ru: the eye button says what it will do and reports its state (aria-pressed)
+  ✓ ru: with privacy on, no amount, percentage, merchant, note or goal name is shown or read out on 10 screens
+  ✓ ru: the spending ring is blurred and privacy is still on after visiting every screen
+  ✓ ru: tab labels stay readable (navigation is not blurred)
+  ✓ ru: turning privacy on writes nothing to storage (ledger data untouched)
+  ✓ ru: turning it off shows the amounts again
+  ✓ ru: privacy is for this session only — after a reload it is off
+  ✓ ru: no JavaScript errors
+
+R9-4. A rent paid as an ordinary expense is linked to the bill only when the user says so
+  ✓ before: this month's rent is still set aside (−800) although 800 was spent on 'Rent' — the double count the user can't see
+  ✓ nothing was linked automatically (same merchant and amount are not enough)
+  ✓ the user is offered the matching kind of bill only (expense bills, not the salary schedule) and sees which one
+  ✓ after choosing the bill: the expense is now that bill's payment (recurring, monthly); amount, date and id are unchanged
+  ✓ Safe to Spend no longer sets the rent aside: discretionary 1,400 → 2,200 (counted once, as spent)
+  ✓ an Undo is offered
+  ✓ Undo puts the expense back exactly as it was
+  ✓ no JavaScript errors
+
+R9-5. Settings overview names surplus, deficit and break-even in words (en / az / ru)
+  ✓ en: overview shows "Net surplus" / "Net deficit" / "Break-even" with the right amount
+  ✓ az: overview shows "Xalis qənaət" / "Xalis kəsir" / "Bərabər" with the right amount
+  ✓ ru: overview shows "Чистый профицит" / "Чистый дефицит" / "В ноль" with the right amount
+
+R9-6. The routine backup reminder is compact and stays dismissed while moving around; data-loss alerts stay strong
+  ✓ the reminder is a compact card (not a full-width bar), still visible
+  ✓ after dismissing, it stays away on every screen during this visit
+  ✓ a recovery notice keeps the full-width alert banner (Master Prompt §8)
+
+e2e_run9: ALL 49 CHECKS PASSED
+[run-browser] e2e_run9.mjs exit=0 passed=49 failed=0 missing=0 expected=49
+
+S1. Recurring screen groups payments into schedules
+  ✓ rent recorded 3 months + Netflix + Spotify = 3 rows, not 5 (found 3)
+  ✓ rent row says '3 payments recorded'; typical monthly outgoing = 450 + 15 + 15 = 480.00 ₼
+  ✓ pausing one schedule pauses every payment recorded under it
+  ✓ …all members of that schedule and no others
+  ✓ a Paused section appears
+  ✓ reactivating restores the whole schedule
+  ✓ Home: Safe to Spend lists upcoming/unrecorded payments and says how many schedules it used
+  ✓ no JavaScript errors
+  ✓ with no recurring payments the card says upcoming bills are NOT included (no silent optimism)
+
+S2. Sheets: dismissal, gestures, focus
+  ✓ opening a sheet moves focus into it
+  ✓ Escape closes it and focus returns to the Settings row that opened it
+  ✓ tapping the backdrop closes it
+  ✓ 45 presses of Tab never leave the open sheet (focus stays inside)
+  ✓ a fast swipe down dismisses the sheet
+  ✓ the sheet follows the finger 1:1 (moved 60px for a 60px drag)
+  ✓ a short slow drag springs back to its place and the sheet stays open
+  ✓ grabbing the sheet mid-spring continues from where it is (no jump: 103 → 103)
+  ✓ Escape closes the add form
+
+S3. Keyboard and switches
+  ✓ the Recurring switch toggles with Space and Enter
+  ✓ the Safe to Spend switch toggles with Space and the setting is saved
+  ✓ keyboard focus is visible (outline or ring)
+
+S4. Touch targets (effective tappable area)
+  ✓ 89 controls measured on 5 screens: every icon-only control is ≥44×44 and every text control ≥34 high
+
+S5. Contrast measured on the rendered page
+  ✓ 324 text elements across 6 screens: all meet WCAG AA (4.5:1, or 3:1 for large text)
+
+S6. User preferences
+  ✓ reduced motion: the sheet's entrance animation is effectively off (0.00001s)
+  ✓ reduced motion: a released short drag resets at once (no spring)
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 21 ms)
+  ✓ reduced transparency: the top bar is solid (no blur, opaque background)
+  ✓ increased contrast: text and border tokens switch to the stronger set
+
+S7. Small screens and the on-screen keyboard
+  ✓ with a short viewport (keyboard open) the focused field is scrolled into view
+  ✓ the Record button can always be scrolled into reach
+
+e2e_ux: ALL 30 CHECKS PASSED
+[run-browser] e2e_ux.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+
+UX-K1. Transaction rows work from the keyboard
+  ✓ a transaction row is a keyboard-focusable button
+  ✓ pressing Tab from the search box reaches a transaction row
+  ✓ the focused row shows a visible focus outline (2 px or more)
+  ✓ Enter opens the transaction's detail sheet
+  ✓ Space opens it too
+  ✓ no JavaScript errors
+
+UX-K2. Recurring payments / bills
+  ✓ the bill row is one keyboard-focusable button; its decorative icon is hidden from screen readers (one tab stop, not two)
+  ✓ Enter opens the bill sheet
+  ✓ pressing Enter on 'Pause' pauses the bill and does NOT also open the sheet (no double action)
+
+UX-K3. Importing a backup by keyboard (was impossible)
+  ✓ the import tile is a focusable button with a readable name
+  ✓ Tab reaches the import tile
+  ✓ Enter makes the app open the file picker (exactly one call to the file input)
+
+UX-K4. Analytics month bars
+  ✓ each month bar is a button with a name that includes the month and its amount, and a pressed state
+  ✓ Enter selects the bar (pressed = true)
+  ✓ with privacy mode on, the bar names reveal no amount
+
+UX-K5. Banners: routine reminders only where they can be acted on; critical ones everywhere
+  ✓ the 'did you keep the backup file?' reminder shows on Home and Import / Export only
+  ✓ a critical 'cannot save' warning still shows on the Transactions tab
+
+UX-K6. Motion: no staggered slide-in of every section; focus ring on controls that lacked one
+  ✓ all sections of a screen appear together (no per-section delay)
+  ✓ the screen-change animation is a short fade only (no sliding)
+  ✓ focus rings exist for rows, bars, the import tile and bill rows
+  ✓ with 'reduce motion' on there is no animation at all
+
+e2e_ux_keyboard: ALL 21 CHECKS PASSED
+[run-browser] e2e_ux_keyboard.mjs exit=0 passed=21 failed=0 missing=0 expected=21
+
+AZ. Touch targets and contrast in Azerbaijani (390×844)
+  ✓ the interface is in az (html lang="az")
+  ✓ az: 82 controls measured on 6 screens — icon-only ≥44×44, text controls ≥34 high, fields ≥36
+  ✓ az: no JavaScript errors
+  ✓ az: 363 text elements across 8 screens meet WCAG AA (4.5:1, or 3:1 for large text)
+
+RU. Touch targets and contrast in Russian (390×844)
+  ✓ the interface is in ru (html lang="ru")
+  ✓ ru: 82 controls measured on 6 screens — icon-only ≥44×44, text controls ≥34 high, fields ≥36
+  ✓ ru: no JavaScript errors
+  ✓ ru: 363 text elements across 8 screens meet WCAG AA (4.5:1, or 3:1 for large text)
+
+e2e_ux_lang: ALL 8 CHECKS PASSED
+[run-browser] e2e_ux_lang.mjs exit=0 passed=8 failed=0 missing=0 expected=8
+[run-browser] candidate=C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\App.jsx
+[run-browser] scratch=C:\Users\cavid\AppData\Local\Temp\ledger-e2e-7rUgAJ
+[run-browser] 28 files, 0 with problems; checks passed=680 failed=0 missing=0
+[run-browser] power: 0 standby enter/exit event(s) during this run

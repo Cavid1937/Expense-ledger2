@@ -1,0 +1,12 @@
+
+E5e. Back button on the final Android build, real touches (5)
+  ✓ opened the add form with a real touch
+   (soft keyboard disabled for this check; on a phone the first Back only hides the keyboard)
+  ✗ Back closes the add form; the app stays open
+      ↳ {"overlay":true,"toast":""}
+  ✗ Back on Home with nothing open: 'Press Back again to exit', app stays
+      ↳ {"overlay":false,"toast":""}
+  ✗ a second Back within 2 seconds leaves the app
+      ↳ mCurrentFocus=Window{3ed3cbc u0 com.example.expenseledger.spike/com.example.expenseledger.spike.Main
+
+emu E5e: 3 FAILED, 1 passed

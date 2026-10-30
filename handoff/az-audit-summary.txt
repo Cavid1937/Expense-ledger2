@@ -1,0 +1,10 @@
+Azerbaijani localization audit — 2026-10-30T11:35:32.810Z
+Catalog: 848 keys, 930 rendered forms (plural forms counted separately). Keys passed directly to t()/tn() in App.jsx: 545.
+Review sheet: az-review-sheet.csv (UTF-8, opens in Excel/Sheets) — one row per form, example values filled in, empty reviewer columns.
+
+A. Turkish spellings in Azerbaijani text: 0
+B. A value slotted in directly before a suffix-bearing word (ending cannot agree with the value): 0
+C. Short month names passed into sentences: 0
+
+Not checked automatically (needs the native reviewer): grammar and word order of complete sentences, natural financial terms,
+tone, punctuation, and whether each sentence reads well with real values. Nothing here marks the wording as reviewed.

@@ -1,0 +1,26 @@
+﻿diff --git a/App.jsx b/App.jsx
+index 56e972d..558c6cf 100644
+--- a/App.jsx
++++ b/App.jsx
+@@ -2373,6 +2373,21 @@ export default function App() {
+   },[switchTab,showToast]);
+   useEffect(()=>{ if (tab!=="home") armBack.current(); },[tab]);
+ 
++  // Run 15: the Android shell hands the phone's Back button to the page here (see MainActivity.java in the Android project). It
++  // exists because the WebView's own history is unreliable for the guard entries this page pushes without a touch: on an emulator
++  // Back used to close the whole app, even with the add form open. Same rules as above: close what is open, leave a tab, warn
++  // once, and only a second press within 2 seconds answers "exit" (the shell then closes the app). Does nothing in a browser.
++  useEffect(()=>{
++    let warnedAt=0;
++    window.__ledgerNativeBack=()=>{
++      if (closeTopLayer()) return "handled";
++      if (tabRef.current!=="home") { switchTab(SUBPAGE_PARENT[tabRef.current]||"home"); return "handled"; }
++      const now=Date.now(); if (now-warnedAt<2000) return "exit";
++      warnedAt=now; showToast(t("nav.backAgain"),2000); return "handled";
++    };
++    return ()=>{ delete window.__ledgerNativeBack; };
++  },[switchTab,showToast]);
++
+   // Swipe between the five sections: a quick, clearly sideways swipe on the page. Ignored while a sheet or the add form is
+   // open, on form fields, on rows that scroll sideways (e.g. the filter chips), and from the screen edges (the system's own
+   // back gesture lives there).

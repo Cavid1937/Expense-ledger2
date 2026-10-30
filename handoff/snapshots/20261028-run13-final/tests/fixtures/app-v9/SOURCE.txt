@@ -1,0 +1,1 @@
+Exact copy of commit 12a0c196ae03f577499391625d0b40e6bc5f8357 (production, backup format 9) App.jsx and i18n.js, taken 2026-10-28 for the Run 13 downgrade test. Never edit.

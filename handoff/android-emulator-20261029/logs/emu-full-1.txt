@@ -1,0 +1,26 @@
+﻿install: Success
+
+E1. Open (1)
+  ✗ language chooser shown on first launch
+  ✓ Home appears after choosing English
+
+E2. Add data (2)
+  ✓ 2 expenses, 1 income and 1 bill stored
+
+E3. Close completely and reopen (3)
+  ✓ process gone
+  ✓ everything is exactly as before
+  ✓ opens to Home, no chooser
+
+E4. Airplane mode (4)
+  ✓ airplane mode on
+  ✓ opens offline with the same data
+  ✓ native shell, no service worker (files are inside the app)
+
+E5. Back button (5)
+  ✗ Back closes the add form and the app stays open
+  ✗ first Back on Home: asks to press Back again, still open
+      ↳ 
+  ✓ second Back leaves the app
+
+emu-full part 1 (E1-E5): 3 FAILED, 9 passed

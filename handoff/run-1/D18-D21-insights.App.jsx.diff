@@ -1,0 +1,94 @@
+﻿diff --git a/tests/original/App.jsx.phase3-1ed61f4a b/App.jsx
+index 1ed61f4..45bc386 100644
+--- a/tests/original/App.jsx.phase3-1ed61f4a
++++ b/App.jsx
+@@ -1063,8 +1063,9 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
+   const empty={ insights, anomalies:[], dayOfWeek:{}, categoryTrends:[], correlations:[] };
+   if (expenses.length<5) return empty;
+   const sumOf=(l)=>l.reduce((a,t)=>a+t.amount,0);
+   const pctChange=(a,b)=>Math.round(((a-b)/b)*100);                       // only called with b>0
++  const quantile=(sorted,q)=>{ const i=(sorted.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); };
+   const isWeekend=(d)=>[0,6].includes(parseLocalDate(d).getDay());
+   const DAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+ 
+   // ── Weekend vs weekday: spending PER CALENDAR DAY over up to 56 days (never before the first recorded expense).
+@@ -1096,23 +1097,31 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
+     const top3=Object.entries(mTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
+     if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>a+v,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", text:t("ins.merchantConc",{ names:top3.map(([m])=>m).join(", "), pct:pc }) }); }
+   }
+ 
+-  // ── Average transaction vs last month (a per-transaction average, so a part-month is comparable)
++  // ── Typical transaction vs last month: the MEDIAN per transaction (a part-month stays comparable, and one unusual purchase
++  //    cannot read as a general change; unusual purchases are reported separately as anomalies)
++  const median=(l)=>quantile([...l].sort((a,b)=>a-b),0.5);
+   const curAmts=expenses.filter(t=>t.date.startsWith(mon)).map(t=>t.amount), prvAmts=expenses.filter(t=>t.date.startsWith(prv)).map(t=>t.amount);
+   if (curAmts.length>=4 && prvAmts.length>=4) {
+-    const curAvg=curAmts.reduce((a,b)=>a+b,0)/curAmts.length, prvAvg=prvAmts.reduce((a,b)=>a+b,0)/prvAmts.length;
+-    if (prvAvg>0) { const pct=pctChange(curAvg,prvAvg); if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:t(pct>0?"ins.avgHigher":"ins.avgLower",{ pct:Math.abs(pct), a:curAmts.length, b:prvAmts.length }) }); }
++    const curMed=median(curAmts), prvMed=median(prvAmts);
++    if (prvMed>0) { const pct=pctChange(curMed,prvMed); if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:t(pct>0?"ins.avgHigher":"ins.avgLower",{ pct:Math.abs(pct), a:curAmts.length, b:prvAmts.length }) }); }
+   }
+ 
+-  // ── Day of week (average per transaction; only days with at least 3 transactions are compared)
+-  const dayOfWeek={}; DAY_NAMES.forEach(d=>{ dayOfWeek[d]={ avg:0, count:0, total:0 }; });
+-  monExp.forEach(t=>{ const d=DAY_NAMES[parseLocalDate(t.date).getDay()]; dayOfWeek[d].count++; dayOfWeek[d].total+=t.amount; });
+-  DAY_NAMES.forEach(d=>{ if (dayOfWeek[d].count>0) dayOfWeek[d].avg=parseFloat((dayOfWeek[d].total/dayOfWeek[d].count).toFixed(2)); });
+-  const eligible=DAY_NAMES.filter(d=>dayOfWeek[d].count>=3);
++  // ── Day of week. The insight and the Analytics card both use the MEDIAN (the typical transaction; the average is kept in
++  //    the data), so one unusual purchase cannot produce a claim. Only days with at least 3 transactions on at least 2 different dates
++  //    are compared (one busy Monday is not a weekly pattern); differences of 3× or more are stated as a multiple ("5.0×").
++  const dayOfWeek={}; DAY_NAMES.forEach(d=>{ dayOfWeek[d]={ avg:0, median:0, count:0, total:0 }; });
++  const dayAmts={}, dayDates={}; monExp.forEach(t=>{ const d=DAY_NAMES[parseLocalDate(t.date).getDay()]; dayOfWeek[d].count++; dayOfWeek[d].total+=t.amount; (dayAmts[d]=dayAmts[d]||[]).push(t.amount); (dayDates[d]=dayDates[d]||new Set()).add(t.date); });
++  DAY_NAMES.forEach(d=>{ if (dayOfWeek[d].count>0) { dayOfWeek[d].avg=parseFloat((dayOfWeek[d].total/dayOfWeek[d].count).toFixed(2)); dayOfWeek[d].median=median(dayAmts[d]); } });
++  const eligible=DAY_NAMES.filter(d=>dayOfWeek[d].count>=3 && dayDates[d].size>=2);
+   if (eligible.length>=2) {
+-    const byAvg=[...eligible].sort((a,b)=>dayOfWeek[b].avg-dayOfWeek[a].avg), hi=byAvg[0], lo=byAvg[byAvg.length-1];
+-    if (dayOfWeek[lo].avg>0) { const pct=pctChange(dayOfWeek[hi].avg,dayOfWeek[lo].avg); if (pct>=30) insights.push({ id:"dayofweek", text:t("ins.dayOfWeek",{ hi:t("dow.pl."+hi), lo:t("dow.cmp."+lo), pct, a:dayOfWeek[hi].count, b:dayOfWeek[lo].count }) }); }
++    const byMed=[...eligible].sort((a,b)=>dayOfWeek[b].median-dayOfWeek[a].median), hi=byMed[0], lo=byMed[byMed.length-1];
++    const mHi=dayOfWeek[hi].median, mLo=dayOfWeek[lo].median;
++    if (mLo>0) {
++      const pct=pctChange(mHi,mLo), vars={ hi:t("dow.pl."+hi), lo:t("dow.cmp."+lo), pct, x:(mHi/mLo).toFixed(1), a:dayOfWeek[hi].count, b:dayOfWeek[lo].count };
++      if (pct>=30) insights.push({ id:"dayofweek", text:t(pct>=200?"ins.dayOfWeekX":"ins.dayOfWeek",vars) });
++    }
+   }
+ 
+   // ── Category trends over the last 6 COMPLETED months (the current part-month would distort a trend)
+   const categoryTrends=[];
+@@ -1132,9 +1141,8 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
+       insights.push({ id:`trend-${catId}`, text:t(trend==="increasing"?"ins.trendUp":"ins.trendDown",{ cat:catName(catId), pct:`${trendPct>0?"+":""}${trendPct}` }) });
+   });
+ 
+   // ── Unusually large transactions this month: above Q3 + 1.5×IQR of that category's history AND at least 1.5× its median
+-  const quantile=(sorted,q)=>{ const i=(sorted.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); };
+   const hist={}; expenses.forEach(t=>{ (hist[t.category]=hist[t.category]||[]).push(t.amount); });
+   const anomalies=[];
+   monExp.forEach(tx=>{
+     const h=[...(hist[tx.category]||[])].sort((a,b)=>a-b);
+@@ -2533,20 +2653,21 @@ function AnalyticsPage({ transactions, currency, budgets }) {
+       {/* S5: Day of week breakdown */}
+       {Object.values(dayOfWeek).some(d=>d.count>0)&&(
+         <div className="a-card">
+           <div className="a-card-title">{t("an.byDay",{month:monthName(now)})}</div>
++          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.byDaySub")}</div>
+           {WEEKDAYS.map((day,di)=>{
+             const d=dayOfWeek[day];
+             if (!d||d.count===0) return null;
+-            const allAvgs=Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.avg);
+-            const maxAvg=Math.max(...allAvgs,1);
++            // the typical (median) transaction, as in the insight: one unusual purchase must not make a day's bar tower over the rest
++            const maxMed=Math.max(...Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.median),1);
+             return (
+-              <div key={day} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
++              <div key={day} className="dow-row" style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                 <div style={{minWidth:28,fontSize:11,color:"var(--ink-3)",fontWeight:600,flexShrink:0}} title={wdName(di,"long")}>{wdName(di,"short")}</div>
+                 <div style={{flex:1,height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden"}}>
+-                  <div style={{height:"100%",width:`${(d.avg/maxAvg)*100}%`,background:"var(--accent)",borderRadius:99}}/>
++                  <div style={{height:"100%",width:`${(d.median/maxMed)*100}%`,background:"var(--accent)",borderRadius:99}}/>
+                 </div>
+-                <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"'Playfair Display',serif",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.avg,currency)}</div>
++                <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"'Playfair Display',serif",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.median,currency)}</div>
+                 <div style={{width:24,textAlign:"right",fontSize:10,color:"var(--ink-4)",flexShrink:0}}>{d.count}×</div>
+               </div>
+             );
+           })}
+

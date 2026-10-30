@@ -1,0 +1,17 @@
+﻿
+R15-N1. The hook exists
+  ✗ window.__ledgerNativeBack is defined once the app has started
+
+R15-N2. Back closes what is open first, then leaves a tab, then warns, then lets the app close
+  ✗ add form open: Back closes it and the app stays
+  ✗ on another tab: Back returns to Home
+  ✗ on Home with nothing open: the first press warns 'press Back again'
+      ↳ 
+  ✗ a second press within 2 seconds lets the app close
+  ✗ after the warning has expired the next press warns again instead of closing
+
+R15-N3. A bottom sheet is closed before anything else
+  ✓ an entry sheet is open
+  ✗ Back closes the sheet, not the app
+
+e2e_run15_back: 7 FAILED, 1 passed

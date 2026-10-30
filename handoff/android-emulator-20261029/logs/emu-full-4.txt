@@ -1,0 +1,11 @@
+app is empty (previous wipe); restoring with the real backup after export is not possible, re-seeding from before.json is not done
+
+E6c. Capture the backup file while the share sheet is open (6)
+total 24
+drwx--S--- 2 u0_a216 u0_a216_cache 4096 2026-10-29 19:21 .
+drwxrws--x 4 u0_a216 u0_a216_cache 4096 2026-10-29 19:21 ..
+-rw------- 1 u0_a216 u0_a216_cache 1246 2026-10-29 19:21 ledger-backup-2026-10-29.json
+  ✓ the file is named ledger-backup-<date>.json
+  ✓ a valid version-10 backup, more than a few hundred bytes
+
+emu E6c: ALL 2 passed

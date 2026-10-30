@@ -1,0 +1,15 @@
+
+E5d. Back button, real touches, updated app: full sequence (5)
+  ✓ opened the add form with a real touch
+   soft keyboard visible: true
+   Back 1 {"alive":true,"overlay":true,"toast":""}
+   (first Back only hid the soft keyboard: normal Android)
+   Back 2 {"alive":true,"overlay":false,"toast":""}
+  ✓ Back closes the add form and the app stays open
+   Back (Home, nothing open) {"alive":true,"overlay":false,"toast":""}
+  ✗ then Back on Home says 'press Back again' and the app stays
+      ↳ {"alive":true,"overlay":false,"toast":""}
+  ✗ a second Back within 2 seconds leaves the app
+      ↳ mCurrentFocus=Window{b289474 u0 com.example.expenseledger.spike/com.example.expenseledger.spike.Main
+
+emu E5d: 2 FAILED, 2 passed

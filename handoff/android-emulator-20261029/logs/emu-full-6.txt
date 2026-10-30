@@ -1,0 +1,8 @@
+
+E9. Restore (9) - file placed in the app's own cache folder
+ -rw-rw-rw- 1 u0_a216 u0_a216_cache 2536 2026-10-29 19:26 cache/restore-test.json
+entries before restore: 0
+sheet: Restore Backup restore-test.json 3 transactions ready to import Merge adds new transactions and keeps everything you have. Budgets are combined (imported categories win), new goals and templates are added, and your currency and Safe to Spend settings stay as they are. Replace swaps your transactions for the file's. Bud
+  ✓ Replace brings back all 3 entries and the bill exactly as before
+
+emu E9: ALL 1 passed

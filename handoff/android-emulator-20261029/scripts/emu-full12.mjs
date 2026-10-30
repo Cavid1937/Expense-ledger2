@@ -1,0 +1,12 @@
+import { adb, wait, shot, launch, connect, ok, section, done, state, clearAnr, PKG } from "./emu-lib.mjs";
+adb("shell", "am", "force-stop", PKG); await wait(800); await launch(); clearAnr(); let { b, p } = await connect(); await wait(1500);
+section("E11. Run 15 screens on the Android WebView");
+const d = new Date(); const dl = new Date(d.getFullYear(), d.getMonth() + 8, 1); const DL = `${dl.getFullYear()}-${String(dl.getMonth() + 1).padStart(2, "0")}-01`;
+await p.evaluate((DL) => { const s = JSON.parse(localStorage.getItem("expense_ledger_v5")); s.goals = [{ id: "g1", name: "Trip", target: 1500, saved: 300, monthlyTarget: 100, targetDate: DL }, { id: "g2", name: "Laptop", target: 2400, saved: 600, monthlyTarget: 200, targetDate: null }]; localStorage.setItem("expense_ledger_v5", JSON.stringify(s)); }, DL);
+await p.reload(); await wait(2500); clearAnr(); shot("40-home-android");
+await p.evaluate(() => document.querySelectorAll(".tab-btn")[3].click()); await wait(800); await p.evaluate(() => document.querySelectorAll(".goals-page .seg-btn")[1].click()); await wait(800); clearAnr(); shot("41-goals-android");
+const need = await p.evaluate(() => [...document.querySelectorAll('[data-section="goal-need"]')].map((e) => e.innerText.replace(/\s+/g, " ")));
+console.log(need);
+ok(need.some((x) => /Save 150\.00/.test(x) && /8 monthly savings/.test(x)) && need.some((x) => /Set a target date/.test(x)), "Android WebView shows the required monthly amount (150.00, 8 savings) and the no-date prompt");
+const ov = await p.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1); ok(!ov, "no horizontal overflow on a 1080-px phone screen");
+done("emu E11"); b.disconnect();

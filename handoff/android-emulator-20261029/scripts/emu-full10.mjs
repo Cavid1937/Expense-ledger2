@@ -1,0 +1,13 @@
+import { adb, wait, shot, launch, connect, ok, section, done, clearAnr, focus, dump, PKG } from "./emu-lib.mjs";
+const tap = (re) => { const x = dump(); const m = [...x.matchAll(/<node [^>]*>/g)].map((n) => n[0]).find((n) => re.test(n)); if (!m) return false; const b = /bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(m); adb("shell", "input", "tap", String((+b[1] + +b[3]) / 2 | 0), String((+b[2] + +b[4]) / 2 | 0)); return true; };
+const imeUp = () => /mInputShown=true|isInputViewShown=true|mIsInputViewShown=true/.test(adb("shell", "dumpsys input_method"));
+const hideIme = async () => { let n = 0; while (imeUp() && n < 3) { adb("shell", "input", "keyevent", "4"); await wait(500); n++; } return n; };
+const info = async () => { try { const c = await connect(); return await c.p.evaluate(() => ({ overlay: !!document.querySelector(".add-overlay"), toast: (document.querySelector(".toast") || {}).innerText || "" })); } catch { return { page: "gone" }; } };
+adb("shell", "am", "force-stop", PKG); await wait(800); await launch(); clearAnr(); await connect();
+section("E5e. Back button on the final Android build, real touches (5)");
+await wait(2500); clearAnr(); let tapped = false; for (let k = 0; k < 5 && !tapped; k++) { tapped = tap(/text="Add transaction"/i); if (!tapped) await wait(1500); } ok(tapped, "opened the add form with a real touch"); await wait(1500);
+console.log("   (soft keyboard disabled for this check; on a phone the first Back only hides the keyboard)");
+adb("shell", "input", "keyevent", "4"); await wait(800); let i = await info(); ok(/expenseledger/.test(focus()) && !i.overlay, "Back closes the add form; the app stays open", i);
+adb("shell", "input", "keyevent", "4"); await wait(700); i = await info(); ok(/expenseledger/.test(focus()) && /again/i.test(i.toast), "Back on Home with nothing open: 'Press Back again to exit', app stays", i);
+adb("shell", "input", "keyevent", "4"); await wait(1800); clearAnr(); ok(!/expenseledger/.test(focus()), "a second Back within 2 seconds leaves the app", focus().slice(0, 100));
+done("emu E5e");

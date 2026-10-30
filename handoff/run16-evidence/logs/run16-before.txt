@@ -1,0 +1,6 @@
+﻿
+R16-1. The pieces exist
+  ✗ walletId, WALLET_IDS, lastWallet and calcWalletSpend are defined
+  (remaining checks skipped: not written yet)
+
+run16: 1 FAILED, 0 passed

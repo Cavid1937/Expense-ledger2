@@ -1,0 +1,5 @@
+// Run 13: build output outside OneDrive (OneDrive locked the build folder: AccessDeniedException / Unable to delete directory).
+allprojects {
+  def p = project.path == ':' ? 'root' : project.path.replace(':', '_')
+  layout.buildDirectory.set(new File("C:/ExpenseLedgerBuild/android/" + p))
+}

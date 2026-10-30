@@ -1,0 +1,41 @@
+== started 2026-10-29T19:40:19.3779025+04:00
+== 1. Run 15 candidate (commit a30f585) into the Android copy; main.jsx, native-share files, index.html, public stay as in Run 13
+839B436550B5B0D81D5B362198F145C27D7633B57FA45642BC8C81657B087C26  App.jsx
+E44C726001BEB40442CB03CD90FC8231D43B6F70FBD04B6F1B4BC147DE87F09D  i18n.js
+1DD9692FFD8A5A69EF946E37E796BB585A3EDD571785533367E05ABDDC4BB5D4  main.jsx
+E0B0834686BED24931F5D881B64EB577EC01788BCB3E68A0854C6D48A642D3C8  native-share-core.js
+CFC4B1F5F5BAE11DB64CBCEEF8F7E83512FA49D6C34DB6F4E7829F2FCCFE4F67  native-share.js
+== 2. vite build (node_modules already present; no npm install)
+dist/assets/web-jjQK7-E2.js      0.36 kB │ gzip:   0.25 kB
+dist/assets/web-aSxBecEu.js      8.73 kB │ gzip:   2.97 kB
+dist/assets/index-CI0SbSUh.js  488.94 kB │ gzip: 146.90 kB
+✓ built in 3.69s
+build exit=0
+== 3. cap sync android
+√ Creating capacitor.config.json in android\app\src\main\assets in 5.85ms
+√ copy android in 101.53ms
+√ Updating Android plugins in 5.73ms
+[info] Found 2 Capacitor plugins for android:
+       @capacitor/filesystem@8.1.5
+       @capacitor/share@8.0.3
+√ update android in 154.13ms
+[info] Sync finished in 0.317s
+sync exit=0
+== 4. gradle assembleDebug (offline, build output outside OneDrive)
+> Task :capacitor-share:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :capacitor-share:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :capacitor-share:prepareDebugArtProfile UP-TO-DATE
+> Task :capacitor-share:prepareLintJarForPublish UP-TO-DATE
+> Task :capacitor-share:mergeDebugJavaResource UP-TO-DATE
+> Task :capacitor-share:syncDebugLibJars UP-TO-DATE
+> Task :capacitor-share:bundleDebugAar UP-TO-DATE
+> Task :capacitor-share:assembleDebug UP-TO-DATE
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect UP-TO-DATE
+> Task :app:assembleDebug
+
+BUILD SUCCESSFUL in 1m 4s
+154 actionable tasks: 6 executed, 148 up-to-date
+gradle exit=0
+E4547A6AFE1B851CEA0E8C72024C82DE2EAE92043E3956877955B1B0829E0721  4448306 bytes  C:\ExpenseLedgerBuild\android\_app\outputs\apk\debug\app-debug.apk
+== finished 2026-10-29T19:41:39.8120304+04:00

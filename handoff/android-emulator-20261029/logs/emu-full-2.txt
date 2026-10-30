@@ -1,0 +1,31 @@
+﻿  ✓ data still the same after the earlier steps
+
+E6. Backup via the share sheet (6)
+buttons: [
+  'Ask the browser again',
+  'Export CSV',
+  'Save a backup to Google Drive, Telegram…',
+  'Create backup file'
+]
+  ✓ the phone's share sheet opened
+share sheet texts: [
+  'Sharing 1 file',
+  'ledger-backup-2026-10-29.json',
+  'No recommended people to share with',
+  'Quick Share',
+  'Drive',
+  'Gmail'
+]
+  ✗ the backup file was written to the app's cache folder
+      ↳ drwx------ 8 u0_a216 u0_a216       4096 2026-10-29 18:56 ..
+ | drwx--S--- 6 u0_a216 u0_a216_cache 4096 2026-10-29 18:57 WebView
+ | drwx--S--- 2 u0_a216 u0_a216_cache 4096 2026-10-29 19:16 exports
+
+E7. Cancel the share sheet (7)
+  ✓ back in the app after closing the share sheet
+  ✓ the app did NOT claim a backup was sent/saved, and 'last backup' is unchanged
+
+E8. CSV export (8)
+  ✓ CSV export opens the same share sheet
+
+emu-full part 2 (E6-E8): 1 FAILED, 5 passed

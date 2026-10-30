@@ -1,0 +1,17 @@
+import { createRequire } from "module"; import { execFileSync } from "child_process"; import fs from "fs";
+const puppeteer = createRequire("file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/package.json")("puppeteer-core");
+export const ADB = process.env.LOCALAPPDATA + "\\Android\\Sdk\\platform-tools\\adb.exe"; export const PKG = "com.example.expenseledger.spike";
+export const OUT = "C:\\Users\\cavid\\AppData\\Local\\Temp\\claude\\C--Users-cavid-OneDrive-Documents-GitHub-Expense-ledger2\\0746605d-af66-4aa0-9a7d-71580e75a820\\scratchpad\\emu";
+export const adb = (...a) => { try { return execFileSync(ADB, a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim(); } catch (e) { return "ERR:" + String(e.stderr || e.message).trim(); } };
+export const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+export const shot = (name) => { adb("shell", "screencap", "-p", "/sdcard/s.png"); adb("pull", "/sdcard/s.png", OUT + "\\" + name + ".png"); };
+export const launch = async () => { adb("shell", "monkey", "-p", PKG, "-c", "android.intent.category.LAUNCHER", "1"); for (let i = 0; i < 30; i++) { await wait(1000); const pid = adb("shell", "pidof", PKG); if (/^\d+/.test(pid) && /webview_devtools_remote_/.test(adb("shell", "cat /proc/net/unix"))) { adb("forward", "tcp:9222", "localabstract:webview_devtools_remote_" + pid.split(/\s/)[0]); await wait(1500); return pid; } } throw new Error("app did not start"); };
+export const connect = async () => { const b = await puppeteer.connect({ browserURL: "http://127.0.0.1:9222", defaultViewport: null }); const p = (await b.pages())[0]; return { b, p }; };
+let pass = 0, fail = 0; export const ok = (c, m, x) => { console.log((c ? "  ✓ " : "  ✗ ") + m); if (c) pass++; else { fail++; if (x !== undefined) console.log("      ↳", typeof x === "string" ? x : JSON.stringify(x)); } };
+export const section = (t) => console.log("\n" + t); export const done = (n) => { console.log(`\n${n}: ${fail ? fail + " FAILED, " : "ALL "}${pass} passed`); };
+export const setVal = (p, sel, v) => p.$eval(sel, (el, v) => { const set = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value").set; set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); }, v);
+export const clickText = (p, sel, re) => p.evaluate((sel, src) => { const r = new RegExp(src, "i"); const el = [...document.querySelectorAll(sel)].find((e) => r.test(e.innerText || e.textContent)); if (el) { el.click(); return true; } return false; }, sel, re.source);
+export const state = (p) => p.evaluate(() => JSON.parse(localStorage.getItem("expense_ledger_v5") || "null"));
+export const dump = () => { adb("shell", "uiautomator", "dump", "/sdcard/u.xml"); return adb("shell", "cat", "/sdcard/u.xml"); };
+export const clearAnr = () => { let n = 0; for (let i = 0; i < 4; i++) { const x = dump(); const m = /text="Wait"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/.exec(x) || /bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"[^>]*text="Wait"/.exec(x); if (!/isn't responding/.test(x) || !m) break; adb("shell", "input", "tap", String((+m[1] + +m[3]) / 2 | 0), String((+m[2] + +m[4]) / 2 | 0)); n++; } return n; };
+export const focus = () => adb("shell", "dumpsys window displays | grep mCurrentFocus");

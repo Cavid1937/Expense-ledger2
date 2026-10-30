@@ -1,0 +1,19 @@
+  ✓ start state: the Run 13 app holds the 3 entries and the bill
+
+E10. Install the newer app OVER the first one, no uninstall (10)
+  ✓ adb install -r of the Run 15 APK succeeded
+  ✓ all entries and the bill are still there after the update
+  ✓ the updated app opens to Home
+  ✓ it is the Run 15 web code (Home has the 'see all' route and no goal cards)
+
+E5b. Back button with the Back fix (5)
+  ✓ Back with the add form open: the app stays open
+  ✗ …and the add form is closed
+      ↳ []
+  ✗ Back on Home with nothing open: 'press Back again' and the app stays
+      ↳ 
+  ✗ Back again within 2 seconds leaves the app
+      ↳ mCurrentFocus=Window{b6c8451 u0 com.example.expenseledger.spike/com.example.expenseledger.spike.MainActivity}
+  ✓ Back from the Goals tab returns to Home
+
+emu E10+E5b: 3 FAILED, 7 passed

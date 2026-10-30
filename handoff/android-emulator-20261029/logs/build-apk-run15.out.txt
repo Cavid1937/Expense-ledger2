@@ -1,0 +1,41 @@
+== started 2026-10-29T19:28:34.1018169+04:00
+== 1. Run 15 candidate (commit a30f585) into the Android copy; main.jsx, native-share files, index.html, public stay as in Run 13
+C1D77CF4FBA96F3E68BC946C63AD7491A7047525E60FCEAB2A7D2A18428490D7  App.jsx
+E44C726001BEB40442CB03CD90FC8231D43B6F70FBD04B6F1B4BC147DE87F09D  i18n.js
+1DD9692FFD8A5A69EF946E37E796BB585A3EDD571785533367E05ABDDC4BB5D4  main.jsx
+E0B0834686BED24931F5D881B64EB577EC01788BCB3E68A0854C6D48A642D3C8  native-share-core.js
+CFC4B1F5F5BAE11DB64CBCEEF8F7E83512FA49D6C34DB6F4E7829F2FCCFE4F67  native-share.js
+== 2. vite build (node_modules already present; no npm install)
+dist/assets/web-CHmUMRQy.js      0.36 kB │ gzip:   0.25 kB
+dist/assets/web-BD7CcM9W.js      8.73 kB │ gzip:   2.97 kB
+dist/assets/index-CIBF9o7H.js  488.65 kB │ gzip: 146.84 kB
+✓ built in 6.61s
+build exit=0
+== 3. cap sync android
+√ Creating capacitor.config.json in android\app\src\main\assets in 4.43ms
+√ copy android in 99.74ms
+√ Updating Android plugins in 5.65ms
+[info] Found 2 Capacitor plugins for android:
+       @capacitor/filesystem@8.1.5
+       @capacitor/share@8.0.3
+√ update android in 184.97ms
+[info] Sync finished in 0.356s
+sync exit=0
+== 4. gradle assembleDebug (offline, build output outside OneDrive)
+> Task :capacitor-share:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :capacitor-share:extractDebugAnnotations UP-TO-DATE
+> Task :capacitor-share:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :capacitor-share:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :capacitor-share:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :capacitor-share:prepareDebugArtProfile UP-TO-DATE
+> Task :capacitor-share:prepareLintJarForPublish UP-TO-DATE
+> Task :capacitor-share:mergeDebugJavaResource UP-TO-DATE
+> Task :capacitor-share:syncDebugLibJars UP-TO-DATE
+> Task :capacitor-share:bundleDebugAar UP-TO-DATE
+> Task :capacitor-share:assembleDebug UP-TO-DATE
+
+BUILD SUCCESSFUL in 1m 10s
+154 actionable tasks: 6 executed, 148 up-to-date
+gradle exit=0
+884446A3F67031068384E49B7C698E89ACC164E0DC03646FD836C6886BD3F596  4448308 bytes  C:\ExpenseLedgerBuild\android\_app\outputs\apk\debug\app-debug.apk
+== finished 2026-10-29T19:30:39.9173847+04:00

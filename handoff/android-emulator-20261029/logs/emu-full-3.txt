@@ -1,0 +1,19 @@
+
+E6b. The exported files themselves (6, 8)
+total 24
+drwx--S--- 2 u0_a216 u0_a216_cache 4096 2026-10-29 19:17 .
+drwxrws--x 4 u0_a216 u0_a216_cache 4096 2026-10-29 19:20 ..
+-rw------- 1 u0_a216 u0_a216_cache  289 2026-10-29 19:17 ledger-2026-10-29.csv
+  ✗ backup file is named ledger-backup-<date>.json
+  ✗ valid version-10 backup: 3 entries, 1 bill, more than a few hundred bytes
+      ↳ {"bytes":55,"v":null}
+  ✓ a CSV file was written too
+  ✓ the CSV contains the entries
+
+E9. Restore from the backup file (9)
+  ✓ the app is empty after the wipe
+sheet: Restore Backup That file could not be read, so nothing was imported. OK
+  ✗ Replace brings back all entries and the bill exactly as before
+      ↳ [0,0]
+
+emu-full part 3 (E6b, E9): 3 FAILED, 3 passed

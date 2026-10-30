@@ -1,0 +1,320 @@
+﻿diff --git a/tests/original/App.jsx.phase3-1ed61f4a b/App.jsx
+index 1ed61f4..45bc386 100644
+--- a/tests/original/App.jsx.phase3-1ed61f4a
++++ b/App.jsx
+@@ -1064,6 +1064,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
+   if (expenses.length<5) return empty;
+   const sumOf=(l)=>l.reduce((a,t)=>a+t.amount,0);
+   const pctChange=(a,b)=>Math.round(((a-b)/b)*100);                       // only called with b>0
++  const quantile=(sorted,q)=>{ const i=(sorted.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); };
+   const isWeekend=(d)=>[0,6].includes(parseLocalDate(d).getDay());
+   const DAY_NAMES=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+ 
+@@ -1097,21 +1098,29 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
+     if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>a+v,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", text:t("ins.merchantConc",{ names:top3.map(([m])=>m).join(", "), pct:pc }) }); }
+   }
+ 
+-  // ── Average transaction vs last month (a per-transaction average, so a part-month is comparable)
++  // ── Typical transaction vs last month: the MEDIAN per transaction (a part-month stays comparable, and one unusual purchase
++  //    cannot read as a general change; unusual purchases are reported separately as anomalies)
++  const median=(l)=>quantile([...l].sort((a,b)=>a-b),0.5);
+   const curAmts=expenses.filter(t=>t.date.startsWith(mon)).map(t=>t.amount), prvAmts=expenses.filter(t=>t.date.startsWith(prv)).map(t=>t.amount);
+   if (curAmts.length>=4 && prvAmts.length>=4) {
+-    const curAvg=curAmts.reduce((a,b)=>a+b,0)/curAmts.length, prvAvg=prvAmts.reduce((a,b)=>a+b,0)/prvAmts.length;
+-    if (prvAvg>0) { const pct=pctChange(curAvg,prvAvg); if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:t(pct>0?"ins.avgHigher":"ins.avgLower",{ pct:Math.abs(pct), a:curAmts.length, b:prvAmts.length }) }); }
++    const curMed=median(curAmts), prvMed=median(prvAmts);
++    if (prvMed>0) { const pct=pctChange(curMed,prvMed); if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:t(pct>0?"ins.avgHigher":"ins.avgLower",{ pct:Math.abs(pct), a:curAmts.length, b:prvAmts.length }) }); }
+   }
+ 
+-  // ── Day of week (average per transaction; only days with at least 3 transactions are compared)
+-  const dayOfWeek={}; DAY_NAMES.forEach(d=>{ dayOfWeek[d]={ avg:0, count:0, total:0 }; });
+-  monExp.forEach(t=>{ const d=DAY_NAMES[parseLocalDate(t.date).getDay()]; dayOfWeek[d].count++; dayOfWeek[d].total+=t.amount; });
+-  DAY_NAMES.forEach(d=>{ if (dayOfWeek[d].count>0) dayOfWeek[d].avg=parseFloat((dayOfWeek[d].total/dayOfWeek[d].count).toFixed(2)); });
+-  const eligible=DAY_NAMES.filter(d=>dayOfWeek[d].count>=3);
++  // ── Day of week. The insight and the Analytics card both use the MEDIAN (the typical transaction; the average is kept in
++  //    the data), so one unusual purchase cannot produce a claim. Only days with at least 3 transactions on at least 2 different dates
++  //    are compared (one busy Monday is not a weekly pattern); differences of 3× or more are stated as a multiple ("5.0×").
++  const dayOfWeek={}; DAY_NAMES.forEach(d=>{ dayOfWeek[d]={ avg:0, median:0, count:0, total:0 }; });
++  const dayAmts={}, dayDates={}; monExp.forEach(t=>{ const d=DAY_NAMES[parseLocalDate(t.date).getDay()]; dayOfWeek[d].count++; dayOfWeek[d].total+=t.amount; (dayAmts[d]=dayAmts[d]||[]).push(t.amount); (dayDates[d]=dayDates[d]||new Set()).add(t.date); });
++  DAY_NAMES.forEach(d=>{ if (dayOfWeek[d].count>0) { dayOfWeek[d].avg=parseFloat((dayOfWeek[d].total/dayOfWeek[d].count).toFixed(2)); dayOfWeek[d].median=median(dayAmts[d]); } });
++  const eligible=DAY_NAMES.filter(d=>dayOfWeek[d].count>=3 && dayDates[d].size>=2);
+   if (eligible.length>=2) {
+-    const byAvg=[...eligible].sort((a,b)=>dayOfWeek[b].avg-dayOfWeek[a].avg), hi=byAvg[0], lo=byAvg[byAvg.length-1];
+-    if (dayOfWeek[lo].avg>0) { const pct=pctChange(dayOfWeek[hi].avg,dayOfWeek[lo].avg); if (pct>=30) insights.push({ id:"dayofweek", text:t("ins.dayOfWeek",{ hi:t("dow.pl."+hi), lo:t("dow.cmp."+lo), pct, a:dayOfWeek[hi].count, b:dayOfWeek[lo].count }) }); }
++    const byMed=[...eligible].sort((a,b)=>dayOfWeek[b].median-dayOfWeek[a].median), hi=byMed[0], lo=byMed[byMed.length-1];
++    const mHi=dayOfWeek[hi].median, mLo=dayOfWeek[lo].median;
++    if (mLo>0) {
++      const pct=pctChange(mHi,mLo), vars={ hi:t("dow.pl."+hi), lo:t("dow.cmp."+lo), pct, x:(mHi/mLo).toFixed(1), a:dayOfWeek[hi].count, b:dayOfWeek[lo].count };
++      if (pct>=30) insights.push({ id:"dayofweek", text:t(pct>=200?"ins.dayOfWeekX":"ins.dayOfWeek",vars) });
++    }
+   }
+ 
+   // ── Category trends over the last 6 COMPLETED months (the current part-month would distort a trend)
+@@ -1133,7 +1142,6 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
+   });
+ 
+   // ── Unusually large transactions this month: above Q3 + 1.5×IQR of that category's history AND at least 1.5× its median
+-  const quantile=(sorted,q)=>{ const i=(sorted.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); };
+   const hist={}; expenses.forEach(t=>{ (hist[t.category]=hist[t.category]||[]).push(t.amount); });
+   const anomalies=[];
+   monExp.forEach(tx=>{
+@@ -1253,7 +1261,7 @@ const CSS = `
+ button{font-family:inherit;cursor:pointer}
+ :root{
+   --bg:#F7F4EE;--bg-warm:#F0EDE5;--bg-card:#FDFCF9;--bg-inset:#EDEAE2;
+-  --ink:#1A1814;--ink-2:#3D3A35;--ink-3:#7A756D;--ink-4:#B5B0A8;--ink-5:#D5D1C9;
++  --ink:#1A1814;--ink-2:#3D3A35;--ink-3:#5F5A53;--ink-4:#6E6961;--ink-5:#D5D1C9;
+   --rule:#E8E4DC;--rule-2:#C8C4BC;
+   --accent:#6B1F2A;--accent-light:#F5ECED;--accent-mid:#C4454F;
+   --pos:#1D5C38;--pos-bg:#EBF4EE;
+@@ -1564,11 +1572,121 @@ input[type=number]{-moz-appearance:textfield}
+ .lang-pill.sel{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+ .lang-pill:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+ .topbar-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
++/* ── Design pass (from patch_H_design.py, reviewed) ── */
++/* Secondary greys: --ink-3 #5F5A53 is 6.2:1 on the page background, --ink-4 #6E6961 is ≥ 4.5:1 on every surface
++   (page, card, warm and inset backgrounds). They were 4.2:1 and 2.0:1. (The patch's #746F67 failed on --bg-inset: 4.15:1.) */
++/* Money reads as aligned, lining figures */
++.hero-amount,.hero-stat-val,.safe-amount,.safe-val,.stat-val,.month-stat-val,.txn-amt,.txn-date-total,.cat-bar-amt,.budget-nums,.amount-input,.wc-diff,.goal-meta{font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1}
++/* Touch targets: the look stays, the tappable area grows to 44px */
++.topbar-btn,.add-close,.toggle-track,.snackbar-undo,.topbar-add,.backup-banner-btn,.backup-dismiss{position:relative}
++.topbar-btn::after{content:"";position:absolute;inset:-5px}
++.sheet .topbar-btn{z-index:1}   /* keeps the enlarged tap area above the goal progress bar drawn just below it */
++.topbar-add::after{content:"";position:absolute;inset:-6px}
++.add-close::after{content:"";position:absolute;inset:-8px}
++.topbar-right{gap:12px}
++.backup-banner-btn::after{content:"";position:absolute;inset:-6px -2px}
++.backup-dismiss::after{content:"";position:absolute;inset:-12px -15px}
++.sheet .topbar-btn::after{inset:-9px}
++.toggle-track::after{content:"";position:absolute;inset:-10px -4px}
++.chip,.sub-chip{min-height:34px;display:inline-flex;align-items:center}
++.btn-sm,.snackbar-undo{min-height:36px}
++/* Sheets follow the finger while dragged (see useSheetGestures) */
++.sheet-grip{margin:0 -20px;padding:12px 0 8px;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
++.sheet-grip:active{cursor:grabbing}
++.sheet-grip .sheet-handle{margin:0 auto}
++.sheet.dragging{animation:none;transition:none;will-change:transform}
++/* Once dragged, a sheet's entrance animation stays off: re-enabling it on release would replay the rise from the bottom. */
++.sheet.settled{animation:none}
++.sheet:focus{outline:none}
++/* Materials follow the user's preferences */
++@media (prefers-reduced-transparency: reduce){
++  .topbar,.tabbar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none}
++  .sheet-overlay{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(26,24,20,0.62)}
++}
++@media (prefers-contrast: more){
++  :root{--rule:#8B867E;--rule-2:#5F5A53;--ink-3:#4A4640;--ink-4:#504B45}
++  .sheet-overlay{background:rgba(26,24,20,0.72)}
++  .btn-ghost,.chip,.sub-chip,.field-input,.cat-tile,.search-input,.tpl-card{border-color:var(--rule-2)}
++}
+ @media (prefers-reduced-motion: reduce){
+   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
+ }
+ `;
+ 
++// ─── Sheet gestures and keyboard (from patch_H_design.py, reviewed) ──────────
++// • Swipe down on a sheet's grip: the sheet follows the finger 1:1; on release the finger's velocity is handed to a spring that
++//   either dismisses it or settles it back. The motion starts from where the sheet visibly is, so it can be grabbed again mid-flight.
++// • Escape closes the top-most layer. Focus moves into a layer when it opens and returns to where it was when it closes;
++//   Tab stays inside the open layer. Reduced-motion users get no spring (the sheet simply closes or resets).
++// Dismissal always goes through the sheet's own close handler (a click on its overlay, or the add form's close button).
++function useSheetGestures() {
++  useEffect(()=>{
++    const reduced=()=>!!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
++    let drag=null, anim=null;
++    const stop=()=>{ if (anim) { cancelAnimationFrame(anim.raf); anim=null; } };
++    const apply=(sheet,overlay,y,h)=>{ sheet.style.transform=`translateY(${y}px)`; overlay.style.background=`rgba(26,24,20,${0.5*(1-Math.min(1,Math.max(0,y)/h))})`; };
++    const spring=(sheet,overlay,from,to,v0,h,done)=>{
++      stop(); if (reduced()) { apply(sheet,overlay,to,h); done(); return; }
++      let x=from, v=v0, last=performance.now(); const k=380, c=2*Math.sqrt(k)*0.92;
++      const step=(now)=>{ const dt=Math.min(0.032,(now-last)/1000); last=now; v+=(-k*(x-to)-c*v)*dt; x+=v*dt; apply(sheet,overlay,x,h);
++        if (Math.abs(x-to)<0.4 && Math.abs(v)<8) { apply(sheet,overlay,to,h); anim=null; done(); } else anim.raf=requestAnimationFrame(step); };
++      anim={ raf:requestAnimationFrame(step) };
++    };
++    const onDown=(e)=>{
++      const grip=e.target.closest && e.target.closest(".sheet-grip"); if (!grip) return;
++      const sheet=grip.closest(".sheet"), overlay=grip.closest(".sheet-overlay"); if (!sheet||!overlay) return;
++      stop(); let cur=0; try { cur=new DOMMatrix(getComputedStyle(sheet).transform).m42||0; } catch {}
++      drag={ sheet, overlay, pid:e.pointerId, startY:e.clientY-cur, y:cur, h:sheet.getBoundingClientRect().height, samples:[{t:e.timeStamp,y:cur}] };
++      sheet.classList.add("dragging"); try { grip.setPointerCapture(e.pointerId); } catch {}
++    };
++    const onMove=(e)=>{
++      if (!drag || e.pointerId!==drag.pid) return;
++      let y=e.clientY-drag.startY; if (y<0) y*=0.2;                                  // resist pulling up
++      drag.y=y; drag.samples.push({t:e.timeStamp,y}); if (drag.samples.length>6) drag.samples.shift();
++      apply(drag.sheet,drag.overlay,y,drag.h);
++    };
++    const onUp=(e)=>{
++      if (!drag || e.pointerId!==drag.pid) return;
++      const d=drag; drag=null; d.sheet.classList.add("settled"); d.sheet.classList.remove("dragging");
++      // Release velocity over the last 100 ms up to the moment of release (a finger that stopped before lifting has ~0 velocity;
++      // the patch measured only between move events, so a short drag released after a pause counted as a hard flick).
++      const recent=d.samples.filter(s=>e.timeStamp-s.t<=100), a=recent[0]||d.samples[d.samples.length-1];
++      const v=e.timeStamp-a.t>0 ? ((d.y-a.y)/(e.timeStamp-a.t))*1000 : 0;               // px/s, downwards positive
++      // Where the sheet would come to rest if thrown (momentum projection, deceleration 0.99): dismiss past 45% of its height.
++      const projected=d.y+(v/1000)*0.99/(1-0.99);
++      if (projected>d.h*0.45) spring(d.sheet,d.overlay,d.y,d.h,v,d.h,()=>{ d.overlay.click(); });
++      else spring(d.sheet,d.overlay,d.y,0,v,d.h,()=>{ d.sheet.style.transform=""; d.overlay.style.background=""; });
++    };
++    const onKey=(e)=>{
++      if (e.key==="Escape" && !e.defaultPrevented) {
++        const add=document.querySelector(".add-overlay .add-close"); if (add) { add.click(); e.preventDefault(); return; }
++        const sheets=document.querySelectorAll(".sheet-overlay"); if (sheets.length) { sheets[sheets.length-1].click(); e.preventDefault(); }
++      } else if (e.key==="Tab") {
++        const layers=document.querySelectorAll(".add-overlay,.sheet"); const top=layers[layers.length-1]; if (!top) return;
++        const f=[...top.querySelectorAll('button,[href],input:not([type=file]),select,textarea,[tabindex]:not([tabindex="-1"])')].filter(x=>!x.disabled && x.offsetParent!==null);
++        if (!f.length) return;
++        const first=f[0], last=f[f.length-1], inside=top.contains(document.activeElement);
++        if (!inside || (e.shiftKey && document.activeElement===first)) { e.preventDefault(); last.focus(); }
++        else if (!e.shiftKey && document.activeElement===last) { e.preventDefault(); first.focus(); }
++      }
++    };
++    const stack=[];
++    const sync=()=>{
++      document.querySelectorAll(".sheet,.add-overlay").forEach(el=>{
++        if (stack.some(x=>x.el===el)) return;
++        stack.push({ el, prev:document.activeElement });
++        if (el.classList.contains("sheet")) el.focus({ preventScroll:true });
++      });
++      for (let i=stack.length-1;i>=0;i--) if (!document.contains(stack[i].el)) { const { prev }=stack.splice(i,1)[0]; if (prev && document.contains(prev) && prev.focus) prev.focus({ preventScroll:true }); }
++    };
++    const mo=new MutationObserver(sync); mo.observe(document.body,{ childList:true, subtree:true });
++    document.addEventListener("pointerdown",onDown); document.addEventListener("pointermove",onMove);
++    document.addEventListener("pointerup",onUp); document.addEventListener("pointercancel",onUp); document.addEventListener("keydown",onKey);
++    return ()=>{ stop(); mo.disconnect(); document.removeEventListener("pointerdown",onDown); document.removeEventListener("pointermove",onMove);
++      document.removeEventListener("pointerup",onUp); document.removeEventListener("pointercancel",onUp); document.removeEventListener("keydown",onKey); };
++  },[]);
++}
++
+ // ─────────────────────────────────────────────────────────────────────────────
+ // ROOT APP
+ // ─────────────────────────────────────────────────────────────────────────────
+@@ -1593,6 +1711,7 @@ export default function App() {
+   const [recoveryNotice, setRecoveryNotice] = useState(()=>LOAD_NOTICE);
+   const stateRef = useRef(state);
+   stateRef.current = state;   // always the latest committed state, for callbacks that must not close over a stale copy
++  useSheetGestures();
+   // Dismissing the backup reminder hides it for this visit only; it is worked out from the saved state on every render.
+   const [backupDismissed, setBackupDismissed] = useState(false);
+   const backupReminder = backupReminderDue(state);
+@@ -1819,8 +1938,8 @@ export default function App() {
+         )}
+         {importPending&&(
+           <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setImportPending(null)}>
+-            <div className="sheet" role="dialog" aria-modal="true" aria-label={t("import.dialogLabel")}>
+-              <div className="sheet-handle"/>
++            <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("import.dialogLabel")}>
++              <div className="sheet-grip"><div className="sheet-handle"/></div>
+               <div className="sheet-title">{t("import.title")}</div>
+               {importPending.error?(
+                 <>
+@@ -2010,8 +2129,9 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
+               <span className="safe-lbl">{t("safe.recordedSpend")}</span>
+               <span className="safe-val" style={{color:"var(--neg)"}}>−{fmt(safeInfo.curExp,currency)}</span>
+             </div>
+-            <div className="safe-row" style={{opacity:safeInfo.futureCommitments>0?1:0.4}}>
+-              <span className="safe-lbl">{t("safe.upcoming")}</span>
++            {/* De-emphasised by colour (still ≥ 4.5:1), not by opacity: at 40% opacity this row was 1.8:1 and hard to read. */}
++            <div className="safe-row">
++              <span className="safe-lbl" style={safeInfo.futureCommitments>0?undefined:{color:"var(--ink-4)"}}>{t("safe.upcoming")}</span>
+               <span className="safe-val" style={{color:safeInfo.futureCommitments>0?"var(--warn)":"var(--ink-4)"}}>
+                 {safeInfo.futureCommitments>0?`−${fmt(safeInfo.futureCommitments,currency)}`:t("safe.noneThisMonth")}
+               </span>
+@@ -2351,8 +2471,8 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
+       )}
+       {showCatSheet&&(
+         <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setShowCatSheet(false)}>
+-          <div className="sheet" role="dialog" aria-modal="true" aria-label={t("ledger.filterTitle")}>
+-            <div className="sheet-handle"/>
++          <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("ledger.filterTitle")}>
++            <div className="sheet-grip"><div className="sheet-handle"/></div>
+             <div className="sheet-title">{t("ledger.filterTitle")}</div>
+             {[{id:"all",color:"#8A8A8A"},...usedCats].map(cat=>(
+               <button key={cat.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",background:"none",border:"none",borderBottom:"1px solid var(--rule)",cursor:"pointer",width:"100%",textAlign:"left",font:"inherit"}}
+@@ -2534,18 +2654,19 @@ function AnalyticsPage({ transactions, currency, budgets }) {
+       {Object.values(dayOfWeek).some(d=>d.count>0)&&(
+         <div className="a-card">
+           <div className="a-card-title">{t("an.byDay",{month:monthName(now)})}</div>
++          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.byDaySub")}</div>
+           {WEEKDAYS.map((day,di)=>{
+             const d=dayOfWeek[day];
+             if (!d||d.count===0) return null;
+-            const allAvgs=Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.avg);
+-            const maxAvg=Math.max(...allAvgs,1);
++            // the typical (median) transaction, as in the insight: one unusual purchase must not make a day's bar tower over the rest
++            const maxMed=Math.max(...Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.median),1);
+             return (
+-              <div key={day} style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
++              <div key={day} className="dow-row" style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                 <div style={{minWidth:28,fontSize:11,color:"var(--ink-3)",fontWeight:600,flexShrink:0}} title={wdName(di,"long")}>{wdName(di,"short")}</div>
+                 <div style={{flex:1,height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden"}}>
+-                  <div style={{height:"100%",width:`${(d.avg/maxAvg)*100}%`,background:"var(--accent)",borderRadius:99}}/>
++                  <div style={{height:"100%",width:`${(d.median/maxMed)*100}%`,background:"var(--accent)",borderRadius:99}}/>
+                 </div>
+-                <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"'Playfair Display',serif",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.avg,currency)}</div>
++                <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"'Playfair Display',serif",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.median,currency)}</div>
+                 <div style={{width:24,textAlign:"right",fontSize:10,color:"var(--ink-4)",flexShrink:0}}>{d.count}×</div>
+               </div>
+             );
+@@ -2757,8 +2878,10 @@ function RecurringHub({ transactions, currency, onView, onToggleSchedule }) {
+     const isInc=x.type==="income";
+     const near=x.nextDue && daysBetween(nowD,x.nextDue)<=3;
+     return (
+-      <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)",opacity:x.isActive?1:0.55}}>
+-        <div onClick={()=>onView?.(x.latest)} style={{width:36,height:36,borderRadius:9,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer"}}>
++      // A paused schedule is marked by its "Paused" text and a faded icon; its text keeps full contrast (fading the whole row
++      // made it 2.2–3.9:1, including the Reactivate button the user needs).
++      <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)"}}>
++        <div onClick={()=>onView?.(x.latest)} style={{width:36,height:36,borderRadius:9,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:x.isActive?1:0.5}}>
+           <CatIcon catId={cat.id} size={16} color={cat.color}/>
+         </div>
+         <div onClick={()=>onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
+@@ -3010,7 +3133,7 @@ function AddEditOverlay({ templates, currency, transactions, prefill, editId, me
+           <div className="field" style={{marginBottom:0}}>
+             <div className="field-lbl" id="txn-rec-lbl">{t("add.recurring")}</div>
+             <div style={{display:"flex",alignItems:"center",gap:9,marginTop:9}}>
+-              <div className={`toggle-track${recur?" on":""}`} onClick={()=>setRecur(r=>!r)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setRecur(r=>!r); } }} role="switch" aria-checked={recur} aria-labelledby="txn-rec-lbl" tabIndex={0}>
++              <div className={`toggle-track${recur?" on":""}`} onClick={()=>setRecur(r=>!r)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setRecur(r=>!r); } }} role="switch" aria-checked={recur} aria-label={t("add.recurring")} tabIndex={0}>
+                 <div className="toggle-knob"/>
+               </div>
+               {recur&&(
+@@ -3040,8 +3163,8 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
+ 
+   return (
+     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+-      <div className="sheet" role="dialog" aria-modal="true" aria-label={txn.merchant||txn.note||catName(txn.category)}>
+-        <div className="sheet-handle"/>
++      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={txn.merchant||txn.note||catName(txn.category)}>
++        <div className="sheet-grip"><div className="sheet-handle"/></div>
+         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+           <div style={{width:44,height:44,borderRadius:12,background:(cat.color)+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+             <CatIcon catId={cat.id} size={22} color={cat.color}/>
+@@ -3221,8 +3344,8 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
+ 
+   return (
+     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+-      <div className="sheet" role="dialog" aria-modal="true" aria-label={t("nav.settings")}>
+-        <div className="sheet-handle"/>
++      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("nav.settings")}>
++        <div className="sheet-grip"><div className="sheet-handle"/></div>
+         <div className="sheet-title">{t("nav.settings")}</div>
+ 
+         {/* Language — changes only the interface text; data, currency and open forms are untouched */}
+@@ -3254,7 +3377,7 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
+         <div className="settings-section-lbl" style={{marginTop:14}}>{t("safe.title")}</div>
+         <div className="settings-row">
+           <div><div className="settings-row-title" id="set-safe-lbl">{t("set.safeEnable")}</div><div className="settings-row-sub">{t("set.safeEnableSub")}</div></div>
+-          <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-labelledby="set-safe-lbl" tabIndex={0}><div className="toggle-knob"/></div>
++          <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-label={t("safe.title")} tabIndex={0}><div className="toggle-knob"/></div>
+         </div>
+         {safeToSpend.enabled&&(
+           <div className="settings-row" style={{flexDirection:"column",alignItems:"flex-start",gap:8}}>
+@@ -3274,7 +3397,7 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
+         <div className="settings-row">
+           <div><div className="settings-row-title" id="set-cur-lbl">{t("set.currency")}</div><div className="settings-row-sub">{t("set.currencySub",{currency})}</div></div>
+           <div style={{display:"flex",gap:7,alignItems:"center"}}>
+-            <input className="field-input" value={curSym} onChange={e=>setCurSym(e.target.value)} maxLength={3} aria-labelledby="set-cur-lbl" style={{width:52,textAlign:"center",padding:"7px 8px"}}/>
++            <input className="field-input" value={curSym} onChange={e=>setCurSym(e.target.value)} maxLength={3} aria-labelledby="set-cur-lbl" style={{width:52,minHeight:38,textAlign:"center",padding:"7px 8px"}}/>
+             <button className="btn btn-sm btn-sm-primary" onClick={()=>{if(!curSym.trim()){showToast(t("set.currencyEmpty"));return;} onCurrencyChange(curSym.trim());showToast(t("set.currencyUpdated"));}}>{t("common.save")}</button>
+           </div>
+         </div>

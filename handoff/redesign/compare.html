@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Redesign Comparison</title>
+<style>
+:root{--bg:#080F17;--card:#111B27;--line:#1F2B3A;--text:#F3F6FC;--muted:#98A5B7;--blue:#7B9BFF;--teal:#32CDAA;--amber:#F5B83D}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.5}
+main{max-width:1200px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;margin:0 0 4px}h2{font-size:20px;margin:36px 0 8px}
+p,li{color:var(--muted)}
+.ref{width:100%;border-radius:16px;border:1px solid var(--line)}
+.row{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:10px}
+figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px}
+figure img{width:100%;border-radius:10px;display:block}
+figcaption{font-size:12px;color:var(--muted);margin-top:6px}
+.st{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:#33270C;color:var(--amber)}
+ul{margin:6px 0 0 18px;padding:0}
+</style></head><body><main>
+<h1>Expense Ledger — redesign vs. reference (2026-10-27)</h1>
+<p>Left: the target reference. Below: the real app, rendered from synthetic test data (no real user data), 390 px wide, in English, Azerbaijani and Russian, plus a 320 px phone. Local build only — nothing is published.</p>
+<img class="ref" src="target-ui-reference.png" alt="Reference: eight dark screens">
+
+<h2>1 · Home <span class="st">Implemented · phone review pending</span></h2>
+<ul><li>Same order: Safe to Spend → This month (income / spent / third tile) → spending ring → due soon.</li>
+<li>Differences: greeting without a name (the app does not know it); Safe to Spend keeps its full breakdown (it explains the number); the third tile is the existing surplus % (balance when no income yet).</li></ul>
+<div class="row"><figure><img src="shots/1-home-390-en.png"><figcaption>en 390</figcaption></figure><figure><img src="shots/1-home-390-az.png"><figcaption>az 390</figcaption></figure><figure><img src="shots/1-home-390-ru.png"><figcaption>ru 390</figcaption></figure><figure><img src="shots/1-home-320-en.png"><figcaption>en 320</figcaption></figure></div>
+
+<h2>2 · Transactions <span class="st">Implemented · phone review pending</span></h2>
+<ul><li>Search, All / Expenses / Income, category and date filters, round category icons, expenses in coral.</li>
+<li>Differences: grouped by day (as before) rather than by month; "add" is the + in the title bar on every screen instead of a floating button.</li></ul>
+<div class="row"><figure><img src="shots/2-transactions-390-en.png"><figcaption>en 390</figcaption></figure><figure><img src="shots/2-transactions-390-az.png"><figcaption>az 390</figcaption></figure><figure><img src="shots/2-transactions-390-ru.png"><figcaption>ru 390</figcaption></figure><figure><img src="shots/2-transactions-320-en.png"><figcaption>en 320</figcaption></figure></div>
+
+<h2>3 · Analytics <span class="st">Implemented · phone review pending</span></h2>
+<ul><li>New Spending trend chart: this month's running total day by day, last month dashed (real data; its end equals "Spent").</li>
+<li>Differences: a month selector (any month) instead of This month / Last 3 months / Custom; category bars, weekday vs weekend and the 6-month chart are further down the same screen.</li></ul>
+<div class="row"><figure><img src="shots/3-analytics-390-en.png"><figcaption>en 390</figcaption></figure><figure><img src="shots/3-analytics-390-az.png"><figcaption>az 390</figcaption></figure><figure><img src="shots/3-analytics-390-ru.png"><figcaption>ru 390</figcaption></figure><figure><img src="shots/3-analytics-320-en.png"><figcaption>en 320</figcaption></figure></div>
+
+<h2>4 · Budgets &amp; Goals <span class="st">Implemented · phone review pending</span></h2>
+<ul><li>Budgets / Goals switch, monthly total card, category rows with progress bars and percent, goal cards with progress.</li>
+<li>Budgets and goals are now edited here (moved out of Settings). Bar colours show status: green on track, amber near the limit, coral over.</li></ul>
+<div class="row"><figure><img src="shots/4-budgets-390-en.png"><figcaption>budgets en</figcaption></figure><figure><img src="shots/4b-goals-390-en.png"><figcaption>goals en</figcaption></figure><figure><img src="shots/4-budgets-390-az.png"><figcaption>budgets az</figcaption></figure><figure><img src="shots/4-budgets-320-en.png"><figcaption>budgets en 320</figcaption></figure></div>
+
+<h2>5 · Recurring payments <span class="st">Implemented · phone review pending</span></h2>
+<ul><li>Under More, with a back arrow. Totals, a "due within 7 days" card, then each schedule with Record payment / Pause.</li>
+<li>Difference: Active and Paused sections instead of Active / Upcoming / All tabs.</li></ul>
+<div class="row"><figure><img src="shots/5-recurring-390-en.png"><figcaption>en 390</figcaption></figure><figure><img src="shots/5-recurring-390-az.png"><figcaption>az 390</figcaption></figure><figure><img src="shots/5-recurring-390-ru.png"><figcaption>ru 390</figcaption></figure><figure><img src="shots/5-recurring-320-en.png"><figcaption>en 320</figcaption></figure></div>
+
+<h2>6 · Import / Export <span class="st">Implemented · phone review pending</span></h2>
+<ul><li>Import and Export cards, a Backups card with the real last-backup date and whether you confirmed you have the file, and a Create backup button.</li>
+<li>Difference: no "Recent imports" list — the app does not record import history, so it would have to be invented.</li></ul>
+<div class="row"><figure><img src="shots/6-import-export-390-en.png"><figcaption>en 390</figcaption></figure><figure><img src="shots/6-import-export-390-az.png"><figcaption>az 390</figcaption></figure><figure><img src="shots/6-import-export-390-ru.png"><figcaption>ru 390</figcaption></figure><figure><img src="shots/6-import-export-320-en.png"><figcaption>en 320</figcaption></figure></div>
+
+<h2>7 · Transaction detail <span class="st">Implemented · phone review pending</span></h2>
+<ul><li>Icon, name, category and date, the amount, and Date / Merchant / Category / Recurring tiles; Edit, Duplicate, Delete.</li>
+<li>Difference: a sheet over the list (as before); changes are made in the Edit form, not on this screen.</li></ul>
+<div class="row"><figure><img src="shots/7-detail-390-en.png"><figcaption>en 390</figcaption></figure><figure><img src="shots/7-detail-390-az.png"><figcaption>az 390</figcaption></figure><figure><img src="shots/7-detail-390-ru.png"><figcaption>ru 390</figcaption></figure><figure><img src="shots/7-detail-320-en.png"><figcaption>en 320</figcaption></figure></div>
+
+<h2>8 · More <span class="st">Implemented · phone review pending</span></h2>
+<ul><li>Recurring payments, Import / Export, Settings.</li>
+<li>Differences: no profile, e-mail, dark-mode switch, help or about — none of these exist in the app. The top card says the data is stored only on this device (true).</li></ul>
+<div class="row"><figure><img src="shots/8-more-390-en.png"><figcaption>en 390</figcaption></figure><figure><img src="shots/8-more-390-az.png"><figcaption>az 390</figcaption></figure><figure><img src="shots/8-more-390-ru.png"><figcaption>ru 390</figcaption></figure><figure><img src="shots/8-more-320-en.png"><figcaption>en 320</figcaption></figure></div>
+</main></body></html>

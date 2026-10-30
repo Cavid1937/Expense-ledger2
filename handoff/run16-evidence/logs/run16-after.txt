@@ -1,0 +1,50 @@
+﻿
+R16-1. The pieces exist
+  ✓ walletId, WALLET_IDS, lastWallet and calcWalletSpend are defined
+  ✓ the built-in wallets are cash, card, mobile and other
+
+R16-2. An entry's wallet is kept exactly, and only when it is usable
+  ✓ cash is kept
+  ✓ surrounding spaces and capitals are tidied: ' Card ' becomes card
+  ✓ an id this version does not know (a future wallet) is KEPT, never dropped or turned into another wallet
+  ✓ "" is not a wallet: the entry gets no wallet field
+  ✓ "  " is not a wallet: the entry gets no wallet field
+  ✓ "bank card" is not a wallet: the entry gets no wallet field
+  ✓ 5 is not a wallet: the entry gets no wallet field
+  ✓ null is not a wallet: the entry gets no wallet field
+  ✓ true is not a wallet: the entry gets no wallet field
+  ✓ {} is not a wallet: the entry gets no wallet field
+  ✓ [] is not a wallet: the entry gets no wallet field
+  ✓ "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" is not a wallet: the entry gets no wallet field
+  ✓ "a/b" is not a wallet: the entry gets no wallet field
+  ✓ "<b>" is not a wallet: the entry gets no wallet field
+  ✓ an entry without a wallet has EXACTLY the fields older versions wrote (no new key, nothing changes for existing data)
+  ✓ walletId: lower-cased id, or empty text when unusable
+
+R16-3. The wallet used last is the default for the next entry
+  ✓ newest entry that has a wallet wins (the list is newest first): card
+  ✓ no entry has a wallet: nothing is pre-selected
+  ✓ an empty or missing list is safe
+
+R16-4. Spending by wallet for one month (same rule as the category totals)
+  ✓ cash 10, card 20, not set 5, total 35
+  ✓ wallets with no spending are absent, and 'used' says at least one entry has a wallet
+  ✓ no entry has a wallet: used is false (the Analytics card stays hidden)
+  ✓ 0.1 + 0.2 is exactly 0.30 (no floating-point drift)
+
+R16-5. CSV: a Wallet column at the end; older files still import
+  ✓ the header ends with Wallet; the earlier columns did not move
+  ✓ each row ends with its wallet id, empty when not set
+  ✓ the app's own CSV round trip keeps each wallet (and gives none where none was set)
+  ✓ names a person would type map to wallets (Cash, Bank card, Mobile wallet, Other); free text or an empty cell gives no wallet
+  ✓ a CSV without a Wallet column imports as before, with no wallet field
+
+R16-6. Backup: wallets survive export and restore; old files are unchanged
+  ✓ Replace restores card, nothing and the future id e-wallet exactly
+  ✓ the backup version stays 10 (an optional field; an older version-10 app ignores it instead of refusing the file)
+  ✓ a version-9 file imports with no wallet field
+
+R16-7. The wallet does not make two look-alike entries different
+  ✓ the look-alike check ignores the wallet, so a file that adds wallets to entries you already have is still recognised as the same purchases
+
+run16: ALL 34 CHECKS PASSED

@@ -1,0 +1,14 @@
+import fs from "fs";
+import { adb, wait, shot, launch, connect, ok, section, done, clickText, state, clearAnr, PKG, OUT } from "./emu-lib.mjs";
+adb("shell", "am", "force-stop", PKG); await wait(800); await launch(); clearAnr(); let { b, p } = await connect();
+const sig = (s) => JSON.stringify({ t: s.transactions.map((x) => [x.id, x.type, x.amount]), b: (s.bills || []).map((x) => [x.id, x.name, x.amount]) });
+const before = fs.readFileSync(OUT + "\\before.json", "utf8") ; section("E9. Restore (9) - file placed in the app's own cache folder");
+adb("push", OUT + "\\emu-backup.json", "/data/local/tmp/restore-test.json"); console.log(adb("shell", "run-as", PKG, "cp", "/data/local/tmp/restore-test.json", "cache/restore-test.json"), adb("shell", "run-as", PKG, "ls", "-la", "cache/restore-test.json"));
+let st = await state(p); console.log("entries before restore:", st && st.transactions.length);
+await p.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(500); await p.evaluate(() => document.querySelectorAll(".more-page .list-row")[1].click()); await wait(800);
+const cdp = await p.createCDPSession(); const { result } = await cdp.send("Runtime.evaluate", { expression: 'document.querySelector(".io-page input[type=file]")' });
+await cdp.send("DOM.enable"); await cdp.send("DOM.setFileInputFiles", { files: ["/data/data/" + PKG + "/cache/restore-test.json"], objectId: result.objectId }); await wait(1800); shot("23-restore-sheet");
+console.log("sheet:", (await p.evaluate(() => (document.querySelector('[aria-label="Restore backup"]') || {}).innerText || "NO SHEET")).replace(/\s+/g, " ").slice(0, 320));
+await clickText(p, '[aria-label="Restore backup"] button', /replace/i); await wait(1500); clearAnr();
+st = await state(p); ok(!!st && sig(st) === before, "Replace brings back all 3 entries and the bill exactly as before", st && [st.transactions.length, (st.bills || []).length]);
+shot("24-restored"); done("emu E9"); b.disconnect();

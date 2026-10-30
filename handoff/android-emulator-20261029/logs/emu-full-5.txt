@@ -1,0 +1,15 @@
+  ✓ data re-created through the app: 3 entries, 1 bill
+
+E6c. Backup file captured while the share sheet is open (6)
+drwxrws--x 4 u0_a216 u0_a216_cache 4096 2026-10-29 19:22 ..
+-rw------- 1 u0_a216 u0_a216_cache 2536 2026-10-29 19:22 ledger-backup-2026-10-29.json
+  ✓ file name is ledger-backup-<date>.json
+  ✓ valid version-10 backup with 3 entries and 1 bill, more than a few hundred bytes
+
+E9. Restore (9)
+  ✓ empty after the wipe (like a new phone)
+sheet: Restore Backup That file could not be read, so nothing was imported. OK
+  ✗ Replace brings back all 3 entries and the bill exactly as before
+      ↳ [0,0]
+
+emu E6c+E9: 1 FAILED, 4 passed

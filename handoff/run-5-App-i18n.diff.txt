@@ -1,0 +1,51 @@
+﻿diff --git a/App.jsx b/App.jsx
+index 9d29737..904d47f 100644
+--- a/App.jsx
++++ b/App.jsx
+@@ -993,7 +993,8 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
+   const { savingsTarget=0 }=safeConfig||{};
+   const mon=localMonthStr(now), todayStr=localDateStr(now);
+   // Every expense recorded for this month, including ones dated later: money entered ahead of time is already committed.
+-  const { totalExp:curExp }=calcMonthSummary(transactions,mon,prevMon(),now);
++  // laterExp is the part of it dated after today, shown on the card so it is not mistaken for money already spent.
++  const { totalExp:curExp, plannedExp:laterExp }=calcMonthSummary(transactions,mon,prevMon(),now);
+   const monthInc=transactions.filter(t=>t.type==="income"&&t.date.startsWith(mon));
+   const curInc=monthInc.filter(t=>t.date<=todayStr).reduce((s,t)=>s+t.amount,0);
+   const expectedInc=monthInc.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
+@@ -1020,7 +1021,7 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
+   const dailyAllowance=p.daysRemaining>0 ? remaining/p.daysRemaining : 0;
+ 
+   return {
+-    curInc, expectedInc, curExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
++    curInc, expectedInc, curExp, laterExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
+     futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount,
+     scheduleCount:schedules.length, recurringMonthly,
+     disposable, remaining, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAllowance,
+@@ -2250,6 +2251,13 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
+               <span className="safe-lbl">{t("safe.recordedSpend")}</span>
+               <span className="safe-val" style={{color:"var(--neg)"}}>−{fmt(safeInfo.curExp,currency)}</span>
+             </div>
++            {/* Part of the row above, not a further deduction: expenses entered for later this month are set aside, not spent. */}
++            {safeInfo.laterExp>0&&(
++              <div className="safe-row">
++                <span className="safe-lbl">{t("safe.laterExpenses")}</span>
++                <span className="safe-val" style={{color:"var(--ink-4)"}}>{fmt(safeInfo.laterExp,currency)}</span>
++              </div>
++            )}
+             {/* De-emphasised by colour (still ≥ 4.5:1), not by opacity: at 40% opacity this row was 1.8:1 and hard to read. */}
+             <div className="safe-row">
+               <span className="safe-lbl" style={safeInfo.futureCommitments>0?undefined:{color:"var(--ink-4)"}}>{t("safe.upcoming")}</span>
+diff --git a/i18n.js b/i18n.js
+index e972bc2..2e41b10 100644
+--- a/i18n.js
++++ b/i18n.js
+@@ -380,7 +380,8 @@ export const MESSAGES = {
+   "safe.expectedLater":  { en: "Expected later this month (not counted)", az: "Bu ay daha sonra gözlənilir (hesablanmır)", ru: "Ожидается позже в этом месяце (не учтено)" },
+   "safe.goalContributions": { en: "Goal contributions", az: "Məqsədlərə ayırmalar", ru: "Взносы на цели" },
+   "safe.savingsTarget":  { en: "Savings target", az: "Yığım hədəfi", ru: "Цель накоплений" },
+-  "safe.recordedSpend":  { en: "Recorded spend", az: "Qeydə alınmış xərclər", ru: "Записанные расходы" },
++  "safe.recordedSpend":  { en: "Recorded expenses", az: "Qeydə alınmış xərclər", ru: "Записанные расходы" },
++  "safe.laterExpenses":  { en: "of which dated later this month (set aside, not spent yet)", az: "o cümlədən bu ayın sonrakı tarixlərinə yazılan (ayrılıb, hələ xərclənməyib)", ru: "в том числе на более поздние даты месяца (отложено, ещё не потрачено)" },
+   "safe.upcoming":       { en: "Upcoming & unrecorded payments", az: "Qarşıdakı və qeydə alınmamış ödənişlər", ru: "Предстоящие и незаписанные платежи" },
+   "safe.noneThisMonth":  { en: "none this month", az: "bu ay yoxdur", ru: "в этом месяце нет" },
+   "safe.discretionary":  { en: "Discretionary remaining", az: "Sərbəst qalıq", ru: "Свободный остаток" },

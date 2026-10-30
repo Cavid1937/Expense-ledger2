@@ -1,0 +1,91 @@
+diff --git a/App.jsx b/App.jsx
+index 908b1f6..9d29737 100644
+--- a/App.jsx
++++ b/App.jsx
+@@ -1303,7 +1303,11 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
+ /* Sentence case, no extra tracking: upper-case labels were up to 30% wider, so long Azerbaijani and Russian words
+    ("Əməliyyatlar", "Təkrarlanan", "По месяцам") filled the whole tab at 320 px and ran into their neighbours. */
+ .tab-btn{min-width:0;padding-left:2px;padding-right:2px}
+-.tab-lbl{font-size:10.5px;font-weight:600;letter-spacing:0;text-transform:none;line-height:1.15;max-width:100%;text-align:center}
++/* Enlarged phone text (page zoom) narrows the CSS viewport: at 130–200% a 390 px phone is 300–195 px wide and the longest
++   label, "Əməliyyatlar" (≈6.15 × the font size), no longer fits a fifth of it. The label shrinks with the width instead,
++   so on screen it stays at least as large as at 100%. When text is enlarged without zoom (a minimum font size), it can't
++   shrink, so it wraps inside its own tab rather than running into the next one. */
++.tab-lbl{font-size:clamp(5.5px,2.85vw,10.5px);font-weight:600;letter-spacing:0;text-transform:none;line-height:1.15;max-width:100%;text-align:center;overflow-wrap:anywhere}
+ .tab-indicator{position:absolute;top:5px;left:calc((100% / var(--tab-count,5)) * var(--tab-index,0) + (100% / (var(--tab-count,5) * 2)) - 8px);width:16px;height:2px;background:var(--accent);border-radius:99px;pointer-events:none;transition:left 320ms cubic-bezier(0.22,1,0.36,1)}
+ .page{flex:1;overflow-y:auto;padding:20px 20px calc(112px + env(safe-area-inset-bottom,0px));animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) backwards}
+ /* "backwards", not "both": a transform kept after the animation makes .page the box that position:fixed sheets are placed in,
+@@ -1561,7 +1565,6 @@ input[type=number]{-moz-appearance:textfield}
+ @media (max-width:360px){
+   .topbar{padding-left:15px;padding-right:15px}
+   .page{padding-left:15px;padding-right:15px}
+-  .tab-lbl{font-size:9.5px}
+   .cat-tile{width:70px}
+   .cat-tile-name{font-size:9px}
+   .hero-stat{padding:10px 6px}
+@@ -1569,6 +1572,29 @@ input[type=number]{-moz-appearance:textfield}
+   .hero-stat-lbl{font-size:9px;letter-spacing:0.7px}
+   .amount-cur{font-size:14px}
+ }
++/* Very narrow: a phone with its text enlarged to ~200% is under 280 CSS px wide. The amount column then left the
++   merchant and category about 7 px, so a row wraps (amount below the name), and the three summary figures stack. */
++@media (max-width:280px){
++  .topbar{padding-left:10px;padding-right:10px}
++  .page{padding-left:10px;padding-right:10px}
++  .txn-row{flex-wrap:wrap;gap:6px 9px;padding:10px}
++  .txn-body{flex:1 1 calc(100% - 43px)}
++  .txn-right{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;align-items:center;width:100%;padding-left:43px}
++  .hero-stats{grid-template-columns:1fr}
++  .hero-stat:not(:last-child)::after{left:8px;right:8px;top:auto;bottom:0;width:auto;height:1px}
++  /* two-column boxes stack (inline grid styles need !important); filter chips wrap instead of scrolling out of sight */
++  .stat-row,.field-row,.date-inputs{grid-template-columns:1fr}
++  .month-stats,.detail-meta{grid-template-columns:1fr !important}
++  .filter-bar{flex-wrap:wrap;overflow-x:visible}
++  .backup-banner{flex-wrap:wrap}
++  .backup-banner span{flex:1 1 100%;min-width:0}
++  .safe-row{flex-wrap:wrap}.safe-val{white-space:normal;overflow-wrap:anywhere}
++  .cat-bar{flex-wrap:wrap}.cat-bar-name{width:100%}
++  /* an input's built-in width (~150 px) pushed the Save button beside it off the screen */
++  .field-input{min-width:0}
++  .settings-row{flex-wrap:wrap}
++  .goal-milestones{flex-wrap:wrap}.goal-milestones>div{flex:1 1 40% !important}
++}
+ .btn:disabled{opacity:.45;cursor:not-allowed}.btn-primary:disabled:active{transform:none}
+ /* First-launch language chooser */
+ .lang-screen{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:var(--bg)}
+@@ -2529,7 +2555,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
+ 
+   return (
+     <div>
+-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:14,gap:8}}>
++      <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"baseline",marginBottom:14,gap:8}}>
+         <h1 style={{fontFamily:"'Playfair Display',serif",fontSize:22,fontWeight:700,margin:0}}>{t("nav.ledger")}</h1>
+         <span style={{fontSize:11,color:"var(--ink-3)"}}>{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</span>
+       </div>
+@@ -3304,7 +3330,7 @@ function TxnDetailSheet({ txn, currency, transactions, onClose, onEdit, onDuplic
+         </div>
+ 
+         {/* Meta */}
+-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
++        <div className="detail-meta" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+           {[
+             [t("add.date"),      fmtDate(txn.date)],
+             [t("add.merchant"),  txn.merchant||"—"],
+@@ -3639,7 +3665,7 @@ function SettingsSheet({ state, onLanguageChange, onExportCSV, onExportJSON, onI
+                 {estCompletion&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:5}}>{t("set.atRate",{amount:fmt(goal.monthlyTarget||0,currency),date:estCompletion})}</div>}
+                 {/* Milestones */}
+                 {milestones&&(
+-                  <div style={{marginTop:8,display:"flex",gap:6}}>
++                  <div className="goal-milestones" style={{marginTop:8,display:"flex",gap:6}}>
+                     {milestones.map(m=>(
+                       <div key={m.pct} style={{flex:1,textAlign:"center",padding:"4px 2px",borderRadius:5,
+                         background:m.completed?"var(--pos-bg)":"var(--bg-inset)",
+@@ -3762,7 +3788,7 @@ function MonthlyView({ transactions, currency, budgets, onView }) {
+       </div>
+ 
+       {/* Summary stats */}
+-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
++      <div className="month-stats" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+         <div className="month-stat">
+           <div className="month-stat-val" style={{color:"var(--neg)"}}>{fmt(curExp,currency)}</div>
+           <div className="month-stat-lbl">{t("home.spent")}</div>

@@ -1,0 +1,68 @@
+﻿
+R15-1. The function exists and is the only place that does this arithmetic
+  ✓ goalRequiredMonthly is defined in App.jsx
+  ✓ goalScenario (the optional what-if) is defined in App.jsx
+
+R15-2. Reference cases, worked by hand
+  ✓ Trip: 1,500 - 300 = 1,200 over 8 month-starts (1 Nov ... 1 Jun) = 150.00 per month
+  ✓ the assignment's reference: 2,000 - 600 = 1,400 over 8 periods = 175.00 (deadline 30 Jun: the 1 Jun start still counts)
+  ✓ Laptop: 1,800 over 9 (1 Nov ... 1 Jul) = 200.00
+
+R15-3. Date boundaries (frozen dates, no wall clock)
+  ✓ deadline later this month: 1 period, the whole remainder, flagged thisMonth
+  ✓ deadline today (even at 23:00): still reachable, 1 period
+  ✓ deadline yesterday: overdue, no ordinary monthly amount, remaining kept
+  ✓ 31 Jan -> 28 Feb: only 1 Feb is a month-start in range = 1 period
+  ✓ 31 Jan -> 1 Mar: 1 Feb and 1 Mar = 2 periods
+  ✓ leap day 29 Feb 2028 -> 1 Mar 2028: 1 period
+  ✓ deadline is the leap day itself and today
+  ✓ year boundary: 15 Dec -> 15 Jan = 1 Jan only = 1 period
+  ✓ 31 Dec 2026 23:00 -> 31 Dec 2027: 12 month-starts (1 Jan ... 1 Dec) = 100.00
+
+R15-4. Missing, invalid, complete
+  ✓ no deadline: asks for a date, invents no amount
+  ✓ invalid date "" behaves like no date, no NaN
+  ✓ invalid date "2026-02-30" behaves like no date, no NaN
+  ✓ invalid date "2026-13-01" behaves like no date, no NaN
+  ✓ invalid date "soon" behaves like no date, no NaN
+  ✓ invalid date 20261013 behaves like no date, no NaN
+  ✓ invalid date {} behaves like no date, no NaN
+  ✓ target 0: invalid, no figure, no NaN
+  ✓ target -5: invalid, no figure, no NaN
+  ✓ target abc: invalid, no figure, no NaN
+  ✓ target NaN: invalid, no figure, no NaN
+  ✓ target null: invalid, no figure, no NaN
+  ✓ target undefined: invalid, no figure, no NaN
+  ✓ target Infinity: invalid, no figure, no NaN
+  ✓ saved = target: complete, 0 per month
+  ✓ saved above target with a passed date: complete, never overdue, never negative
+  ✓ malformed saved counts as 0
+
+R15-5. Rounding is in whole cents and always up
+  ✓ 100 over 3 = 33.333... rounds UP to 33.34 (3 x 33.34 = 100.02, never short)
+  ✓ 8 cents over 8 periods = 0.01
+  ✓ 9 cents over 8 periods = 1.125 cents rounds UP to 0.02
+  ✓ binary drift: 1.1 - 0.1 is 1.0000000000000002 in floating point; the answer is 1.00, not 1.01
+  ✓ large target: 10,000,000 over 120 = 83,333.333... -> 83,333.34
+
+R15-6. The optional what-if is user-controlled and uses the same periods
+  ✓ 150 per month: 1,200 / 150 = 8 payments, meets a deadline with 8 periods
+  ✓ 149.99 per month: 8.0005 -> 9 payments, misses by one
+  ✓ 100 per month: 12 payments, finishes October 2027 (12th month-start = 1 Oct 2027), after the deadline
+  ✓ an amount above the remainder: 1 payment
+  ✓ no deadline: estimate only, no comparison
+  ✓ scenario amount 0 is rejected, no NaN
+  ✓ scenario amount -1 is rejected, no NaN
+  ✓ scenario amount abc is rejected, no NaN
+  ✓ scenario amount NaN is rejected, no NaN
+  ✓ scenario amount null is rejected, no NaN
+  ✓ scenario amount undefined is rejected, no NaN
+  ✓ scenario amount Infinity is rejected, no NaN
+  ✓ a complete goal needs no scenario
+
+R15-7. The Home coach uses the same number (the old rule differed)
+  ✓ a behind-schedule goal produces a coach card
+  ✓ the card quotes 142.86 (the shared rule), not the old whole-manat 143
+  ✓ and goalRequiredMonthly agrees: 7 periods, 142.86
+
+run15: ALL 52 CHECKS PASSED

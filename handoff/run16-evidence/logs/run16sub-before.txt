@@ -1,0 +1,6 @@
+﻿
+R16S-1. The pieces exist
+  ✗ cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats and writeSubcats are defined
+  (remaining checks skipped: not written yet)
+
+run16sub: 1 FAILED, 0 passed

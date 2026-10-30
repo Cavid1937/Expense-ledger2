@@ -1,0 +1,48 @@
+﻿
+R16S-1. The pieces exist
+  ✓ cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats and writeSubcats are defined
+
+R16S-2. Cleaning what is read from storage or a file
+  ✓ trimmed, inner spaces collapsed, duplicates ignoring case removed, too long / empty / non-text dropped
+  ✓ an unknown category id is dropped
+  ✓ income categories can have their own subcategories too
+  ✓ the stored shape {version, byCategory} is accepted
+  ✓ null gives an empty map, never an error
+  ✓ undefined gives an empty map, never an error
+  ✓ 5 gives an empty map, never an error
+  ✓ "x" gives an empty map, never an error
+  ✓ [] gives an empty map, never an error
+  ✓ {"food":"Lunch"} gives an empty map, never an error
+  ✓ {"food":{"a":1}} gives an empty map, never an error
+  ✓ text equal to a built-in subcategory of that category (any case) is not stored a second time
+  ✓ at most 20 per category
+
+R16S-3. Adding and removing one
+  ✓ adds the trimmed text and leaves the old map unchanged
+  ✓ the same text in another case is refused as a duplicate
+  ✓ a built-in subcategory (Coffee) is refused as a duplicate
+  ✓ empty text is refused
+  ✓ more than 30 characters is refused
+  ✓ an unknown category is refused
+  ✓ the 21st is refused (limit 20)
+  ✓ removing ignores case and keeps the others
+  ✓ removing the last one removes the category key too
+
+R16S-4. Merging a file's suggestions with the ones on the phone
+  ✓ union, the phone's own first, nothing overwritten, duplicates ignored
+  ✓ a missing side is fine
+
+R16S-5. Storage in its own key; failures are safe
+  ✓ nothing stored: an empty map
+  ✓ write then read round trip
+  ✓ it uses expense_ledger_v5__subcats and does not create or touch the ledger key
+  ✓ unreadable stored text gives an empty map, no crash
+  ✓ a storage failure is reported (false), not thrown
+
+R16S-6. Backup carries them as an optional field
+  ✓ buildBackup adds subcategories (version stays 10)
+  ✓ no suggestions: the field is absent, so the file is identical to before
+  ✓ importing returns the cleaned suggestions for the app to merge
+  ✓ a file without them imports as before
+
+run16sub: ALL 34 CHECKS PASSED

@@ -1,0 +1,8 @@
+
+E5f. Back button on the final Android build, real touches (5)
+  ✓ opened the add form with a real touch
+  ✓ Back closed the add form and the app stayed open (after 2 presses; an earlier press can be used by Android itself to hide the keyboard or autofill)
+  ✓ Back on Home with nothing open shows 'Press Back again to exit' and the app stays open
+  ✓ a second Back within 2 seconds leaves the app
+
+emu E5f: ALL 4 passed

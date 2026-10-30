@@ -1,0 +1,7 @@
+﻿
+R15-1. The function exists and is the only place that does this arithmetic
+  ✗ goalRequiredMonthly is defined in App.jsx
+  ✗ goalScenario (the optional what-if) is defined in App.jsx
+  (remaining checks skipped: the function does not exist yet)
+
+run15: 2 FAILED, 0 passed

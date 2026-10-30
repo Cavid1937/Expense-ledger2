@@ -1,0 +1,10 @@
+{
+  "appId": "com.example.expenseledger.spike",
+  "appName": "Expense Ledger",
+  "webDir": "dist",
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK"
+    }
+  }
+}

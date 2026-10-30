@@ -1,0 +1,76 @@
+# Autonomous backlog (ordered; the first unfinished BUILD item is the next one to do)
+
+Rules: see `AUTONOMOUS_CHARTER.md`. Mark items with the exact status words. When all items of a section are done or blocked, ADD new ones (see "How to find more work" at the bottom) — never leave a run empty-handed.
+
+## 0. TOP PRIORITY — Work Plan assignment from 2026-10-28 ("deep research mandate"; reports go to Notion)
+Source of truth: Work Plan top section (Notion `4057ff36825e81eab694c4a0c567e0a1`) + Coordination Record `4067ff36825e813f9734ed6a831840d5`. BLOCKER recorded: the owner-supplied file `EXPENSE_LEDGER_DEEP_RESEARCH_AND_DEVELOPMENT_MANDATE.md` is NOT on this computer (it is only a ChatGPT chat attachment; not in Downloads or the project). Do not substitute a summary; work from the Work Plan text, and put "please upload the mandate file" under Questions for the owner.
+Deep-research reports to write (one Notion page each, source URLs + dates, facts vs vendor claims vs inference, counterarguments; mark NOT ASSESSED anything you could not verify). Take the next unfinished one per research run:
+ R1. Mobile packaging/architecture decision: Capacitor vs Expo/React Native vs Trusted Web Activity / PWABuilder (Play) vs staying PWA — against the real code (React/Vite single-file App.jsx, localStorage `expense_ledger_v5`, service worker), maintenance by one non-programmer + AI, store policies (Apple 4.2), costs, risks, counterarguments.
+ R2. Store prerequisites & timeline: Google Play (target API, $25, 12 testers × 14 days, review times), Apple (Xcode/Mac, $99, TestFlight, review), exact critical path to 20 November 2026 and a realistic deliverable list.
+ R3. Requirements & gap matrix vs the authoritative Master Prompt, mobile master prompt, visual handoff, UX/localization brief (status of every requirement with evidence pointers).
+ R4. QA / data-integrity risk register (storage eviction, migration, backup/restore, import, bills, offline, update/rollback) with test coverage per risk.
+ R5. Azerbaijan market, competitors and banking/Open Banking/payment conditions (official sources only for legal/regulatory claims).
+ R6. Localization/design/product research (az/ru naturalness, accessibility, differentiation hypotheses to validate with users).
+ R7. Prioritized roadmap to 20 November with owner decisions needed.
+Also: if not yet in Notion, write a truthful standalone report for any past run from the real logs in `tests/evidence` and `handoff/*-report.md` (Run 12 report is being created by the interactive session; check first).
+## 0b. RUN 13 OUTCOME (interactive session, 2026-10-28) — read before touching the code
+- Frozen, clean-install-tested candidate = `handoff/snapshots/20261028-run13-final/` (App.jsx `FA568979…EFED`, i18n.js `4F7AEA2F…CBA`). Report: `handoff/run-13-report.md`; identity: `handoff/run-13-SOURCE-IDENTITY.txt`. Still LOCAL and UNCOMMITTED; no preview (owner: "no preview for now").
+- New since Run 12: bills mirror + restore offer (`expense_ledger_v5__bills_mirror`, protects against the live v9 app wiping bills on a rollback), import-sheet note when a Replace file has no bills, warning for an unreadable entry list, native-share hand-over for the Android shell (`window.__ledgerNativeShare`, source in `handoff/native/`), crash cleanup in `tests/browser/lib.mjs`.
+- Suites: logic 646, browser 533 (see the report for the exact final counts). Do not lower any expected count.
+- DONE in Run 13: backlog A2 (bills soak/migration) mostly; C13 (Android export, web + shell code, APK built from the candidate). STILL OPEN: device/emulator run of the APK (BLOCKED: no device; emulator image download needs the owner's yes), browser-fault root cause (not reproduced in 5+ runs), pinning the test tools in the repo (owner decision), native az/ru review of the new texts, Android Back-button/offline/update behaviour on a device.
+- Build note: building the APK inside OneDrive fails (file locks). Use `-I handoff/outside-onedrive.init.gradle`-style init script (copy in the evidence zip) so the build folder is `C:\ExpenseLedgerBuild`.
+- Rollback rule for any release runbook: never roll production back past the bills release without a v10 backup; after a rollback the new app OFFERS a restore of the bills.
+
+## Questions for the owner (never block on these; runs add to this list)
+- Run 13: may Claude download the Android emulator system image (~1.5 GB, Google's official repository) to test the APK on this PC? Or connect your phone (USB debugging) / install the APK from `ExpenseLedgerBackups\run13-app-debug.apk` and follow `handoff/run13-android-phone-checklist.md`.
+- Run 13: pin the test tools (puppeteer-core 25.16.0, fontsource 5.3.0) in the repo and commit `package-lock.json` + `tests/`? (nothing committed without your yes)
+- Push Run 12 (explicit bills) to a preview for a phone test? (owner said "no preview for now", 2026-10-28)
+- Permanent app ID for the Android app; Play Console account ($25) and 12 testers; a phone with USB debugging or OK to download an emulator image (~1.5 GB); Mac / cloud for iOS.
+- Native Azerbaijani / Russian review of ~45 new texts (`handoff/az-review-sheet.csv`).
+- Please provide EXPENSE_LEDGER_DEEP_RESEARCH_AND_DEVELOPMENT_MANDATE.md (only a ChatGPT chat attachment now; can't be read by Claude).
+- Re-authorize the Ruflo team connector (`/mcp`) if the owner wants a recorded team.
+
+- (ideas-evening 2026-10-28) 2–3 ANONYMISED bank statement samples (CSV/PDF) from the banks you use, so CSV import (P8) can be judged; and OK to interview ~5 people (cash earners, students, a parent) about the irregular-income idea.
+- (ideas-evening) Approve a data-model change for cash/card accounts + transfers (item 20) only after the design note — not before.
+- (ideas-evening) Someone with a phone should open Birbank, ABB Mobile, Kapital and PASHA apps and note: budgets/categories? other-bank accounts? (Birbank open banking confirmed by the bank's page, hands-on NOT ASSESSED.)
+
+## A. BUILD — correctness, reliability, data safety (highest priority)
+1. **Browser-test instability** (NEEDS WORK). Two different files were each stopped once by Chrome/puppeteer faults ("Navigating frame was detached" in e2e_run12; "ProtocolError" in e2e_run5 in the fresh-install run), plus earlier e2e_import / e2e_ux timing flakes. Find the cause (Chrome memory/load? parallel pages? open-page leaks in `tests/browser/lib.mjs`?). Fix test infrastructure only (never loosen assertions). Option: make `tests/run-browser.mjs` retry a file ONCE only when it dies with a protocol/frame-detached fault and no assertion failed, and print that it did (same pattern as `e2e_bigtext`). Acceptance: 5 consecutive full runs with 0 stops, or a documented, honest cause.
+2. **Mixed-state and migration soak tests for bills** (IMPLEMENTED BUT UNVERIFIED). Add logic/browser tests: legacy data with weekly/biweekly/yearly schedules converted to bills; income schedules; paused schedules converted; two bills sharing a name + Undo of every bill action; importing a version-10 backup into a device that has old-style groups; Replace/Merge with bills. Fix any defect test-first.
+3. **Large-data performance**: generate 20,000 synthetic transactions; measure Home/Transactions/Analytics render time and `localStorage` size; find hot spots (`buildSchedules`, list rendering). Fix only with a failing perf/limit test. Document the localStorage size limit (≈5 MB) and what happens near it (the app must warn before failing to save — check this path exists and is tested).
+4. **Storage adapter boundary** (design + small safe refactor): isolate all `localStorage` reads/writes behind one module/functions with identical behavior (needed for the Android app). Tests must prove byte-identical stored output for the existing fixtures.
+5. **Review of Run 7 Monthly/Analytics merged screen** (item 9 from Run 8, NOT ASSESSED): independent review of month comparison logic (same-days window), empty months, first/last month, leap years.
+6. **Backup file safety**: size/type limits on import, huge/odd files, binary garbage, BOM, CRLF, 100k-row CSV (does it freeze?), malformed JSON with deep nesting. Tests first.
+
+## B. BUILD — product quality, accessibility, localization
+7. Trend chart on Analytics: add y-axis amount labels and a readable tooltip/legend per the Caspian brief; keep privacy mode masking (labels must be masked). Health vs Food ring colours are too close — separate them (check contrast ≥ 3:1 between neighbouring slices).
+8. Accessibility pass on the new screens (Goals, More, Import/Export, bill sheet, privacy toggle): focus order, labels, `aria-live` for toasts/undo, 44×44 targets at 200% text, reduced motion. Extend `e2e_ux_lang` coverage to the bill sheet and update notice.
+9. First-run experience for a brand-new user (empty app): plain-language guidance for the first 3 actions (add income, add an expense, set a budget), in az/en/ru. Keep it small, dismissible, stored only as UI state (not in the ledger).
+10. Plain-language money terms: short "what does this mean?" explanations (Safe to Spend, surplus/deficit, budget vs goal, bill vs payment) reachable from where they appear; az/en/ru; non-colour cues.
+11. Localization hygiene: long Azerbaijani/Russian strings at 320 px in every sheet/dialog; plural forms; date formats; add any missing cases to the az-audit. Update `handoff/az-review-sheet.csv`.
+12. Desktop/tablet layout: the app is a 430 px column on desktop. Propose and, if safe, implement a wider layout (≥ 768 px) that reuses the same components.
+
+### B2. From research (ideas-evening 2026-10-28; see `handoff/ideas/2026-10-28-azerbaijan-market-and-feature-proposals.md`) — all NOT ASSESSED until built
+20. **Design note first: cash/card accounts + transfers** (P2). Step 1 (no code change): read App.jsx and write `handoff/ideas/accounts-design-note.md`: how accounts exist today, what a transfer would be, effect on Safe to Spend/analytics/budgets/bills/backup format/migration. Step 2 only after owner approval. Acceptance: note lists every total that must exclude transfers, a migration plan keeping `expense_ledger_v5` valid, and ≥15 named failing-test cases (double counting, delete account with entries, Undo, import/merge, negative balance, 0.01 and 999,999,999.99).
+21. **Irregular-income view** (P1) — build after the owner confirms wording. Acceptance: shows "typical month" = median of up to the last 6 completed months with the months used listed; with <2 months of data it shows "not enough history" and Safe to Spend is unchanged; opt-in only; az/en/ru strings; privacy mode masks the amounts; logic tests with hand-calculated fixtures (1, 2, 3, 6, 7 months; a zero-income month; leap-year February).
+22. **Due-date `.ics` export + "due this week" list** (P4) — Acceptance: per-bill or all-bills `.ics` download (UTF-8, CRLF, valid VEVENT with UID/DTSTAMP, RRULE only for weekly/monthly/yearly bills, month-end bills handled via the bill `dueDay`); no notification by default; tested by parsing the output; downloads go to a temp folder in tests.
+Cheap, safe ideas for build sessions: (a) "repeat last entry"/recent-merchant chips if not present (P9a); (b) show "last backup: N days ago" in More if missing; (c) weekly in-app summary card (dismissible, in-app only, no streaks).
+
+## C. ANDROID / STORE READINESS (work in the separate copy `C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-capacitor`, branch `claude/capacitor-spike` — never push)
+13. Rebase the spike on the latest tested code (copy the current source into that worktree; do not merge into the main worktree). Apply the findings of `capacitor-spike-report.md`: skip the service worker and update notice on native (`window.Capacitor?.isNativePlatform()`), Android Back button (`@capacitor/app`), native backup export via `@capacitor/filesystem` + `@capacitor/share` (the web `downloadFile` does nothing there), proper launcher icon/splash. Build the debug APK again; record size/hash. NOTHING can be called VERIFIED without a device/emulator.
+14. Store prerequisites draft (documents only): privacy policy text (az/en/ru) from the REAL data-flow inventory (all local; what leaves the device: only user-initiated backup/share), Play "Data safety" and Apple "App Privacy" answers drafted from code, store listing text, screenshots plan, age rating answers, support e-mail placeholder. Mark owner-only items.
+15. Google Drive automatic backup — DESIGN ONLY (no code): OAuth scope `drive.appdata`, consent, revocation, restore, quota, failure modes, encryption option, privacy disclosure; list exactly what the owner must create (Google Cloud project, OAuth client) with click-by-click steps.
+
+## D. RESEARCH & BRAINSTORM (write to `handoff/ideas/<yyyy-mm-dd>-<topic>.md`; label every claim Confirmed / Likely / Hypothesis / Opinion with sources and dates)
+[Status 2026-10-28: items 16, 17, 18 = first pass DONE in `handoff/ideas/2026-10-28-azerbaijan-market-and-feature-proposals.md` (hands-on bank-app test, store reviews, official DSMF/MTS pages, CBA open-banking rules still NOT ASSESSED → follow-up research runs). Item 19 NOT STARTED — do it next.]
+16. Competitor + market scan for Azerbaijan personal-finance apps (local banks' apps, global trackers, Telegram bots): what users complain about, what is missing, what we can do better with a local-first, private app. Treat reviews as qualitative evidence only.
+17. Feature proposals with cost/benefit: receipt photo → entry (E-kassa receipts? check what is actually machine-readable), salary gross/net calculator for Azerbaijan (verify current tax/DSMF rules from official sources and date them), debts/loans tracker, shared household budget (local-first constraints), cash vs card accounts, transfers, labels/tags, CSV import from Azerbaijani bank statements (check real formats), widgets/notifications for due bills (what the PWA/Android can do offline).
+18. Retention ideas without dark patterns: weekly summary, "you're on track" nudges, bill reminders via local notifications — feasibility on PWA vs Capacitor.
+19. Critical self-review: re-read the Master Prompt and list requirements still NOT ASSESSED; propose the next 5 verification tasks.
+
+## E. How to find more work (when sections A–D are exhausted or blocked)
+- Re-run all suites and 3 random exploratory sessions in the real app (headless browser) using new synthetic data; try to break it (odd dates, 0.01, 999,999,999.99, emoji merchants, 200 categories filters, rapid taps, back button during sheets, language switch mid-form); every defect → failing test → fix.
+- Read the code for the biggest functions (`App.jsx` is ~5k lines): look for duplicate logic, dead code, unclear naming; propose a safe, test-covered cleanup (no sweeping rewrites).
+- Read the Notion Work Plan and ChatGPT's newest reviews (database `collection://cf8083e7-2953-41f7-9e47-002f61cde2eb`); turn new requirements into backlog items with acceptance criteria.
+- Improve the tests' own quality: mutation-test important logic (break it deliberately; the tests must fail), add missing boundary cases, speed up slow tests.
+- Improve documentation for the owner in plain language: a 1-page "how the app calculates Safe to Spend", a "what each backup file contains" note, a troubleshooting guide.
