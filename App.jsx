@@ -641,6 +641,12 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
 }
 function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }
 
+// "Hide amounts" is remembered until the user changes it (Run 20, owner request): it is a preference, kept under its own key like the other
+// side settings, so the ledger key is not touched. An unreadable or blocked store simply means "off".
+const PRIVACY_KEY=`${KEY}__privacy`;
+function readPrivacy() { try { return localStorage.getItem(PRIVACY_KEY)==="1"; } catch { return false; } }
+function writePrivacy(on) { try { if (on) localStorage.setItem(PRIVACY_KEY,"1"); else localStorage.removeItem(PRIVACY_KEY); return true; } catch { return false; } }
+
 // ─── App lock (Run 19) ───────────────────────────────────────────────────────
 // A PIN (4–6 digits) and, where the phone allows, a fingerprint prompt keep other people out of the app's screens. It is NOT
 // encryption: the ledger stays readable in this browser's storage and the backup files are unchanged. The PIN is never stored;
@@ -3036,9 +3042,10 @@ function AppInner() {
   useEffect(()=>{ document.documentElement.lang=state.language||"en"; },[state.language]);
   const [tab,      setTab]      = useState("home");
   const [tabKey,   setTabKey]   = useState(0);
-  // Privacy mode lives only in memory: it is never saved, so a reload (or a new tab) starts with it off.
-  const [privacy,  setPrivacy]  = useState(false);
+  // Privacy mode ("Hide amounts") is remembered across closing the app until the user changes it (Run 20; before that it started off every time).
+  const [privacy,  setPrivacy]  = useState(()=>readPrivacy());
   setPrivacyMode(privacy);
+  useEffect(()=>{ writePrivacy(privacy); },[privacy]);
   // Budgets & Goals: which half is shown, and a counter the title bar's "+" bumps to open that half's "new" form.
   const [goalsSeg, setGoalsSeg] = useState("budgets");
   const [goalsAdd, setGoalsAdd] = useState(0);
