@@ -349,3 +349,10 @@ Owner decision: simple PIN + biometric; no encryption claim; encryption deferred
 - Gate 1 on 9a73fd1 found a real defect: unreadable localStorage was treated as a damaged lock (e2e_import R2 failed). Fixed in 1d91c62 (readLock returns no lock when storage cannot be read), logic test added (run19lock 31).
 - Gate 2 on 1d91c62 (cleanroom-run17.ps1): logic 989 passed / 0 failed / 0 missing; build and az audit exit 0; browser 909 passed / 0 failed / 40 missing, 0 standby events. The 40 missing are e2e_phase2 (24), e2e_run3 (4), e2e_run5 (12): they refuse to run on the last day of a month. Gate is therefore incomplete, push withheld.
 - Next: on 1 Nov 2026 or later re-run the gate; push only if every file is complete and origin/main (88dbf4a) is still an ancestor.
+
+### Run 20 (31 Oct 2026), local only, not pushed
+- 2125cac coach R12 what-if extra payment on annuity loan cards (run20extra 12, e2e_run20_extra 10; numbers worked out by hand).
+- Hide amounts now remembered under expense_ledger_v5__privacy (owner request); e2e_run9 updated on purpose (55).
+- Keep your data safe has a 4th section: where the backup file lands (Android/iPhone), copy it elsewhere.
+- Open from owner's list: (1) icon/logo set - needs owner palette/direction, nothing built; (2) Patterns & insights rebuild like the coach (cards with figures, basis, hide, tap-through) - not started; (3) automatic in-app backup copies - NOT built, see risks below.
+- Auto backup, honest scope: a web app cannot silently write files to the phone. Possible: rolling internal copies (protect against app mistakes, NOT against clearing site data/uninstall/lost phone) and a one-tap weekly backup prompt. Risk to settle first: localStorage quota - extra copies could make the main ledger save fail. Needs size guard + test of failure paths.
