@@ -1891,6 +1891,7 @@ function toMonthlyAmountHelper(t) {
 }
 
 // Run 20: a short heading for each kind of pattern line (the sentence itself says what was found and from how many entries)
+const PATTERN_BASIS_KEY={ month:"pat.basisMonth", weeks:"pat.basisWeeks", two:"pat.basisTwo", six:"pat.basisSix" };
 const PATTERN_TITLE_KEY={ weekend:"pat.weekend", catconc:"pat.catconc", merchant:"pat.merchant", avgtxn:"pat.avgtxn", dayofweek:"pat.dayofweek", trend:"pat.trend", anomaly:"pat.anomaly" };
 // S5: Full financial patterns engine — deterministic, data-only
 // Returns { insights, anomalies, dayOfWeek, categoryTrends, correlations }
@@ -1921,7 +1922,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
     const weAvg=sumOf(win.filter(t=>isWeekend(t.date)))/weDays, wdAvg=sumOf(win.filter(t=>!isWeekend(t.date)))/wdDays;
     if (weAvg>0 && wdAvg>0) {
       const pct=pctChange(weAvg,wdAvg);
-      if (Math.abs(pct)>=20) insights.push({ id:"weekend", text:t(pct>0?"ins.weekendMore":"ins.weekendLess",{ pct:Math.abs(pct), we:fmt(weAvg,currency), wd:fmt(wdAvg,currency), days:weDays+wdDays }) });
+      if (Math.abs(pct)>=20) insights.push({ id:"weekend", basis:{ n:win.length, per:"weeks" }, text:t(pct>0?"ins.weekendMore":"ins.weekendLess",{ pct:Math.abs(pct), we:fmt(weAvg,currency), wd:fmt(wdAvg,currency), days:weDays+wdDays }) });
     }
   }
 
@@ -1932,10 +1933,10 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
     const catTotals={}; monExp.forEach(t=>{ catTotals[t.category]=(catTotals[t.category]||0)+t.amount; });
     const topCat=Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
     const pct=Math.round((topCat[1]/monTotal)*100);
-    if (pct>=40) insights.push({ id:"catconc", text:t("ins.catConc",{ cat:catName(topCat[0]), pct }) });
+    if (pct>=40) insights.push({ id:"catconc", basis:{ n:monExp.length, per:"month" }, text:t("ins.catConc",{ cat:catName(topCat[0]), pct }) });
     const mTotals={}; monExp.filter(t=>t.merchant).forEach(t=>{ mTotals[t.merchant]=(mTotals[t.merchant]||0)+t.amount; });
     const top3=Object.entries(mTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>a+v,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", text:t("ins.merchantConc",{ names:top3.map(([m])=>m).join(", "), pct:pc }) }); }
+    if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>a+v,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", basis:{ n:monExp.length, per:"month" }, text:t("ins.merchantConc",{ names:top3.map(([m])=>m).join(", "), pct:pc }) }); }
   }
 
   // ── Typical transaction vs last month: the MEDIAN per transaction (a part-month stays comparable, and one unusual purchase
@@ -1944,7 +1945,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
   const curAmts=monExp.map(t=>t.amount), prvAmts=expenses.filter(t=>t.date.startsWith(prv)).map(t=>t.amount);
   if (curAmts.length>=4 && prvAmts.length>=4) {
     const curMed=median(curAmts), prvMed=median(prvAmts);
-    if (prvMed>0) { const pct=pctChange(curMed,prvMed); if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", text:t(pct>0?"ins.avgHigher":"ins.avgLower",{ pct:Math.abs(pct), a:curAmts.length, b:prvAmts.length }) }); }
+    if (prvMed>0) { const pct=pctChange(curMed,prvMed); if (Math.abs(pct)>=20) insights.push({ id:"avgtxn", basis:{ n:curAmts.length+prvAmts.length, per:"two" }, text:t(pct>0?"ins.avgHigher":"ins.avgLower",{ pct:Math.abs(pct), a:curAmts.length, b:prvAmts.length }) }); }
   }
 
   // ── Day of week. The insight and the Analytics card both use the MEDIAN (the typical transaction; the average is kept in
@@ -1959,7 +1960,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
     const mHi=dayOfWeek[hi].median, mLo=dayOfWeek[lo].median;
     if (mLo>0) {
       const pct=pctChange(mHi,mLo), vars={ hi:t("dow.pl."+hi), lo:t("dow.cmp."+lo), pct, x:(mHi/mLo).toFixed(1), a:dayOfWeek[hi].count, b:dayOfWeek[lo].count };
-      if (pct>=30) insights.push({ id:"dayofweek", text:t(pct>=200?"ins.dayOfWeekX":"ins.dayOfWeek",vars) });
+      if (pct>=30) insights.push({ id:"dayofweek", basis:{ n:dayOfWeek[hi].count+dayOfWeek[lo].count, per:"month" }, text:t(pct>=200?"ins.dayOfWeekX":"ins.dayOfWeek",vars) });
     }
   }
 
@@ -1981,7 +1982,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
     const sustained=direction(data.slice(0,n-1)).trend===trend;
     if (trend!=="stable" && prev>0 && last>0 && Math.abs(trendPct)>=20) {
       const vars={ cat:catName(catId), pct:`${trendPct>0?"+":""}${trendPct}` };
-      insights.push({ id:`trend-${catId}`, text: sustained ? t(trend==="increasing"?"ins.trendUp":"ins.trendDown",vars) : t("ins.lastMonthChange",vars) });
+      insights.push({ id:`trend-${catId}`, basis:{ n:expenses.filter(t=>t.category===catId&&months6.some(m=>t.date.startsWith(m))).length, per:"six" }, text: sustained ? t(trend==="increasing"?"ins.trendUp":"ins.trendDown",vars) : t("ins.lastMonthChange",vars) });
     }
   });
 
@@ -1996,7 +1997,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
       anomalies.push({ date:tx.date, amount:tx.amount, category:tx.category, merchant:tx.merchant||"", reason:t("ins.anomalyReason",{ x:(tx.amount/med).toFixed(1), cat:catName(tx.category), med:fmt(med,currency) }), severity:"high" });
   });
   anomalies.sort((a,b)=>b.amount-a.amount).splice(10);
-  if (anomalies.length) insights.push({ id:"anomaly", text:tn("ins.anomalies",anomalies.length) });
+  if (anomalies.length) insights.push({ id:"anomaly", basis:{ n:monExp.length, per:"month" }, text:tn("ins.anomalies",anomalies.length) });
 
   // ── Categories recorded on the same day (co-occurrence — it does not mean one causes the other)
   const correlations=[];
@@ -6045,7 +6046,7 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
                   <Icon name="pattern" size={14} color="var(--ink-3)"/>
                   <div style={{flex:1,minWidth:0}}>
                     {titleKey&&<div style={{fontWeight:700,color:"var(--ink)",marginBottom:2}}>{t(titleKey)}</div>}
-                    <span>{PRIVACY?t("privacy.hiddenText"):p.text}</span>
+                    <span>{PRIVACY?t("privacy.hiddenText"):p.text}</span>{p.basis&&<div className="list-sub pattern-basis" style={{marginTop:4}}>{tn(PATTERN_BASIS_KEY[p.basis.per],p.basis.n)}</div>}
                     <div><button className="btn btn-sm pattern-hide" style={{marginTop:6}} onClick={()=>setPatMute([...patMuted,p.id])}>{t("coach.hide")}</button></div>
                   </div>
                 </div>
