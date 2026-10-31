@@ -7,8 +7,8 @@
 // was downloaded before the worker started. Offline the page then opened without its code: a blank screen on the owner's
 // installed app. Now the worker reads the page and saves every /assets/ file it names — when it installs, and again each
 // time the page is loaded online — so the code is always saved together with the page that needs it.
-const CACHE = "ledger-shell-v2";
-const SHELL = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
+const CACHE = "ledger-shell-v3";   // v3 (Run 20): new app icons; the icons are cached first, so the old name would keep showing the old ones
+const SHELL = ["/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/apple-touch-icon.png", "/icon.svg"];
 
 // The /assets/ files a page needs (its script, stylesheets, preloads), read from the page's HTML.
 const assetsOf = (html) => [...new Set((html.match(/\/assets\/[^"'\s>)]+/g) || []))];
