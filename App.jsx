@@ -639,7 +639,9 @@ async function pinHash(pin, saltB64, iter) {
 function sameText(a, b) { a=String(a); b=String(b); let d=a.length^b.length; for (let i=0;i<Math.max(a.length,b.length);i++) d|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0); return d===0; }
 // null = no lock; { ok:true, rec } = a lock; { ok:false } = the lock record exists but cannot be read (the lock screen then offers the reset only).
 function readLock() {
-  let raw; try { raw=localStorage.getItem(LOCK_KEY); } catch { return { ok:false }; }
+  // Storage that cannot be read at all (blocked by the browser) holds no lock to enforce, and the ledger is unreadable too: the app already
+  // shows its "saving is paused" notice. Treating that as a damaged lock would lock the user out of an app that otherwise works.
+  let raw; try { raw=localStorage.getItem(LOCK_KEY); } catch { return null; }
   if (raw===null) return null;
   try {
     const r=JSON.parse(raw);
