@@ -1890,6 +1890,8 @@ function toMonthlyAmountHelper(t) {
   return t.amount;
 }
 
+// Run 20: a short heading for each kind of pattern line (the sentence itself says what was found and from how many entries)
+const PATTERN_TITLE_KEY={ weekend:"pat.weekend", catconc:"pat.catconc", merchant:"pat.merchant", avgtxn:"pat.avgtxn", dayofweek:"pat.dayofweek", trend:"pat.trend", anomaly:"pat.anomaly" };
 // S5: Full financial patterns engine — deterministic, data-only
 // Returns { insights, anomalies, dayOfWeek, categoryTrends, correlations }
 
@@ -5696,6 +5698,10 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
   const COACH_MUTE_KEY=`${KEY}__coachmute`, COACH_ACTIONS=["loanDue","loanOverdue","owedLate"];
   const [muted,setMuted]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(COACH_MUTE_KEY)||"[]"); return Array.isArray(v)?v.filter(x=>typeof x==="string"):[]; } catch { return []; } });
   const setMute=(next)=>{ setMuted(next); try { if (next.length) localStorage.setItem(COACH_MUTE_KEY,JSON.stringify(next)); else localStorage.removeItem(COACH_MUTE_KEY); } catch {} };
+  // Run 20: Patterns lines can be hidden one by one and brought back, like the coach cards (own key, ledger untouched).
+  const PAT_MUTE_KEY=`${KEY}__patmute`;
+  const [patMuted,setPatMuted]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(PAT_MUTE_KEY)||"[]"); return Array.isArray(v)?v.filter(x=>typeof x==="string"):[]; } catch { return []; } });
+  const setPatMute=(next)=>{ setPatMuted(next); try { if (next.length) localStorage.setItem(PAT_MUTE_KEY,JSON.stringify(next)); else localStorage.removeItem(PAT_MUTE_KEY); } catch {} };
   const coach       = useMemo(()=>calcCoach(transactions,readDebts(),new Date(),bills),[transactions,bills]);             // Run 17: Debts-page data is read when the ledger changes
   const txnStats    = calcTxnStats(transactions,selectedMon);
   const perDay      = calcWeekdayWeekend(transactions,selectedMon);
@@ -6032,12 +6038,20 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
         {patterns.length>0&&(
           <div className="a-card">
             <div className="a-card-title">{t("an.patterns")}</div>
-            {patterns.map(p=>(
-              <div key={p.id} className="pattern-item">
-                <Icon name="pattern" size={14} color="var(--ink-3)"/>
-                <span>{PRIVACY?t("privacy.hiddenText"):p.text}</span>
-              </div>
-            ))}
+            {patterns.filter(p=>!patMuted.includes(p.id)).map(p=>{
+              const titleKey=PATTERN_TITLE_KEY[p.id.startsWith("trend-")?"trend":p.id];
+              return (
+                <div key={p.id} className="pattern-item" data-section="pattern-item" data-id={p.id}>
+                  <Icon name="pattern" size={14} color="var(--ink-3)"/>
+                  <div style={{flex:1,minWidth:0}}>
+                    {titleKey&&<div style={{fontWeight:700,color:"var(--ink)",marginBottom:2}}>{t(titleKey)}</div>}
+                    <span>{PRIVACY?t("privacy.hiddenText"):p.text}</span>
+                    <div><button className="btn btn-sm pattern-hide" style={{marginTop:6}} onClick={()=>setPatMute([...patMuted,p.id])}>{t("coach.hide")}</button></div>
+                  </div>
+                </div>
+              );
+            })}
+            {patMuted.length>0&&<button className="btn btn-sm pattern-unhide" style={{marginTop:2}} onClick={()=>setPatMute([])}>{t("coach.showHidden",{n:patMuted.length})}</button>}
           </div>
         )}
 
