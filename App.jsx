@@ -5006,7 +5006,7 @@ function ListRow({ icon, title, sub, onClick, color="var(--accent-text)", classN
 // Run 16: "How it works" (four short steps) and the privacy notice, one simple sheet each. The notice describes what the app does
 // today (no account, no analytics, nothing sent); it is not legal advice and must be kept true if the app ever changes.
 function InfoSheet({ kind, onClose }) {
-  const n=kind==="how"?4:kind==="safe"?5:8;
+  const n=kind==="how"?4:kind==="safe"?6:8;
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("info."+kind+".title")} data-section={"info-"+kind}>
