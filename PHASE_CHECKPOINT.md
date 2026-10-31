@@ -363,3 +363,8 @@ Owner decision: simple PIN + biometric; no encryption claim; encryption deferred
 - Decision, auto backup: NOT built. Rolling in-app copies protect only against app mistakes (recovery copies already exist before risky changes) and add a real risk that extra stored copies make the ledger's own save fail on a full store. Better value was the guide on where backup files land (done) and the existing reminder. Revisit only with a size guard and failure-path tests.
 
 - 31 Oct: Patterns lines now show 'Based on N entries ...' (e2e_run20_patterns 11). apple-design/SKILL.md received from owner (Downloads) and saved in the repo; it is a motion/typography reference, nothing in it was applied yet. Push NOT done: clock still 31 Oct, three date-dependent test files cannot run, gate incomplete.
+
+### Owner's 31 Oct list - status
+- Done: unused root files moved to archive/unused-root-files-2026-10-31 (not deleted; build + 1008 logic checks unchanged); Poco F6 check list handoff/POCO_F6_CHECKLIST_2026-10-31.md; request for the 3 missing documents posted in Notion (page 40a7ff36825e8149a44cc77324b2c86c).
+- NOT started (usage reserved for the scheduled 1 Nov gate+push; weekly 86%): trip grouping (owner: simple grouping only), first-launch polish, account balances + transfers (financial design needed first), apple-design clean-up of "AI slop" (use as a lens, do not copy), splitting App.jsx (WARNING: tests/harness.mjs extracts the logic before the "// --- SVG icon system" marker of ONE file; a split needs the harness redesigned first).
+- Suggested order next week: trips (smallest), apple-design pass, first-launch, accounts/transfers, then the App.jsx split last.
