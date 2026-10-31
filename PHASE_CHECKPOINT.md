@@ -308,3 +308,44 @@ Commit 30bbc0f live (rollback 29b420a). Ask-each-time linked debt repayments. Cl
 
 ## Run 18c (2026-10-30)
 Commit e9c23fc live (rollback 30bbc0f): add button hides on scroll down. Clean room: browser 875/875, 0 standby.
+
+## Run 18d (30 Oct 2026, evening) - LIVE as 47f0ac8 (bundle index-DZ43IXI3.js; rollback target e9c23fc)
+- All-time overview is now the first card on Analytics; Home shows the latest five entries (with "See all"); four more coach rules (welcome-back, income dip, loan share of income, payment not covering interest); card header wraps so the az "see all" link is not clipped at 200% zoom.
+- Old tests e2e_run15 / e2e_run15_feedback updated on purpose (they asserted Home has no entries; owner asked for the latest-entries list).
+- Evidence: clean-room gate on 47f0ac8: logic 927/927, browser 879/879, 0 standby. Live smoke test (made-up data in a throw-away browser): Home lists 5 newest, overview before month selector. The first gate on f0a0c23 found 3 real failures (az clip, 2 stale tests) - fixed before push.
+- NOT done / unverified: nothing on a real phone; az/ru wording unreviewed; coach new rules covered by logic tests only (not browser-visible cards).
+- Still incomplete: recurring-payment end date + countdown; more coach rules (R3, R4, R5, R7, R10, R12, R16); tutorial / PWA-install / data-loss teaching; detailed privacy policy; one-off label explanation; 6-month section modernisation; trip grouping; family; first-launch polish; icons/logo; themes (owner palettes).
+
+## Run 18e (30 Oct 2026, night) - LIVE as 7646619 (bundle index-D2bPZeLd.js; rollback target 47f0ac8)
+- Bills: optional last payment date (endDate). validateBill keeps/refuses it (must be a real date on or after the first due date); no occurrences, next-due or Safe-to-Spend set-aside after it; billPaymentsLeft() counts payments still to come; the Recurring list shows "N payments left" / "Finished on ...". Old bills keep their exact shape.
+- More: new last row "Keep your data safe" (what can erase data, backups, adding the app to the home screen, restoring); Privacy notice grew from 6 to 8 sections (debts/recovery copies/crash note; shared phone, "Hide amounts" is screen-only); the "recurring / one-off" tags now have a one-line explanation on Analytics.
+- Evidence: clean-room gate on 7646619: logic 946/946, browser 887/887, 0 standby; new tests run18enddate (19 logic) and e2e_run18_enddate (7); e2e_run16_info updated (7 rows, 8 privacy sections, safe sheet). Live check: bundle changed, safe sheet has 5 sections, bill form shows the end-date field.
+- UNVERIFIED: the one-off explanation line (only shown when a category has merchant changes) has no browser check; az/ru text is draft (unreviewed); nothing on a real phone; ended bill with income type not specially tested in UI.
+- Still incomplete: coach rules R3/R4/R5/R7/R10/R12/R16 + "why am I seeing this"/mute; interactive tutorial; 6-month section modernisation; trip grouping; family; first-launch polish; icons/logo; themes (owner palettes); number-pad hide/animation; donut enlarge; "+" type chooser.
+
+## Run 18f - LIVE as 88dbf4a (rollback 7646619)
+Coach cards: category at least 50% above its 3-month average (R7) and total interest still to pay on a loan (R10). Gate: logic 952/952, browser 890/890, 0 standby; new run18coach2 (6) and e2e_run18_coach2 (3). Thresholds (50%, 20 currency units) are design defaults. Still open: R3, R4, R5, R12, R16, mute/why.
+
+## Run 18g + 18h (31 Oct 2026, just after midnight) - COMMITTED LOCALLY as dfee251, NOT PUSHED (gate cannot be clean on 31 Oct)
+- 18g: coach card "regular bills share of income" (R3); "Hide this tip" / "Show hidden tips" on coach cards (side key expense_ledger_v5__coachmute; due-date warnings cannot be hidden); "Hide number pad" button + key press animation; Loan and Debt shortcuts in the add form (open Debts & loans on the right list).
+- 18h: 6-month section now shows spending AND income bars with legend and a spent/income/net detail line; FIXED a crash on tapping a month bar (leftover setActiveCell from the old heatmap threw a ReferenceError; no test tapped a bar before).
+- Tests: logic 958/958. Gate on dfee251: browser 887 passed, 1 failed (e2e_run7 regex for the renamed 6-month title; test updated and re-run alone: 21/21), 16 missing = e2e_run3 (4 checks skipped by design on the last day of a month) and e2e_run5 (refuses to run on the last day of a month). Those two are DATE-DEPENDENT, not app defects, but a clean gate needs 1 Nov or later.
+- NEXT ACTION: on 1 Nov re-run scratchpad\cleanroom-run17.ps1 (with awake17.ps1 first); if 0 failed / 0 missing / 0 standby and origin/main is still an ancestor of dfee251, push, check the live bundle, smoke test (Home latest, add form Loan/Debt chips, tap a 6-month bar, hide a coach tip).
+- Earlier "still open" claims that were WRONG and are now corrected: donut enlarge-on-touch is built (Run 17); quick-add templates already choose subcategories.
+- Still genuinely open: interactive tutorial, trip grouping, family feature, first-launch polish beyond the checklist, icons/logo, themes (palettes), app lock/encryption (needs an owner decision: curtain-only PIN vs real encryption where a forgotten PIN means lost data), accounts/balances, remaining coach rules R4/R5 (duplicate existing Smart Helper cards), R12, R16.
+
+
+## Run 19 (31 Oct 2026) — App lock (PIN + fingerprint), local commit 9a73fd1, NOT pushed
+Owner decision: simple PIN + biometric; no encryption claim; encryption deferred to a separate assessment.
+- Code (App.jsx, i18n.js): LOCK_KEY `expense_ledger_v5__lock` (salted PBKDF2-SHA-256, 150k rounds, PIN never stored); `LockGate` wraps the app (children stay mounted, hidden while locked); `LockScreen` (keypad, fingerprint button, forgot-PIN with 10 s wait removes ONLY the lock, damaged-record reset path); `LockSheet` from a new last More row (set/change/turn off PIN, timeout 0/1/5/15 min, fingerprint toggle, lock now); wait after 5 wrong tries (30 s doubling to 5 min) stored so a reload does not reset it; privacy item 7 reworded (lock is not encryption).
+- Defect found and fixed by the test: a pending fingerprint prompt blocked PIN entry (bio no longer uses `busy`; prompt timeout 30 s).
+- Tests actually run: logic `run19lock` 30/30; full logic run 988 passed / 0 failed / 0 problem files; browser `e2e_run19_lock` 45/45 (incl. fingerprint via a CDP virtual authenticator over http://localhost — NOT a real fingerprint sensor); affected suites re-run singly: e2e_run16_info 15 (row count updated 7 to 8 on purpose), e2e_run15 35, e2e_run18_home 4, e2e_ux 30, e2e_ux_lang 8 — all pass.
+- Not done: full clean-room gate (today is the last day of a month; e2e_run3/e2e_run5 are date-dependent). Needs 1 Nov or later. Real-phone fingerprint unverified (Poco F6). az/ru lock wording unreviewed.
+- Document: handoff/ENCRYPTION_AT_REST_RISK_ASSESSMENT_2026-10-31.md (assessment only; DEFERRED WITH REASON).
+- Branch HEAD 9a73fd1 holds 18g + 18h + 19; live main is still 88dbf4a (18f).
+- Next: on 1 Nov+ run clean-room gate for 9a73fd1 (awake17.ps1 first, then cleanroom-run17.ps1), push if 0 failed/0 missing/0 standby, verify live, smoke test (set a PIN, reopen, forgot flow), update memory/Notion.
+
+### Run 19 gate attempt, 31 Oct 2026 (HEAD 1d91c62) — NOT PUSHED
+- Gate 1 on 9a73fd1 found a real defect: unreadable localStorage was treated as a damaged lock (e2e_import R2 failed). Fixed in 1d91c62 (readLock returns no lock when storage cannot be read), logic test added (run19lock 31).
+- Gate 2 on 1d91c62 (cleanroom-run17.ps1): logic 989 passed / 0 failed / 0 missing; build and az audit exit 0; browser 909 passed / 0 failed / 40 missing, 0 standby events. The 40 missing are e2e_phase2 (24), e2e_run3 (4), e2e_run5 (12): they refuse to run on the last day of a month. Gate is therefore incomplete, push withheld.
+- Next: on 1 Nov 2026 or later re-run the gate; push only if every file is complete and origin/main (88dbf4a) is still an ancestor.
