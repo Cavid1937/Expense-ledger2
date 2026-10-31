@@ -471,6 +471,27 @@ function impliedNominalPct(principal, months, payment) {
   for (let i=0;i<80;i++) { const mid=(lo+hi)/2; if (pv(mid)>principal) lo=mid; else hi=mid; }
   return ((lo+hi)/2)*1200;
 }
+// Run 20 (coach R12): what an extra payment made now would change, with the regular payment kept as it is. An ESTIMATE on the typed terms, for
+// annuity loans only (the other repayment types do not shorten the same way). Returns null when it cannot say something true: other loan
+// types, an invalid amount, a loan already paid, or an extra payment that would clear the whole balance (then the loan is simply paid off).
+function loanExtraEffect(l, extra) {
+  const sc=loanSchedule(l); if (!sc || l.rateType!=="annuity" || !isQapik(extra)) return null;
+  const k=Math.min(Array.isArray(l.payments)?l.payments.length:0, sc.payments.length);
+  if (k>=sc.payments.length) return null;
+  const bal0=k===0 ? l.principal : sc.payments[k-1].balance;
+  if (extra>=bal0) return null;
+  const rows=sc.payments.slice(k), origMonths=rows.length, origInterest=rows.reduce((s,p)=>s+p.interest,0);
+  const A=sc.payments[0].payment, r=(l.ratePct||0)/1200;
+  let bal=bal0-extra, months=0, interest=0;
+  while (bal>0) {
+    const i=Math.round(bal*r); months++; interest+=i;
+    if (months>origMonths) return null;
+    if (A-i>=bal) break;                 // the last payment is whatever is left
+    if (A<=i) return null;               // the payment never reduces the balance: say nothing rather than invent a plan
+    bal-=A-i;
+  }
+  return { monthsSaved:origMonths-months, interestSaved:origInterest-interest, newMonths:months, origMonths };
+}
 function debtRemaining(d) { return Math.max(0,d.principal-(d.payments||[]).reduce((s,p)=>s+p.amount,0)); }
 function debtCanPay(d, amount) { return isQapik(amount) && amount<=debtRemaining(d); }
 
@@ -5011,7 +5032,7 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
   const [showDebt,setShowDebt]=useState(false), [showLoan,setShowLoan]=useState(false);
   const [dForm,setDForm]=useState({ dir:"owe", name:"", amt:"", due:"" }), [dMsg,setDMsg]=useState("");
   const [lForm,setLForm]=useState({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }), [lMsg,setLMsg]=useState("");
-  const [pay,setPay]=useState({}), [payMsg,setPayMsg]=useState({}), [intr,setIntr]=useState({});
+  const [pay,setPay]=useState({}), [payMsg,setPayMsg]=useState({}), [intr,setIntr]=useState({}), [ext,setExt]=useState({});
   const uid=(p)=>`${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
   const q=(v)=>fmt(v/100,currency);
   const [health,setHealth]=useState(()=>debtsHealth());
@@ -5230,6 +5251,21 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
                   <div className="list-sub" style={{marginTop:4,lineHeight:1.5}}>{t("loan.interestHint")}</div>
                 </div>
               )}
+              {!done&&l.rateType==="annuity"&&(()=>{
+                const txt=(ext[l.id]||"").trim(), v=txt===""?null:formMoney(txt), cents=v===null?0:Math.round(v*100), eff=cents>0?loanExtraEffect(l,cents):null;
+                const msg=cents<=0 ? "" : eff===null ? (cents>=balance?t("loan.extraClears"):"")
+                  : eff.monthsSaved>0 ? t("loan.extraResult",{ amount:q(cents), months:tn("loan.extraMonths",eff.monthsSaved), interest:q(eff.interestSaved) })
+                  : eff.interestSaved>0 ? t("loan.extraNoMonths",{ amount:q(cents), interest:q(eff.interestSaved) }) : t("loan.extraNone",{ amount:q(cents) });
+                return (
+                  <div className="field loan-extra" style={{marginTop:10,marginBottom:0}} data-section="loan-extra">
+                    <label className="field-lbl" htmlFor={"loan-ext-"+l.id}>{t("loan.extra")}</label>
+                    <input id={"loan-ext-"+l.id} className="field-input loan-extra-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00"
+                      value={ext[l.id]||""} onChange={e=>setExt(m=>({...m,[l.id]:cleanMoneyText(e.target.value)}))}/>
+                    {msg&&<div className="list-sub loan-extra-result" role="status" style={{marginTop:4,lineHeight:1.5,color:"var(--ink)"}}>{msg}</div>}
+                    <div className="list-sub" style={{marginTop:4,lineHeight:1.5}}>{t("loan.extraHint")}</div>
+                  </div>
+                );
+              })()}
               {!done&&<button className="btn btn-primary btn-full loan-paid-btn" style={{marginTop:10}} onClick={()=>markPaid(l,sc)}>{t("loan.markPaid")}</button>}
               {l.payments.length>0&&<div className="list-sub" style={{marginTop:12}}>{t("loan.paymentsTitle")}</div>}
               {l.payments.map(p=>(
