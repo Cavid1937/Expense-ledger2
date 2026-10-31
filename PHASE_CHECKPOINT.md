@@ -356,3 +356,5 @@ Owner decision: simple PIN + biometric; no encryption claim; encryption deferred
 - Keep your data safe has a 4th section: where the backup file lands (Android/iPhone), copy it elsewhere.
 - Open from owner's list: (1) icon/logo set - needs owner palette/direction, nothing built; (2) Patterns & insights rebuild like the coach (cards with figures, basis, hide, tap-through) - not started; (3) automatic in-app backup copies - NOT built, see risks below.
 - Auto backup, honest scope: a web app cannot silently write files to the phone. Possible: rolling internal copies (protect against app mistakes, NOT against clearing site data/uninstall/lost phone) and a one-tap weekly backup prompt. Risk to settle first: localStorage quota - extra copies could make the main ledger save fail. Needs size guard + test of failure paths.
+
+- Patterns (31 Oct): headings + hide/show per line (own key __patmute); e2e_run20_patterns 10; Analytics regressions e2e_ux 30, e2e_ux_lang 8, e2e_run7 21 pass. Still not a full coach-style rebuild (no per-line figures/tap-through). Not pushed; gate pending 1 Nov+.
