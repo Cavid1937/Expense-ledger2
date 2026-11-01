@@ -43,7 +43,7 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   "buildBillsMirror","planBillRestore","applyBillRestore","BILLS_MIRROR_KEY",
   // Run 17: month-end forecast, profile name
   "calcMonthEndForecast","calcCoach","forSpending","loanCashOut","debtsHealth","debtCashFlow","debtLinkRef","billPaymentsLeft","loanExtraEffect","PRIVACY_KEY","readPrivacy","writePrivacy","LOCK_KEY","LOCK_TIMEOUTS","validPin","lockSupported","readLock","writeLock","removeLock","makeLockRecord","verifyPin","lockWaitMs","lockShouldEngage","cleanProfileName","PROFILE_NAME_MAX",
-  "loanSchedule","impliedNominalPct","debtRemaining","debtCanPay","cleanDebtData","readDebts","writeDebts","mergeDebtData","tripName","tripTotals","catTotals","budgetCrossing","billsToIcs","icsEscape","bankMoney","bankDate","parseCsvImport",
+  "loanSchedule","impliedNominalPct","debtRemaining","debtCanPay","cleanDebtData","readDebts","writeDebts","mergeDebtData","tripName","tripTotals","catTotals","budgetCrossing","billsToIcs","icsEscape","bankMoney","bankDate","cleanCustomCats","applyCustomCats","addCustomCat","mergeCustomCats","customCatInUse","planImportWithCats","parseCsvImport",
   // interface language (from i18n.js when present)
   "t","tn","tIn","setLang","getLang","MESSAGES","LANGS","LANG_NAMES","LOCALES","catName","subName","monthName","monthShort","fmtLongDate"];
 const have = names.filter((n) => new RegExp("(function\\s+" + n + "\\b|const\\s+" + n + "\\b)").test(body));

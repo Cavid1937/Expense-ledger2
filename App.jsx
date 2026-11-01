@@ -296,6 +296,56 @@ function resolveCategory(raw, keepUnknownId=false) {
   return "other";
 }
 
+// ─── Custom categories (Run 24; Phase 2 of the custom-categories design note) ──────────────────────────────────────────────
+// The user's own categories live in their own storage key and are added to CATEGORIES at start-up, so every picker, chart and budget
+// sees them. An entry keeps only the category's id ("u_…"); the ledger shape is unchanged. A phone or older version that does not
+// know an id shows the entry as "Other" and keeps the id (see resolveCategory), and the backup file carries the list.
+const CCAT_KEY=KEY+"__cats", CCAT_MAX=30, CCAT_LEN=24, CCAT_COLORS=["#F28B82","#F6AD55","#ECC94B","#68D391","#4FD1C5","#63B3ED","#A78BFA","#F687B3"];
+function cleanCustomCats(raw) {
+  const src=Array.isArray(raw) ? raw : (raw && Array.isArray(raw.cats) ? raw.cats : []);
+  const ids=new Set(), names=new Set(CATEGORIES.filter(c=>!c.custom).map(c=>catKey(c.name)).concat(CATEGORIES.filter(c=>!c.custom).map(c=>catKey(c.id)))), out=[];
+  src.forEach(v=>{
+    if (!isPlainObject(v) || out.length>=CCAT_MAX) return;
+    const id=typeof v.id==="string" && /^u_[a-z0-9]{3,12}$/.test(v.id) ? v.id : null;
+    const name=typeof v.name==="string" ? v.name.trim().replace(/\s+/g," ") : "";
+    if (!id || !name || name.length>CCAT_LEN || ids.has(id) || names.has(catKey(name))) return;
+    ids.add(id); names.add(catKey(name));
+    out.push({ id, name, income:v.income===true, color:typeof v.color==="string" && /^#[0-9a-fA-F]{6}$/.test(v.color) ? v.color : CCAT_COLORS[out.length%CCAT_COLORS.length] });
+  });
+  return out;
+}
+const currentCustomCats=()=>CATEGORIES.filter(c=>c.custom).map(c=>({ id:c.id, name:c.name, income:c.income, color:c.color }));
+function applyCustomCats(list) {   // replaces the custom entries of CATEGORIES in place (same array, so every reader sees the change)
+  for (let i=CATEGORIES.length-1;i>=0;i--) if (CATEGORIES[i].custom) { const c=CATEGORIES.splice(i,1)[0]; delete CATEGORY_LOOKUP[c.id]; delete CATEGORY_LOOKUP[catKey(c.name)]; }
+  cleanCustomCats(list).forEach(c=>{ CATEGORIES.push({ id:c.id, name:c.name, tile:c.name, color:c.color, income:c.income, subs:[], custom:true }); CATEGORY_LOOKUP[c.id]=c.id; CATEGORY_LOOKUP[catKey(c.name)]=c.id; });
+}
+function mergeCustomCats(a, b) { return cleanCustomCats([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])]); }
+function readCustomCats() { try { const r=localStorage.getItem(CCAT_KEY); return r ? cleanCustomCats(JSON.parse(r)) : []; } catch { return []; } }
+function writeCustomCats(list) {
+  try { const c=cleanCustomCats(list); if (!c.length) localStorage.removeItem(CCAT_KEY); else localStorage.setItem(CCAT_KEY,JSON.stringify({ version:1, cats:c })); return true; } catch { return false; }
+}
+function newCustomCatId(list) { const used=new Set((list||[]).map(c=>c.id)); let id; do { id="u_"+Math.random().toString(36).slice(2,8).replace(/[^a-z0-9]/g,"a").padEnd(6,"a"); } while (used.has(id)); return id; }
+// Adds a category to a list; returns the new list or a reason it was refused (empty, long, duplicate of a built-in or own name, full).
+function addCustomCat(list, name, income, color) {
+  const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
+  if (!n) return { list, added:false, reason:"empty" };
+  if (n.length>CCAT_LEN) return { list, added:false, reason:"long" };
+  if ((list||[]).length>=CCAT_MAX) return { list, added:false, reason:"full" };
+  const next=cleanCustomCats([...(list||[]),{ id:newCustomCatId(list), name:n, income:!!income, color }]);
+  return next.length>(list||[]).length ? { list:next, added:true, reason:"" } : { list, added:false, reason:"dup" };
+}
+function customCatInUse(id, transactions, budgets) { return (transactions||[]).some(x=>x && x.category===id) || !!(budgets && budgets[id]>0); }
+try { applyCustomCats(readCustomCats()); } catch {}
+
+// planImport reads a backup's own categories first, so its entries keep their category instead of becoming "Other"; nothing is stored here.
+function planImportWithCats(raw, filename="") {
+  let inc=[]; try { const p=JSON.parse(String(raw).replace(/^﻿/,"")); if (isPlainObject(p)) inc=cleanCustomCats(p.customCategories); } catch {}
+  if (!inc.length) return planImport(raw,filename);
+  const had=currentCustomCats();
+  applyCustomCats(mergeCustomCats(had,inc));
+  try { const r=planImport(raw,filename); if (r && r.ok) r.customCats=inc; return r; } finally { applyCustomCats(had); }
+}
+
 // Callers validate with checkRawTxn() first (see partitionTransactions). normaliseTxn never takes abs(),
 // never defaults a date and never turns an unknown type into an expense.
 function normaliseTxn(t, opts={}) {
@@ -1249,8 +1299,10 @@ function buildBackup(state, now=new Date().toISOString()) {
   const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
   const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
   const dd=cleanDebtData(state.debtData);   // Run 17: debts and loans, optional in the same way
+  const ccats=cleanCustomCats(state.customCats);   // Run 24: the user's own categories, optional in the same way
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
     transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}),
+    ...(ccats.length ? { customCategories:ccats } : {}),
     ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
 }
 
@@ -3233,6 +3285,7 @@ function AppInner() {
   const [goalsAdd, setGoalsAdd] = useState(0);
   const [showAdd,  setShowAdd]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [,setCatVer] = useState(0);   // Run 24: bumped when the user's own categories change, so every screen redraws with them
   const [toast,    setToast]    = useState(null);
   const [snackbar, setSnackbar] = useState(null);
   const [prefill,  setPrefill]  = useState(null);
@@ -3574,7 +3627,7 @@ function AppInner() {
   const exportJSON=useCallback(()=>{
     if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: native shell → the hand-over, never a dead download link
     const now=new Date().toISOString();
-    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
+    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
     // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
     // It is not a confirmed backup until the user says they have the file (see backupReminderDue).
     setState(s=>({...s,lastBackup:now}));
@@ -3586,7 +3639,7 @@ function AppInner() {
   // the phone. Cancelled → nothing changes. No file sharing on this device → falls back to the download above.
   const shareBackup=useCallback(async ()=>{
     const now=new Date().toISOString();
-    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts()},now),null,2),`ledger-backup-${today()}.json`);
+    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats()},now),null,2),`ledger-backup-${today()}.json`);
     if (r==="unsupported") { exportJSON(); return; }
     if (r==="failed") { showToast(t("io.shareFailed"),6000); return; }   // Run 13: told, and nothing is recorded
     if (r!=="shared") return;
@@ -3601,7 +3654,7 @@ function AppInner() {
     const reader=new FileReader();
     reader.onerror=()=>setImportPending({ error:t("import.readFailed"), filename:file.name });
     reader.onload=e=>{
-      const plan=planImport(String(e.target.result||""), file.name||"");
+      const plan=planImportWithCats(String(e.target.result||""), file.name||"");
       if (!plan.ok) { setImportPending({ error:plan.error, filename:file.name }); return; }
       setSkipDup(true);
       setImportPending({ ...plan, dupCount:countSuspectedDuplicates(stateRef.current.transactions, plan.transactions) });
@@ -3627,8 +3680,15 @@ function AppInner() {
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
     const restore=(k,raw)=>{ try { if (raw===undefined) return; if (raw===null) localStorage.removeItem(k); else localStorage.setItem(k,raw); } catch {} };
-    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY) };
-    const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); };
+    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY) };
+    const catsHad=currentCustomCats();
+    const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); applyCustomCats(catsHad); };
+    // Run 24: the file's own categories are added to the ones on this phone (by id; a name already in use is skipped, never renamed).
+    if (plan.customCats && plan.customCats.length) {
+      const merged=mergeCustomCats(readCustomCats(),plan.customCats);
+      if (!writeCustomCats(merged)) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
+      applyCustomCats(merged); setCatVer(v=>v+1);
+    }
     // Run 16: the file's own-subcategory suggestions are added to the ones on this phone (union; nothing is overwritten or removed).
     const hasSub=plan.subcategories && Object.keys(plan.subcategories).length;
     // Run 17: debts and loans from the file are added by id (what is already on this phone is never overwritten).
@@ -3784,7 +3844,7 @@ function AppInner() {
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
         {showLock&&<LockSheet onClose={()=>setShowLock(false)} showToast={showToast}/>}
         {showSettings&&(
-          <SettingsSheet state={state}
+          <SettingsSheet state={state} onCatsChanged={()=>setCatVer(v=>v+1)}
             onCurrencyChange={c=>setState(s=>({...s,currency:c}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}
             onClose={()=>setShowSettings(false)} showToast={showToast}/>
@@ -5116,7 +5176,47 @@ function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClos
 // ─── Preferences sheet ────────────────────────────────────────────────────────
 // Run 17: language and the profile name live on the Settings page itself, the all-time overview is on Analytics, and the savings floor
 // and the quick-add templates are on Goals. What remains here: the currency and the Safe to Spend on/off switch.
-function SettingsSheet({ state, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
+// Run 24: the user's own categories — add (name, expense or income, colour) and remove one that no entry or budget uses.
+function MyCategories({ state, onChanged, showToast }) {
+  const [list,setList]=useState(()=>readCustomCats());
+  const [name,setName]=useState(""), [income,setIncome]=useState(false), [color,setColor]=useState(CCAT_COLORS[5]);
+  const commit=(next)=>{ if (!writeCustomCats(next)) { showToast(t("mycat.saveFailed"),5000); return false; } applyCustomCats(next); setList(readCustomCats()); onChanged(); return true; };
+  const add=()=>{
+    const r=addCustomCat(list,name,income,color);
+    if (!r.added) { showToast({ empty:t("mycat.err.empty"), long:t("mycat.err.long"), dup:t("mycat.err.dup"), full:t("mycat.err.full") }[r.reason],4000); return; }
+    if (commit(r.list)) { setName(""); showToast(t("mycat.added")); }
+  };
+  const remove=(c)=>{
+    if (customCatInUse(c.id,state.transactions,state.budgets)) { showToast(t("mycat.inUse"),5000); return; }
+    if (commit(list.filter(x=>x.id!==c.id))) showToast(t("mycat.removed"));
+  };
+  return (
+    <div data-section="my-categories">
+      <div className="settings-section-lbl" style={{marginTop:14}}>{t("mycat.title")}</div>
+      <div className="list-sub" style={{marginBottom:8}}>{t("mycat.sub")}</div>
+      {list.map(c=>(
+        <div key={c.id} className="settings-row" data-cat={c.id}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <span aria-hidden="true" style={{width:14,height:14,borderRadius:99,background:c.color,flex:"none"}}/>
+            <div style={{minWidth:0}}><div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{c.name}</div><div className="settings-row-sub">{t(c.income?"add.income":"add.expense")}</div></div>
+          </div>
+          <button className="chip" aria-label={t("mycat.remove",{name:c.name})} onClick={()=>remove(c)}>{t("mycat.removeBtn")}</button>
+        </div>
+      ))}
+      <div className="field"><label className="field-lbl" htmlFor="mycat-name">{t("mycat.name")}</label>
+        <input id="mycat-name" className="field-input" value={name} maxLength={CCAT_LEN} onChange={e=>setName(e.target.value)} onKeyDown={e=>{ if (e.key==="Enter") add(); }}/></div>
+      <div className="filter-bar" role="group" aria-label={t("mycat.type")}>
+        {[false,true].map(v=>(<button key={String(v)} className={`chip${income===v?" on":""}`} aria-pressed={income===v} onClick={()=>setIncome(v)}>{t(v?"add.income":"add.expense")}</button>))}
+      </div>
+      <div className="filter-bar" role="group" aria-label={t("mycat.color")}>
+        {CCAT_COLORS.map(c=>(<button key={c} aria-label={c} aria-pressed={color===c} onClick={()=>setColor(c)} style={{width:28,height:28,borderRadius:99,background:c,border:color===c?"3px solid var(--ink)":"2px solid transparent",padding:0}}/>))}
+      </div>
+      <button className="btn btn-ghost btn-full" data-section="mycat-add" disabled={!name.trim()} onClick={add} style={{marginTop:6}}>{t("mycat.add")}</button>
+    </div>
+  );
+}
+
+function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
   const { currency,safeToSpend={} }=state;
   const [curSym,      setCurSym]      = useState(currency);
 
@@ -5132,6 +5232,8 @@ function SettingsSheet({ state, onCurrencyChange, onSafeToSpendChange, onClose, 
           <div><div className="settings-row-title" id="set-safe-lbl">{t("set.safeEnable")}</div><div className="settings-row-sub">{t("set.safeEnableSub")}</div></div>
           <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-label={t("safe.title")} tabIndex={0}><div className="toggle-knob"/></div>
         </div>
+
+        <MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/>
 
         {/* Currency */}
         <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
