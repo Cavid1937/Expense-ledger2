@@ -2940,6 +2940,7 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .list-card{padding:4px 16px}
 .list-row{display:flex;align-items:center;gap:14px;width:100%;min-height:60px;padding:12px 0;background:none;border:none;border-bottom:1px solid var(--rule);text-align:left;color:var(--ink);font:inherit;cursor:pointer}
 .list-row:last-child{border-bottom:none}
+.prefs-card>.settings-section-lbl:first-child{margin-top:0!important;padding-top:0}   /* Run 24: Preferences sections sit in rounded cards, like Claude's grouped settings */
 .list-row{border-radius:12px;transition:background-color 120ms ease-out}
 .list-row:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent)}   /* Run 24: a pressed row becomes a soft rounded pill (Claude-app feel) */
 @media (prefers-reduced-motion:reduce){.list-row{transition:none}}
@@ -5359,7 +5360,7 @@ function MyCategories({ state, onChanged, showToast }) {
     if (commit(list.filter(x=>x.id!==c.id))) showToast(t("mycat.removed"));
   };
   return (
-    <div data-section="my-categories">
+    <div className="card prefs-card" data-section="my-categories">
       <div className="settings-section-lbl" style={{marginTop:14}}>{t("mycat.title")}</div>
       <div className="list-sub" style={{marginBottom:8}}>{t("mycat.sub")}</div>
       {list.map(c=>(
@@ -5424,7 +5425,7 @@ function MyAccounts({ state, currency, showToast }) {
   };
   const nameOf=(id)=>(data.accounts.find(a=>a.id===id)||{}).name||"?";
   return (
-    <div data-section="my-accounts">
+    <div className="card prefs-card" data-section="my-accounts" style={{marginTop:14}}>
       <div className="settings-section-lbl" style={{marginTop:14}}>{t("acc.title")}</div>
       <div className="list-sub" style={{marginBottom:8}}>{t("acc.sub")}</div>
       {data.accounts.map(a=>editing&&editing.id===a.id ? (
