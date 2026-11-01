@@ -1357,10 +1357,13 @@ function comparisonWindow(mon, prv, now=new Date()) {
 // cur* = happened (to date), planned* = dated later in the month, total* = the whole month (Safe to Spend uses totalExp:
 // an expense entered ahead of time is money already committed). prev* = the previous month over the comparison window
 // (see comparisonWindow); prevFullExp = the whole previous month, for display.
+// Run 22 (formula audit): the sum of entry amounts in whole cents. Adding 0.1 ten times in floating point gives 0.9999999999999999, which
+// would sit just under an exact budget of 1.00; rounding each amount to cents first makes the total exact.
+function sumCents(list) { return (list||[]).reduce((s,t)=>s+Math.round((Number(t.amount)||0)*100),0)/100; }
 function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
   const isExp=t=>t.type==="expense", isInc=t=>t.type==="income", inMon=t=>t.date.startsWith(mon);
   const cw=comparisonWindow(mon,prv,now);
-  const done=happenedIn(mon,now), donePrv=cw.inPrev, sum=l=>l.reduce((s,t)=>s+t.amount,0);
+  const done=happenedIn(mon,now), donePrv=cw.inPrev, sum=sumCents;   // Run 22 audit: whole cents, so ten entries of 0.10 are exactly 1.00
   const curExp =sum(transactions.filter(t=>isExp(t)&&done(t)));
   const curInc =sum(transactions.filter(t=>isInc(t)&&done(t)));
   const plannedExp=sum(transactions.filter(t=>isExp(t)&&inMon(t)&&!done(t)));
@@ -1378,7 +1381,8 @@ function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Dat
 function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
   const out={}, done=happenedIn(mon,now);
   transactions.filter(t=>t.type==="expense"&&done(t))
-    .forEach(t=>{ out[t.category]=(out[t.category]||0)+t.amount; });
+    .forEach(t=>{ out[t.category]=(out[t.category]||0)+Math.round((Number(t.amount)||0)*100); });
+  Object.keys(out).forEach(k=>{ out[k]=out[k]/100; });   // Run 22 audit: summed in whole cents
   return out;
 }
 
@@ -1409,7 +1413,7 @@ function monthProgress(mon, now=new Date()) {
 function calcSpentToDate(transactions, mon=curMon(), now=new Date()) {
   const p=monthProgress(mon,now); if (p.state==="future") return 0;
   const todayStr=localDateStr(now);
-  return transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&(p.state==="past"||t.date<=todayStr)).reduce((s,t)=>s+t.amount,0);
+  return transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&(p.state==="past"||t.date<=todayStr)).reduce((s,t)=>s+Math.round((Number(t.amount)||0)*100),0)/100;   // Run 22 audit: whole cents
 }
 
 function calcSpendingPace(spent, mon=curMon(), budgetTotal=0, now=new Date()) {
