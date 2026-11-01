@@ -1620,6 +1620,26 @@ function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
   return { ...f, backtest:{ months, hits }, rangeShown:months>=2 && hits*3>=months*2 };
 }
 
+// Run 24: split one entry (a shopping receipt, say) into 2–6 entries in different categories. No new data shape: the original is
+// replaced by ordinary entries with the same date, merchant, note, wallet and tag, and their amounts add up to the original to the
+// cent. Entries that belong to a bill, a repeating schedule or a debt repayment are not split, so those links never break.
+const SPLIT_MAX=6;
+function splitTransaction(txn, parts, mkId=()=>Date.now()+Math.random()) {
+  if (!txn || !(Number(txn.amount)>0)) return { ok:false, reason:"invalid" };
+  if (txn.recurring || txn.billId || txn.debtLink) return { ok:false, reason:"linked" };
+  if (!Array.isArray(parts) || parts.length<2 || parts.length>SPLIT_MAX) return { ok:false, reason:"count" };
+  const total=Math.round(Number(txn.amount)*100), isInc=txn.type==="income", { id:_id, ...base }=txn;
+  let sum=0; const entries=[];
+  for (const p of parts) {
+    const cat=p && CATEGORIES.find(x=>x.id===p.category), c=Math.round((Number(p && p.amount)||0)*100);
+    if (!cat || cat.income!==isInc) return { ok:false, reason:"category" };
+    if (!(c>0)) return { ok:false, reason:"amount" };
+    sum+=c;
+    entries.push({ ...base, id:mkId(), category:cat.id, amount:c/100, subcategory:cat.id===txn.category ? (txn.subcategory||"") : "" });
+  }
+  return sum===total ? { ok:true, entries } : { ok:false, reason:"sum", diff:(total-sum)/100 };
+}
+
 // Run 24: a newly added expense can push its category past 80% of that month's limit ("near") or past the limit ("over"). Only the
 // crossing is reported, once, so entries that follow in the same state stay quiet. Cent-exact; never touches the ledger.
 function budgetCrossing(before, after, budgets, txn, now=new Date()) {
@@ -3512,6 +3532,17 @@ function AppInner() {
     }, 6000, "delete");
   },[showSnackbar,showToast]);
 
+  // Run 24: splitting replaces one entry with several that add up to it; undo puts the original back unless something changed since.
+  const splitEntry=useCallback((id,parts)=>{
+    const before=stateRef.current, orig=before.transactions.find(x=>x.id===id);
+    if (!orig) return false;
+    const r=splitTransaction(orig,parts); if (!r.ok) return false;
+    const next={...before,transactions:before.transactions.flatMap(x=>x.id===id?r.entries:[x])};
+    setState(next);
+    showSnackbar(t("split.done",{ n:r.entries.length }),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },8000,"split");
+    return true;
+  },[showSnackbar,showToast]);
+
   const deleteTransaction=useCallback((id)=>{
     const removed=stateRef.current.transactions.find(t=>t.id===id);
     if (!removed) return;
@@ -3915,6 +3946,7 @@ function AppInner() {
             onClose={()=>setViewTxn(null)}
             onEdit={()=>{ openAdd(viewTxn,viewTxn.id); setViewTxn(null); }}
             onDuplicate={()=>{ openAdd({...viewTxn,date:today(),id:undefined},null); setViewTxn(null); }}
+            onSplit={parts=>{ if (splitEntry(viewTxn.id,parts)) setViewTxn(null); }}
             onDelete={()=>{ deleteTransaction(viewTxn.id); setViewTxn(null); }}
             onLinkBill={x=>{
               // The entry becomes that bill's payment: it takes the bill's name, category and frequency (the fields that identify
@@ -4999,7 +5031,42 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
 }
 
 // ─── S6: Transaction Detail Sheet with Merchant Intelligence ─────────────────
-function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClose, onEdit, onDuplicate, onDelete, onLinkBill, onAssignBill }) {
+// Run 24: the split form inside the entry's detail sheet: pick a category and an amount per part; Save is enabled only when the parts add up exactly.
+function SplitPanel({ txn, currency, onSplit }) {
+  const sameKind=CATEGORIES.filter(c=>c.income===(txn.type==="income"));
+  const other=(sameKind.find(c=>c.id!==txn.category)||sameKind[0]).id;
+  const [open,setOpen]=useState(false);
+  const [parts,setParts]=useState([{ category:txn.category, amount:"" },{ category:other, amount:"" }]);
+  const parsed=parts.map(p=>({ category:p.category, amount:parseMoney(p.amount)||0 }));
+  const check=splitTransaction(txn,parsed,()=>0);
+  const left=Math.round(txn.amount*100)-parsed.reduce((s,p)=>s+Math.round(p.amount*100),0);
+  const set=(i,k,v)=>setParts(ps=>ps.map((p,j)=>j===i?{...p,[k]:v}:p));
+  return (
+    <div style={{marginBottom:8}} data-section="split">
+      <button className="btn btn-ghost btn-full" data-section="split-open" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>{t("split.btn")}</button>
+      {open&&(
+        <div style={{marginTop:8}}>
+          <div className="list-sub" style={{marginBottom:8}}>{t("split.sub",{ total:fmt(txn.amount,currency) })}</div>
+          {parts.map((p,i)=>(
+            <div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
+              <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("split.partCat",{ n:i+1 })} value={p.category} onChange={e=>set(i,"category",e.target.value)}>
+                {sameKind.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}
+              </select>
+              <input className="field-input" style={{width:110}} inputMode="decimal" aria-label={t("split.partAmt",{ n:i+1 })} placeholder="0.00" value={p.amount} onChange={e=>set(i,"amount",e.target.value)}/>
+            </div>
+          ))}
+          <div className="list-sub" data-section="split-left" style={{marginBottom:8,fontWeight:600,color:left===0?"var(--pos)":"var(--ink-2)"}}>{t("split.left",{ amount:fmt(left/100,currency) })}</div>
+          <div style={{display:"flex",gap:8}}>
+            {parts.length<SPLIT_MAX&&<button className="btn btn-ghost" style={{flex:1}} data-section="split-add" onClick={()=>setParts(ps=>[...ps,{ category:other, amount:"" }])}>{t("split.add")}</button>}
+            <button className="btn btn-primary" style={{flex:1}} data-section="split-save" disabled={!check.ok} onClick={()=>onSplit(parsed)}>{t("split.save")}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClose, onEdit, onDuplicate, onSplit, onDelete, onLinkBill, onAssignBill }) {
   // Run 9: an ordinary (non-recurring) entry can be marked as the payment of an existing bill — only when the user picks the
   // bill. Same merchant and amount are never enough to link anything automatically.
   // Run 12: once every recurring payment has a bill ("explicit"), any entry can be linked to a bill, moved to another bill,
@@ -5144,6 +5211,7 @@ function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClos
           <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onEdit}><Icon name="edit" size={14}/>{t("common.edit")}</button>
           <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onDuplicate}><Icon name="repeat" size={14}/>{t("detail.duplicate")}</button>
         </div>
+        {onSplit&&!txn.recurring&&!txn.billId&&!txn.debtLink&&txn.amount>0&&<SplitPanel key={txn.id} txn={txn} currency={currency} onSplit={onSplit}/>}
         {myBill&&<div className="list-sub bill-of" style={{margin:"0 2px 8px"}}>{t("bill.paymentOf",{name:maskText(myBill.name)})}</div>}
         {((explicit&&onAssignBill)||(onLinkBill&&bills.length>0))&&(
           <div style={{marginBottom:8}}>

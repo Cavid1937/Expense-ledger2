@@ -48,6 +48,7 @@
     "run24bank.test.mjs": 9,
     "run24mycat.test.mjs": 15,
     "run24sums.test.mjs": 3,
+    "run24split.test.mjs": 11,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -111,7 +112,8 @@
     "e2e_run24_budgetwarn.mjs": 7,
     "e2e_run24_bulk.mjs": 11,
     "e2e_run24_ics.mjs": 6,
-    "e2e_run24_mycat.mjs": 10
+    "e2e_run24_mycat.mjs": 10,
+    "e2e_run24_split.mjs": 12
   }
 }
 
