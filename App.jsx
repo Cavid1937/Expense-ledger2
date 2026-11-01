@@ -2411,8 +2411,9 @@ input[type=number]{-moz-appearance:textfield}
 .date-lbl{font-size:10px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:var(--ink-3)}
 .date-input{background:var(--bg-card);border:1px solid var(--rule);border-radius:5px;padding:7px 9px;font-size:12px;color:var(--ink);font-family:var(--font);width:100%}.date-input:focus{outline:none;border-color:var(--rule-2);box-shadow:0 0 0 3px rgba(0,0,0,0.05)}
 /* Sheet */
-.sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);z-index:80;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn 200ms cubic-bezier(0.22,1,0.36,1)}
-@keyframes fadeIn{from{opacity:0;backdrop-filter:blur(0px)}to{opacity:1;backdrop-filter:blur(12px)}}
+.sheet-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:80;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn 200ms cubic-bezier(0.22,1,0.36,1)}   /* Run 23: a plain dim, no blur (calmer, cheaper on phones) */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: every press answers at once */
 .sheet{background:var(--bg);width:100%;max-width:430px;border-radius:20px 20px 0 0;border-top:1px solid var(--rule);max-height:92vh;overflow-y:auto;animation:sheetRise 320ms cubic-bezier(0.22,1,0.36,1);padding:0 20px 48px;box-shadow:0 -4px 32px rgba(0,0,0,0.12)}
 @keyframes sheetRise{from{transform:translateY(100%);opacity:0.8}to{transform:translateY(0);opacity:1}}
 .sheet-handle{width:32px;height:3px;background:var(--ink-5);border-radius:99px;margin:12px auto 18px}
