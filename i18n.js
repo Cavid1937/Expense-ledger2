@@ -587,6 +587,8 @@ export const MESSAGES = {
   "common.save":   { en: "Save", az: "Yadda saxla", ru: "Сохранить" },
   "common.edit":   { en: "Edit", az: "Redaktə et", ru: "Изменить" },
   "common.delete": { en: "Delete", az: "Sil", ru: "Удалить" },
+  "bill.icsBtn":  { en: "Add upcoming bills to my calendar (.ics)", az: "Yaxın ödənişləri təqvimimə əlavə et (.ics)", ru: "Добавить ближайшие платежи в календарь (.ics)" },
+  "bill.icsNone": { en: "No unpaid bill dates in the next 12 months.", az: "Növbəti 12 ayda ödənilməmiş ödəniş tarixi yoxdur.", ru: "В ближайшие 12 месяцев нет неоплаченных платежей." },
   "ledger.select":     { en: "Select", az: "Seç", ru: "Выбрать" },
   "ledger.selectDone": { en: "Done", az: "Hazır", ru: "Готово" },
   "ledger.selectAll":  { en: "Select all ({n})", az: "Hamısını seç ({n})", ru: "Выбрать все ({n})" },

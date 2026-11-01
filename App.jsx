@@ -1802,6 +1802,27 @@ function scheduleNextDue(s, transactions, now=new Date()) {
   return null;
 }
 
+// Run 24: upcoming unpaid bill dates (next 12 months) as an iCalendar file other calendar apps can import. All-day events, one per
+// date; nothing leaves the device and the ledger is not touched. Text is escaped and lines folded per RFC 5545.
+function icsEscape(s) { return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/\r?\n/g,"\\n").replace(/;/g,"\\;").replace(/,/g,"\\,"); }
+function icsFold(line) { const out=[]; let rest=line; while (rest.length>73) { out.push(rest.slice(0,73)); rest=" "+rest.slice(73); } out.push(rest); return out.join("\r\n"); }
+function billsToIcs(schedules, transactions, now=new Date(), opts={}) {
+  const months=opts.months||12, label=opts.label||((x)=>x.merchant||x.note||x.category), amountText=opts.amountText||((x)=>String(x.amount));
+  const todayStr=localDateStr(now), stamp=now.toISOString().replace(/[-:]/g,"").replace(/\.\d+Z$/,"Z");
+  const ev=[]; let n=0;
+  (Array.isArray(schedules)?schedules:[]).filter(s=>s && s.isActive && s.type==="expense").forEach(s=>{
+    for (let i=0;i<months;i++) {
+      const mon=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i));
+      scheduleMonthStatus(s,transactions,mon,now).remaining.filter(d=>d>=todayStr).forEach(d=>{
+        const next=localDateStr(new Date(parseLocalDate(d).getFullYear(),parseLocalDate(d).getMonth(),parseLocalDate(d).getDate()+1));
+        ev.push(["BEGIN:VEVENT","UID:"+icsEscape(String(s.key)+"-"+d)+"@expense-ledger","DTSTAMP:"+stamp,"DTSTART;VALUE=DATE:"+d.replace(/-/g,""),"DTEND;VALUE=DATE:"+next.replace(/-/g,""),
+          "SUMMARY:"+icsEscape(label(s)+" · "+amountText(s)),"TRANSP:TRANSPARENT","END:VEVENT"].map(icsFold).join("\r\n")); n++;
+      });
+    }
+  });
+  return { text:["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Expense Ledger//Bills//EN","CALSCALE:GREGORIAN",...ev,"END:VCALENDAR"].join("\r\n")+"\r\n", count:n };
+}
+
 // Run 18: how many payments of a bill with an end date are still to come (today or later, none recorded for them yet). null = no end date.
 function billPaymentsLeft(s, transactions, now=new Date()) {
   const end=s && s.bill && s.bill.endDate; if (!end) return null;
@@ -4397,6 +4418,7 @@ function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedu
     </div>
   );
 
+  const ics=billsToIcs(outgoing,transactions,nowD,{ label:x=>maskText(x.merchant||x.note)||catName(x.category), amountText:x=>fmt(x.amount,currency) });   // Run 24
   const dueText=(x)=>{ if (!x.nextDue) return t("rec.noDate"); const d=daysBetween(nowD,x.nextDue); return d===0?t("rec.dueToday"):d===1?t("rec.dueTomorrow"):d<=60?tn("rec.dueInDays",d):t("rec.dueOn",{date:fmtDate(localDateStr(x.nextDue))}); };
   const Row=({x})=>{
     const cat=CAT(x.category)||{id:"other",color:"#98A5B7"};
@@ -4477,6 +4499,12 @@ function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedu
         <div className="label-sm" style={{marginBottom:8}}>{t("rec.paused")}</div>
         <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>{paused.map(x=><Row key={x.key} x={x}/>)}</div>
       </>)}
+      {outgoing.length>0&&(
+        <>
+          <button className="btn btn-ghost btn-full" data-section="bills-ics" disabled={!ics.count} style={{marginBottom:ics.count?14:4}} onClick={()=>downloadFile(ics.text,"text/calendar;charset=utf-8","expense-ledger-bills.ics")}>{t("bill.icsBtn")}</button>
+          {!ics.count&&<div className="list-sub" style={{marginBottom:14}}>{t("bill.icsNone")}</div>}
+        </>
+      )}
       {monthlyOut>0&&(
         <div className="a-card" style={{marginTop:4}}>
           <div className="a-card-title">{t("rec.yearlyByCat")}</div>
