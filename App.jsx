@@ -2108,6 +2108,17 @@ function cumulativeByDay(transactions, mon, now=new Date()) {
   let run=0; return perDay.map((v,i)=>{ run=Math.round((run+v)*100)/100; return i<last?run:null; });
 }
 
+// Run 23: iPhone/iPad in a Safari-engine browser tab (every iPhone browser) that is NOT installed to the Home Screen. Apple may clear such a site's saved
+// data after about a week of non-use, so the app says so once. Installed Home Screen apps are exempt from that rule and are not told.
+const IOS_NOTE_KEY=KEY+"__iosnote";
+function iosBrowserTab() {
+  try {
+    const ios=/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+    const installed=navigator.standalone===true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+    return ios && !installed;
+  } catch { return false; }
+}
+function iosNoteSeen() { try { return localStorage.getItem(IOS_NOTE_KEY)==="1"; } catch { return false; } }
 // ─── SVG icon system ──────────────────────────────────────────────────────────
 const ICONS = {
   food:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v7"/><path d="M7 2v7"/><path d="M10 2v7"/><path d="M4 7a3 3 0 0 0 6 0"/><path d="M7 10v12"/><path d="M17 2c-2.2 2-3 4.5-3 7v2h6V9c0-2.5-.8-5-3-7Z"/><path d="M17 11v11"/></svg>`,
@@ -3130,6 +3141,7 @@ function AppInner() {
   useSheetGestures();
   // Dismissing the backup reminder hides it for this visit only; it is worked out from the saved state on every render.
   const [backupDismissed, setBackupDismissed] = useState(false);
+  const [iosNote, setIosNote] = useState(()=>iosBrowserTab() && !iosNoteSeen());
   const backupReminder = backupReminderDue(state);
   const snackTimer=useRef(null);
   const snackActive=useRef(false);   // is an undo window currently open?
@@ -3561,6 +3573,13 @@ function AppInner() {
             <span>{t("banner.backupConfirm")}</span>
             <button className="backup-banner-btn" onClick={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}>{t("banner.haveFile")}</button>
             <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label={t("common.dismiss")}>×</button>
+          </div>
+        )}
+
+        {iosNote&&tab==="home"&&(
+          <div className="backup-banner backup-reminder" role="note" data-section="ios-note">
+            <span>{t("banner.iosNote")}</span>
+            <button className="backup-dismiss" onClick={()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } }} aria-label={t("common.dismiss")}>×</button>
           </div>
         )}
 
