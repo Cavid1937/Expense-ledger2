@@ -379,6 +379,8 @@ function normaliseTxn(t, opts={}) {
     ...(debtLinkRef(t.debtLink) ? { debtLink:debtLinkRef(t.debtLink) } : {}),
     // Run 22: an optional trip / group name. Same rule: entries without one keep the shape older versions wrote.
     ...(tripName(t.trip) ? { trip:tripName(t.trip) } : {}),
+    // Run 24: the account the entry was paid from or received into. Optional, same rule; an id this phone does not know is kept as it is.
+    ...(accId(t.account) ? { account:accId(t.account) } : {}),
   };
 }
 // Run 22: a trip is a short free-text label (max 40 characters) on ordinary entries. Anything that is not text gives no trip.
@@ -495,6 +497,74 @@ function readSubcats() { try { const r=localStorage.getItem(SUBCAT_KEY); return 
 function writeSubcats(map) {   // an empty list removes the key instead of keeping an empty shell
   try { const c=cleanSubcats(map); if (!Object.keys(c).length) localStorage.removeItem(SUBCAT_KEY); else localStorage.setItem(SUBCAT_KEY,JSON.stringify({ version:1, byCategory:c })); return true; } catch { return false; }
 }
+// ─── Accounts, balances and transfers (Run 24; see handoff/DESIGN_NOTE_ACCOUNTS_TRANSFERS) ────────────────────────────────
+// Accounts (a card, cash, a bank account) live in their own storage key with the transfers between them. An ordinary entry may carry
+// an optional `account` id. A balance is never stored: opening balance + income − expenses (entries with that account) + transfers in −
+// transfers out, all in whole cents. A transfer is its own record, so it can never count as income or spending.
+const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","bank","other"];
+const accId=(v)=>typeof v==="string" && /^a_[a-z0-9]{3,12}$/.test(v) ? v : "";
+const centsOf=(v)=>{ const n=Number(v); return Number.isFinite(n) ? Math.round(n*100) : 0; };
+function cleanAccountData(raw) {
+  const src=isPlainObject(raw) ? raw : {};
+  const accounts=[], ids=new Set(), names=new Set();
+  (Array.isArray(src.accounts)?src.accounts:[]).forEach(a=>{
+    if (!isPlainObject(a) || accounts.length>=ACC_MAX) return;
+    const id=accId(a.id), name=typeof a.name==="string" ? a.name.trim().replace(/\s+/g," ").slice(0,40) : "";
+    if (!id || !name || ids.has(id) || names.has(name.toLowerCase())) return;
+    const op=isPlainObject(a.opening) ? a.opening : {}, amt=Number(op.amount);
+    ids.add(id); names.add(name.toLowerCase());
+    accounts.push({ id, name, kind:ACC_KINDS.includes(a.kind)?a.kind:"other", opening:{ amount:Number.isFinite(amt)&&Math.abs(amt)<1e12 ? Math.round(amt*100)/100 : 0, date:isValidDateStr(op.date)?op.date:"" }, hidden:a.hidden===true });
+  });
+  const tids=new Set(), transfers=[];
+  (Array.isArray(src.transfers)?src.transfers:[]).forEach(x=>{
+    if (!isPlainObject(x) || transfers.length>=TRANSFER_MAX) return;
+    const id=typeof x.id==="string" && /^t_[a-z0-9]{3,16}$/.test(x.id) ? x.id : "", amt=centsOf(x.amount);
+    if (!id || tids.has(id) || !ids.has(accId(x.from)) || !ids.has(accId(x.to)) || x.from===x.to || !(amt>0) || amt>1e14 || !isValidDateStr(x.date)) return;
+    tids.add(id); transfers.push({ id, from:x.from, to:x.to, amount:amt/100, date:x.date, note:typeof x.note==="string" ? x.note.trim().slice(0,80) : "" });
+  });
+  return { accounts, transfers };
+}
+function mergeAccountData(a, b) {   // by id: what is already here wins; transfers whose accounts are missing are dropped by the cleaner
+  const A=cleanAccountData(a), B=cleanAccountData(b);
+  const haveA=new Set(A.accounts.map(x=>x.id)), haveT=new Set(A.transfers.map(x=>x.id));
+  return cleanAccountData({ accounts:[...A.accounts,...B.accounts.filter(x=>!haveA.has(x.id))], transfers:[...A.transfers,...B.transfers.filter(x=>!haveT.has(x.id))] });
+}
+function readAccounts() { try { const r=localStorage.getItem(ACC_KEY); return r ? cleanAccountData(JSON.parse(r)) : { accounts:[], transfers:[] }; } catch { return { accounts:[], transfers:[] }; } }
+function writeAccounts(data) {
+  try { const c=cleanAccountData(data); if (!c.accounts.length) localStorage.removeItem(ACC_KEY); else localStorage.setItem(ACC_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
+}
+// Balance per account id, in money (exact to the cent). Entries whose account is unknown here are not counted anywhere.
+function accountBalances(data, transactions) {
+  const d=cleanAccountData(data), out={};
+  d.accounts.forEach(a=>{ out[a.id]=centsOf(a.opening.amount); });
+  (transactions||[]).forEach(x=>{ if (!x || !(accId(x.account) in out)) return; const c=centsOf(x.amount); out[x.account]+= x.type==="income" ? c : x.type==="expense" ? -c : 0; });
+  d.transfers.forEach(x=>{ out[x.from]-=centsOf(x.amount); out[x.to]+=centsOf(x.amount); });
+  Object.keys(out).forEach(k=>{ out[k]=out[k]/100; });
+  return out;
+}
+function newAccId(prefix, used) { let id; do { id=prefix+Math.random().toString(36).slice(2,8).replace(/[^a-z0-9]/g,"a").padEnd(6,"a"); } while (used.has(id)); return id; }
+function addAccount(data, name, kind, openingAmount, openingDate) {
+  const d=cleanAccountData(data), n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
+  if (!n) return { data:d, added:false, reason:"empty" };
+  if (n.length>40) return { data:d, added:false, reason:"long" };
+  if (d.accounts.length>=ACC_MAX) return { data:d, added:false, reason:"full" };
+  if (d.accounts.some(a=>a.name.toLowerCase()===n.toLowerCase())) return { data:d, added:false, reason:"dup" };
+  const amt=Number(openingAmount||0); if (!Number.isFinite(amt) || Math.abs(amt)>=1e12) return { data:d, added:false, reason:"amount" };
+  const id=newAccId("a_",new Set(d.accounts.map(a=>a.id)));
+  return { data:cleanAccountData({ accounts:[...d.accounts,{ id, name:n, kind, opening:{ amount:amt, date:openingDate||"" }, hidden:false }], transfers:d.transfers }), added:true, reason:"", id };
+}
+function addTransfer(data, from, to, amount, date, note="") {
+  const d=cleanAccountData(data), c=centsOf(amount);
+  if (!d.accounts.some(a=>a.id===from) || !d.accounts.some(a=>a.id===to)) return { data:d, added:false, reason:"account" };
+  if (from===to) return { data:d, added:false, reason:"same" };
+  if (!(c>0)) return { data:d, added:false, reason:"amount" };
+  if (!isValidDateStr(date)) return { data:d, added:false, reason:"date" };
+  if (d.transfers.length>=TRANSFER_MAX) return { data:d, added:false, reason:"full" };
+  const id=newAccId("t_",new Set(d.transfers.map(x=>x.id)));
+  return { data:cleanAccountData({ accounts:d.accounts, transfers:[{ id, from, to, amount:c/100, date, note },...d.transfers] }), added:true, reason:"", id };
+}
+// Removing an account is refused while any entry or transfer uses it (hide it instead), so nothing is ever orphaned silently.
+function accountInUse(data, id, transactions) { const d=cleanAccountData(data); return (transactions||[]).some(x=>x && x.account===id) || d.transfers.some(x=>x.from===id||x.to===id); }
 // ─── Debts and loans (Run 17) ─────────────────────────────────────────────────
 // Informal DEBTS (person to person) and formal LOANS (a rate and a schedule). All money is whole qapik (integers); interest is rounded
 // half-up to the qapik each month. Stored under their own key, so the main saved-data key is never touched by this feature. The
@@ -1184,7 +1254,7 @@ function parseCsvImport(raw, _bank=false) {
 function planImport(raw, filename="") {
   const text=String(raw).replace(/^\uFEFF/,"");
   const isCSV=/\.csv$/i.test(filename) || text.trimStart().toLowerCase().startsWith("date,");
-  let list=[], settings={}, problems=[], warnings=[], subcategories={}, debtData={ debts:[], loans:[] };
+  let list=[], settings={}, problems=[], warnings=[], subcategories={}, debtData={ debts:[], loans:[] }, accountData={ accounts:[], transfers:[] };
   if (isCSV) {
     const r=parseCsvImport(text);
     if (r.error) return { ok:false, error:r.error };
@@ -1204,6 +1274,7 @@ function planImport(raw, filename="") {
       else { const v=Object.values(parsed).find(v=>Array.isArray(v) && v.length>0 && isPlainObject(v[0]) && v[0].amount!==undefined); if (v) list=v; }
       const v=validateSettings(parsed); settings=v.settings; problems=v.problems; warnings=v.warnings.slice();
       subcategories=cleanSubcats(parsed.subcategories);   // Run 16: the user's own subcategory suggestions (optional)
+      accountData=cleanAccountData({ accounts:parsed.accounts, transfers:parsed.transfers });   // Run 24: accounts and transfers (optional)
       debtData=cleanDebtData({ debts:parsed.debts, loans:parsed.loans });   // Run 17: debts and loans (optional)
       // Run 13: an entry list that is present but not a list used to be skipped without a word when the file also held
       // settings (and had no entry count to disagree with). The user is told no entries could be read.
@@ -1238,7 +1309,7 @@ function planImport(raw, filename="") {
   // never replace the ledger: Replace would otherwise delete every transaction on the device.
   // Run 8: nor can a file where some rows were refused — Replace would quietly drop those rows along with the whole ledger.
   // Merge (adds the readable rows) stays available; the sheet explains why Replace is not offered.
-  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings, subcategories, debtData };
+  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings, subcategories, debtData, accountData };
 }
 
 // Run 8: whether an entry repeats (and how often) is part of what it is, so a monthly bill and an identical one-off purchase
@@ -1299,10 +1370,12 @@ function buildBackup(state, now=new Date().toISOString()) {
   const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
   const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
   const dd=cleanDebtData(state.debtData);   // Run 17: debts and loans, optional in the same way
+  const acc=cleanAccountData(state.accountData);   // Run 24: accounts and transfers, optional in the same way
   const ccats=cleanCustomCats(state.customCats);   // Run 24: the user's own categories, optional in the same way
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
     transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}),
     ...(ccats.length ? { customCategories:ccats } : {}),
+    ...(acc.accounts.length ? { accounts:acc.accounts, ...(acc.transfers.length ? { transfers:acc.transfers } : {}) } : {}),
     ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
 }
 
@@ -3479,11 +3552,11 @@ function AppInner() {
     return { ...s, transactions:r.transactions, bills:r.bills };
   };
   const addTransaction=useCallback((txn)=>{
-    const { billChoice, wallet, trip, ...data }=txn, id=Date.now()+Math.random();
+    const { billChoice, wallet, trip, account, ...data }=txn, id=Date.now()+Math.random();
     // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
     // bill the entry may have created, and refuses if something else changed in the meantime, like the other undo windows.
     const before=stateRef.current;
-    const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
+    const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),...(accId(account)?{account:accId(account)}:{}),id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
     setState(next);
     const cross=budgetCrossing(before.transactions,next.transactions,next.budgets,{...data});
     const msg=cross ? t("toast.recorded")+". "+t(cross.kind==="over"?"budget.crossOver":"budget.crossNear",{ cat:catName(data.category), pct:cross.pct }) : t("toast.recorded");
@@ -3504,9 +3577,9 @@ function AppInner() {
     const dd=readDebts(), d=dd.debts.find(x=>x.id===tx.debtLink.debtId); return !!(d && d.payments.some(p=>p.id===tx.debtLink.paymentId)); };
   const updateTransaction=useCallback((id,txn)=>{
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
-    const { billChoice, wallet, trip, ...data }=txn;
+    const { billChoice, wallet, trip, account, ...data }=txn;
     // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored). Run 22: same for the trip.
-    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}) }; })},id,billChoice));
+    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}) }; })},id,billChoice));
     showToast(t("toast.updated"));
   },[showToast]);
 
@@ -3660,7 +3733,7 @@ function AppInner() {
   const exportJSON=useCallback(()=>{
     if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: native shell → the hand-over, never a dead download link
     const now=new Date().toISOString();
-    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
+    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),accountData:readAccounts()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
     // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
     // It is not a confirmed backup until the user says they have the file (see backupReminderDue).
     setState(s=>({...s,lastBackup:now}));
@@ -3672,7 +3745,7 @@ function AppInner() {
   // the phone. Cancelled → nothing changes. No file sharing on this device → falls back to the download above.
   const shareBackup=useCallback(async ()=>{
     const now=new Date().toISOString();
-    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats()},now),null,2),`ledger-backup-${today()}.json`);
+    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),accountData:readAccounts()},now),null,2),`ledger-backup-${today()}.json`);
     if (r==="unsupported") { exportJSON(); return; }
     if (r==="failed") { showToast(t("io.shareFailed"),6000); return; }   // Run 13: told, and nothing is recorded
     if (r!=="shared") return;
@@ -3713,7 +3786,7 @@ function AppInner() {
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
     const restore=(k,raw)=>{ try { if (raw===undefined) return; if (raw===null) localStorage.removeItem(k); else localStorage.setItem(k,raw); } catch {} };
-    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY) };
+    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY) };
     const catsHad=currentCustomCats();
     const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); applyCustomCats(catsHad); };
     // Run 24: the file's own categories are added to the ones on this phone (by id; a name already in use is skipped, never renamed).
@@ -3726,6 +3799,7 @@ function AppInner() {
     const hasSub=plan.subcategories && Object.keys(plan.subcategories).length;
     // Run 17: debts and loans from the file are added by id (what is already on this phone is never overwritten).
     const hasDebts=plan.debtData && (plan.debtData.debts.length || plan.debtData.loans.length);
+    if (plan.accountData && plan.accountData.accounts.length && !writeAccounts(mergeAccountData(readAccounts(),plan.accountData))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
     if (hasSub && !writeSubcats(mergeSubcats(readSubcats(),plan.subcategories))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
     if (hasDebts && !writeDebts(mergeDebtData(readDebts(),plan.debtData))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
     setState(next);
@@ -4729,6 +4803,8 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   const [wallet,   setWallet]   = useState(isEditing ? walletId(prefill?.wallet) : (prefill && "wallet" in prefill ? walletId(prefill.wallet) : lastWallet(transactions)));
   // Run 22: optional trip / group name (free text; earlier names are suggested). Editing keeps the entry's own.
   const [trip, setTrip] = useState(tripName(prefill?.trip));
+  const accData=useMemo(()=>readAccounts(),[]);   // Run 24: optional account (card, cash...) the entry belongs to
+  const [account, setAccount] = useState(accId(prefill?.account));
   const knownTrips=useMemo(()=>tripTotals(transactions).map(x=>x.name),[transactions]);
   // Run 16: the user's own subcategory suggestions (separate storage key; entries keep the text itself).
   const [mySubs, setMySubs] = useState(()=>readSubcats());
@@ -4750,11 +4826,11 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
   // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
   // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
-  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip }).current;
+  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account }).current;
   const [askDiscard, setAskDiscard] = useState(false);
   const defaultCat=type===initial.type ? initial.catId : (type==="income"?"salary":"food");
   const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
-    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip;
+    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account;
   const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
 
   const expCats=CATEGORIES.filter(c=>!c.income);
@@ -4811,7 +4887,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
       const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
       if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
     }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,
       billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
@@ -4957,6 +5033,13 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
           <input id="txn-trip" className="field-input" list="txn-trip-list" value={trip} maxLength={40} autoComplete="off" placeholder={t("trip.placeholder")} onChange={e=>setTrip(e.target.value)}/>
           <datalist id="txn-trip-list">{knownTrips.map(n=><option key={n} value={n}/>)}</datalist>
         </div>
+        {accData.accounts.length>0&&(<div className="field" data-section="add-account">
+          <label className="field-lbl" htmlFor="txn-account">{t("acc.field")} {optional}</label>
+          <select id="txn-account" className="field-input" value={account} onChange={e=>setAccount(e.target.value)}>
+            <option value="">{t("acc.none")}</option>
+            {accData.accounts.filter(a=>!a.hidden||a.id===account).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </div>)}
 
         <div className="field">
           <label className="field-lbl" htmlFor="txn-note">{t("add.note")} {optional}</label>
@@ -5286,6 +5369,84 @@ function MyCategories({ state, onChanged, showToast }) {
   );
 }
 
+// Run 24: accounts with derived balances, and transfers between them (a transfer is never income or spending).
+function MyAccounts({ state, currency, showToast }) {
+  const [data,setData]=useState(()=>readAccounts());
+  const [name,setName]=useState(""), [kind,setKind]=useState("card"), [opening,setOpening]=useState("");
+  const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState("");
+  const bal=useMemo(()=>accountBalances(data,state.transactions),[data,state.transactions]);
+  const shown=data.accounts.filter(a=>!a.hidden), kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
+  const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
+  const errs=()=>({ empty:t("acc.err.empty"), long:t("acc.err.long"), full:t("acc.err.full"), dup:t("acc.err.dup"), amount:t("acc.err.amount"), same:t("acc.err.same"), account:t("acc.err.account"), date:t("acc.err.date") });
+  const commit=(next)=>{ if (!writeAccounts(next)) { showToast(t("acc.saveFailed"),5000); return false; } setData(readAccounts()); return true; };
+  const add=()=>{
+    const op=opening.trim()==="" ? 0 : parseMoney(opening);
+    if (op===null) { showToast(t("acc.err.amount"),4000); return; }
+    const r=addAccount(data,name,kind,op,op?today():"");
+    if (!r.added) { showToast(errs()[r.reason],4000); return; }
+    if (commit(r.data)) { setName(""); setOpening(""); showToast(t("acc.added")); }
+  };
+  const toggleHidden=(a)=>commit({ accounts:data.accounts.map(x=>x.id===a.id?{...x,hidden:!x.hidden}:x), transfers:data.transfers });
+  const remove=(a)=>{
+    if (accountInUse(data,a.id,state.transactions)) { showToast(t("acc.inUse"),5000); return; }
+    if (commit({ accounts:data.accounts.filter(x=>x.id!==a.id), transfers:data.transfers })) showToast(t("acc.removed"));
+  };
+  const transfer=()=>{
+    const v=parseMoney(amt);
+    const r=addTransfer(data,from||shown[0]?.id,to||shown[1]?.id,v===null?0:v,today());
+    if (!r.added) { showToast(errs()[r.reason],4000); return; }
+    if (commit(r.data)) { setAmt(""); showToast(t("acc.transferDone")); }
+  };
+  const nameOf=(id)=>(data.accounts.find(a=>a.id===id)||{}).name||"?";
+  return (
+    <div data-section="my-accounts">
+      <div className="settings-section-lbl" style={{marginTop:14}}>{t("acc.title")}</div>
+      <div className="list-sub" style={{marginBottom:8}}>{t("acc.sub")}</div>
+      {data.accounts.map(a=>(
+        <div key={a.id} className="settings-row" data-account={a.id} style={a.hidden?{opacity:0.7}:undefined}>
+          <div style={{minWidth:0}}>
+            <div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{a.name}{a.hidden?" · "+t("acc.hidden"):""}</div>
+            <div className="settings-row-sub">{kindName[a.kind]} · <strong data-balance={a.id}>{fmt(bal[a.id]||0,currency)}</strong></div>
+          </div>
+          <div style={{display:"flex",gap:6,flexShrink:0}}>
+            <button className="chip" onClick={()=>toggleHidden(a)}>{t(a.hidden?"acc.show":"acc.hide")}</button>
+            <button className="chip" aria-label={t("acc.remove",{name:a.name})} onClick={()=>remove(a)}>{t("mycat.removeBtn")}</button>
+          </div>
+        </div>
+      ))}
+      {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
+      <div className="field"><label className="field-lbl" htmlFor="acc-name">{t("acc.name")}</label>
+        <input id="acc-name" className="field-input" value={name} maxLength={40} onChange={e=>setName(e.target.value)}/></div>
+      <div className="filter-bar" role="group" aria-label={t("acc.kind")}>
+        {ACC_KINDS.map(k=>(<button key={k} className={`chip${kind===k?" on":""}`} aria-pressed={kind===k} onClick={()=>setKind(k)}>{kindName[k]}</button>))}
+      </div>
+      <div className="field"><label className="field-lbl" htmlFor="acc-open">{t("acc.opening")}</label>
+        <input id="acc-open" className="field-input" inputMode="decimal" placeholder="0.00" value={opening} onChange={e=>setOpening(cleanMoneyText(e.target.value))}/></div>
+      <button className="btn btn-ghost btn-full" data-section="acc-add" disabled={!name.trim()} onClick={add}>{t("acc.add")}</button>
+      {shown.length>1&&(
+        <div data-section="acc-transfer" style={{marginTop:14}}>
+          <div className="settings-section-lbl">{t("acc.transferTitle")}</div>
+          <div className="list-sub" style={{marginBottom:8}}>{t("acc.transferSub")}</div>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
+            <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("acc.from")} value={from||shown[0].id} onChange={e=>setFrom(e.target.value)}>{shown.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+            <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("acc.to")} value={to||shown[1].id} onChange={e=>setTo(e.target.value)}>{shown.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <input className="field-input" style={{flex:1}} inputMode="decimal" aria-label={t("acc.amount")} placeholder="0.00" value={amt} onChange={e=>setAmt(cleanMoneyText(e.target.value))}/>
+            <button className="btn btn-primary" data-section="acc-transfer-go" disabled={!amt.trim()} onClick={transfer}>{t("acc.transferGo")}</button>
+          </div>
+        </div>
+      )}
+      {data.transfers.slice(0,5).map(x=>(
+        <div key={x.id} className="settings-row" data-transfer={x.id}>
+          <div style={{minWidth:0}}><div className="settings-row-title">{fmt(x.amount,currency)}</div><div className="settings-row-sub">{nameOf(x.from)} → {nameOf(x.to)} · {fmtDate(x.date)}</div></div>
+          <button className="chip" aria-label={t("acc.removeTransfer")} onClick={()=>{ if (commit({ accounts:data.accounts, transfers:data.transfers.filter(y=>y.id!==x.id) })) showToast(t("acc.transferRemoved")); }}>{t("mycat.removeBtn")}</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
   const { currency,safeToSpend={} }=state;
   const [curSym,      setCurSym]      = useState(currency);
@@ -5303,6 +5464,7 @@ function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendCh
           <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-label={t("safe.title")} tabIndex={0}><div className="toggle-knob"/></div>
         </div>
 
+        <MyAccounts state={state} currency={state.currency} showToast={showToast}/>
         <MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/>
 
         {/* Currency */}
