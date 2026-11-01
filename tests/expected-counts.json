@@ -104,7 +104,8 @@
     "e2e_run23_ios.mjs": 10,
     "e2e_run24_currency.mjs": 8,
     "e2e_run24_cat.mjs": 7,
-    "e2e_run24_budgetwarn.mjs": 7
+    "e2e_run24_budgetwarn.mjs": 7,
+    "e2e_run24_bulk.mjs": 11
   }
 }
 

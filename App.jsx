@@ -3344,6 +3344,28 @@ function AppInner() {
     showToast(t("toast.updated"));
   },[showToast]);
 
+  // Run 24: several entries removed in one step. They share one undo window ("N transactions deleted"); entries tied to a debt
+  // repayment are skipped and counted in one notice, exactly as single deletes refuse them.
+  const deleteMany=useCallback((ids)=>{
+    const want=new Set((ids||[]).map(String));
+    const all=stateRef.current.transactions.filter(x=>want.has(String(x.id)));
+    const gone=all.filter(x=>!debtLinked(x.id)), kept=all.length-gone.length;
+    if (!gone.length) { if (kept) showToast(t("debt.linkedLocked"),5000); return; }
+    const goneIds=new Set(gone.map(x=>String(x.id)));
+    setState(s=>({...s,transactions:s.transactions.filter(x=>!goneIds.has(String(x.id)))}));
+    if (!snackActive.current || snackKind.current!=="delete") undoBuffer.current=[];
+    undoBuffer.current.push(...gone);
+    const batch=[...undoBuffer.current];
+    showSnackbar(tn("toast.deleted",batch.length)+(kept?". "+t("debt.linkedLocked"):""),()=>{
+      setState(s=>{
+        const have=new Set(s.transactions.map(x=>String(x.id)));
+        const back=batch.filter(x=>!have.has(String(x.id)));
+        return back.length ? {...s,transactions:[...back,...s.transactions].sort((a,b)=>b.date.localeCompare(a.date))} : s;
+      });
+      undoBuffer.current=[];
+    }, 6000, "delete");
+  },[showSnackbar,showToast]);
+
   const deleteTransaction=useCallback((id)=>{
     const removed=stateRef.current.transactions.find(t=>t.id===id);
     if (!removed) return;
@@ -3625,7 +3647,7 @@ function AppInner() {
           {tab==="home"      && <HomePage transactions={spendTxns} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
-          {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
+          {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={spendState} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
@@ -4128,7 +4150,9 @@ function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
 }
 
 // ─── Ledger Page ──────────────────────────────────────────────────────────────
-function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd }) {
+function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onEdit, onView, onAdd }) {
+  const [selMode, setSelMode] = useState(false);          // Run 24: select several entries, then delete them together (undo stays available)
+  const [picked,  setPicked]  = useState(()=>new Set());
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [catFilter,  setCatFilter]  = useState("all");
@@ -4210,6 +4234,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
         <button className={`chip${(showDates||hasDateFilter)?" on":""}`} aria-pressed={!!(showDates||hasDateFilter)} onClick={()=>setShowDates(s=>!s)}>
           <Icon name="calendar" size={11}/> {t("ledger.date")}
         </button>
+        <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
         {(hasCatFilter||hasDateFilter||typeFilter!=="all"||walletFilter!=="all"||tripFilter!=="all")&&(
           <button className="chip on" style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)"}}
             onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");setTripFilter("all");}}>{t("ledger.clear")} ×</button>
@@ -4249,7 +4274,27 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
           <div className="empty-title">{t("ledger.noResults")}</div>
           <div className="empty-body">{t("ledger.noResultsBody")}</div>
         </div>
-      ):(
+      ):selMode?(()=>{
+        const shown=filtered.filter(x=>picked.has(String(x.id))), allOn=shown.length===filtered.length;
+        return (
+          <div data-section="tx-select">
+            <div className="filter-bar" style={{position:"sticky",top:0,zIndex:2,background:"var(--bg)",paddingBottom:6}}>
+              <button className="chip" data-section="tx-select-all" onClick={()=>setPicked(allOn?new Set():new Set(filtered.map(x=>String(x.id))))}>{t(allOn?"ledger.selectNone":"ledger.selectAll",{n:filtered.length})}</button>
+              <button className="chip on" data-section="tx-select-delete" disabled={!shown.length} style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)",opacity:shown.length?1:0.5}}
+                onClick={()=>{ onDeleteMany(shown.map(x=>x.id)); setPicked(new Set()); setSelMode(false); }}>{t("ledger.deleteSel",{n:shown.length})}</button>
+            </div>
+            <div className="txn-list">
+              {filtered.map(x=>{ const on=picked.has(String(x.id)); return (
+                <button key={x.id} className="list-row" role="checkbox" aria-checked={on} data-picked={on?"1":"0"} style={{width:"100%",textAlign:"left",font:"inherit",display:"flex",alignItems:"center",gap:10,background:on?"var(--accent-bg, rgba(0,0,0,0.05))":"none",border:"none",borderBottom:"1px solid var(--rule)",padding:"10px 4px",cursor:"pointer"}}
+                  onClick={()=>setPicked(p=>{ const n=new Set(p); const k=String(x.id); n.has(k)?n.delete(k):n.add(k); return n; })}>
+                  <span aria-hidden="true" style={{width:20,height:20,borderRadius:6,border:"2px solid var(--ink-3)",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"none"}}>{on?<Icon name="check" size={13}/>:null}</span>
+                  <span style={{flex:1,minWidth:0}}><span style={{display:"block",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(x.merchant||x.note)||catName(x.category)}</span><span className="list-sub">{fmtDate(x.date)}</span></span>
+                  <span style={{fontWeight:600}}>{x.type==="income"?"+":"−"}{fmt(x.amount,currency)}</span>
+                </button>); })}
+            </div>
+          </div>
+        );
+      })():(
         <GroupedTxns txns={filtered} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView}/>
       )}
       {showCatSheet&&(
