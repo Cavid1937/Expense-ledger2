@@ -724,7 +724,7 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
     else {
       const inc=win.filter(x=>x.type==="income").reduce(addAmt,0), exp=win.filter(x=>x.type==="expense").reduce(addAmt,0);
       if (!(inc>0)) numbers.push({ id:"noIncome" });
-      else { const pct=Math.round(exp/inc*100); numbers.push(exp<=inc ? { id:"spent", pct, kept:100-pct } : { id:"over", pct }); }
+      else { const pct=Math.round(exp/inc*100); numbers.push(exp<=inc ? { id:"spent", pct, kept:100-pct } : { id:"over", pct:Math.max(101,pct) }); }
     }
   }
   if (future>0) numbers.push({ id:"future", n:future });
@@ -736,7 +736,7 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
   }
   const monKey=(d)=>d.getFullYear()*12+d.getMonth(), curK=monKey(now);
   const incBy={}; let firstK=null;
-  past.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); if (firstK===null||k<firstK) firstK=k; if (x.type==="income") incBy[k]=(incBy[k]||0)+(Number(x.amount)||0); });
+  past.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); if (firstK===null||k<firstK) firstK=k; if (x.type==="income") incBy[k]=Math.round(((incBy[k]||0)+(Number(x.amount)||0))*100)/100; });
   if (firstK!==null) {
     const from=Math.max(firstK,curK-6), months=[]; for (let k=from;k<curK;k++) months.push(k);
     if (months.length>=4) {
@@ -766,12 +766,13 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
   // only with all three earlier months present; the biggest rise only. R10: interest still to pay on each running loan (qapik).
   {
     const spend=forSpending(past.filter(x=>x.type==="expense")), byCat={}, seen=new Set();
-    spend.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); seen.add(k); if (!byCat[x.category]) byCat[x.category]={}; byCat[x.category][k]=(byCat[x.category][k]||0)+(Number(x.amount)||0); });
+    spend.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); seen.add(k); if (!byCat[x.category]) byCat[x.category]={}; byCat[x.category][k]=Math.round(((byCat[x.category][k]||0)+(Number(x.amount)||0))*100)/100; });
     if ([1,2,3].every(i=>seen.has(curK-i))) {
       let best=null;
       Object.keys(byCat).forEach(c=>{
-        const cur=byCat[c][curK]||0, avg=([1,2,3].reduce((s,i)=>s+(byCat[c][curK-i]||0),0))/3;
-        if (avg>0 && cur>=1.5*avg && cur-avg>=20 && (!best || cur-avg>best.d)) best={ d:cur-avg, id:"catUp", cat:c, pct:Math.round((cur/avg-1)*100) };
+        // Whole cents, no division: "at least 50% above the average of 3 months" is 2×current ≥ sum of the 3 months, and "20 or more above" is 3×current − sum ≥ 60.
+        const curC=Math.round((byCat[c][curK]||0)*100), prevC=[1,2,3].reduce((s,i)=>s+Math.round((byCat[c][curK-i]||0)*100),0);
+        if (prevC>0 && 2*curC>=prevC && 3*curC-prevC>=6000 && (!best || (3*curC-prevC)/3>best.d)) best={ d:(3*curC-prevC)/3, id:"catUp", cat:c, pct:Math.round((curC*3/prevC-1)*100) };
       });
       if (best) numbers.push({ id:best.id, cat:best.cat, pct:best.pct });
     }
