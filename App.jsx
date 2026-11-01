@@ -1806,8 +1806,8 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bil
   // laterExp is the part of it dated after today, shown on the card so it is not mistaken for money already spent.
   const { totalExp:curExp, plannedExp:laterExp }=calcMonthSummary(transactions,mon,prevMon(),now);
   const monthInc=transactions.filter(t=>t.type==="income"&&t.date.startsWith(mon));
-  const curInc=monthInc.filter(t=>t.date<=todayStr).reduce((s,t)=>s+t.amount,0);
-  const expectedInc=monthInc.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
+  const curInc=sumCents(monthInc.filter(t=>t.date<=todayStr));          // Run 22 audit: whole cents
+  const expectedInc=sumCents(monthInc.filter(t=>t.date>todayStr));
   const p=monthProgress(mon,now);
 
   const schedules=buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense");
@@ -1826,8 +1826,9 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bil
   const effectiveSavingsTarget=Math.max(savingsTarget,goalContributions);
   const goalContributionActive=goalContributions>savingsTarget && goalContributions>0;
 
-  const disposable=curInc-effectiveSavingsTarget;
-  const remaining=disposable-curExp-futureCommitments;
+  const cents2=(x)=>Math.round(x*100)/100;   // Run 22 audit: no floating-point crumbs (5e-17 instead of 0)
+  const disposable=cents2(curInc-effectiveSavingsTarget);
+  const remaining=cents2(disposable-curExp-futureCommitments);
   const dailyAllowance=p.daysRemaining>0 ? remaining/p.daysRemaining : 0;
 
   return {
