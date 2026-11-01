@@ -652,7 +652,7 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
     const days=new Set(win.map(x=>x.date)).size;
     if (days<14 || win.length<15) numbers.push({ id:"incomplete", days });
     else {
-      const inc=win.filter(x=>x.type==="income").reduce((a,x)=>a+x.amount,0), exp=win.filter(x=>x.type==="expense").reduce((a,x)=>a+x.amount,0);
+      const inc=win.filter(x=>x.type==="income").reduce(addAmt,0), exp=win.filter(x=>x.type==="expense").reduce(addAmt,0);
       if (!(inc>0)) numbers.push({ id:"noIncome" });
       else { const pct=Math.round(exp/inc*100); numbers.push(exp<=inc ? { id:"spent", pct, kept:100-pct } : { id:"over", pct }); }
     }
@@ -1384,8 +1384,8 @@ function calcMerchantProfile(merchant, transactions) {
   // Last 30 / previous 30 days
   const now30 = localDateStr(new Date(Date.now()-30*86400000));
   const prev30 = localDateStr(new Date(Date.now()-60*86400000));
-  const last30 = txns.filter(t=>t.date>=now30).reduce((s,t)=>s+t.amount,0);
-  const prev30total = txns.filter(t=>t.date>=prev30&&t.date<now30).reduce((s,t)=>s+t.amount,0);
+  const last30 = txns.filter(t=>t.date>=now30).reduce(addAmt,0);
+  const prev30total = txns.filter(t=>t.date>=prev30&&t.date<now30).reduce(addAmt,0);
 
   // Visit frequency
   const gaps = [];
@@ -1435,8 +1435,8 @@ function calcMerchantProfile(merchant, transactions) {
   // Spending trend (compare last 3 txns to previous 3)
   let spendingTrend = "stable";
   if (txns.length >= 6) {
-    const recent3 = txns.slice(-3).reduce((s,t)=>s+t.amount,0)/3;
-    const prev3   = txns.slice(-6,-3).reduce((s,t)=>s+t.amount,0)/3;
+    const recent3 = txns.slice(-3).reduce(addAmt,0)/3;
+    const prev3   = txns.slice(-6,-3).reduce(addAmt,0)/3;
     if (prev3 > 0) {
       const delta = (recent3-prev3)/prev3*100;
       if (delta > 10) spendingTrend = "increasing";
@@ -1491,6 +1491,8 @@ function comparisonWindow(mon, prv, now=new Date()) {
 // (see comparisonWindow); prevFullExp = the whole previous month, for display.
 // Run 22 (formula audit): the sum of entry amounts in whole cents. Adding 0.1 ten times in floating point gives 0.9999999999999999, which
 // would sit just under an exact budget of 1.00; rounding each amount to cents first makes the total exact.
+// Run 24: reducer that keeps a running total exact to the cent (0.1 + 0.2 stays 0.3), for the plain sums that used to add raw decimals.
+const addAmt=(s,t)=>Math.round((s+(Number(t&&t.amount)||0))*100)/100;
 function sumCents(list) { return (list||[]).reduce((s,t)=>s+Math.round((Number(t.amount)||0)*100),0)/100; }
 function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
   const isExp=t=>t.type==="expense", isInc=t=>t.type==="income", inMon=t=>t.date.startsWith(mon);
@@ -1578,8 +1580,8 @@ function forecastCore(transactions, bills, now) {
   const expenses=transactions.filter(t=>t.type==="expense");
   if (!expenses.length) return { available:false, reason:"history" };
   const inMon=expenses.filter(t=>t.date.startsWith(mon));
-  const spentSoFar=inMon.filter(t=>t.date<=todayStr).reduce((s,t)=>s+t.amount,0);
-  const plannedLater=inMon.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
+  const spentSoFar=inMon.filter(t=>t.date<=todayStr).reduce(addAmt,0);
+  const plannedLater=inMon.filter(t=>t.date>todayStr).reduce(addAmt,0);
   let commitments=0;
   buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense").forEach(s=>{
     const st=scheduleMonthStatus(s,transactions,mon,now);
@@ -1612,7 +1614,7 @@ function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
     const m=new Date(now.getFullYear(),now.getMonth()-k,1), asOf=new Date(m.getFullYear(),m.getMonth(),10,12,0,0), mon=localMonthStr(m);
     const known=transactions.filter(t=>t.date<=localDateStr(asOf));
     const b=forecastCore(known,bills,asOf); if (!b.available) continue;
-    const actual=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon)).reduce((s,t)=>s+t.amount,0);
+    const actual=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon)).reduce(addAmt,0);
     months++; if (actual>=b.low-0.005 && actual<=b.high+0.005) hits++;
   }
   return { ...f, backtest:{ months, hits }, rangeShown:months>=2 && hits*3>=months*2 };
@@ -1647,8 +1649,8 @@ function calcTxnStats(transactions, mon=curMon(), now=new Date()) {
   const done=happenedIn(mon,now);
   const amts=transactions.filter(t=>t.type==="expense"&&done(t)).map(t=>t.amount);
   const isWkend=d=>[0,6].includes(parseLocalDate(d).getDay());
-  const wkdExp=transactions.filter(t=>t.type==="expense"&&done(t)&&!isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
-  const wkndExp=transactions.filter(t=>t.type==="expense"&&done(t)&&isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
+  const wkdExp=transactions.filter(t=>t.type==="expense"&&done(t)&&!isWkend(t.date)).reduce(addAmt,0);
+  const wkndExp=transactions.filter(t=>t.type==="expense"&&done(t)&&isWkend(t.date)).reduce(addAmt,0);
   return { count:amts.length, avgTxn:amts.length?amts.reduce((s,a)=>s+a,0)/amts.length:0, medTxn:median(amts), weekdayExp:wkdExp, weekendExp:wkndExp };
 }
 
@@ -1663,8 +1665,8 @@ function calcWeekdayWeekend(transactions, mon=curMon(), now=new Date()) {
   const lastStr=p.daysPassed>0 ? `${mon}-${String(p.daysPassed).padStart(2,"0")}` : "";
   const isWkend=d=>[0,6].includes(parseLocalDate(d).getDay());
   const inWindow=transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&t.date<=lastStr);
-  const weTotal=inWindow.filter(t=>isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
-  const wdTotal=inWindow.filter(t=>!isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
+  const weTotal=inWindow.filter(t=>isWkend(t.date)).reduce(addAmt,0);
+  const wdTotal=inWindow.filter(t=>!isWkend(t.date)).reduce(addAmt,0);
   const weAvg=weDays>0 ? weTotal/weDays : null, wdAvg=wdDays>0 ? wdTotal/wdDays : null;
   let heavier=null;
   if (weAvg!==null && wdAvg!==null && (weTotal>0 || wdTotal>0)) {
@@ -2090,7 +2092,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
   const insights=[];
   const empty={ insights, anomalies:[], dayOfWeek:{}, categoryTrends:[], correlations:[] };
   if (expenses.length<5) return empty;
-  const sumOf=(l)=>l.reduce((a,t)=>a+t.amount,0);
+  const sumOf=(l)=>l.reduce(addAmt,0);
   const pctChange=(a,b)=>Math.round(((a-b)/b)*100);                       // only called with b>0
   const quantile=(sorted,q)=>{ const i=(sorted.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); };
   const isWeekend=(d)=>[0,6].includes(parseLocalDate(d).getDay());
@@ -4248,7 +4250,7 @@ function GroupedTxns({ txns, currency, onDelete, onEdit, onView, compact }) {
   return (
     <>
       {groups.map(([date,rows])=>{
-        const dayTotal=rows.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+        const dayTotal=rows.filter(t=>t.type==="expense").reduce(addAmt,0);
         return (
           <div key={date} className="txn-group">
             <div className="txn-date-hdr">
@@ -6107,7 +6109,7 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
   const now=curMon();
   const months6=Array.from({length:6},(_,i)=>nMon(5-i));
   // Run 18g: each month shows what was spent AND what came in, so a month is read as a pair, not just a cost.
-  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce((s,t)=>s+t.amount,0),inc:transactions.filter(t=>t.type==="income"&&happenedIn(m)(t)).reduce((s,t)=>s+t.amount,0),isCur:m===now,ym:m}));
+  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce(addAmt,0),inc:transactions.filter(t=>t.type==="income"&&happenedIn(m)(t)).reduce(addAmt,0),isCur:m===now,ym:m}));
   const maxMonth=Math.max(...monthlyData.map(m=>Math.max(m.exp,m.inc)),1);
   const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
   const DAY_LBLS=WEEKDAYS.map((_,i)=>wdName(i,"narrow"));
@@ -6116,14 +6118,14 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
   const calDim=new Date(cy,cm,0).getDate(), calLead=(new Date(cy,cm-1,1).getDay()+6)%7;
   const calDays=Array.from({length:calDim},(_,i)=>{ const ds=`${selectedMon}-${String(i+1).padStart(2,"0")}`;
     const items=expenses.filter(x=>x.date===ds&&done(x));
-    return { date:ds, day:i+1, amt:items.reduce((s,x)=>s+x.amount,0), cats:items.map(x=>catName(x.category)).filter((v,j,arr)=>arr.indexOf(v)===j).join(", "), future:ds>today(), isToday:ds===today() }; });
+    return { date:ds, day:i+1, amt:items.reduce(addAmt,0), cats:items.map(x=>catName(x.category)).filter((v,j,arr)=>arr.indexOf(v)===j).join(", "), future:ds>today(), isToday:ds===today() }; });
   const maxDay=Math.max(...calDays.map(c=>c.amt),1);  const hasTrends = expenses.length>0;
 
   return (
     <div onClick={()=>{setActiveBar(null);setCalDay(null);}}>
       {/* Run 18: the all-time overview is the first thing on Analytics (it moved here from the bottom) */}
         {transactions.length>0&&(()=>{
-          const totalInc=transactions.filter(x=>x.type==="income").reduce((s,x)=>s+x.amount,0), totalExp=transactions.filter(x=>x.type==="expense").reduce((s,x)=>s+x.amount,0);
+          const totalInc=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
           return (
             <div className="a-card" data-section="an-overview">
               <div className="a-card-title">{t("set.overview")}</div>
