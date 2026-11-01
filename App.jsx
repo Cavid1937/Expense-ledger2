@@ -553,6 +553,18 @@ function addAccount(data, name, kind, openingAmount, openingDate) {
   const id=newAccId("a_",new Set(d.accounts.map(a=>a.id)));
   return { data:cleanAccountData({ accounts:[...d.accounts,{ id, name:n, kind, opening:{ amount:amt, date:openingDate||"" }, hidden:false }], transfers:d.transfers }), added:true, reason:"", id };
 }
+// Rename an account and/or set its opening amount (the date of the opening stays, or becomes the given date when it had none).
+function editAccount(data, id, name, openingAmount, openingDate) {
+  const d=cleanAccountData(data), cur=d.accounts.find(a=>a.id===id);
+  if (!cur) return { data:d, edited:false, reason:"account" };
+  const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
+  if (!n) return { data:d, edited:false, reason:"empty" };
+  if (n.length>40) return { data:d, edited:false, reason:"long" };
+  if (d.accounts.some(a=>a.id!==id && a.name.toLowerCase()===n.toLowerCase())) return { data:d, edited:false, reason:"dup" };
+  const amt=Number(openingAmount); if (!Number.isFinite(amt) || Math.abs(amt)>=1e12) return { data:d, edited:false, reason:"amount" };
+  const accounts=d.accounts.map(a=>a.id!==id ? a : { ...a, name:n, opening:{ amount:Math.round(amt*100)/100, date:a.opening.date||openingDate||"" } });
+  return { data:cleanAccountData({ accounts, transfers:d.transfers }), edited:true, reason:"" };
+}
 function addTransfer(data, from, to, amount, date, note="") {
   const d=cleanAccountData(data), c=centsOf(amount);
   if (!d.accounts.some(a=>a.id===from) || !d.accounts.some(a=>a.id===to)) return { data:d, added:false, reason:"account" };
@@ -5374,7 +5386,7 @@ function MyCategories({ state, onChanged, showToast }) {
 function MyAccounts({ state, currency, showToast }) {
   const [data,setData]=useState(()=>readAccounts());
   const [name,setName]=useState(""), [kind,setKind]=useState("card"), [opening,setOpening]=useState("");
-  const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState("");
+  const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState(""), [editing,setEditing]=useState(null);
   const bal=useMemo(()=>accountBalances(data,state.transactions),[data,state.transactions]);
   const shown=data.accounts.filter(a=>!a.hidden), kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
   const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
@@ -5386,6 +5398,16 @@ function MyAccounts({ state, currency, showToast }) {
     const r=addAccount(data,name,kind,op,op?today():"");
     if (!r.added) { showToast(errs()[r.reason],4000); return; }
     if (commit(r.data)) { setName(""); setOpening(""); showToast(t("acc.added")); }
+  };
+  // The box shows the balance as it is now; the opening amount is moved by the difference, so entries and transfers stay counted.
+  const saveEdit=()=>{
+    const v=editing.bal.trim()==="" ? 0 : parseMoney(editing.bal);
+    if (v===null) { showToast(t("acc.err.amount"),4000); return; }
+    const a=data.accounts.find(x=>x.id===editing.id); if (!a) { setEditing(null); return; }
+    const open=(Math.round(v*100)-Math.round((bal[a.id]||0)*100)+Math.round(a.opening.amount*100))/100;
+    const r=editAccount(data,a.id,editing.name,open,today());
+    if (!r.edited) { showToast(errs()[r.reason],4000); return; }
+    if (commit(r.data)) { setEditing(null); showToast(t("acc.edited")); }
   };
   const toggleHidden=(a)=>commit({ accounts:data.accounts.map(x=>x.id===a.id?{...x,hidden:!x.hidden}:x), transfers:data.transfers });
   const remove=(a)=>{
@@ -5403,15 +5425,27 @@ function MyAccounts({ state, currency, showToast }) {
     <div data-section="my-accounts">
       <div className="settings-section-lbl" style={{marginTop:14}}>{t("acc.title")}</div>
       <div className="list-sub" style={{marginBottom:8}}>{t("acc.sub")}</div>
-      {data.accounts.map(a=>(
+      {data.accounts.map(a=>editing&&editing.id===a.id ? (
+        <div key={a.id} data-account-edit={a.id} style={{padding:"8px 0"}}>
+          <div className="field"><label className="field-lbl" htmlFor="acc-edit-name">{t("acc.name")}</label>
+            <input id="acc-edit-name" className="field-input" value={editing.name} maxLength={40} onChange={e=>setEditing({...editing,name:e.target.value})}/></div>
+          <div className="field"><label className="field-lbl" htmlFor="acc-edit-bal">{t("acc.opening")}</label>
+            <input id="acc-edit-bal" className="field-input" inputMode="decimal" value={editing.bal} onChange={e=>setEditing({...editing,bal:cleanMoneyText(e.target.value)})}/></div>
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setEditing(null)}>{t("common.cancel")}</button>
+            <button className="btn btn-primary" style={{flex:1}} data-section="acc-edit-save" disabled={!editing.name.trim()} onClick={saveEdit}>{t("common.save")}</button>
+          </div>
+        </div>
+      ) : (
         <div key={a.id} className="settings-row" data-account={a.id} style={a.hidden?{opacity:0.7}:undefined}>
           <div style={{minWidth:0}}>
             <div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{a.name}{a.hidden?" · "+t("acc.hidden"):""}</div>
             <div className="settings-row-sub">{kindName[a.kind]} · <strong data-balance={a.id}>{fmt(bal[a.id]||0,currency)}</strong></div>
           </div>
-          <div style={{display:"flex",gap:6,flexShrink:0}}>
+          <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"60%"}}>
             <button className="chip" onClick={()=>toggleHidden(a)}>{t(a.hidden?"acc.show":"acc.hide")}</button>
             <button className="chip" aria-label={t("acc.remove",{name:a.name})} onClick={()=>remove(a)}>{t("mycat.removeBtn")}</button>
+            <button className="chip" data-section="acc-edit" aria-label={t("acc.edit")+": "+a.name} onClick={()=>setEditing({ id:a.id, name:a.name, bal:String(bal[a.id]||0) })}>{t("acc.edit")}</button>
           </div>
         </div>
       ))}

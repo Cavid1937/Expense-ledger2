@@ -52,6 +52,7 @@
     "run24accounts.test.mjs": 15,
     "run24coach.test.mjs": 5,
     "run24patterns.test.mjs": 4,
+    "run24accedit.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -117,7 +118,8 @@
     "e2e_run24_ics.mjs": 6,
     "e2e_run24_mycat.mjs": 10,
     "e2e_run24_split.mjs": 12,
-    "e2e_run24_accounts.mjs": 13
+    "e2e_run24_accounts.mjs": 13,
+    "e2e_run24_accedit.mjs": 7
   }
 }
 

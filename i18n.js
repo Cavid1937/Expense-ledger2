@@ -604,6 +604,8 @@ export const MESSAGES = {
   "acc.removed": { en: "Account removed", az: "Hesab silindi", ru: "Счёт удалён" },
   "acc.remove": { en: "Remove account {name}", az: "{name} hesabını sil", ru: "Удалить счёт {name}" },
   "acc.hidden": { en: "hidden", az: "gizlədilib", ru: "скрыт" },
+  "acc.edit":   { en: "Edit", az: "Dəyiş", ru: "Изменить" },
+  "acc.edited": { en: "Account updated", az: "Hesab yeniləndi", ru: "Счёт обновлён" },
   "acc.hide":   { en: "Hide", az: "Gizlət", ru: "Скрыть" },
   "acc.show":   { en: "Show", az: "Göstər", ru: "Показать" },
   "acc.inUse":  { en: "Entries or transfers use this account, so it cannot be removed. Hide it instead.", az: "Bu hesabdan qeydlər və ya köçürmələr istifadə edir, buna görə silinə bilməz. Əvəzinə gizlədin.", ru: "Этот счёт используется в операциях или переводах, удалить его нельзя. Скройте его." },
