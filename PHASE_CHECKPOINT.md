@@ -422,3 +422,10 @@ Currency chips, per-category totals, budget warnings (80/100%), bulk select+dele
 
 ## Run 24 part 2 - LIVE at 78d4b85 (1 Nov, night)
 Added: bill calendar .ics export, bank-statement CSV layouts, custom categories, exact-cent plain sums, label wording (Label, trip or group), split entry into categories, accounts + derived balances + transfers. Gate 34: logic 50 files 1141/1141; browser 63 files 1087/1087; 0 standby. Remaining: Patterns/coach formula audit beyond sums, Claude-app motion pass, Terms of use (needs owner details + lawyer), lock leftovers (backup prompt before Forgot-PIN removal, fingerprint-branch test), apple-design pass, App.jsx split.
+
+## Run 24 part 3 (2 Nov 2026) - LIVE at 4fe367c
+- Coach cent-exact comparisons, over-income shows 101%, Patterns merges merchant spellings, passkey-safe lock test (all VERIFIED by full gate: logic 1160/1160, browser 1099/1099).
+- Accounts: Edit (rename + balance correction) per row; Preferences accounts/categories in rounded cards; Settings name Save disabled until changed; pressed list rows = soft pill.
+- Motion pass: existing 320 ms sheets/spring dismiss/fades/reduced-motion judged sufficient; NOT built: sheet exit animation, sideways sub-screen slides. Real-phone look unverified.
+- Owner could not reproduce-describe "cannot add names": add worked on live at phone size; rename was the gap (now fixed).
+- Next: Home feel pass, Terms of use (needs owner details), Forgot-PIN backup prompt, App.jsx split.
