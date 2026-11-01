@@ -327,7 +327,22 @@ function normaliseTxn(t, opts={}) {
     ...(loanRef(t.loan) ? { loan:loanRef(t.loan) } : {}),
     // Run 18: a repayment of a person-to-person debt that the user chose to also record as cash flow. Optional, same rule.
     ...(debtLinkRef(t.debtLink) ? { debtLink:debtLinkRef(t.debtLink) } : {}),
+    // Run 22: an optional trip / group name. Same rule: entries without one keep the shape older versions wrote.
+    ...(tripName(t.trip) ? { trip:tripName(t.trip) } : {}),
   };
+}
+// Run 22: a trip is a short free-text label (max 40 characters) on ordinary entries. Anything that is not text gives no trip.
+function tripName(v) { return typeof v==="string" ? v.replace(/[\u0000-\u001f\u007f\s]+/g," ").trim().slice(0,40).trim() : ""; }
+// Expenses per trip (loan instalments count only their interest, like every spending view), whole cents so 0.1 + 0.2 is exactly 0.30.
+// "Baku" and "baku" are one trip; the spelling of the first entry in the list (newest first) is shown. Largest total first.
+function tripTotals(list) {
+  const by=new Map();
+  forSpending(list).forEach(x=>{
+    const n=tripName(x && x.trip); if (!n || x.type==="income") return;
+    const k=n.toLowerCase(), g=by.get(k) || { name:n, cents:0, n:0 };
+    g.cents+=Math.round((Number(x.amount)||0)*100); g.n++; by.set(k,g);
+  });
+  return [...by.values()].map(g=>({ name:g.name, total:g.cents/100, n:g.n })).sort((a,b)=>b.total-a.total || a.name.localeCompare(b.name));
 }
 // Run 17 (owner rule): a loan payment is recorded as the FULL instalment (money paid out). loan.interest is the part that is a real cost
 // (units, 2 decimals) or null when the person does not know the split. Spending views count only the interest; the principal reduces the
@@ -1011,7 +1026,7 @@ function pruneRecoveryCopies(label) {
 // ─── Import / export pipeline (pure: no React, no storage) ───────────────────
 const CSV_COLUMNS = { date:["date"], amount:["amount","amt","value"], type:["type"], category:["category","cat"],
   categoryId:["categoryid","category id","category_id"], subcategory:["subcategory","subcat"], merchant:["merchant"],
-  note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"], wallet:["wallet","paid with"] };
+  note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"], wallet:["wallet","paid with"], trip:["trip","group"] };
 
 function parseCsvImport(raw) {
   const rows=parseCSV(String(raw).replace(/^\uFEFF/,""));
@@ -1027,10 +1042,11 @@ function parseCsvImport(raw) {
     const rec=cell(row,"recurring").toLowerCase();
     const isRec=!!rec && !["no","false","0","none"].includes(rec);
     const wal=walletFromText(cell(row,"wallet"));   // Run 16: free text that is not a wallet gives none, never an error
+    const trp=tripName(cell(row,"trip"));            // Run 22
     return { id:Date.now()+i+Math.random(), type:cell(row,"type"), amount:cell(row,"amount"),
       category:cell(row,"categoryId")||cell(row,"category"), subcategory:cell(row,"subcategory"), merchant:cell(row,"merchant"),
       note:cell(row,"note"), date:cell(row,"date"), recurring:isRec, recurFreq:isRec?rec:null, isActive:true, createdAt:new Date().toISOString(),
-      ...(wal ? { wallet:wal } : {}) };
+      ...(wal ? { wallet:wal } : {}), ...(trp ? { trip:trp } : {}) };
   });
   return { records };
 }
@@ -1160,8 +1176,8 @@ function buildBackup(state, now=new Date().toISOString()) {
 
 function buildCsv(transactions) {
   // Run 16: "Wallet" is the last column, so the columns before it did not move (older readers and the older import still work).
-  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet"]];
-  transactions.forEach(t=>rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category,walletId(t.wallet)]));
+  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip"]];   // Run 22: "Trip" is appended after "Wallet"
+  transactions.forEach(t=>rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category,walletId(t.wallet),tripName(t.trip)]));
   // Formula-injection guard: a cell starting with = + - @ tab or CR would run as a formula in a spreadsheet, so it gets a
   // leading apostrophe (shown as text). parseCsvImport removes it again, so the app's own CSV round trip stays exact.
   const safe=(v)=>{ const s=String(v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; };
@@ -3224,11 +3240,11 @@ function AppInner() {
     return { ...s, transactions:r.transactions, bills:r.bills };
   };
   const addTransaction=useCallback((txn)=>{
-    const { billChoice, wallet, ...data }=txn, id=Date.now()+Math.random();
+    const { billChoice, wallet, trip, ...data }=txn, id=Date.now()+Math.random();
     // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
     // bill the entry may have created, and refuses if something else changed in the meantime, like the other undo windows.
     const before=stateRef.current;
-    const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
+    const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
     setState(next);
     showSnackbar(t("toast.recorded"),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },6000,"add");
   },[showToast,showSnackbar]);
@@ -3247,9 +3263,9 @@ function AppInner() {
     const dd=readDebts(), d=dd.debts.find(x=>x.id===tx.debtLink.debtId); return !!(d && d.payments.some(p=>p.id===tx.debtLink.paymentId)); };
   const updateTransaction=useCallback((id,txn)=>{
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
-    const { billChoice, wallet, ...data }=txn;
-    // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored).
-    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}) }; })},id,billChoice));
+    const { billChoice, wallet, trip, ...data }=txn;
+    // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored). Run 22: same for the trip.
+    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}) }; })},id,billChoice));
     showToast(t("toast.updated"));
   },[showToast]);
 
@@ -4003,6 +4019,7 @@ function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
     catName(txn.category),
     subName(txn.subcategory)||null,
     txn.wallet?walletName(txn.wallet):null,
+    tripName(txn.trip)||null,
     !compact?fmtDate(txn.date):null,
   ].filter(Boolean).join(" · ");
   return (
@@ -4033,6 +4050,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [catFilter,  setCatFilter]  = useState("all");
+  const [tripFilter, setTripFilter] = useState("all");   // Run 22: "all" or a trip name (compared without case)
   const [walletFilter, setWalletFilter] = useState("all");   // Run 16: "all", a wallet id, or "none" (entries without one)
   const [dateFrom,   setDateFrom]   = useState("");
   const [dateTo,     setDateTo]     = useState("");
@@ -4063,10 +4081,14 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
     if (typeFilter!=="all") list=list.filter(x=>x.type===typeFilter);
     if (catFilter!=="all")  list=list.filter(x=>x.category===catFilter);
     if (walletFilter!=="all") list=list.filter(x=>(walletId(x.wallet)||"none")===walletFilter);
+    if (tripFilter!=="all") list=list.filter(x=>tripName(x.trip).toLowerCase()===tripFilter.toLowerCase());
     if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
     if (dateTo)             list=list.filter(x=>x.date<=dateTo);
     return list;
-  },[transactions,search,typeFilter,catFilter,walletFilter,dateFrom,dateTo,locale()]);
+  },[transactions,search,typeFilter,catFilter,walletFilter,tripFilter,dateFrom,dateTo,locale()]);
+  // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
+  const trips=useMemo(()=>tripTotals(transactions),[transactions]);
+  const tripSel=tripFilter==="all" ? null : trips.find(x=>x.name.toLowerCase()===tripFilter.toLowerCase()) || null;
   // Run 16: the wallet filter is offered only when at least one entry has a wallet, and lists only the wallets in use.
   const usedWallets=useMemo(()=>[...new Set(transactions.map(x=>walletId(x.wallet)).filter(Boolean))],[transactions]);
   const hasUnsetWallet=useMemo(()=>transactions.some(x=>!walletId(x.wallet)),[transactions]);
@@ -4105,11 +4127,19 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
         <button className={`chip${(showDates||hasDateFilter)?" on":""}`} aria-pressed={!!(showDates||hasDateFilter)} onClick={()=>setShowDates(s=>!s)}>
           <Icon name="calendar" size={11}/> {t("ledger.date")}
         </button>
-        {(hasCatFilter||hasDateFilter||typeFilter!=="all"||walletFilter!=="all")&&(
+        {(hasCatFilter||hasDateFilter||typeFilter!=="all"||walletFilter!=="all"||tripFilter!=="all")&&(
           <button className="chip on" style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)"}}
-            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");}}>{t("ledger.clear")} ×</button>
+            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");setTripFilter("all");}}>{t("ledger.clear")} ×</button>
         )}
       </div>
+      {trips.length>0&&(
+        <div className="filter-bar" role="group" aria-label={t("trip.filterLabel")} data-section="tx-trip-filter">
+          {["all",...trips.map(x=>x.name)].map(n=>(
+            <button key={n} className={`chip${tripFilter===n?" on":""}`} aria-pressed={tripFilter===n} onClick={()=>setTripFilter(n)}>{n==="all"?t("trip.filterAll"):n}</button>
+          ))}
+        </div>
+      )}
+      {tripSel&&<div className="list-sub" data-section="tx-trip-total" style={{margin:"2px 2px 8px"}}>{t("trip.total",{name:tripSel.name,total:fmt(tripSel.total),n:tripSel.n})}</div>}
       {usedWallets.length>0&&(
         <div className="filter-bar" role="group" aria-label={t("wallet.filterLabel")} data-section="tx-wallet-filter">
           {["all",...usedWallets,...(hasUnsetWallet?["none"]:[])].map(w=>(
@@ -4371,6 +4401,9 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   const [freq,     setFreq]     = useState(prefill?.recurFreq||"monthly");
   // Run 16: how it was paid. A new entry starts with the wallet used last (one tap fewer); editing keeps the entry's own.
   const [wallet,   setWallet]   = useState(isEditing ? walletId(prefill?.wallet) : (prefill && "wallet" in prefill ? walletId(prefill.wallet) : lastWallet(transactions)));
+  // Run 22: optional trip / group name (free text; earlier names are suggested). Editing keeps the entry's own.
+  const [trip, setTrip] = useState(tripName(prefill?.trip));
+  const knownTrips=useMemo(()=>tripTotals(transactions).map(x=>x.name),[transactions]);
   // Run 16: the user's own subcategory suggestions (separate storage key; entries keep the text itself).
   const [mySubs, setMySubs] = useState(()=>readSubcats());
   const [newSub, setNewSub] = useState(null);   // null = closed; otherwise the text being typed
@@ -4391,11 +4424,11 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
   // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
   // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
-  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet }).current;
+  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip }).current;
   const [askDiscard, setAskDiscard] = useState(false);
   const defaultCat=type===initial.type ? initial.catId : (type==="income"?"salary":"food");
   const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
-    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet;
+    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip;
   const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
 
   const expCats=CATEGORIES.filter(c=>!c.income);
@@ -4452,7 +4485,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
       const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
       if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
     }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),
       billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
@@ -4590,6 +4623,13 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
               <button type="button" role="radio" aria-checked="true" className="sub-chip sel" onClick={()=>setWallet("")}>{walletName(wallet)}</button>
             )}
           </div>
+        </div>
+
+        {/* Run 22: optional trip / group, e.g. "Baku trip". Suggestions are the names already used. */}
+        <div className="field" data-section="add-trip">
+          <label className="field-lbl" htmlFor="txn-trip">{t("trip.label")} {optional}</label>
+          <input id="txn-trip" className="field-input" list="txn-trip-list" value={trip} maxLength={40} autoComplete="off" placeholder={t("trip.placeholder")} onChange={e=>setTrip(e.target.value)}/>
+          <datalist id="txn-trip-list">{knownTrips.map(n=><option key={n} value={n}/>)}</datalist>
         </div>
 
         <div className="field">
