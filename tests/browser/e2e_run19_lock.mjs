@@ -189,8 +189,8 @@ section("R19-E9. Fingerprint (virtual authenticator) — only if this browser of
   await page.evaluateOnNewDocument((k, d) => { if (!sessionStorage.getItem("__seeded")) { sessionStorage.setItem("__seeded", "1"); localStorage.setItem(k, JSON.stringify(d)); } }, "expense_ledger_v5", seed());
   await page.goto(`http://localhost:${srv.address().port}/`); await page.waitForSelector(".tabbar"); await wait(600);
   const cdp = await page.createCDPSession();
-  let virtual = true;
-  try { await cdp.send("WebAuthn.enable"); await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } }); } catch { virtual = false; }
+  let virtual = true, authId = null;
+  try { await cdp.send("WebAuthn.enable"); authId = (await cdp.send("WebAuthn.addVirtualAuthenticator", { options: { protocol: "ctap2", transport: "internal", hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } })).authenticatorId; } catch { virtual = false; }
   await setPin(page, "2468");
   await openLockSheet(page);
   const avail = await page.evaluate(() => !!document.querySelector('[data-section="lock-bio-toggle"]'));
@@ -203,7 +203,8 @@ section("R19-E9. Fingerprint (virtual authenticator) — only if this browser of
     await page.evaluate(() => document.querySelector(".sheet-overlay").click()); await wait(250);
     await page.reload(); await page.waitForSelector(".tabbar"); await wait(1500);
     ok(await isOpen(page), "with the fingerprint on, the app opens by itself on start: the phone's prompt is offered without a tap");
-    await cdp.send("WebAuthn.disable"); await page.reload(); await page.waitForSelector(".tabbar"); await wait(1500);
+    // The virtual authenticator stays and is told the check FAILS; disabling WebAuthn here used to let Chrome reach the real Windows Hello / passkey dialog on the owner's computer.
+    await cdp.send("WebAuthn.setUserVerified", { authenticatorId: authId, isUserVerified: false }); await page.reload(); await page.waitForSelector(".tabbar"); await wait(1500);
     ok(await page.evaluate(() => !!document.querySelector('[data-section="lock-bio"]')), "the lock screen still has the fingerprint button for another try");
     ok(await isLocked(page), "if the fingerprint check fails the app stays locked and the PIN still works");
     await typePin(page, "2468"); await submit(page); await wait(300);
