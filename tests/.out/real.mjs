@@ -597,6 +597,13 @@ const MESSAGES = {
   "common.save":   { en: "Save", az: "Yadda saxla", ru: "Сохранить" },
   "common.edit":   { en: "Edit", az: "Redaktə et", ru: "Изменить" },
   "common.delete": { en: "Delete", az: "Sil", ru: "Удалить" },
+  "ledger.select":     { en: "Select", az: "Seç", ru: "Выбрать" },
+  "ledger.selectDone": { en: "Done", az: "Hazır", ru: "Готово" },
+  "ledger.selectAll":  { en: "Select all ({n})", az: "Hamısını seç ({n})", ru: "Выбрать все ({n})" },
+  "ledger.selectNone": { en: "Clear selection", az: "Seçimi təmizlə", ru: "Снять выбор" },
+  "ledger.deleteSel":  { en: "Delete {n}", az: "{n} sil", ru: "Удалить: {n}" },
+  "budget.crossOver": { en: "{cat} budget exceeded this month ({pct}%)", az: "{cat} büdcəsi bu ay aşıldı ({pct}%)", ru: "Бюджет «{cat}» в этом месяце превышен ({pct}%)" },
+  "budget.crossNear": { en: "{cat} budget is {pct}% used", az: "{cat} büdcəsinin {pct}%-i istifadə olunub", ru: "Бюджет «{cat}» использован на {pct}%" },
   "toast.recorded": { en: "Transaction recorded", az: "Əməliyyat qeydə alındı", ru: "Операция записана" },
   "toast.updated":  { en: "Transaction updated", az: "Əməliyyat yeniləndi", ru: "Операция обновлена" },
   "toast.deleted":  { en: { one: "Transaction deleted", other: "{n} transactions deleted" }, az: { one: "Əməliyyat silindi", other: "{n} əməliyyat silindi" }, ru: { one: "{n} операция удалена", few: "{n} операции удалены", many: "{n} операций удалено", other: "{n} операции удалено" } },
@@ -2612,6 +2619,19 @@ function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
   return { ...f, backtest:{ months, hits }, rangeShown:months>=2 && hits*3>=months*2 };
 }
 
+// Run 24: a newly added expense can push its category past 80% of that month's limit ("near") or past the limit ("over"). Only the
+// crossing is reported, once, so entries that follow in the same state stay quiet. Cent-exact; never touches the ledger.
+function budgetCrossing(before, after, budgets, txn, now=new Date()) {
+  if (!txn || txn.type!=="expense" || !isPlainObject(budgets)) return null;
+  const limit=Math.round((Number(budgets[txn.category])||0)*100), mon=String(txn.date||"").slice(0,7);
+  if (limit<=0 || !/^\d{4}-\d{2}$/.test(mon)) return null;
+  const c=(list)=>Math.round(((calcCategorySpend(list||[],mon,now)[txn.category])||0)*100);
+  const b=c(before), a=c(after);
+  if (a>limit && b<=limit) return { kind:"over", pct:Math.round(a*100/limit) };
+  if (a<=limit && a*5>=limit*4 && b*5<limit*4) return { kind:"near", pct:Math.round(a*100/limit) };
+  return null;
+}
+
 function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
   const p=monthProgress(mon,now);
   const pacePct=p.totalDays ? Math.round((p.daysPassed/p.totalDays)*100) : 0;
@@ -3352,6 +3372,6 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bi
 
 
 
-export { migrateAndLoad, buildMerchantMemory, merchantSuggest, memKey, calcHelperCards, calcSafeToSpend, calcSpendingPace, calcBudgetStatus, calcMonthSummary, calcPatterns, calcGoalProgress, goalRequiredMonthly, goalScenario, walletId, WALLET_IDS, lastWallet, calcWalletSpend, cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats, writeSubcats, calcCategorySpend, calcWhatChanged, calcTxnStats, calcSpentToDate, prevMon, nMon, surplusLabel, surplusColor, normaliseTxn, addMonths, strictNum, parseMoney, moneyReason, isUsableRawTxn, checkRawTxn, isValidDateStr, localDateStr, localMonthStr, parseLocalDate, daysInMonth, daysBetween, parseCSV, validateSettings, planImport, applyImport, buildBackup, buildCsv, countSuspectedDuplicates, txnFingerprint, partitionTransactions, ensureUniqueIds, summariseReasons, noteLoad, buildSchedules, scheduleOccurrences, scheduleMonthStatus, scheduleNextDue, scheduleKey, monthProgress, toMonthlyAmountHelper, fmt, detectRecurrence, calcMerchantProfile, resolveCategory, curMon, sanitizeTransactions, MAX_AMOUNT, CATEGORIES, CAT, calcWeekdayWeekend, backupReminderDue, BACKUP_REMINDER_DAYS, pctShares, donutSlices, cumulativeByDay, greetingKey, storageProtection, shareBackupFile, shareViaNative, nativeShareHook, appVersionOf, checkForUpdate, validateBill, convertLegacySchedules, assignToBill, BACKUP_VERSION, buildBillsMirror, planBillRestore, applyBillRestore, BILLS_MIRROR_KEY, calcMonthEndForecast, calcCoach, forSpending, loanCashOut, debtsHealth, debtCashFlow, debtLinkRef, billPaymentsLeft, loanExtraEffect, PRIVACY_KEY, readPrivacy, writePrivacy, LOCK_KEY, LOCK_TIMEOUTS, validPin, lockSupported, readLock, writeLock, removeLock, makeLockRecord, verifyPin, lockWaitMs, lockShouldEngage, cleanProfileName, PROFILE_NAME_MAX, loanSchedule, impliedNominalPct, debtRemaining, debtCanPay, cleanDebtData, readDebts, writeDebts, mergeDebtData, tripName, tripTotals, catTotals, parseCsvImport, t, tn, tIn, setLang, getLang, MESSAGES, LANGS, LANG_NAMES, LOCALES, catName, subName, monthName, monthShort, fmtLongDate };
+export { migrateAndLoad, buildMerchantMemory, merchantSuggest, memKey, calcHelperCards, calcSafeToSpend, calcSpendingPace, calcBudgetStatus, calcMonthSummary, calcPatterns, calcGoalProgress, goalRequiredMonthly, goalScenario, walletId, WALLET_IDS, lastWallet, calcWalletSpend, cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats, writeSubcats, calcCategorySpend, calcWhatChanged, calcTxnStats, calcSpentToDate, prevMon, nMon, surplusLabel, surplusColor, normaliseTxn, addMonths, strictNum, parseMoney, moneyReason, isUsableRawTxn, checkRawTxn, isValidDateStr, localDateStr, localMonthStr, parseLocalDate, daysInMonth, daysBetween, parseCSV, validateSettings, planImport, applyImport, buildBackup, buildCsv, countSuspectedDuplicates, txnFingerprint, partitionTransactions, ensureUniqueIds, summariseReasons, noteLoad, buildSchedules, scheduleOccurrences, scheduleMonthStatus, scheduleNextDue, scheduleKey, monthProgress, toMonthlyAmountHelper, fmt, detectRecurrence, calcMerchantProfile, resolveCategory, curMon, sanitizeTransactions, MAX_AMOUNT, CATEGORIES, CAT, calcWeekdayWeekend, backupReminderDue, BACKUP_REMINDER_DAYS, pctShares, donutSlices, cumulativeByDay, greetingKey, storageProtection, shareBackupFile, shareViaNative, nativeShareHook, appVersionOf, checkForUpdate, validateBill, convertLegacySchedules, assignToBill, BACKUP_VERSION, buildBillsMirror, planBillRestore, applyBillRestore, BILLS_MIRROR_KEY, calcMonthEndForecast, calcCoach, forSpending, loanCashOut, debtsHealth, debtCashFlow, debtLinkRef, billPaymentsLeft, loanExtraEffect, PRIVACY_KEY, readPrivacy, writePrivacy, LOCK_KEY, LOCK_TIMEOUTS, validPin, lockSupported, readLock, writeLock, removeLock, makeLockRecord, verifyPin, lockWaitMs, lockShouldEngage, cleanProfileName, PROFILE_NAME_MAX, loanSchedule, impliedNominalPct, debtRemaining, debtCanPay, cleanDebtData, readDebts, writeDebts, mergeDebtData, tripName, tripTotals, catTotals, budgetCrossing, parseCsvImport, t, tn, tIn, setLang, getLang, MESSAGES, LANGS, LANG_NAMES, LOCALES, catName, subName, monthName, monthShort, fmtLongDate };
 export const getNotice=()=>LOAD_NOTICE; export const getSaveBlocked=()=>SAVE_BLOCKED;
 export const resetFlags=()=>{LOAD_NOTICE=null;SAVE_BLOCKED=false;if(typeof SAVE_BLOCKED_READ!=='undefined')SAVE_BLOCKED_READ=false;};
