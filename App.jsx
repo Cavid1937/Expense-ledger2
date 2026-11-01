@@ -2940,7 +2940,9 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .list-card{padding:4px 16px}
 .list-row{display:flex;align-items:center;gap:14px;width:100%;min-height:60px;padding:12px 0;background:none;border:none;border-bottom:1px solid var(--rule);text-align:left;color:var(--ink);font:inherit;cursor:pointer}
 .list-row:last-child{border-bottom:none}
-.list-row:active{opacity:0.7}
+.list-row{border-radius:12px;transition:background-color 120ms ease-out}
+.list-row:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent)}   /* Run 24: a pressed row becomes a soft rounded pill (Claude-app feel) */
+@media (prefers-reduced-motion:reduce){.list-row{transition:none}}
 .list-ico{width:28px;display:inline-flex;justify-content:center;flex-shrink:0}
 .list-body{flex:1;min-width:0}
 .more-id{display:flex;align-items:center;gap:14px}
@@ -5948,7 +5950,7 @@ function MorePage({ language, profileName="", onLanguageChange, onProfileName, o
         <label className="field-lbl" htmlFor="profile-name">{t("st.profileName")}</label>
         <div style={{display:"flex",gap:8}}>
           <input id="profile-name" className="field-input" autoComplete="off" maxLength={PROFILE_NAME_MAX*2} placeholder={t("st.profilePh")} value={name} onChange={e=>setName(e.target.value)} style={{flex:1}}/>
-          <button className="btn btn-sm btn-sm-primary" onClick={()=>{ onProfileName(name); setName(cleanProfileName(name)); }}>{t("common.save")}</button>
+          <button className="btn btn-sm btn-sm-primary" data-section="st-name-save" disabled={cleanProfileName(name)===cleanProfileName(profileName)} onClick={()=>{ onProfileName(name); setName(cleanProfileName(name)); }}>{t("common.save")}</button>
         </div>
         <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
       </div>
