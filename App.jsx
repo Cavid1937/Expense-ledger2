@@ -2213,13 +2213,13 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
   const monExp=expenses.filter(t=>t.date.startsWith(mon)&&t.date<=todayStr);   // what has happened this month (not entries dated later)
   const monTotal=sumOf(monExp);
   if (monExp.length>=5 && monTotal>0) {
-    const catTotals={}; monExp.forEach(t=>{ catTotals[t.category]=(catTotals[t.category]||0)+t.amount; });
+    const catTotals={}; monExp.forEach(t=>{ catTotals[t.category]=addAmt(catTotals[t.category]||0,t); });
     const topCat=Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
     const pct=Math.round((topCat[1]/monTotal)*100);
     if (pct>=40) insights.push({ id:"catconc", basis:{ n:monExp.length, per:"month" }, text:t("ins.catConc",{ cat:catName(topCat[0]), pct }) });
-    const mTotals={}; monExp.filter(t=>t.merchant).forEach(t=>{ mTotals[t.merchant]=(mTotals[t.merchant]||0)+t.amount; });
+    const mTotals={}, mShown={}; monExp.filter(t=>t.merchant&&t.merchant.trim()).forEach(t=>{ const k=t.merchant.trim().toLowerCase(); if (!(k in mShown)) mShown[k]=t.merchant.trim(); mTotals[k]=addAmt(mTotals[k]||0,t); });   // "Bravo" and "bravo " are one merchant
     const top3=Object.entries(mTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>a+v,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", basis:{ n:monExp.length, per:"month" }, text:t("ins.merchantConc",{ names:top3.map(([m])=>m).join(", "), pct:pc }) }); }
+    if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>Math.round((a+v)*100)/100,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", basis:{ n:monExp.length, per:"month" }, text:t("ins.merchantConc",{ names:top3.map(([m])=>mShown[m]).join(", "), pct:pc }) }); }
   }
 
   // ── Typical transaction vs last month: the MEDIAN per transaction (a part-month stays comparable, and one unusual purchase

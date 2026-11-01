@@ -51,6 +51,7 @@
     "run24split.test.mjs": 11,
     "run24accounts.test.mjs": 15,
     "run24coach.test.mjs": 5,
+    "run24patterns.test.mjs": 4,
   "run18coach.test.mjs": 9
   },
   "browser": {
