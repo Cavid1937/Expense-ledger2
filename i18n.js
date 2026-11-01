@@ -587,6 +587,7 @@ export const MESSAGES = {
   "common.save":   { en: "Save", az: "Yadda saxla", ru: "Сохранить" },
   "common.edit":   { en: "Edit", az: "Redaktə et", ru: "Изменить" },
   "common.delete": { en: "Delete", az: "Sil", ru: "Удалить" },
+  "import.bankSkipped": { en: "{n} rows of the bank statement were skipped because their date or amount could not be read.", az: "Bank çıxarışının {n} sətri tarixi və ya məbləği oxunmadığı üçün buraxıldı.", ru: "Строк банковской выписки пропущено: {n} — не удалось прочитать дату или сумму." },
   "bill.icsBtn":  { en: "Add upcoming bills to my calendar (.ics)", az: "Yaxın ödənişləri təqvimimə əlavə et (.ics)", ru: "Добавить ближайшие платежи в календарь (.ics)" },
   "bill.icsNone": { en: "No unpaid bill dates in the next 12 months.", az: "Növbəti 12 ayda ödənilməmiş ödəniş tarixi yoxdur.", ru: "В ближайшие 12 месяцев нет неоплаченных платежей." },
   "ledger.select":     { en: "Select", az: "Seç", ru: "Выбрать" },

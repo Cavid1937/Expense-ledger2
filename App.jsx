@@ -1038,13 +1038,82 @@ const CSV_COLUMNS = { date:["date"], amount:["amount","amt","value"], type:["typ
   categoryId:["categoryid","category id","category_id"], subcategory:["subcategory","subcat"], merchant:["merchant"],
   note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"], wallet:["wallet","paid with"], trip:["trip","group"] };
 
-function parseCsvImport(raw) {
+// Run 24: bank statements. Banks name columns differently, split money into Debit/Credit columns, use ; or tab, day-first dates and
+// comma decimals. This rewrites such a file into the app's own CSV (date, amount, type, merchant, note); the normal import review,
+// validation and duplicate checks then run on the result. Files the app wrote itself are never touched (they have Date + Amount).
+const BANK_HEADERS = {
+  date:["date","transaction date","booking date","posting date","value date","tarix","\u0259m\u0259liyyat tarixi","\u0434\u0430\u0442\u0430","\u0434\u0430\u0442\u0430 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438","\u0434\u0430\u0442\u0430 \u0442\u0440\u0430\u043D\u0437\u0430\u043A\u0446\u0438\u0438"],
+  amount:["amount","sum","m\u0259bl\u0259\u011F","\u0441\u0443\u043C\u043C\u0430","\u0441\u0443\u043C\u043C\u0430 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"],
+  debit:["debit","withdrawal","withdrawals","paid out","money out","x\u0259rc","\u00E7\u0131x\u0131\u015F","\u0440\u0430\u0441\u0445\u043E\u0434","\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435"],
+  credit:["credit","deposit","deposits","paid in","money in","g\u0259lir","m\u0259daxil","\u043F\u0440\u0438\u0445\u043E\u0434","\u0437\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u0435"],
+  desc:["description","details","narrative","payee","merchant","reference","t\u0259svir","t\u0259yinat","\u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435","\u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435 \u043F\u043B\u0430\u0442\u0435\u0436\u0430","\u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435","\u0434\u0435\u0442\u0430\u043B\u0438"] };
+function splitDelimited(text, d) {
+  const rows=[]; let row=[], cur="", q=false;
+  for (let i=0;i<text.length;i++) {
+    const c=text[i];
+    if (q) { if (c==='"') { if (text[i+1]==='"') { cur+='"'; i++; } else q=false; } else cur+=c; }
+    else if (c==='"') q=true;
+    else if (c===d) { row.push(cur); cur=""; }
+    else if (c==="\n"||c==="\r") { if (c==="\r"&&text[i+1]==="\n") i++; row.push(cur); cur=""; if (row.some(x=>x.trim()!=="")) rows.push(row); row=[]; }
+    else cur+=c;
+  }
+  row.push(cur); if (row.some(x=>x.trim()!=="")) rows.push(row);
+  return rows;
+}
+function bankMoney(s) {   // "1 234,56" "1.234,56" "1,234.56" "-12,5 AZN" "(45.00)" -> cents (integer, signed) or null
+  let v=String(s==null?"":s).replace(/[\u00A0\s]/g,"").trim(); if (!v) return null;
+  let neg=false; if (/^\(.*\)$/.test(v)) { neg=true; v=v.slice(1,-1); }
+  v=v.replace(/[^\d.,+\-]/g,""); if (/^-/.test(v)) { neg=!neg; } v=v.replace(/[+\-]/g,"");
+  if (!/\d/.test(v)) return null;
+  const lc=v.lastIndexOf(","), ld=v.lastIndexOf(".");
+  if (lc>-1 && ld>-1) v = lc>ld ? v.replace(/\./g,"").replace(",",".") : v.replace(/,/g,"");
+  else if (lc>-1) v = /,\d{1,2}$/.test(v) && v.indexOf(",")===lc ? v.replace(",",".") : v.replace(/,/g,"");
+  else if (ld>-1 && v.indexOf(".")!==ld) v=v.replace(/\./g,"");
+  if (!/^\d*\.?\d+$|^\d+\.$/.test(v)) return null;
+  const c=Math.round(parseFloat(v)*100); return neg ? -c : c;
+}
+function bankDate(s) {   // yyyy-mm-dd, dd.mm.yyyy, dd/mm/yyyy, dd-mm-yyyy (day first); times ignored; real calendar dates only
+  const v=String(s||"").trim(); let y,m,d, x;
+  if ((x=v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/))) { y=+x[1]; m=+x[2]; d=+x[3]; }
+  else if ((x=v.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:[\sT].*)?$/))) { d=+x[1]; m=+x[2]; y=+x[3]; }
+  else return null;
+  const dt=new Date(y,m-1,d); if (dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d) return null;
+  return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+function bankCsvToStandard(raw) {
+  const text=String(raw).replace(/^\uFEFF/,""), first=text.split(/\r?\n/,1)[0]||"";
+  const d=[";","\t",","].map(c=>[c,first.split(c).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=splitDelimited(text,d); if (rows.length<2) return null;
+  const hdr=rows[0].map(h=>h.replace(/^\uFEFF/,"").trim().toLowerCase());
+  const col=(k)=>BANK_HEADERS[k].map(n=>hdr.indexOf(n)).find(i=>i!==-1) ?? -1;
+  const ci={ date:col("date"), amount:col("amount"), debit:col("debit"), credit:col("credit"), desc:col("desc") };
+  if (ci.date===-1 || (ci.amount===-1 && ci.debit===-1 && ci.credit===-1)) return null;
+  const out=["date,amount,type,merchant,note"]; let skipped=0;
+  rows.slice(1).forEach(r=>{
+    const date=bankDate(r[ci.date]); let cents=null, type="expense";
+    if (ci.amount!==-1) { const a=bankMoney(r[ci.amount]); if (a!==null && a!==0) { cents=Math.abs(a); type=a<0?"expense":"income"; } }
+    if (cents===null && (ci.debit!==-1||ci.credit!==-1)) {
+      const dv=ci.debit===-1?null:bankMoney(r[ci.debit]), cv=ci.credit===-1?null:bankMoney(r[ci.credit]);
+      if (dv) { cents=Math.abs(dv); type="expense"; } else if (cv) { cents=Math.abs(cv); type="income"; }
+    }
+    if (!date || !cents) { skipped++; return; }
+    const desc=ci.desc===-1?"":String(r[ci.desc]||"").trim().replace(/\s+/g," ").slice(0,80);
+    const q=(s)=>`"${s.replace(/"/g,'""')}"`;
+    out.push([date,(cents/100).toFixed(2),type,q(desc),'""'].join(","));
+  });
+  return out.length>1 ? { text:out.join("\n"), skipped } : null;
+}
+
+function parseCsvImport(raw, _bank=false) {
   const rows=parseCSV(String(raw).replace(/^\uFEFF/,""));
   if (rows.unterminated) return { error:t("csv.unterminated") };
   if (rows.length<2) return { error:t("csv.noRows") };
   const headers=rows[0].map(h=>h.replace(/^\uFEFF/,"").trim().toLowerCase());
   const idx={}; Object.entries(CSV_COLUMNS).forEach(([k,names])=>{ idx[k]=names.map(n=>headers.indexOf(n)).find(i=>i!==-1) ?? -1; });
   const missing=["date","amount"].filter(k=>idx[k]===-1);
+  if (!_bank && (missing.length || (idx.date!==-1 && !/^\d{4}-\d{2}-\d{2}/.test(String(rows[1][idx.date]||"").trim())))) {   // Run 24: bank statement layouts
+    const conv=bankCsvToStandard(raw); if (conv) return { ...parseCsvImport(conv.text,true), bankSkipped:conv.skipped };
+  }
   if (missing.length) return { error:t(missing.length===2 ? "csv.needDateAmount" : missing[0]==="date" ? "csv.needDate" : "csv.needAmount", { found:rows[0].map(h=>h.trim()).filter(Boolean).join(", ")||t("csv.noHeaders") }) };
   // A leading apostrophe before = + - @ tab or CR is the formula guard added by buildCsv: remove it to restore the original text.
   const cell=(row,k)=>{ const v=idx[k]===-1 ? "" : String(row[idx[k]] ?? "").trim(); return /^'[=+\-@\t\r]/.test(v) ? v.slice(1) : v; };
@@ -1070,6 +1139,7 @@ function planImport(raw, filename="") {
     const r=parseCsvImport(text);
     if (r.error) return { ok:false, error:r.error };
     list=r.records;
+    if (r.bankSkipped) warnings.push(t("import.bankSkipped",{ n:r.bankSkipped }));
   } else {
     let parsed;
     try { parsed=JSON.parse(text); } catch { return { ok:false, error:t("import.notJsonCsv") }; }

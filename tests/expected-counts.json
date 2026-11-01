@@ -45,6 +45,7 @@
     "run24cat.test.mjs": 7,
     "run24budget.test.mjs": 10,
     "run24ics.test.mjs": 11,
+    "run24bank.test.mjs": 9,
   "run18coach.test.mjs": 9
   },
   "browser": {
