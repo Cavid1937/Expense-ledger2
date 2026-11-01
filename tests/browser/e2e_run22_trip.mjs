@@ -9,7 +9,7 @@ section("R22-B1. The add form saves a trip; entries without one get no field");
 {
   const page = await openPage(browser, { seed: base() }); await settle(page);
   await openAdd(page);
-  ok(!!(await page.$("#txn-trip")), "the add form has a Trip or group field");
+  ok(!!(await page.$("#txn-trip")), "the add form has a Label, trip or group field");
   await setVal(page, ".amount-input", "12"); await setVal(page, "#txn-trip", "  Baku   trip "); await record(page);
   let st = await state(page);
   ok(st.transactions[0].trip === "Baku trip" && st.transactions[0].amount === 12, "saved with the cleaned trip name", st.transactions[0]);
@@ -28,7 +28,7 @@ section("R22-B2. Ledger: trip filter and per-trip total; a row shows its trip; C
   const page = await openPage(browser, { seed }); await tab(page, "Ledger"); await settle(page);
   const rows = () => page.evaluate(() => [...document.querySelectorAll(".txn-row")].map((r) => r.innerText.replace(/\s+/g, " ")));
   const labels = await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-trip-filter"] .chip')].map((b) => b.innerText.trim()));
-  ok(labels.length === 2 && labels[0] === "All trips" && labels[1].toLowerCase() === "shaki", "one chip per trip ('Shaki' and 'shaki' are the same trip) plus All trips", labels);
+  ok(labels.length === 2 && labels[0] === "All labels" && labels[1].toLowerCase() === "shaki", "one chip per trip ('Shaki' and 'shaki' are the same trip) plus All labels", labels);
   ok((await rows()).find((r) => /Hotel/.test(r) && /Shaki/.test(r)) && !(await rows()).find((r) => /Groceries/.test(r) && /haki/.test(r)), "a row shows its trip; an entry without one shows nothing extra", await rows());
   await page.evaluate(() => document.querySelectorAll('[data-section="tx-trip-filter"] .chip')[1].click()); await wait(250);
   ok((await rows()).length === 2, "filtering by the trip shows its two entries", (await rows()).length);
