@@ -689,7 +689,7 @@ function readLock() {
     const r=JSON.parse(raw);
     if (!isPlainObject(r) || r.v!==1 || typeof r.salt!=="string" || typeof r.hash!=="string" || !Number.isInteger(r.iter) || r.iter<1000 || r.iter>2000000) return { ok:false };
     return { ok:true, rec:{ v:1, salt:r.salt, hash:r.hash, iter:r.iter, timeout:LOCK_TIMEOUTS.includes(r.timeout)?r.timeout:0,
-      bio:typeof r.bio==="string" && r.bio ? r.bio : null, fails:Number.isInteger(r.fails)&&r.fails>0?r.fails:0, until:Number.isFinite(r.until)&&r.until>0?r.until:0 } };
+      bio:typeof r.bio==="string" && r.bio ? r.bio : null, len:Number.isInteger(r.len)&&r.len>=4&&r.len<=6?r.len:0, fails:Number.isInteger(r.fails)&&r.fails>0?r.fails:0, until:Number.isFinite(r.until)&&r.until>0?r.until:0 } };
   } catch { return { ok:false }; }
 }
 function writeLock(rec) { try { localStorage.setItem(LOCK_KEY,JSON.stringify(rec)); return true; } catch { return false; } }
@@ -697,7 +697,7 @@ function removeLock() { try { localStorage.removeItem(LOCK_KEY); return true; } 
 async function makeLockRecord(pin, timeout=0, bio=null) {
   if (!validPin(pin) || !lockSupported()) return null;
   const salt=toB64(crypto.getRandomValues(new Uint8Array(16)));
-  return { v:1, salt, hash:await pinHash(pin,salt,LOCK_ITER), iter:LOCK_ITER, timeout:LOCK_TIMEOUTS.includes(timeout)?timeout:0, bio, fails:0, until:0 };
+  return { v:1, salt, hash:await pinHash(pin,salt,LOCK_ITER), iter:LOCK_ITER, timeout:LOCK_TIMEOUTS.includes(timeout)?timeout:0, bio, len:pin.length, fails:0, until:0 };
 }
 async function verifyPin(rec, pin) { if (!rec || !validPin(pin) || !lockSupported()) return false; try { return sameText(await pinHash(pin,rec.salt,rec.iter),rec.hash); } catch { return false; } }
 // Wrong PINs: the first four are free, then the wait doubles from 30 s up to 5 minutes. Stored, so closing the app does not reset it.
@@ -2332,6 +2332,16 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .lock-msg{color:var(--neg);font-size:13px;font-weight:600;min-height:20px;margin-bottom:6px}
 .lock-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
 .lock-pad .numpad-key:disabled{opacity:.45}
+.lock-screen .btn:not(.btn-primary),[data-section="lock-sheet"] .btn:not(.btn-primary){-webkit-appearance:none;appearance:none;padding:12px 18px;min-height:48px;background:var(--bg-card);color:var(--ink);border:1px solid var(--rule);border-radius:14px;font-size:15px;-webkit-tap-highlight-color:transparent}
+.lock-screen .btn:not(.btn-primary):active,[data-section="lock-sheet"] .btn:not(.btn-primary):active{opacity:.7}
+.lock-screen .btn[data-section="lock-forgot-btn"]{background:none;border-color:transparent;color:var(--ink-3);font-weight:500;margin-top:4px}
+[data-section="lock-sheet"] .btn.lock-bio-row{justify-content:space-between;text-align:left}
+.lock-switch{position:relative;flex:0 0 44px;width:44px;height:26px;border-radius:13px;background:var(--rule);transition:background .15s}
+.lock-switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--ink-3);transition:transform .15s,background .15s}
+.lock-bio-row[aria-checked="true"] .lock-switch{background:var(--accent-fill)}
+.lock-bio-row[aria-checked="true"] .lock-switch::after{transform:translateX(18px);background:var(--on-accent)}
+.lock-bio-row .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.lock-switch,.lock-switch::after{transition:none}}
 .numpad-key:active{background:var(--bg-warm);transform:scale(.95)}
 @media (prefers-reduced-motion:reduce){.numpad-key{transition:none}.numpad-key:active{transform:none}}
 .numpad-key:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -2887,7 +2897,7 @@ function LockScreen({ lock, onUnlock, onRemoved }) {
     if (busy||waitS>0||!cur||!validPin(pin)) return;
     setBusy(true);
     const good=await verifyPin(cur,pin);
-    if (good) { if (cur.fails||cur.until) writeLock({ ...cur, fails:0, until:0 }); onUnlock(); return; }
+    if (good) { if (cur.fails||cur.until||!cur.len) writeLock({ ...cur, fails:0, until:0, len:cur.len||pin.length }); onUnlock(); return; }
     const fails=cur.fails+1, w=lockWaitMs(fails), next={ ...cur, fails, until:w?Date.now()+w:0 };
     writeLock(next); setCur(next); setPin(""); setMsg(t("lock.wrong")); setNow(Date.now()); setBusy(false);
   };
@@ -2903,6 +2913,10 @@ function LockScreen({ lock, onUnlock, onRemoved }) {
     const onKey=(e)=>{ if (forgot) return; if (/^[0-9]$/.test(e.key)) press(e.key); else if (e.key==="Backspace") back(); else if (e.key==="Enter") submit(); };
     window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey);
   });
+  // Opens by itself: the phone's fingerprint prompt appears as the lock screen does (it mounts on every lock), and a PIN of the saved length
+  // is checked the moment its last digit is typed. Locks saved before the length was stored still use the button until their first unlock.
+  useEffect(()=>{ if (cur&&cur.bio&&!forgot) bio(); },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{ if (cur&&cur.len&&pin.length===cur.len&&!forgot) submit(); },[pin]); // eslint-disable-line react-hooks/exhaustive-deps
   const remove=()=>{ if (forgotS>0) return; removeLock(); onRemoved(); };
   return (
     <div className="lock-screen" role="dialog" aria-modal="true" aria-label={t("lock.screenTitle")} data-section="lock-screen">
@@ -2919,7 +2933,7 @@ function LockScreen({ lock, onUnlock, onRemoved }) {
           <h1 className="lock-title">{t("lock.screenTitle")}</h1>
           <p className="lock-sub">{t("lock.screenSub")}</p>
           <div className="lock-dots" role="img" aria-label={t("lock.entered",{n:pin.length})} data-section="lock-dots">
-            {Array.from({length:Math.max(4,pin.length)},(_,i)=><span key={i} className={`lock-dot${i<pin.length?" on":""}`}/>)}
+            {Array.from({length:Math.max((cur&&cur.len)||4,pin.length)},(_,i)=><span key={i} className={`lock-dot${i<pin.length?" on":""}`}/>)}
           </div>
           <div className="lock-msg" role="alert" data-section="lock-msg">{waitS>0?t("lock.wait",{s:waitS}):msg}</div>
           <div className="lock-pad">
@@ -2928,7 +2942,7 @@ function LockScreen({ lock, onUnlock, onRemoved }) {
             <button type="button" className="numpad-key" onClick={()=>press("0")} disabled={waitS>0}>0</button>
             <button type="button" className="numpad-key" onClick={back} aria-label={t("lock.del")} title={t("lock.del")}><Icon name="close" size={18}/></button>
           </div>
-          <button className="btn btn-primary btn-full" data-section="lock-go" style={{marginTop:12}} disabled={waitS>0||!validPin(pin)||busy} onClick={submit}>{t("lock.screenTitle")}</button>
+          {!(cur&&cur.len)&&<button className="btn btn-primary btn-full" data-section="lock-go" style={{marginTop:12}} disabled={waitS>0||!validPin(pin)||busy} onClick={submit}>{t("lock.screenTitle")}</button>}
           <button className="btn btn-full" data-section="lock-forgot-btn" style={{marginTop:8}} onClick={()=>{ setForgot(true); setForgotAt(Date.now()); }}>{t("lock.forgot")}</button>
         </div>
       )}
@@ -3009,7 +3023,7 @@ function LockSheet({ onClose, showToast }) {
             <div className="list-sub" style={{marginTop:6}}>{t("lock.whenSub")}</div>
             <div className="settings-section-lbl" style={{marginTop:14}}>{t("lock.bio")}</div>
             {bioOk
-              ? <button className={`btn btn-full${rec.bio?" btn-primary":""}`} role="switch" aria-checked={!!rec.bio} data-section="lock-bio-toggle" onClick={toggleBio}>{t("lock.bio")}: {rec.bio?t("lock.on"):t("lock.off")}</button>
+              ? <button className="btn btn-full lock-bio-row" role="switch" aria-checked={!!rec.bio} data-section="lock-bio-toggle" onClick={toggleBio}><span>{t("lock.bio")}</span><span className="lock-switch" aria-hidden="true"/><span className="sr-only">{rec.bio?t("lock.on"):t("lock.off")}</span></button>
               : <div className="list-sub" data-section="lock-bio-no">{t("lock.bioNo")}</div>}
             <div className="list-sub" style={{marginTop:6}}>{t("lock.bioSub")}</div>
             {err&&<div className="field-error" role="alert">{err}</div>}
