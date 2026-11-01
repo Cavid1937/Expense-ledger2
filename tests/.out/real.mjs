@@ -598,6 +598,53 @@ const MESSAGES = {
   "common.edit":   { en: "Edit", az: "Redaktə et", ru: "Изменить" },
   "common.delete": { en: "Delete", az: "Sil", ru: "Удалить" },
   "import.bankSkipped": { en: "{n} rows of the bank statement were skipped because their date or amount could not be read.", az: "Bank çıxarışının {n} sətri tarixi və ya məbləği oxunmadığı üçün buraxıldı.", ru: "Строк банковской выписки пропущено: {n} — не удалось прочитать дату или сумму." },
+  "acc.title":  { en: "Accounts and balances", az: "Hesablar və qalıqlar", ru: "Счета и остатки" },
+  "acc.sub":    { en: "Add your cards, cash and bank accounts. A balance is worked out from the opening balance and the entries you mark with that account; entries without an account are not counted.", az: "Kartlarınızı, nağd pulunuzu və bank hesablarınızı əlavə edin. Qalıq açılış qalığından və həmin hesabla işarələdiyiniz qeydlərdən hesablanır; hesabsız qeydlər nəzərə alınmır.", ru: "Добавьте карты, наличные и банковские счета. Остаток считается из начального остатка и операций, отмеченных этим счётом; операции без счёта не учитываются." },
+  "acc.field":  { en: "Account", az: "Hesab", ru: "Счёт" },
+  "acc.none":   { en: "No account", az: "Hesabsız", ru: "Без счёта" },
+  "acc.name":   { en: "Account name", az: "Hesabın adı", ru: "Название счёта" },
+  "acc.kind":   { en: "Account type", az: "Hesab növü", ru: "Тип счёта" },
+  "acc.kind.cash":  { en: "Cash", az: "Nağd", ru: "Наличные" },
+  "acc.kind.card":  { en: "Card", az: "Kart", ru: "Карта" },
+  "acc.kind.bank":  { en: "Bank account", az: "Bank hesabı", ru: "Банковский счёт" },
+  "acc.kind.other": { en: "Other", az: "Digər", ru: "Другое" },
+  "acc.opening": { en: "Balance today (optional)", az: "Bu günkü qalıq (istəyə bağlı)", ru: "Остаток сегодня (необязательно)" },
+  "acc.add":    { en: "Add account", az: "Hesab əlavə et", ru: "Добавить счёт" },
+  "acc.added":  { en: "Account added", az: "Hesab əlavə edildi", ru: "Счёт добавлен" },
+  "acc.removed": { en: "Account removed", az: "Hesab silindi", ru: "Счёт удалён" },
+  "acc.remove": { en: "Remove account {name}", az: "{name} hesabını sil", ru: "Удалить счёт {name}" },
+  "acc.hidden": { en: "hidden", az: "gizlədilib", ru: "скрыт" },
+  "acc.hide":   { en: "Hide", az: "Gizlət", ru: "Скрыть" },
+  "acc.show":   { en: "Show", az: "Göstər", ru: "Показать" },
+  "acc.inUse":  { en: "Entries or transfers use this account, so it cannot be removed. Hide it instead.", az: "Bu hesabdan qeydlər və ya köçürmələr istifadə edir, buna görə silinə bilməz. Əvəzinə gizlədin.", ru: "Этот счёт используется в операциях или переводах, удалить его нельзя. Скройте его." },
+  "acc.saveFailed": { en: "Could not save. Free some storage and try again.", az: "Saxlamaq mümkün olmadı. Yaddaşı boşaldıb yenidən cəhd edin.", ru: "Не удалось сохранить. Освободите память и повторите." },
+  "acc.total":  { en: "Total in shown accounts: {amount}", az: "Göstərilən hesablarda cəmi: {amount}", ru: "Всего на показанных счетах: {amount}" },
+  "acc.totalNote": { en: "This is not your net worth: debts and loans are not included.", az: "Bu sizin xalis sərvətiniz deyil: borclar və kreditlər daxil edilməyib.", ru: "Это не ваш капитал: долги и кредиты не учтены." },
+  "acc.transferTitle": { en: "Move money between accounts", az: "Hesablar arasında pul köçürün", ru: "Перевод между счетами" },
+  "acc.transferSub": { en: "A transfer is not income and not spending. It changes only the two balances.", az: "Köçürmə nə gəlirdir, nə də xərc. O yalnız iki qalığı dəyişir.", ru: "Перевод — не доход и не расход. Он меняет только два остатка." },
+  "acc.from":   { en: "From account", az: "Hansı hesabdan", ru: "Со счёта" },
+  "acc.to":     { en: "To account", az: "Hansı hesaba", ru: "На счёт" },
+  "acc.amount": { en: "Transfer amount", az: "Köçürmə məbləği", ru: "Сумма перевода" },
+  "acc.transferGo": { en: "Transfer", az: "Köçür", ru: "Перевести" },
+  "acc.transferDone": { en: "Transfer recorded", az: "Köçürmə qeyd edildi", ru: "Перевод записан" },
+  "acc.transferRemoved": { en: "Transfer removed", az: "Köçürmə silindi", ru: "Перевод удалён" },
+  "acc.removeTransfer": { en: "Remove this transfer", az: "Bu köçürməni sil", ru: "Удалить этот перевод" },
+  "acc.err.empty":   { en: "Type a name first.", az: "Əvvəlcə ad yazın.", ru: "Сначала введите название." },
+  "acc.err.long":    { en: "That name is too long (40 characters at most).", az: "Ad çox uzundur (ən çox 40 simvol).", ru: "Название слишком длинное (не более 40 символов)." },
+  "acc.err.full":    { en: "You have reached the limit.", az: "Həddə çatdınız.", ru: "Достигнут предел." },
+  "acc.err.dup":     { en: "An account with that name already exists.", az: "Bu adda hesab artıq var.", ru: "Счёт с таким названием уже есть." },
+  "acc.err.amount":  { en: "Enter an amount greater than zero.", az: "Sıfırdan böyük məbləğ daxil edin.", ru: "Введите сумму больше нуля." },
+  "acc.err.same":    { en: "Choose two different accounts.", az: "İki fərqli hesab seçin.", ru: "Выберите два разных счёта." },
+  "acc.err.account": { en: "Choose both accounts.", az: "Hər iki hesabı seçin.", ru: "Выберите оба счёта." },
+  "acc.err.date":    { en: "The date is not valid.", az: "Tarix düzgün deyil.", ru: "Дата недействительна." },
+  "split.btn":     { en: "Split into categories", az: "Kateqoriyalara böl", ru: "Разделить по категориям" },
+  "split.sub":     { en: "Share {total} between two or more categories. The parts must add up exactly.", az: "{total} məbləğini iki və ya daha çox kateqoriya arasında bölün. Hissələrin cəmi dəqiq uyğun olmalıdır.", ru: "Разделите {total} между двумя и более категориями. Сумма частей должна совпасть точно." },
+  "split.partCat": { en: "Category of part {n}", az: "{n}-ci hissənin kateqoriyası", ru: "Категория части {n}" },
+  "split.partAmt": { en: "Amount of part {n}", az: "{n}-ci hissənin məbləği", ru: "Сумма части {n}" },
+  "split.left":    { en: "Left to assign: {amount}", az: "Bölüşdürülməli qalan: {amount}", ru: "Осталось распределить: {amount}" },
+  "split.add":     { en: "Add a part", az: "Hissə əlavə et", ru: "Добавить часть" },
+  "split.save":    { en: "Split", az: "Böl", ru: "Разделить" },
+  "split.done":    { en: "Split into {n} entries", az: "{n} qeydə bölündü", ru: "Разделено на записей: {n}" },
   "mycat.title":   { en: "My categories", az: "Mənim kateqoriyalarım", ru: "Мои категории" },
   "mycat.sub":     { en: "Add your own categories. They appear everywhere categories are chosen. A category can be removed only when no entry or budget uses it.", az: "Öz kateqoriyalarınızı əlavə edin. Onlar kateqoriya seçilən hər yerdə görünür. Kateqoriyanı yalnız heç bir qeyd və ya büdcə istifadə etmədikdə silmək olar.", ru: "Добавьте свои категории. Они появятся везде, где выбирается категория. Удалить категорию можно, только если её не используют операции и бюджеты." },
   "mycat.name":    { en: "Category name", az: "Kateqoriya adı", ru: "Название категории" },
@@ -825,10 +872,10 @@ const MESSAGES = {
   "subcat.err.dup":      { en: "That name is already in the list.", az: "Bu ad siyahıda artıq var.", ru: "Такое название уже есть в списке." },
   "subcat.err.full":     { en: "You already have 20 of your own here. Remove one first.", az: "Burada artıq 20 öz siyahınız var. Əvvəlcə birini silin.", ru: "Здесь уже 20 ваших вариантов. Сначала уберите один." },
   "subcat.err.category": { en: "Pick a category first.", az: "Əvvəlcə kateqoriya seçin.", ru: "Сначала выберите категорию." },
-  "trip.label":       { en: "Trip or group", az: "Səfər və ya qrup", ru: "Поездка или группа" },
-  "trip.placeholder": { en: "e.g. Baku trip", az: "məs. Bakı səfəri", ru: "напр. Поездка в Баку" },
-  "trip.filterLabel": { en: "Filter by trip", az: "Səfərə görə süzgəc", ru: "Фильтр по поездке" },
-  "trip.filterAll":   { en: "All trips", az: "Bütün səfərlər", ru: "Все поездки" },
+  "trip.label":       { en: "Label, trip or group", az: "Etiket, səfər və ya qrup", ru: "Метка, поездка или группа" },
+  "trip.placeholder": { en: "e.g. Baku trip, Family, Business", az: "məs. Bakı səfəri, Ailə, Biznes", ru: "напр. Поездка в Баку, Семья, Бизнес" },
+  "trip.filterLabel": { en: "Filter by label, trip or group", az: "Etiketə, səfərə və ya qrupa görə süzgəc", ru: "Фильтр по метке, поездке или группе" },
+  "trip.filterAll":   { en: "All labels", az: "Bütün etiketlər", ru: "Все метки" },
   "trip.total":       { en: "{name}: {total} spent in {n} entries", az: "{name}: {n} əməliyyatda {total} xərclənib", ru: "{name}: потрачено {total} ({n} записей)" },
   "wallet.label":    { en: "Paid with", az: "Ödəniş üsulu", ru: "Чем оплачено" },
   "wallet.labelIn":  { en: "Received in", az: "Daxil olduğu yer", ru: "Куда поступило" },
@@ -1521,6 +1568,8 @@ function normaliseTxn(t, opts={}) {
     ...(debtLinkRef(t.debtLink) ? { debtLink:debtLinkRef(t.debtLink) } : {}),
     // Run 22: an optional trip / group name. Same rule: entries without one keep the shape older versions wrote.
     ...(tripName(t.trip) ? { trip:tripName(t.trip) } : {}),
+    // Run 24: the account the entry was paid from or received into. Optional, same rule; an id this phone does not know is kept as it is.
+    ...(accId(t.account) ? { account:accId(t.account) } : {}),
   };
 }
 // Run 22: a trip is a short free-text label (max 40 characters) on ordinary entries. Anything that is not text gives no trip.
@@ -1637,6 +1686,74 @@ function readSubcats() { try { const r=localStorage.getItem(SUBCAT_KEY); return 
 function writeSubcats(map) {   // an empty list removes the key instead of keeping an empty shell
   try { const c=cleanSubcats(map); if (!Object.keys(c).length) localStorage.removeItem(SUBCAT_KEY); else localStorage.setItem(SUBCAT_KEY,JSON.stringify({ version:1, byCategory:c })); return true; } catch { return false; }
 }
+// ─── Accounts, balances and transfers (Run 24; see handoff/DESIGN_NOTE_ACCOUNTS_TRANSFERS) ────────────────────────────────
+// Accounts (a card, cash, a bank account) live in their own storage key with the transfers between them. An ordinary entry may carry
+// an optional `account` id. A balance is never stored: opening balance + income − expenses (entries with that account) + transfers in −
+// transfers out, all in whole cents. A transfer is its own record, so it can never count as income or spending.
+const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","bank","other"];
+const accId=(v)=>typeof v==="string" && /^a_[a-z0-9]{3,12}$/.test(v) ? v : "";
+const centsOf=(v)=>{ const n=Number(v); return Number.isFinite(n) ? Math.round(n*100) : 0; };
+function cleanAccountData(raw) {
+  const src=isPlainObject(raw) ? raw : {};
+  const accounts=[], ids=new Set(), names=new Set();
+  (Array.isArray(src.accounts)?src.accounts:[]).forEach(a=>{
+    if (!isPlainObject(a) || accounts.length>=ACC_MAX) return;
+    const id=accId(a.id), name=typeof a.name==="string" ? a.name.trim().replace(/\s+/g," ").slice(0,40) : "";
+    if (!id || !name || ids.has(id) || names.has(name.toLowerCase())) return;
+    const op=isPlainObject(a.opening) ? a.opening : {}, amt=Number(op.amount);
+    ids.add(id); names.add(name.toLowerCase());
+    accounts.push({ id, name, kind:ACC_KINDS.includes(a.kind)?a.kind:"other", opening:{ amount:Number.isFinite(amt)&&Math.abs(amt)<1e12 ? Math.round(amt*100)/100 : 0, date:isValidDateStr(op.date)?op.date:"" }, hidden:a.hidden===true });
+  });
+  const tids=new Set(), transfers=[];
+  (Array.isArray(src.transfers)?src.transfers:[]).forEach(x=>{
+    if (!isPlainObject(x) || transfers.length>=TRANSFER_MAX) return;
+    const id=typeof x.id==="string" && /^t_[a-z0-9]{3,16}$/.test(x.id) ? x.id : "", amt=centsOf(x.amount);
+    if (!id || tids.has(id) || !ids.has(accId(x.from)) || !ids.has(accId(x.to)) || x.from===x.to || !(amt>0) || amt>1e14 || !isValidDateStr(x.date)) return;
+    tids.add(id); transfers.push({ id, from:x.from, to:x.to, amount:amt/100, date:x.date, note:typeof x.note==="string" ? x.note.trim().slice(0,80) : "" });
+  });
+  return { accounts, transfers };
+}
+function mergeAccountData(a, b) {   // by id: what is already here wins; transfers whose accounts are missing are dropped by the cleaner
+  const A=cleanAccountData(a), B=cleanAccountData(b);
+  const haveA=new Set(A.accounts.map(x=>x.id)), haveT=new Set(A.transfers.map(x=>x.id));
+  return cleanAccountData({ accounts:[...A.accounts,...B.accounts.filter(x=>!haveA.has(x.id))], transfers:[...A.transfers,...B.transfers.filter(x=>!haveT.has(x.id))] });
+}
+function readAccounts() { try { const r=localStorage.getItem(ACC_KEY); return r ? cleanAccountData(JSON.parse(r)) : { accounts:[], transfers:[] }; } catch { return { accounts:[], transfers:[] }; } }
+function writeAccounts(data) {
+  try { const c=cleanAccountData(data); if (!c.accounts.length) localStorage.removeItem(ACC_KEY); else localStorage.setItem(ACC_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
+}
+// Balance per account id, in money (exact to the cent). Entries whose account is unknown here are not counted anywhere.
+function accountBalances(data, transactions) {
+  const d=cleanAccountData(data), out={};
+  d.accounts.forEach(a=>{ out[a.id]=centsOf(a.opening.amount); });
+  (transactions||[]).forEach(x=>{ if (!x || !(accId(x.account) in out)) return; const c=centsOf(x.amount); out[x.account]+= x.type==="income" ? c : x.type==="expense" ? -c : 0; });
+  d.transfers.forEach(x=>{ out[x.from]-=centsOf(x.amount); out[x.to]+=centsOf(x.amount); });
+  Object.keys(out).forEach(k=>{ out[k]=out[k]/100; });
+  return out;
+}
+function newAccId(prefix, used) { let id; do { id=prefix+Math.random().toString(36).slice(2,8).replace(/[^a-z0-9]/g,"a").padEnd(6,"a"); } while (used.has(id)); return id; }
+function addAccount(data, name, kind, openingAmount, openingDate) {
+  const d=cleanAccountData(data), n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
+  if (!n) return { data:d, added:false, reason:"empty" };
+  if (n.length>40) return { data:d, added:false, reason:"long" };
+  if (d.accounts.length>=ACC_MAX) return { data:d, added:false, reason:"full" };
+  if (d.accounts.some(a=>a.name.toLowerCase()===n.toLowerCase())) return { data:d, added:false, reason:"dup" };
+  const amt=Number(openingAmount||0); if (!Number.isFinite(amt) || Math.abs(amt)>=1e12) return { data:d, added:false, reason:"amount" };
+  const id=newAccId("a_",new Set(d.accounts.map(a=>a.id)));
+  return { data:cleanAccountData({ accounts:[...d.accounts,{ id, name:n, kind, opening:{ amount:amt, date:openingDate||"" }, hidden:false }], transfers:d.transfers }), added:true, reason:"", id };
+}
+function addTransfer(data, from, to, amount, date, note="") {
+  const d=cleanAccountData(data), c=centsOf(amount);
+  if (!d.accounts.some(a=>a.id===from) || !d.accounts.some(a=>a.id===to)) return { data:d, added:false, reason:"account" };
+  if (from===to) return { data:d, added:false, reason:"same" };
+  if (!(c>0)) return { data:d, added:false, reason:"amount" };
+  if (!isValidDateStr(date)) return { data:d, added:false, reason:"date" };
+  if (d.transfers.length>=TRANSFER_MAX) return { data:d, added:false, reason:"full" };
+  const id=newAccId("t_",new Set(d.transfers.map(x=>x.id)));
+  return { data:cleanAccountData({ accounts:d.accounts, transfers:[{ id, from, to, amount:c/100, date, note },...d.transfers] }), added:true, reason:"", id };
+}
+// Removing an account is refused while any entry or transfer uses it (hide it instead), so nothing is ever orphaned silently.
+function accountInUse(data, id, transactions) { const d=cleanAccountData(data); return (transactions||[]).some(x=>x && x.account===id) || d.transfers.some(x=>x.from===id||x.to===id); }
 // ─── Debts and loans (Run 17) ─────────────────────────────────────────────────
 // Informal DEBTS (person to person) and formal LOANS (a rate and a schedule). All money is whole qapik (integers); interest is rounded
 // half-up to the qapik each month. Stored under their own key, so the main saved-data key is never touched by this feature. The
@@ -1794,7 +1911,7 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
     const days=new Set(win.map(x=>x.date)).size;
     if (days<14 || win.length<15) numbers.push({ id:"incomplete", days });
     else {
-      const inc=win.filter(x=>x.type==="income").reduce((a,x)=>a+x.amount,0), exp=win.filter(x=>x.type==="expense").reduce((a,x)=>a+x.amount,0);
+      const inc=win.filter(x=>x.type==="income").reduce(addAmt,0), exp=win.filter(x=>x.type==="expense").reduce(addAmt,0);
       if (!(inc>0)) numbers.push({ id:"noIncome" });
       else { const pct=Math.round(exp/inc*100); numbers.push(exp<=inc ? { id:"spent", pct, kept:100-pct } : { id:"over", pct }); }
     }
@@ -2326,7 +2443,7 @@ function parseCsvImport(raw, _bank=false) {
 function planImport(raw, filename="") {
   const text=String(raw).replace(/^\uFEFF/,"");
   const isCSV=/\.csv$/i.test(filename) || text.trimStart().toLowerCase().startsWith("date,");
-  let list=[], settings={}, problems=[], warnings=[], subcategories={}, debtData={ debts:[], loans:[] };
+  let list=[], settings={}, problems=[], warnings=[], subcategories={}, debtData={ debts:[], loans:[] }, accountData={ accounts:[], transfers:[] };
   if (isCSV) {
     const r=parseCsvImport(text);
     if (r.error) return { ok:false, error:r.error };
@@ -2346,6 +2463,7 @@ function planImport(raw, filename="") {
       else { const v=Object.values(parsed).find(v=>Array.isArray(v) && v.length>0 && isPlainObject(v[0]) && v[0].amount!==undefined); if (v) list=v; }
       const v=validateSettings(parsed); settings=v.settings; problems=v.problems; warnings=v.warnings.slice();
       subcategories=cleanSubcats(parsed.subcategories);   // Run 16: the user's own subcategory suggestions (optional)
+      accountData=cleanAccountData({ accounts:parsed.accounts, transfers:parsed.transfers });   // Run 24: accounts and transfers (optional)
       debtData=cleanDebtData({ debts:parsed.debts, loans:parsed.loans });   // Run 17: debts and loans (optional)
       // Run 13: an entry list that is present but not a list used to be skipped without a word when the file also held
       // settings (and had no entry count to disagree with). The user is told no entries could be read.
@@ -2380,7 +2498,7 @@ function planImport(raw, filename="") {
   // never replace the ledger: Replace would otherwise delete every transaction on the device.
   // Run 8: nor can a file where some rows were refused — Replace would quietly drop those rows along with the whole ledger.
   // Merge (adds the readable rows) stays available; the sheet explains why Replace is not offered.
-  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings, subcategories, debtData };
+  return { ok:true, kind:isCSV?"csv":"json", filename, transactions:good, canReplace:good.length>0 && bad.length===0, skippedCount:bad.length, skippedSummary:summariseReasons(bad), settings, problems, warnings, subcategories, debtData, accountData };
 }
 
 // Run 8: whether an entry repeats (and how often) is part of what it is, so a monthly bill and an identical one-off purchase
@@ -2441,10 +2559,12 @@ function buildBackup(state, now=new Date().toISOString()) {
   const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
   const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
   const dd=cleanDebtData(state.debtData);   // Run 17: debts and loans, optional in the same way
+  const acc=cleanAccountData(state.accountData);   // Run 24: accounts and transfers, optional in the same way
   const ccats=cleanCustomCats(state.customCats);   // Run 24: the user's own categories, optional in the same way
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
     transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}),
     ...(ccats.length ? { customCategories:ccats } : {}),
+    ...(acc.accounts.length ? { accounts:acc.accounts, ...(acc.transfers.length ? { transfers:acc.transfers } : {}) } : {}),
     ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
 }
 
@@ -2526,8 +2646,8 @@ function calcMerchantProfile(merchant, transactions) {
   // Last 30 / previous 30 days
   const now30 = localDateStr(new Date(Date.now()-30*86400000));
   const prev30 = localDateStr(new Date(Date.now()-60*86400000));
-  const last30 = txns.filter(t=>t.date>=now30).reduce((s,t)=>s+t.amount,0);
-  const prev30total = txns.filter(t=>t.date>=prev30&&t.date<now30).reduce((s,t)=>s+t.amount,0);
+  const last30 = txns.filter(t=>t.date>=now30).reduce(addAmt,0);
+  const prev30total = txns.filter(t=>t.date>=prev30&&t.date<now30).reduce(addAmt,0);
 
   // Visit frequency
   const gaps = [];
@@ -2577,8 +2697,8 @@ function calcMerchantProfile(merchant, transactions) {
   // Spending trend (compare last 3 txns to previous 3)
   let spendingTrend = "stable";
   if (txns.length >= 6) {
-    const recent3 = txns.slice(-3).reduce((s,t)=>s+t.amount,0)/3;
-    const prev3   = txns.slice(-6,-3).reduce((s,t)=>s+t.amount,0)/3;
+    const recent3 = txns.slice(-3).reduce(addAmt,0)/3;
+    const prev3   = txns.slice(-6,-3).reduce(addAmt,0)/3;
     if (prev3 > 0) {
       const delta = (recent3-prev3)/prev3*100;
       if (delta > 10) spendingTrend = "increasing";
@@ -2633,6 +2753,8 @@ function comparisonWindow(mon, prv, now=new Date()) {
 // (see comparisonWindow); prevFullExp = the whole previous month, for display.
 // Run 22 (formula audit): the sum of entry amounts in whole cents. Adding 0.1 ten times in floating point gives 0.9999999999999999, which
 // would sit just under an exact budget of 1.00; rounding each amount to cents first makes the total exact.
+// Run 24: reducer that keeps a running total exact to the cent (0.1 + 0.2 stays 0.3), for the plain sums that used to add raw decimals.
+const addAmt=(s,t)=>Math.round((s+(Number(t&&t.amount)||0))*100)/100;
 function sumCents(list) { return (list||[]).reduce((s,t)=>s+Math.round((Number(t.amount)||0)*100),0)/100; }
 function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
   const isExp=t=>t.type==="expense", isInc=t=>t.type==="income", inMon=t=>t.date.startsWith(mon);
@@ -2720,8 +2842,8 @@ function forecastCore(transactions, bills, now) {
   const expenses=transactions.filter(t=>t.type==="expense");
   if (!expenses.length) return { available:false, reason:"history" };
   const inMon=expenses.filter(t=>t.date.startsWith(mon));
-  const spentSoFar=inMon.filter(t=>t.date<=todayStr).reduce((s,t)=>s+t.amount,0);
-  const plannedLater=inMon.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
+  const spentSoFar=inMon.filter(t=>t.date<=todayStr).reduce(addAmt,0);
+  const plannedLater=inMon.filter(t=>t.date>todayStr).reduce(addAmt,0);
   let commitments=0;
   buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense").forEach(s=>{
     const st=scheduleMonthStatus(s,transactions,mon,now);
@@ -2754,10 +2876,30 @@ function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
     const m=new Date(now.getFullYear(),now.getMonth()-k,1), asOf=new Date(m.getFullYear(),m.getMonth(),10,12,0,0), mon=localMonthStr(m);
     const known=transactions.filter(t=>t.date<=localDateStr(asOf));
     const b=forecastCore(known,bills,asOf); if (!b.available) continue;
-    const actual=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon)).reduce((s,t)=>s+t.amount,0);
+    const actual=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon)).reduce(addAmt,0);
     months++; if (actual>=b.low-0.005 && actual<=b.high+0.005) hits++;
   }
   return { ...f, backtest:{ months, hits }, rangeShown:months>=2 && hits*3>=months*2 };
+}
+
+// Run 24: split one entry (a shopping receipt, say) into 2–6 entries in different categories. No new data shape: the original is
+// replaced by ordinary entries with the same date, merchant, note, wallet and tag, and their amounts add up to the original to the
+// cent. Entries that belong to a bill, a repeating schedule or a debt repayment are not split, so those links never break.
+const SPLIT_MAX=6;
+function splitTransaction(txn, parts, mkId=()=>Date.now()+Math.random()) {
+  if (!txn || !(Number(txn.amount)>0)) return { ok:false, reason:"invalid" };
+  if (txn.recurring || txn.billId || txn.debtLink) return { ok:false, reason:"linked" };
+  if (!Array.isArray(parts) || parts.length<2 || parts.length>SPLIT_MAX) return { ok:false, reason:"count" };
+  const total=Math.round(Number(txn.amount)*100), isInc=txn.type==="income", { id:_id, ...base }=txn;
+  let sum=0; const entries=[];
+  for (const p of parts) {
+    const cat=p && CATEGORIES.find(x=>x.id===p.category), c=Math.round((Number(p && p.amount)||0)*100);
+    if (!cat || cat.income!==isInc) return { ok:false, reason:"category" };
+    if (!(c>0)) return { ok:false, reason:"amount" };
+    sum+=c;
+    entries.push({ ...base, id:mkId(), category:cat.id, amount:c/100, subcategory:cat.id===txn.category ? (txn.subcategory||"") : "" });
+  }
+  return sum===total ? { ok:true, entries } : { ok:false, reason:"sum", diff:(total-sum)/100 };
 }
 
 // Run 24: a newly added expense can push its category past 80% of that month's limit ("near") or past the limit ("over"). Only the
@@ -2789,8 +2931,8 @@ function calcTxnStats(transactions, mon=curMon(), now=new Date()) {
   const done=happenedIn(mon,now);
   const amts=transactions.filter(t=>t.type==="expense"&&done(t)).map(t=>t.amount);
   const isWkend=d=>[0,6].includes(parseLocalDate(d).getDay());
-  const wkdExp=transactions.filter(t=>t.type==="expense"&&done(t)&&!isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
-  const wkndExp=transactions.filter(t=>t.type==="expense"&&done(t)&&isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
+  const wkdExp=transactions.filter(t=>t.type==="expense"&&done(t)&&!isWkend(t.date)).reduce(addAmt,0);
+  const wkndExp=transactions.filter(t=>t.type==="expense"&&done(t)&&isWkend(t.date)).reduce(addAmt,0);
   return { count:amts.length, avgTxn:amts.length?amts.reduce((s,a)=>s+a,0)/amts.length:0, medTxn:median(amts), weekdayExp:wkdExp, weekendExp:wkndExp };
 }
 
@@ -2805,8 +2947,8 @@ function calcWeekdayWeekend(transactions, mon=curMon(), now=new Date()) {
   const lastStr=p.daysPassed>0 ? `${mon}-${String(p.daysPassed).padStart(2,"0")}` : "";
   const isWkend=d=>[0,6].includes(parseLocalDate(d).getDay());
   const inWindow=transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&t.date<=lastStr);
-  const weTotal=inWindow.filter(t=>isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
-  const wdTotal=inWindow.filter(t=>!isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
+  const weTotal=inWindow.filter(t=>isWkend(t.date)).reduce(addAmt,0);
+  const wdTotal=inWindow.filter(t=>!isWkend(t.date)).reduce(addAmt,0);
   const weAvg=weDays>0 ? weTotal/weDays : null, wdAvg=wdDays>0 ? wdTotal/wdDays : null;
   let heavier=null;
   if (weAvg!==null && wdAvg!==null && (weTotal>0 || wdTotal>0)) {
@@ -3232,7 +3374,7 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
   const insights=[];
   const empty={ insights, anomalies:[], dayOfWeek:{}, categoryTrends:[], correlations:[] };
   if (expenses.length<5) return empty;
-  const sumOf=(l)=>l.reduce((a,t)=>a+t.amount,0);
+  const sumOf=(l)=>l.reduce(addAmt,0);
   const pctChange=(a,b)=>Math.round(((a-b)/b)*100);                       // only called with b>0
   const quantile=(sorted,q)=>{ const i=(sorted.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i); return sorted[lo]+(sorted[hi]-sorted[lo])*(i-lo); };
   const isWeekend=(d)=>[0,6].includes(parseLocalDate(d).getDay());
@@ -3534,6 +3676,6 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bi
 
 
 
-export { migrateAndLoad, buildMerchantMemory, merchantSuggest, memKey, calcHelperCards, calcSafeToSpend, calcSpendingPace, calcBudgetStatus, calcMonthSummary, calcPatterns, calcGoalProgress, goalRequiredMonthly, goalScenario, walletId, WALLET_IDS, lastWallet, calcWalletSpend, cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats, writeSubcats, calcCategorySpend, calcWhatChanged, calcTxnStats, calcSpentToDate, prevMon, nMon, surplusLabel, surplusColor, normaliseTxn, addMonths, strictNum, parseMoney, moneyReason, isUsableRawTxn, checkRawTxn, isValidDateStr, localDateStr, localMonthStr, parseLocalDate, daysInMonth, daysBetween, parseCSV, validateSettings, planImport, applyImport, buildBackup, buildCsv, countSuspectedDuplicates, txnFingerprint, partitionTransactions, ensureUniqueIds, summariseReasons, noteLoad, buildSchedules, scheduleOccurrences, scheduleMonthStatus, scheduleNextDue, scheduleKey, monthProgress, toMonthlyAmountHelper, fmt, detectRecurrence, calcMerchantProfile, resolveCategory, curMon, sanitizeTransactions, MAX_AMOUNT, CATEGORIES, CAT, calcWeekdayWeekend, backupReminderDue, BACKUP_REMINDER_DAYS, pctShares, donutSlices, cumulativeByDay, greetingKey, storageProtection, shareBackupFile, shareViaNative, nativeShareHook, appVersionOf, checkForUpdate, validateBill, convertLegacySchedules, assignToBill, BACKUP_VERSION, buildBillsMirror, planBillRestore, applyBillRestore, BILLS_MIRROR_KEY, calcMonthEndForecast, calcCoach, forSpending, loanCashOut, debtsHealth, debtCashFlow, debtLinkRef, billPaymentsLeft, loanExtraEffect, PRIVACY_KEY, readPrivacy, writePrivacy, LOCK_KEY, LOCK_TIMEOUTS, validPin, lockSupported, readLock, writeLock, removeLock, makeLockRecord, verifyPin, lockWaitMs, lockShouldEngage, cleanProfileName, PROFILE_NAME_MAX, loanSchedule, impliedNominalPct, debtRemaining, debtCanPay, cleanDebtData, readDebts, writeDebts, mergeDebtData, tripName, tripTotals, catTotals, budgetCrossing, billsToIcs, icsEscape, bankMoney, bankDate, cleanCustomCats, applyCustomCats, addCustomCat, mergeCustomCats, customCatInUse, planImportWithCats, parseCsvImport, t, tn, tIn, setLang, getLang, MESSAGES, LANGS, LANG_NAMES, LOCALES, catName, subName, monthName, monthShort, fmtLongDate };
+export { migrateAndLoad, buildMerchantMemory, merchantSuggest, memKey, calcHelperCards, calcSafeToSpend, calcSpendingPace, calcBudgetStatus, calcMonthSummary, calcPatterns, calcGoalProgress, goalRequiredMonthly, goalScenario, walletId, WALLET_IDS, lastWallet, calcWalletSpend, cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats, writeSubcats, calcCategorySpend, calcWhatChanged, calcTxnStats, calcSpentToDate, prevMon, nMon, surplusLabel, surplusColor, normaliseTxn, addMonths, strictNum, parseMoney, moneyReason, isUsableRawTxn, checkRawTxn, isValidDateStr, localDateStr, localMonthStr, parseLocalDate, daysInMonth, daysBetween, parseCSV, validateSettings, planImport, applyImport, buildBackup, buildCsv, countSuspectedDuplicates, txnFingerprint, partitionTransactions, ensureUniqueIds, summariseReasons, noteLoad, buildSchedules, scheduleOccurrences, scheduleMonthStatus, scheduleNextDue, scheduleKey, monthProgress, toMonthlyAmountHelper, fmt, detectRecurrence, calcMerchantProfile, resolveCategory, curMon, sanitizeTransactions, MAX_AMOUNT, CATEGORIES, CAT, calcWeekdayWeekend, backupReminderDue, BACKUP_REMINDER_DAYS, pctShares, donutSlices, cumulativeByDay, greetingKey, storageProtection, shareBackupFile, shareViaNative, nativeShareHook, appVersionOf, checkForUpdate, validateBill, convertLegacySchedules, assignToBill, BACKUP_VERSION, buildBillsMirror, planBillRestore, applyBillRestore, BILLS_MIRROR_KEY, calcMonthEndForecast, calcCoach, forSpending, loanCashOut, debtsHealth, debtCashFlow, debtLinkRef, billPaymentsLeft, loanExtraEffect, PRIVACY_KEY, readPrivacy, writePrivacy, LOCK_KEY, LOCK_TIMEOUTS, validPin, lockSupported, readLock, writeLock, removeLock, makeLockRecord, verifyPin, lockWaitMs, lockShouldEngage, cleanProfileName, PROFILE_NAME_MAX, loanSchedule, impliedNominalPct, debtRemaining, debtCanPay, cleanDebtData, readDebts, writeDebts, mergeDebtData, tripName, tripTotals, catTotals, budgetCrossing, billsToIcs, icsEscape, bankMoney, bankDate, cleanCustomCats, applyCustomCats, addCustomCat, mergeCustomCats, customCatInUse, planImportWithCats, splitTransaction, cleanAccountData, accountBalances, addAccount, addTransfer, accountInUse, mergeAccountData, parseCsvImport, t, tn, tIn, setLang, getLang, MESSAGES, LANGS, LANG_NAMES, LOCALES, catName, subName, monthName, monthShort, fmtLongDate };
 export const getNotice=()=>LOAD_NOTICE; export const getSaveBlocked=()=>SAVE_BLOCKED;
 export const resetFlags=()=>{LOAD_NOTICE=null;SAVE_BLOCKED=false;if(typeof SAVE_BLOCKED_READ!=='undefined')SAVE_BLOCKED_READ=false;};

@@ -419,3 +419,6 @@ Weekly usage was 89% at start (hard stop 90%). Trip grouping (item 1) is a multi
 
 ## Run 24 (1 Nov, late) - LIVE at d70b84c
 Currency chips, per-category totals, budget warnings (80/100%), bulk select+delete with one undo. Gate: logic 1077/1077; browser 59 files 1046 checks 0 failed, 0 standby. Remaining backlog: custom categories, formula audit of Patterns/coach, accounts+transfers (design note exists), labels/split, CSV import, .ics export, Terms screen (needs owner details), motion pass, lock leftovers. Weekly usage ~93%.
+
+## Run 24 part 2 - LIVE at 78d4b85 (1 Nov, night)
+Added: bill calendar .ics export, bank-statement CSV layouts, custom categories, exact-cent plain sums, label wording (Label, trip or group), split entry into categories, accounts + derived balances + transfers. Gate 34: logic 50 files 1141/1141; browser 63 files 1087/1087; 0 standby. Remaining: Patterns/coach formula audit beyond sums, Claude-app motion pass, Terms of use (needs owner details + lawyer), lock leftovers (backup prompt before Forgot-PIN removal, fingerprint-branch test), apple-design pass, App.jsx split.
