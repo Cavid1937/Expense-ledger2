@@ -43,6 +43,7 @@
     "run20extra.test.mjs": 12,
     "run20icons.test.mjs": 7,
     "run24cat.test.mjs": 7,
+    "run24budget.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -102,7 +103,8 @@
     "e2e_run20_patterns.mjs": 11,
     "e2e_run23_ios.mjs": 10,
     "e2e_run24_currency.mjs": 8,
-    "e2e_run24_cat.mjs": 7
+    "e2e_run24_cat.mjs": 7,
+    "e2e_run24_budgetwarn.mjs": 7
   }
 }
 

@@ -1496,6 +1496,19 @@ function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
   return { ...f, backtest:{ months, hits }, rangeShown:months>=2 && hits*3>=months*2 };
 }
 
+// Run 24: a newly added expense can push its category past 80% of that month's limit ("near") or past the limit ("over"). Only the
+// crossing is reported, once, so entries that follow in the same state stay quiet. Cent-exact; never touches the ledger.
+function budgetCrossing(before, after, budgets, txn, now=new Date()) {
+  if (!txn || txn.type!=="expense" || !isPlainObject(budgets)) return null;
+  const limit=Math.round((Number(budgets[txn.category])||0)*100), mon=String(txn.date||"").slice(0,7);
+  if (limit<=0 || !/^\d{4}-\d{2}$/.test(mon)) return null;
+  const c=(list)=>Math.round(((calcCategorySpend(list||[],mon,now)[txn.category])||0)*100);
+  const b=c(before), a=c(after);
+  if (a>limit && b<=limit) return { kind:"over", pct:Math.round(a*100/limit) };
+  if (a<=limit && a*5>=limit*4 && b*5<limit*4) return { kind:"near", pct:Math.round(a*100/limit) };
+  return null;
+}
+
 function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
   const p=monthProgress(mon,now);
   const pacePct=p.totalDays ? Math.round((p.daysPassed/p.totalDays)*100) : 0;
@@ -3306,7 +3319,9 @@ function AppInner() {
     const before=stateRef.current;
     const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
     setState(next);
-    showSnackbar(t("toast.recorded"),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },6000,"add");
+    const cross=budgetCrossing(before.transactions,next.transactions,next.budgets,{...data});
+    const msg=cross ? t("toast.recorded")+". "+t(cross.kind==="over"?"budget.crossOver":"budget.crossNear",{ cat:catName(data.category), pct:cross.pct }) : t("toast.recorded");
+    showSnackbar(msg,()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },6000,"add");
   },[showToast,showSnackbar]);
 
   // Run 17: a loan payment marked paid adds one plain expense and returns its id (so the payment record can point at it); removing

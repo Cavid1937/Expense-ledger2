@@ -587,6 +587,8 @@ export const MESSAGES = {
   "common.save":   { en: "Save", az: "Yadda saxla", ru: "Сохранить" },
   "common.edit":   { en: "Edit", az: "Redaktə et", ru: "Изменить" },
   "common.delete": { en: "Delete", az: "Sil", ru: "Удалить" },
+  "budget.crossOver": { en: "{cat} budget exceeded this month ({pct}%)", az: "{cat} büdcəsi bu ay aşıldı ({pct}%)", ru: "Бюджет «{cat}» в этом месяце превышен ({pct}%)" },
+  "budget.crossNear": { en: "{cat} budget is {pct}% used", az: "{cat} büdcəsinin {pct}%-i istifadə olunub", ru: "Бюджет «{cat}» использован на {pct}%" },
   "toast.recorded": { en: "Transaction recorded", az: "Əməliyyat qeydə alındı", ru: "Операция записана" },
   "toast.updated":  { en: "Transaction updated", az: "Əməliyyat yeniləndi", ru: "Операция обновлена" },
   "toast.deleted":  { en: { one: "Transaction deleted", other: "{n} transactions deleted" }, az: { one: "Əməliyyat silindi", other: "{n} əməliyyat silindi" }, ru: { one: "{n} операция удалена", few: "{n} операции удалены", many: "{n} операций удалено", other: "{n} операции удалено" } },
