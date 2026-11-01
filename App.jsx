@@ -689,7 +689,7 @@ function readLock() {
     const r=JSON.parse(raw);
     if (!isPlainObject(r) || r.v!==1 || typeof r.salt!=="string" || typeof r.hash!=="string" || !Number.isInteger(r.iter) || r.iter<1000 || r.iter>2000000) return { ok:false };
     return { ok:true, rec:{ v:1, salt:r.salt, hash:r.hash, iter:r.iter, timeout:LOCK_TIMEOUTS.includes(r.timeout)?r.timeout:0,
-      bio:typeof r.bio==="string" && r.bio ? r.bio : null, len:Number.isInteger(r.len)&&r.len>=4&&r.len<=6?r.len:0, fails:Number.isInteger(r.fails)&&r.fails>0?r.fails:0, until:Number.isFinite(r.until)&&r.until>0?r.until:0 } };
+      bio:typeof r.bio==="string" && r.bio ? r.bio : null, len:Number.isInteger(r.len)&&r.len>=4&&r.len<=6?r.len:0, resetAt:Number.isFinite(r.resetAt)&&r.resetAt>0?r.resetAt:0, fails:Number.isInteger(r.fails)&&r.fails>0?r.fails:0, until:Number.isFinite(r.until)&&r.until>0?r.until:0 } };
   } catch { return { ok:false }; }
 }
 function writeLock(rec) { try { localStorage.setItem(LOCK_KEY,JSON.stringify(rec)); return true; } catch { return false; } }
@@ -2897,7 +2897,7 @@ function LockScreen({ lock, onUnlock, onRemoved }) {
     if (busy||waitS>0||!cur||!validPin(pin)) return;
     setBusy(true);
     const good=await verifyPin(cur,pin);
-    if (good) { if (cur.fails||cur.until||!cur.len) writeLock({ ...cur, fails:0, until:0, len:cur.len||pin.length }); onUnlock(); return; }
+    if (good) { if (cur.fails||cur.until||!cur.len||cur.resetAt) writeLock({ ...cur, fails:0, until:0, resetAt:0, len:cur.len||pin.length }); onUnlock(); return; }
     const fails=cur.fails+1, w=lockWaitMs(fails), next={ ...cur, fails, until:w?Date.now()+w:0 };
     writeLock(next); setCur(next); setPin(""); setMsg(t("lock.wrong")); setNow(Date.now()); setBusy(false);
   };
@@ -2917,6 +2917,19 @@ function LockScreen({ lock, onUnlock, onRemoved }) {
   // is checked the moment its last digit is typed. Locks saved before the length was stored still use the button until their first unlock.
   useEffect(()=>{ if (cur&&cur.bio&&!forgot) bio(); },[]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{ if (cur&&cur.len&&pin.length===cur.len&&!forgot) submit(); },[pin]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Forgot PIN is not a quick bypass any more: with a fingerprint set up it needs that fingerprint; without one the lock can be removed only 24 h
+  // after the request (stored with the lock, so closing the app does not restart or skip it; the right PIN cancels it). A damaged lock record
+  // protects nothing, so it keeps the short wait. This is still a screen lock, not encryption.
+  const FORGOT_DELAY_MS=24*3600*1000;
+  const delayLeft=cur&&!cur.bio ? Math.max(0,(cur.resetAt||now)+FORGOT_DELAY_MS-now) : 0;
+  const askForgot=()=>{ setForgot(true); setForgotAt(Date.now()); setMsg(""); if (cur&&!cur.bio&&!cur.resetAt) { const n={ ...cur, resetAt:Date.now() }; if (writeLock(n)) setCur(n); } };
+  const removeBio=async()=>{
+    if (bioWait.current||!cur||!cur.bio) return;
+    bioWait.current=true; let good=false; try { good=await bioCheck(cur.bio); } catch { good=false; }
+    bioWait.current=false;
+    if (good) { removeLock(); onRemoved(); } else setMsg(t("lock.bioFail"));
+  };
+  const removeDelay=()=>{ if (delayLeft>0) return; removeLock(); onRemoved(); };
   const remove=()=>{ if (forgotS>0) return; removeLock(); onRemoved(); };
   return (
     <div className="lock-screen" role="dialog" aria-modal="true" aria-label={t("lock.screenTitle")} data-section="lock-screen">
@@ -2924,8 +2937,13 @@ function LockScreen({ lock, onUnlock, onRemoved }) {
       {forgot ? (
         <div className="lock-card" data-section="lock-forgot">
           <h1 className="lock-title">{t("lock.forgot")}</h1>
-          <p className="lock-sub" style={{lineHeight:1.55}}>{damaged?t("lock.damaged"):t("lock.forgotBody")}</p>
-          <button className="btn btn-primary btn-full" data-section="lock-remove" disabled={forgotS>0} onClick={remove}>{forgotS>0?t("lock.forgotWait",{s:forgotS}):t("lock.forgotGo")}</button>
+          <p className="lock-sub" style={{lineHeight:1.55}}>{damaged?t("lock.damaged"):cur.bio?t("lock.forgotBioBody"):t("lock.forgotDelayBody")}</p>
+          <div className="lock-msg" role="alert" data-section="lock-msg">{msg}</div>
+          {damaged
+            ? <button className="btn btn-primary btn-full" data-section="lock-remove" disabled={forgotS>0} onClick={remove}>{forgotS>0?t("lock.forgotWait",{s:forgotS}):t("lock.forgotGo")}</button>
+            : cur.bio
+              ? <button className="btn btn-primary btn-full" data-section="lock-remove" onClick={removeBio}>{t("lock.forgotBioGo")}</button>
+              : <button className="btn btn-primary btn-full" data-section="lock-remove" disabled={delayLeft>0} onClick={removeDelay}>{delayLeft>0?t("lock.forgotDelayWait",{h:Math.floor(Math.ceil(delayLeft/60000)/60),m:Math.ceil(delayLeft/60000)%60}):t("lock.forgotGo")}</button>}
           {!damaged&&<button className="btn btn-full" style={{marginTop:8}} onClick={()=>setForgot(false)}>{t("lock.back")}</button>}
         </div>
       ) : (
@@ -2943,7 +2961,7 @@ function LockScreen({ lock, onUnlock, onRemoved }) {
             <button type="button" className="numpad-key" onClick={back} aria-label={t("lock.del")} title={t("lock.del")}><Icon name="close" size={18}/></button>
           </div>
           {!(cur&&cur.len)&&<button className="btn btn-primary btn-full" data-section="lock-go" style={{marginTop:12}} disabled={waitS>0||!validPin(pin)||busy} onClick={submit}>{t("lock.screenTitle")}</button>}
-          <button className="btn btn-full" data-section="lock-forgot-btn" style={{marginTop:8}} onClick={()=>{ setForgot(true); setForgotAt(Date.now()); }}>{t("lock.forgot")}</button>
+          <button className="btn btn-full" data-section="lock-forgot-btn" style={{marginTop:8}} onClick={askForgot}>{t("lock.forgot")}</button>
         </div>
       )}
     </div>
