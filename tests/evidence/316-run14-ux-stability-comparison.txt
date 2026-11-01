@@ -1,0 +1,4 @@
+﻿Run 14 comparison, 2026-10-28 ~23:25 (console output, saved by hand): tests/browser/e2e_ux.mjs run 8 times on each build, one file at a time, 0 standby events during the comparison.
+NEW (Run 14 code, App.jsx ADD9FE8F...):            8 of 8 runs: ALL 30 CHECKS PASSED
+BASELINE (Run 13 frozen code, App.jsx FA568979...): 8 of 8 runs: ALL 30 CHECKS PASSED
+Context: in the clean-install run 1 (log 314, 2 standby events during that run) this file failed one check ("grabbing the sheet mid-spring continues from where it is (no jump: 103 -> 96)"). The same check passed in dev runs 305 and 310 and in these 16 standalone runs. Cause of the single failure: NOT PROVEN (timing-sensitive gesture test; the run overlapped standby). No evidence of a regression from the Run 14 changes (they do not touch the sheet gesture code).

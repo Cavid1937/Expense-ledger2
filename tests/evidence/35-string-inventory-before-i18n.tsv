@@ -1,0 +1,281 @@
+115	noteLoad	${n} set aside${why} — the rest of your data is intact
+116	noteLoad	${n}${why} found but a recovery copy could not be made (storage may be full) — saving is paused so nothing is overwritten
+144	noteLoad	${rekeyed} duplicate id${rekeyed>1?
+175	prop:name	Food & Dining
+177	prop:name	Transport
+179	prop:name	Shopping
+181	prop:name	Gifts & Personal
+183	prop:name	Entertainment
+185	prop:name	Bills & Subscriptions
+187	prop:name	Health & Fitness
+189	prop:name	Education
+191	prop:name	Travel
+193	prop:name	Home
+195	prop:name	Finance
+197	prop:name	Other
+199	prop:name	Salary
+200	prop:name	Freelance
+201	prop:name	Other Income
+286	problems	Budgets are not a valid list — your current budgets were kept.
+290	problems	All ${entries.length} budget entries were invalid — your current budgets were kept.
+291	problems	${bad} invalid budget ${plural(bad,
+295	problems	Templates are not a valid list — your current templates were kept.
+308	problems	All ${src.templates.length} templates were invalid — your current templates were kept.
+309	problems	${bad} invalid ${plural(bad,
+313	problems	Goals are not a valid list — your current goals were kept.
+328	problems	All ${src.goals.length} goals were invalid — your current goals were kept.
+335	problems	The currency symbol was not valid — your current symbol was kept.
+342	problems	The Safe to Spend settings were not valid — your current settings were kept.
+358	noteLoad	Some saved settings were not valid and were reset${kept?
+376	noteLoad	Saved data could not be read — a recovery copy was kept
+377	noteLoad	Saved data could not be read and a recovery copy could not be made (storage may be full) — saving is paused so nothing is overwritten
+419	prop:name	Bus / Metro
+420	prop:name	Manatlıq B-S
+421	prop:name	Groceries
+422	prop:name	Coffee
+423	prop:name	Football Pitch
+476	prop:error	This CSV has an opening quote that is never closed, so rows could be merged or lost. Nothing was imported.
+477	prop:error	No data rows were found in the CSV.
+481	prop:error	The CSV needs a ${missing.join(
+505	prop:error	This file is not valid JSON or CSV, so nothing was imported.
+509	prop:error	The backup's version number is not valid, so it was not imported.
+510	prop:error	This backup was made by a newer version of the app (v${parsed.version}). Update the app before importing it.
+516	warnings	The backup's export date is not valid and was ignored.
+518	warnings	The file says it holds ${parsed.meta.transactionCount} transactions but contains ${list.length} — it may be incomplete.
+519	prop:error	This file does not look like a ledger backup.
+525	prop:reason	more than 2 decimal places
+529	warnings	${unknownCat} transaction${unknownCat>1?
+575	jsx	ms!==null && (now.getTime()-ms)/86400000
+638	jsx	= 5  && avgGap
+639	jsx	= 12 && avgGap
+640	jsx	= 25 && avgGap
+641	jsx	= 300 && avgGap
+664	jsx	=prev30&&t.date
+694	jsx	0 && (maxSpend-minSpend)/avg
+744	jsx	exp ? "Surplus" : inc
+746	jsx	exp ? "var(--pos)" : inc
+782	jsx	t.type==="expense"&&t.date.startsWith(mon)&&(p.state==="past"||t.date
+831	jsx	t.type==="expense"&&t.date.startsWith(mon)&&t.date
+937	jsx	!used.has(ix) && Math.abs(daysBetween(parseLocalDate(r),parseLocalDate(e)))
+941	jsx	d
+967	jsx	t.date
+983	jsx	0 && (g.saved||0)
+1063	jsx	=startStr && t.date
+1068	prop:text	Per day, you spend ${Math.abs(pct)}% ${pct>0?
+1079	prop:text	${CAT(topCat[0])?.name} accounts for ${pct}% of spending this month
+1082	prop:text	${top3.map(([m])=>m).join(
+1089	prop:text	Average transaction is ${Math.abs(pct)}% ${pct>0?
+1099	prop:text	${hi}s average ${pct}% more per transaction than ${lo}s this month (${dayOfWeek[hi].count} vs ${dayOfWeek[lo].count} transactions)
+1107	jsx	0).length
+1112	jsx	avgY*0.05 ? "increasing" : slope
+1117	prop:text	${CAT(catId)?.name} spending has been ${trend} over recent months (${trendPct>0?
+1129	prop:reason	${(t.amount/med).toFixed(1)}× the usual ${CAT(t.category)?.name} amount (median ${fmt(med,currency)})
+1132	prop:text	${anomalies.length} unusually large transaction${anomalies.length>1?
+1143	prop:text	${CAT(t.category1)?.name} and ${CAT(t.category2)?.name} are often recorded on the same day (${Math.round(t.correlation*100)}% of spending days this month)
+1553	prop:name	Expense Ledger
+1591	showToast	Transaction recorded
+1596	showToast	Transaction updated
+1631	showToast	CSV file created — ${state.transactions.length} rows
+1641	showToast	Backup file created — ${state.transactions.length} transactions. Check your Downloads folder: the app can't confirm it was saved.
+1647	prop:error	That file could not be read, so nothing was imported.
+1663	showToast	Couldn't keep a copy of your current data (storage may be full) — export a backup first. Nothing was changed.
+1672	showToast	Can't undo — your data has changed since the import
+1687	jsx	Undo
+1693	aria-label	Dismiss notice
+1699	jsx	Back up
+1704	jsx	Back up your data to avoid losing it
+1705	jsx	Back up now
+1706	aria-label	Dismiss
+1711	jsx	A backup file was created. The app can't see your Downloads — once you've found the file, confirm it here.
+1712	jsx	I have the file
+1712	showToast	Thanks — the next reminder is in ${BACKUP_REMINDER_DAYS} days
+1720	aria-label	Add transaction
+1721	aria-label	Settings
+1735	prop:label	Ledger
+1735	prop:label	Monthly
+1735	prop:label	Analytics
+1735	prop:label	Recurring
+1762	aria-label	Restore backup
+1764	jsx	Restore Backup
+1768	jsx	OK
+1780	jsx	Merge
+1780	jsx	adds new transactions and keeps everything you have. Budgets are combined (imported categories win), new goals and templates are added, and your currency and Safe to Spend settings stay as they are.
+1781	jsx	Replace
+1789	jsx	Merge — add new, keep existing
+1790	jsx	Replace — use the file's data
+1791	jsx	Cancel
+1836	jsx	x.nextDue&&daysBetween(nowD,x.nextDue)
+1847	jsx	spent this month
+1858	jsx	Income
+1862	jsx	Spent
+1866	jsx	=20?" pos":(surplusRate||0)
+1868	jsx	curExp?" pos":curInc
+1868	jsx	Balance
+1897	jsx	Income received so far
+1902	jsx	Expected later this month (not counted)
+1909	jsx	Goal contributions
+1914	jsx	Savings target
+1919	jsx	Recorded spend
+1923	jsx	Upcoming &amp; unrecorded payments
+1929	jsx	Discretionary remaining
+1955	jsx	Goals
+1969	jsx	Projected to finish after the target date
+1970	jsx	On track for the target date
+1972	jsx	No monthly contribution set
+1982	jsx	Budgets
+2056	jsx	Spending Pace
+2062	title	Where the month is
+2072	jsx	Set a budget to see pace status
+2083	jsx	Recent Activity
+2089	jsx	Nothing recorded yet
+2090	jsx	Tap + to add your first transaction.
+2091	jsx	Add first transaction
+2148	aria-label	Edit
+2149	aria-label	Delete
+2187	jsx	x.date
+2198	jsx	Ledger is empty
+2199	jsx	Start recording to build your transaction history.
+2200	jsx	Add first entry
+2212	placeholder	Search merchant, note, amount…
+2212	aria-label	Search
+2219	jsx	Category
+2227	jsx	Clear ×
+2232	jsx	From
+2233	jsx	To
+2239	jsx	No results
+2240	jsx	Try adjusting your search or clearing filters.
+2249	jsx	Filter by Category
+2250	prop:name	All Categories
+2260	jsx	Close
+2317	jsx	No data yet
+2318	jsx	Add a few transactions to see spending patterns.
+2330	jsx	total spent
+2342	jsx	Daily avg:
+2343	jsx	Projected:
+2354	jsx	Total spending
+2399	jsx	Transactions
+2400	jsx	Avg per txn
+2401	jsx	Median
+2402	title	Average spending per day, counting only the days of this month so far
+2412	jsx	Patterns & Insights
+2448	jsx	Unusual Transactions This Month
+2470	jsx	Often Appear Together
+2471	jsx	Categories recorded on the same day this month
+2508	jsx	Spending pace is ahead of budget pace
+2518	jsx	By Category
+2533	jsx	Top Expenses This Month
+2554	jsx	6-Month Spending
+2555	jsx	6-month avg:
+2576	jsx	Weekly Spending — Last 8 Weeks
+2595	jsx	now
+2610	jsx	Less
+2612	jsx	More · tap for details
+2638	jsx	No recurring payments
+2639	jsx	Mark a transaction as recurring when you add it — rent, gym, subscriptions. Entries for the same payment are grouped into one schedule.
+2677	jsx	Each row is one schedule. Monthly figures are estimates (weekly ×4.33, every two weeks ×2.17); Safe to Spend uses the payments actually still to come this month.
+2679	jsx	Typical monthly outgoing
+2680	jsx	Typical yearly
+2681	jsx	Typical monthly income
+2682	jsx	Active schedules
+2701	jsx	Active
+2705	jsx	Paused
+2710	jsx	Typical Yearly Cost by Category
+2798	jsx	Expense
+2805	aria-label	Amount
+2811	jsx	Similar transaction recorded recently — double entry?
+2815	jsx	Quick fill
+2827	jsx	Merchant
+2827	jsx	(optional)
+2828	placeholder	e.g., BakuBus, Bravo, Spotify
+2879	jsx	Subcategory
+2890	jsx	Note
+2891	placeholder	Additional detail
+2897	jsx	Date
+2973	jsx	Merchant Profile
+2982	jsx	Visits
+2986	jsx	Avg spend
+2990	jsx	Total
+2997	jsx	Visit frequency
+3003	jsx	Typical day
+3009	jsx	Usually for
+3016	jsx	Consistent (±15%)
+3021	jsx	Trend
+3029	jsx	Est. next visit
+3038	jsx	Detected pattern
+3044	jsx	Last 30 days
+3047	jsx	0&&profile.diff30!==0&&
+3058	jsx	Duplicate
+3096	showToast	Name and a positive amount required
+3105	showToast	Name and a positive target required
+3106	showToast	Saved and monthly amounts must be numbers, 0 or more
+3107	showToast	Target date is not valid
+3119	jsx	Overview
+3130	jsx	Safe to Spend
+3132	jsx	Enable Safe to Spend
+3132	jsx	Shows discretionary budget on Dashboard
+3138	jsx	Monthly savings floor
+3139	jsx	Minimum reserved from income — if your goal contributions exceed this, the higher amount is used automatically
+3143	jsx	Save
+3143	showToast	Enter a number, 0 or more
+3143	showToast	Saved
+3149	jsx	Preferences
+3151	jsx	Currency symbol
+3154	showToast	Enter a currency symbol
+3154	showToast	Currency updated
+3161	jsx	Quick-Add Templates
+3167	jsx	Name
+3172	placeholder	Optional
+3174	jsx	Note (optional)
+3174	placeholder	Pre-filled note
+3175	jsx	Save Template
+3178	jsx	No templates yet.
+3193	jsx	Monthly Budgets
+3207	placeholder	Monthly limit
+3208	showToast	Budget saved
+3221	jsx	Financial Goals
+3226	jsx	Goal name
+3226	placeholder	e.g., Master
+3229	jsx	Saved so far
+3232	jsx	Monthly contribution
+3233	jsx	Target date
+3235	jsx	Save Goal
+3238	jsx	No goals yet.
+3252	jsx	Completed
+3259	showToast	Not a valid amount — saved amount unchanged
+3262	jsx	Update
+3290	jsx	What-if scenarios
+3305	jsx	Data
+3307	jsx	Export CSV
+3307	jsx	Full ledger with merchant and subcategory
+3308	jsx	Export
+3311	jsx	JSON Backup
+3312	jsx	Backup
+3315	jsx	Accepts .json or .csv — confirms before any mutation
+3318	jsx	Click to select or drag & drop
+3323	jsx	Last backup file created:
+3326	jsx	Not confirmed yet — the reminder at the top asks once you've found the file.
+3327	jsx	The app can't tell whether your browser kept the file — check it, and store a copy somewhere safe.
+3329	jsx	No backup yet — export one above
+3387	aria-label	Previous month
+3390	jsx	CURRENT
+3392	aria-label	Next month
+3414	jsx	curExp?"Net surplus":curInc
+3437	jsx	By Merchant
+3458	jsx	Budget Status
+3493	jsx	No transactions
+3523	prop:text	You are ${fmt(overage,currency)} above budget pace for this point in the month.
+3535	prop:title	${cat?.name} Budget
+3553	prop:title	Goal: ${goal.name}
+3554	prop:text	At ${fmt(goal.monthlyTarget,currency)}/mo, 
+3555	prop:impact	Finishing by the target date would take about ${fmt(neededMonthly,currency)}/mo.
+3561	prop:text	The target date for 
+3571	prop:title	Over Discretionary Limit
+3572	prop:text	You have spent ${fmt(Math.abs(safeInfo.remaining),currency)} beyond your discretionary budget this month.
+3573	prop:impact	Income received so far: ${fmt(safeInfo.curInc,currency)} − commitments − savings target leaves no room.${safeInfo.expectedInc>0?
+3585	prop:title	Recurring Audit
+3586	prop:text	${activeSchedules.length} active recurring payments come to about ${fmt(monthlyTotal,currency)} in a typical month — ${pctOfIncome}% of the income recorded this month.
+3587	prop:impact	Review them in the Recurring tab. Pausing ones you no longer use frees up discretionary budget.
+3598	prop:title	Unusual Transaction
+3599	prop:text	${top.merchant||CAT(top.category)?.name} on ${fmtDate(top.date)}: ${fmt(top.amount,currency)} — ${top.reason}.
+3600	prop:impact	This is significantly above your normal spend for ${CAT(top.category)?.name}. Was this expected?
+3620	jsx	Financial Coach

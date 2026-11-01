@@ -1,0 +1,79 @@
+﻿
+F1. First launch: chooser before anything else, nothing preselected, Continue disabled
+  ✓ a fresh install shows the language chooser, not the app
+  ✓ three choices with native names: Azərbaycan dili · English · Русский
+  ✓ no language is preselected
+  ✓ Continue is disabled until a choice is made
+  ✓ the three options are equally prominent (same size, weight, width and height ≥ 44 px)
+  ✓ no flags (no images or flag emoji)
+  ✓ before a choice, the heading is shown in all three languages
+  ✓ selecting Azərbaycan dili enables Continue and marks only that option
+  ✓ selecting English enables Continue and marks only that option
+  ✓ selecting Русский enables Continue and marks only that option
+  ✓ the selected option looks different from the others (border and background)
+  ✓ after choosing Русский the Continue button reads 'Продолжить'
+  ✓ keyboard: Tab focuses the first option and a visible focus ring appears
+  ✓ keyboard: the arrow key moves the choice to English (native radio behaviour)
+  ✓ Enter continues; the app opens in English and the choice is saved
+
+F2. The chosen language applies everywhere and survives a reload
+  ✓ choosing Русский: the navigation is in Russian
+  ✓ language 'ru' is stored with the app's settings (expense_ledger_v5), nothing else is created
+  ✓ the page's lang attribute is 'ru' (screen readers pronounce it correctly)
+  ✓ after a reload the chooser does not reappear and the app opens in Russian
+
+F3. Existing users are not sent through onboarding
+  ✓ stored data from before this feature (no language) opens directly in English, as before
+  ✓ a saved Azerbaijani preference opens directly in Azerbaijani
+
+F4. Switching in Settings: everything changes at once, nothing else does
+  ✓ switch to Azərbaycan dili: Settings stays open and the whole interface changes (Parametrlər)
+  ✓ …the half-filled goal form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ switch to Русский: Settings stays open and the whole interface changes (Настройки)
+  ✓ …the half-filled goal form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ switch to English: Settings stays open and the whole interface changes (Settings)
+  ✓ …the half-filled goal form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ the Settings switch shows the current language as selected
+
+F5. No untranslated English on any screen (az and ru)
+  ✓ Azərbaycan dili: no English interface text on Home, Ledger, Monthly, Analytics, Recurring, Settings or the add form
+  ✓ Azərbaycan dili: accessible names (aria-label) are translated too
+  ✗ Azərbaycan dili: the month name is written in that language ("2026 M10")
+  ✓ Azərbaycan dili: amounts keep the 1,234.56 form that matches how amounts are typed (documented decision)
+  ✓ Azərbaycan dili: no JavaScript errors
+  ✓ Русский: no English interface text on Home, Ledger, Monthly, Analytics, Recurring, Settings or the add form
+  ✓ Русский: accessible names (aria-label) are translated too
+  ✓ Русский: the month name is written in that language ("ОКТЯБРЬ 2026 Г.")
+  ✓ Русский: amounts keep the 1,234.56 form that matches how amounts are typed (documented decision)
+  ✓ Русский: no JavaScript errors
+
+F6. Narrow screens: 320 / 360 / 390 px in all three languages
+  ✗ Azərbaycan dili @ 320px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["ledger chip:  Tarix","add cat-tile: Əyləncə","add cat-tile: Ödənişlər","add cat-tile: Sağlamlıq","add cat-tile: Təhsil","add cat-tile: Səyahət","add cat-tile: Ev","add cat-tile: Maliyyə","add cat-tile: Digər","add sub-chip: Çatdırılma","add sub-chip: Qəlyanaltı","add sub-chip: Digər"]
+  ✗ Azərbaycan dili @ 360px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["ledger chip:  Tarix","add cat-tile: Əyləncə","add cat-tile: Ödənişlər","add cat-tile: Sağlamlıq","add cat-tile: Təhsil","add cat-tile: Səyahət","add cat-tile: Ev","add cat-tile: Maliyyə","add cat-tile: Digər","add sub-chip: Çatdırılma","add sub-chip: Qəlyanaltı","add sub-chip: Digər"]
+  ✗ Azərbaycan dili @ 390px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["add cat-tile: Ödənişlər","add cat-tile: Sağlamlıq","add cat-tile: Təhsil","add cat-tile: Səyahət","add cat-tile: Ev","add cat-tile: Maliyyə","add cat-tile: Digər","add sub-chip: Qəlyanaltı","add sub-chip: Digər"]
+  ✗ English @ 320px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["ledger chip:  Date","add cat-tile: Entertainment","add cat-tile: Bills & subs","add cat-tile: Health","add cat-tile: Education","add cat-tile: Travel","add cat-tile: Home","add cat-tile: Finance","add cat-tile: Other","add sub-chip: Groceries","add sub-chip: Delivery","add sub-chip: Snacks"]
+  ✗ English @ 360px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["ledger chip:  Date","add cat-tile: Entertainment","add cat-tile: Bills & subs","add cat-tile: Health","add cat-tile: Education","add cat-tile: Travel","add cat-tile: Home","add cat-tile: Finance","add cat-tile: Other","add sub-chip: Delivery","add sub-chip: Snacks","add sub-chip: Other"]
+  ✗ English @ 390px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["add cat-tile: Entertainment","add cat-tile: Bills & subs","add cat-tile: Health","add cat-tile: Education","add cat-tile: Travel","add cat-tile: Home","add cat-tile: Finance","add cat-tile: Other","add sub-chip: Delivery","add sub-chip: Snacks","add sub-chip: Other"]
+  ✗ Русский @ 320px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["ledger cat-filter-btn: Категория","ledger chip:  Дата","add cat-tile: Развлечения","add cat-tile: Счета","add cat-tile: Здоровье","add cat-tile: Учёба","add cat-tile: Поездки","add cat-tile: Дом","add cat-tile: Финансы","add cat-tile: Другое","add sub-chip: Доставка","add sub-chip: Перекусы"]
+  ✗ Русский @ 360px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["ledger chip:  Дата","add cat-tile: Развлечения","add cat-tile: Счета","add cat-tile: Здоровье","add cat-tile: Учёба","add cat-tile: Поездки","add cat-tile: Дом","add cat-tile: Финансы","add cat-tile: Другое","add sub-chip: Доставка","add sub-chip: Перекусы","add sub-chip: Другое"]
+  ✗ Русский @ 390px: nothing clipped or overflowing on the chooser, 5 tabs, Settings and the add form
+      ↳ ["ledger chip:  Дата","add cat-tile: Развлечения","add cat-tile: Счета","add cat-tile: Здоровье","add cat-tile: Учёба","add cat-tile: Поездки","add cat-tile: Дом","add cat-tile: Финансы","add cat-tile: Другое","add sub-chip: Доставка","add sub-chip: Перекусы","add sub-chip: Другое"]
+
+F7. Add form with the keyboard open (short viewport) in Azerbaijani and Russian
+  ✓ Azərbaycan dili: the focused note field is visible in a 320×420 viewport
+  ✓ Azərbaycan dili: the translated save button ("Xərci qeyd et") can be scrolled into reach
+  ✓ Русский: the focused note field is visible in a 320×420 viewport
+  ✓ Русский: the translated save button ("Записать расход") can be scrolled into reach
+
+e2e_lang: 10 FAILED, 44 passed

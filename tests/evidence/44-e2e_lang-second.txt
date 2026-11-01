@@ -1,0 +1,69 @@
+﻿
+F1. First launch: chooser before anything else, nothing preselected, Continue disabled
+  ✓ a fresh install shows the language chooser, not the app
+  ✓ three choices with native names: Azərbaycan dili · English · Русский
+  ✓ no language is preselected
+  ✓ Continue is disabled until a choice is made
+  ✓ the three options are equally prominent (same size, weight, width and height ≥ 44 px)
+  ✓ no flags (no images or flag emoji)
+  ✓ before a choice, the heading is shown in all three languages
+  ✓ selecting Azərbaycan dili enables Continue and marks only that option
+  ✓ selecting English enables Continue and marks only that option
+  ✓ selecting Русский enables Continue and marks only that option
+  ✓ the selected option looks different from the others (border and background)
+  ✓ after choosing Русский the Continue button reads 'Продолжить'
+  ✓ keyboard: Tab focuses the first option and a visible focus ring appears
+  ✓ keyboard: the arrow key moves the choice to English (native radio behaviour)
+  ✓ Enter continues; the app opens in English and the choice is saved
+
+F2. The chosen language applies everywhere and survives a reload
+  ✓ choosing Русский: the navigation is in Russian
+  ✓ language 'ru' is stored with the app's settings (expense_ledger_v5), nothing else is created
+  ✓ the page's lang attribute is 'ru' (screen readers pronounce it correctly)
+  ✓ after a reload the chooser does not reappear and the app opens in Russian
+
+F3. Existing users are not sent through onboarding
+  ✓ stored data from before this feature (no language) opens directly in English, as before
+  ✓ a saved Azerbaijani preference opens directly in Azerbaijani
+
+F4. Switching in Settings: everything changes at once, nothing else does
+  ✓ switch to Azərbaycan dili: Settings stays open and the whole interface changes (Parametrlər)
+  ✓ …the half-filled goal form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ switch to Русский: Settings stays open and the whole interface changes (Настройки)
+  ✓ …the half-filled goal form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ switch to English: Settings stays open and the whole interface changes (Settings)
+  ✓ …the half-filled goal form keeps what was typed
+  ✓ …only the language changed in saved data (transactions, ids, amounts, currency, budgets, goals untouched)
+  ✓ the Settings switch shows the current language as selected
+
+F5. No untranslated English on any screen (az and ru)
+node : node:internal/modules/run_main:107
+At line:1 char:685
++ ... ndex.html"; node "$wt\tests\browser\e2e_lang.mjs" *> "$wt\tests\evide ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:internal/modules/run_main:107:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    triggerUncaughtException(
+    ^
+
+Error [TypeError]: Cannot read properties of null (reading 'click')
+    at evaluate (evaluate at openSettings 
+(file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/lib.mjs:58:58), <anonymous>:0:62)
+    at #evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/li
+b/puppeteer/cdp/ExecutionContext.js:402:19)
+    at async ExecutionContext.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_mod
+ules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:16)
+    at async IsolatedWorld.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_module
+s/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pup
+peteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/api/Page.js:832:20)
+    at async openSettings 
+(file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/lib.mjs:58:47)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_lang.mjs:98:3
+
+Node.js v24.22.1

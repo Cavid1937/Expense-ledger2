@@ -1,0 +1,4 @@
+﻿M1 percentages without remainder: [run-logic] redesign.test.mjs exit=1 passed=12 failed=4 missing=0 expected=16 PROBLEM: exit=1
+M2 trend counts entries dated later: [run-logic] redesign.test.mjs exit=1 passed=14 failed=2 missing=0 expected=16 PROBLEM: exit=1
+M3 trend without cent rounding: [run-logic] redesign.test.mjs exit=1 passed=15 failed=1 missing=0 expected=16 PROBLEM: exit=1
+M4 ring keeps six categories: [run-logic] redesign.test.mjs exit=1 passed=15 failed=1 missing=0 expected=16 PROBLEM: exit=1

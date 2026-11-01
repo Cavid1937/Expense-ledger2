@@ -1,0 +1,83 @@
+﻿
+D16. A failed read of the saved data is never treated as a fresh install
+  ✗ getItem(expense_ledger_v5) throws → saving is paused (the next save cannot overwrite the stored ledger)
+  ✗ the user is told the data could not be read and saving is paused
+      ↳ null
+  ✓ the stored ledger is byte-for-byte unchanged
+  ✗ …and older-version data is NOT migrated over it while the current data is unreadable
+      ↳ 1
+  ✗ storage completely unavailable → the app still starts (empty view) with saving paused
+
+D17. An empty string stored under the key is unreadable data, not 'nothing saved'
+  ✗ a recovery copy of the empty value is kept before anything can overwrite it
+      ↳ ["expense_ledger_v5"]
+  ✗ the user is told the saved data could not be read
+      ↳ null
+  ✗ it is treated as an existing user (no first-launch language chooser)
+      ↳ null
+  ✗ …and if that copy cannot be made, saving is paused
+
+D18. Older-version data that cannot be read blocks saving instead of being skipped
+  ✗ reading an older key throws → saving is paused and the user is told (the older data is not hidden behind an empty ledger)
+      ↳ null
+  ✗ an unparseable older key: a recovery copy is kept, the readable older data still migrates
+      ↳ {"n":1,"keys":[]}
+  ✓ older keys are never modified or removed
+  ✓ control: a normal migration is unchanged (1 record, no notice, not blocked)
+
+D8/D14. A file with no usable transactions can never empty the ledger with Replace
+  ✗ settings-only file: importable for its settings, but Replace is not offered (canReplace=false)
+      ↳ {"ok":true,"n":0}
+  ✗ even if Replace is forced, the 2 existing transactions stay; only the valid settings are applied
+      ↳ {"n":0,"cur":"$"}
+  ✗ settings + only invalid rows: same (1 skipped, Replace not offered)
+      ↳ {"ok":true,"kind":"json","filename":"s.json","transactions":[],"skippedCount":1,"skippedSummary":"1 invalid date","settings":{"currency":"$"},"problems":[],"warnings":[]}
+  ✗ settings + an explicitly empty list: Replace not offered and cannot empty the ledger
+  ✗ control: a backup with 1 valid transaction still replaces as before
+      ↳ {"n":1}
+
+D9/D15. isActive and recurring accept only true/false (or the words true/false)
+  ✗ true/false, "true"/"false" (any case, trimmed) are read as written; a missing flag means active
+      ↳ [[100,true],[101,false],[102,true],[103,true],[104,true],[199,true]]
+  ✗ isActive null / 0 / 1 / "yes" / "no" / {} / [] → every record refused (never guessed)
+      ↳ [[300,false],[301,false],[302,true],[303,true],[304,true],[305,true],[306,true]]
+  ✗ recurring "yes" / 1 refused; "false" → not recurring; true + monthly → recurring
+      ↳ [[400,false],[401,false],[402,false],[403,true]]
+  ✗ stored data: "false" stays paused; an unreadable flag is set aside with a recovery copy (not silently activated)
+      ↳ [[1,true],[2,true],[3,true]]
+
+D13/D22. Every stored or imported money value must be whole cents
+  ✗ stored 12.345 is set aside with a recovery copy; 12.34 kept
+      ↳ [[1,12.34],[2,12.345],[3,0.30000000000000004]]
+  ✗ a binary rounding leftover (0.1+0.2 = 0.30000000000000004) is read as 0.30
+      ↳ 0.30000000000000004
+  ✗ budget 12.345 refused (transport 50 kept)
+      ↳ {"settings":{"budgets":{"food":12.345,"transport":50}},"problems":[],"warnings":[]}
+  ✗ goals with saved 12.345 or monthly 10.005 refused; a whole-cent goal kept
+      ↳ [{"id":"g1791878400000_0","name":"A","target":100,"saved":12.345,"monthlyTarget":0,"targetDate":null},{"id":"g1791878400000_1","name":"B","target":100,"saved":0,"monthlyTarget":10.005,"targetDate":null},{"id":"g1791878400000_2","name":"C","target":100.5,"saved":10.01,"monthlyTarget":5,"targetDate":null}]
+  ✗ Safe to Spend savings floor 12.345 refused (your current value is kept)
+      ↳ {"settings":{"safeToSpend":{"savingsTarget":12.345,"enabled":true}},"problems":[],"warnings":[]}
+  ✗ template 1.005 refused; 1.50 kept
+      ↳ [{"id":"t1791878400000_0","name":"Bus","amount":1.005,"catId":"transport","subcat":"","merchant":"","note":""},{"id":"t1791878400000_1","name":"Tea","amount":1.5,"catId":"food","subcat":"","merchant":"","note":""}]
+  ✓ control: whole-cent settings are accepted unchanged
+
+D1. Two different bills from the same merchant stay two schedules
+  ✗ electricity 90 and water 18 (same merchant, category, monthly) → 2 schedules
+      ↳ [["Water",18]]
+  ✗ water paid on 5 Oct does not settle electricity: 90 still owed → 2000 − 18 − 90 = 1,892 (was 1,982)
+      ↳ {"fc":0,"remaining":1982}
+  ✓ control: one bill whose price changed 30 → 35 stays ONE schedule (latest amount 35)
+
+D19. A bill due on the 31st returns to the 31st after a short month
+  ✗ 31 Jan, 28 Feb → March due 31 Mar (not 28 Mar)
+      ↳ ["2026-03-28"]
+  ✗ → April 30; and 31 Mar, 30 Apr → 31 May
+  ✓ control: the 15th stays the 15th
+  ✓ a deliberate change (paid on 28 Mar, not month-end) moves the due day to the 28th
+
+D21. A 29 February yearly payment returns to 29 February in a leap year
+  ✗ 29 Feb 2024, 28 Feb 2025 → 28 Feb 2026, 29 Feb 2028
+      ↳ [["2026-02-28"],["2028-02-28"]]
+  ✓ control: a 10 March yearly payment is due 10 March only
+
+run6: 30 FAILED, 8 passed

@@ -1,0 +1,32 @@
+﻿
+R13-B1. Replace with an older (version 9) backup while the device has bills
+  ✗ the Replace sheet says: this file has no bills, so your 2 bills stay and its payments will not be linked to them
+      ↳ Restore Backup
+v9-backup.json
+2 transactions ready to import
+Merge adds new transactions and keeps everything you have. Budgets are combined (imported categories win), new goals and templates are adde
+  ✓ after Replace: the 2 entries of the file, the 2 bills still there, no entry linked to a bill
+  ✓ a recovery copy was kept first
+  ✓ Undo brings back all 3 entries, both links and both bills
+  ✓ Safe to Spend is back to +1,892
+  ✓ no JavaScript errors
+  ✓ a device without bills sees no such note
+
+R13-B2. Converting to bills when the recovery copy cannot be kept
+  ✓ nothing is converted: no bills, no links
+  ✓ the user is told why, and the Convert offer is still there
+  ✓ once copies can be kept again, the same step works (1 bill, 3 links)
+  ✓ no JavaScript errors
+
+R13-B3. The ledger itself cannot be saved (storage full)
+  ✓ a red banner says the data could not be saved
+  ✓ the saved ledger and the mirror are exactly as they were (nothing half-written)
+  ✓ after reloading: the 2 earlier bills are intact (the unsaved third is gone, as the banner said) and no restore offer appears
+
+R13-B4. Restoring bills when the recovery copy cannot be kept
+  ✓ (setup) the ledger without bills plus its mirror: the restore offer is shown
+  ✓ no recovery copy possible: nothing is restored, the user is told why, and the offer stays
+  ✓ once a copy can be kept, Restore brings back the 2 bills and the 2 links
+  ✓ no JavaScript errors
+
+e2e_run13: 1 FAILED, 17 passed

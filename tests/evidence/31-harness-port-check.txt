@@ -1,0 +1,4 @@
+﻿candidate logic section found verbatim in harness output: true | import lines removed: 1 ["import { useState, useEffect, useMemo, useCallback, useRef } from \"react\";"]
+text before it = clock/storage stub only: true
+appended after it: calcHelperCards copied verbatim: true
+export line: 910 chars; 60 names

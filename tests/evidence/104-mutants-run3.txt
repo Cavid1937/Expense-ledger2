@@ -1,0 +1,11 @@
+﻿== B-no-unsaved-question
+
+run3: ALL 19 CHECKS PASSED
+[run-logic] 7 files, 0 with failures
+== C-future-counts-again
+run3: 8 FAILED, 11 passed
+[run-logic] 7 files, 1 with failures
+e2e_run3: 2 FAILED, 35 passed
+== real page rebuilt
+
+

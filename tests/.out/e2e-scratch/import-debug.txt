@@ -1,0 +1,25 @@
+﻿
+I1. CSV with BOM and bad rows
+node : node:fs:2482
+At line:1 char:791
++ ... R="$s\imp"; node "$wt\tests\browser\e2e_import.mjs" *> "$s\import-deb ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:fs:2482:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    return binding.writeFileUtf8(
+                   ^
+
+Error: ENOENT: no such file or directory, open 
+'C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\tests\.out\e2e-scratch\imp\mixed.csv'
+    at Object.writeFileSync (node:fs:2482:20)
+    at write (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_import.mjs:4:71)
+    at file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_import.mjs:19:20 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 
+'C:\\Users\\cavid\\OneDrive\\Documents\\GitHub\\Expense-ledger2-fixes\\tests\\.out\\e2e-scratch\\imp\\mixed.csv'
+}
+
+Node.js v24.22.1

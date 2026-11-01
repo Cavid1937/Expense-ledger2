@@ -1,0 +1,159 @@
+﻿built App.jsx (323032 bytes bundled) -> C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\page
+
+A. Add-transaction form
+  ✓ cleared date → 'Please choose a valid date' shown
+  ✓ …nothing saved, form stays open
+  ✓ amount "-5" → nothing saved
+  ✓ amount "1e999" → nothing saved
+  ✓ amount "1e3" → nothing saved
+  ✓ amount "0" → nothing saved
+  ✓ amount "12." → nothing saved
+  ✓ valid amount + date → saved normally (regression check)
+
+B. Settings entry points
+  ✓ add form closed after the valid save
+  ✓ savings floor −300 → rejected, stays 300
+  ✓ savings floor 450 → saved
+  ✓ empty currency → rejected, stays ₼
+  ✓ currency row says 'Display only — amounts are not converted'
+  ✓ template amount −5 → rejected
+  ✓ template amount 0 → rejected
+  ✓ template amount 3.5 → saved
+  ✓ budget −50 → rejected, budgets unchanged
+  ✓ budget 120 → saved
+  ✓ goal target −100 → rejected
+  ✓ goal monthly −5 → rejected
+  ✓ goal saved −1 → rejected
+  ✓ valid goal → saved with exact values
+  ✓ prompt 'abc' → rejected, saved amount stays 3200
+  ✓ prompt −500 → rejected
+  ✓ prompt 1e3 (scientific) → rejected
+  ✓ prompt 4500 → saved
+  ✓ no JavaScript errors during the whole run
+
+e2e: ALL 27 CHECKS PASSED
+[run-browser] e2e.mjs exit=0
+
+I1. CSV with BOM and bad rows
+  ✓ sheet: '2 transactions ready to import'
+  ✓ sheet explains each skipped row by reason (−5, 0, empty, abc+1e3, no date)
+  ✓ sheet explains what Merge and Replace do
+  ✓ merge adds exactly the 2 valid rows with exact amounts 12.5 and 7
+  ✓ no rejected row slipped in; the −5 did not become +5; no row got today's date
+  ✓ snackbar confirms 'Added 2 transactions'
+
+I2. Replace keeps a recovery copy and can be undone
+  ✓ replace: transactions, budgets and currency replaced; goals and templates (absent from the file) kept
+  ✓ a recovery copy of the previous data was stored before replacing
+  ✓ …and it equals the pre-import data exactly
+  ✓ snackbar offers Undo
+  ✓ Undo restores the previous data exactly
+  ✓ Undo after a later change refuses (it would erase newer work)
+  ✓ …and says why
+
+I3. Malformed settings in an otherwise valid backup
+  ✓ each rejected section is reported
+  ✓ merge adds the valid transaction and leaves every current setting untouched
+
+I4. Files that must be refused
+  ✓ unterminated.csv: refused with a clear message
+  ✓ unterminated.csv: saved data unchanged
+  ✓ nocols.csv: refused with a clear message
+  ✓ nocols.csv: saved data unchanged
+  ✓ future.json: refused with a clear message
+  ✓ future.json: saved data unchanged
+  ✓ junk.json: refused with a clear message
+  ✓ junk.json: saved data unchanged
+  ✓ allbad.csv: refused with a clear message
+  ✓ allbad.csv: saved data unchanged
+
+I5. Look-alike transactions (re-importing the same CSV)
+  ✓ sheet counts the look-alike and offers to skip it (checked by default)
+  ✓ merge with the box checked adds only the new one
+
+I6. Export files, then import them back
+  ✓ JSON backup file was downloaded
+  ✓ …its content equals the saved state (transactions, budgets, goals, currency) and carries version and count
+  ✓ message says the file was CREATED and that the app can't confirm it was saved (no 'backup saved')
+  ✓ Settings labels the date 'Last backup file created'
+  ✓ importing the same backup back → every transaction is recognised as already present
+  ✓ merging your own backup changes nothing
+  ✓ CSV export: BOM, CategoryId column, one row per transaction
+  ✓ re-importing the CSV: every row accepted, none skipped
+
+R1. Recovery notices stay until dismissed
+  ✓ recovery banner explains what was set aside and why
+  ✓ …and it is still there after several toasts (nothing can replace it)
+  ✓ dismissing it removes it
+  ✓ the set-aside records remain recoverable in storage
+
+R2. localStorage unavailable
+  ✓ app still starts; a visible banner says changes cannot be saved
+  ✓ the app keeps working in memory (a recorded entry appears in the Ledger)
+  ✓ no JavaScript errors
+
+R3. Save fails (quota)
+  ✓ a failed write shows 'Could not save changes' with a Back up button
+
+R4. Recovery copy cannot be made → saving is paused
+  ✓ banner says saving is paused so nothing is overwritten
+  ✓ after making a change, the ORIGINAL stored data is byte-for-byte untouched
+
+U1. Undo restores exactly what was deleted
+  ✓ delete shows 'Transaction deleted' with Undo
+  ✓ Undo brings back the identical record AND keeps the entry added after the delete
+  ✓ two quick deletes share one undo window ('2 transactions deleted')
+  ✓ one Undo restores both, exactly
+  ✓ after the window closes the Undo is gone (no stale undo)
+  ✓ no JavaScript errors
+
+e2e_import: ALL 51 CHECKS PASSED
+[run-browser] e2e_import.mjs exit=0
+
+S1. Recurring screen groups payments into schedules
+  ✓ rent recorded 3 months + Netflix + Spotify = 3 rows, not 5 (found 3)
+  ✓ rent row says '3 payments recorded'; typical monthly outgoing = 450 + 15 + 15 = 480.00 ₼
+  ✓ pausing one schedule pauses every payment recorded under it
+  ✓ …all members of that schedule and no others
+  ✓ a Paused section appears
+  ✓ reactivating restores the whole schedule
+  ✓ Home: Safe to Spend lists upcoming/unrecorded payments and says how many schedules it used
+  ✓ no JavaScript errors
+  ✓ with no recurring payments the card says upcoming bills are NOT included (no silent optimism)
+
+S2. Sheets: dismissal, gestures, focus
+  ✗ opening a sheet moves focus into it
+  ✗ Escape closes it and focus returns to the button that opened it
+  ✓ tapping the backdrop closes it
+  ✗ 45 presses of Tab never leave the open sheet (focus stays inside)
+node : node:internal/modules/run_main:107
+At line:1 char:676
++ ... pp.jsx"))){ node "$wt\tests\run-browser.mjs" $c[1] *> "$wt\tests\evid ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:internal/modules/run_main:107:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    triggerUncaughtException(
+    ^
+
+Error [TypeError]: Cannot read properties of null (reading 'getBoundingClientRect')
+    at evaluate (evaluate at gripCenter 
+(file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_ux.mjs:48:31), 
+<anonymous>:0:56)
+    at #evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/li
+b/puppeteer/cdp/ExecutionContext.js:402:19)
+    at async ExecutionContext.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_mod
+ules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:16)
+    at async IsolatedWorld.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_module
+s/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pup
+peteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/api/Page.js:832:20)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_ux.mjs:50:35
+
+Node.js v24.22.1
+[run-browser] e2e_ux.mjs exit=1
+[run-browser] candidate=C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\App.jsx
+[run-browser] scratch=C:\Users\cavid\AppData\Local\Temp\ledger-e2e-aQyHtr
+[run-browser] 3 files, 1 with failures

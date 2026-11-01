@@ -1,0 +1,13 @@
+﻿
+> expense-ledger@1.0.0 build
+> vite build
+
+vite v5.4.21 building for production...
+transforming...
+✓ 30 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/manifest-wyF7OkiL.json    0.42 kB │ gzip:  0.23 kB
+dist/index.html                       0.70 kB │ gzip:  0.37 kB
+dist/assets/index-pu3BTabF.js       320.50 kB │ gzip: 91.35 kB
+✓ built in 2.70s

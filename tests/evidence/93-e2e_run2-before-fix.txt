@@ -1,0 +1,51 @@
+﻿
+R2-A. A sheet opened from a long Ledger list is on screen and above the tab bar
+  ✗ list scrolled to the top: the category sheet sits at the bottom of the screen (top 3828, bottom 4353, screen 844)
+      ↳ {"top":3828,"bottom":4353,"vh":844,"tabbarCovered":false}
+  ✗ …and it covers the tab bar (the tab bar is not drawn over it)
+      ↳ {"top":3828,"bottom":4353,"vh":844,"tabbarCovered":false}
+  ✓ list scrolled to the bottom: the category sheet sits at the bottom of the screen (top 319, bottom 844, screen 844)
+  ✗ …and it covers the tab bar (the tab bar is not drawn over it)
+      ↳ {"top":319,"bottom":844,"vh":844,"tabbarCovered":false}
+  ✓ no JavaScript errors
+
+R2-B. The category list follows Expenses / Income
+  ✓ All: both expense and income categories are listed
+  ✗ Expenses: only expense categories (no Salary)
+      ↳ ["All Categories","Food & Dining","Transport","Shopping","Home","Salary"]
+  ✗ Income: only income categories (no Food & Dining)
+      ↳ ["All Categories","Food & Dining","Transport","Shopping","Home","Salary"]
+  ✗ switching to Income drops a Transport filter instead of showing an empty list
+      ↳ Transport
+
+R2-C. A search with no match shows 'No results' and does not crash
+  ✗ searching 'zzqq' shows 'No results' with no JavaScript error
+      ↳ Error: Uncaught TypeError: T is not a function
+node : node:internal/modules/run_main:107
+At line:1 char:518
++ ... dex.html')).AbsoluteUri; node tests/browser/e2e_run2.mjs 2>&1 | Tee-O ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:internal/modules/run_main:107:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    triggerUncaughtException(
+    ^
+
+Error: field not found
+    at evaluate (evaluate at setInput 
+(file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/lib.mjs:54:14), <anonymous>:0:66)
+    at #evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/li
+b/puppeteer/cdp/ExecutionContext.js:402:19)
+    at async ExecutionContext.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_mod
+ules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:16)
+    at async IsolatedWorld.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_module
+s/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pup
+peteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/api/Page.js:832:20)
+    at async setInput 
+(file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/lib.mjs:54:3)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_run2.mjs:64:1
+
+Node.js v24.22.1

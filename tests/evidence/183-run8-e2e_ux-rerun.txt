@@ -1,0 +1,7 @@
+﻿@2026-10-27T16:51:32
+Run 8 — e2e_ux rerun on the exact Run 8 build (App.jsx sha256 328689C0CF5471476546AB89597B81C78D82A9C75EFA10C38F92112A232B05BB,
+the file the full suite in log 182 built; saved as handoff/run-8-snapshot/App.jsx).
+Log 182 (full suite, run while the e2e_import repeat loop of log 181 was also driving Chrome): 368/369, the one failure
+"grabbing the sheet mid-spring continues from where it is (no jump: 112 → 97)" — a timing-based gesture check.
+Rerun alone, same page, 3 times: run 1 ALL 30 PASSED, run 2 ALL 30 PASSED, run 3 ALL 30 PASSED.
+Reading: load-sensitive timing check, not a Run 8 regression (Run 8 did not touch sheet gestures). Recorded as a flaky check.

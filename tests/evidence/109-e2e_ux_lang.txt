@@ -1,0 +1,16 @@
+﻿
+AZ. Touch targets and contrast in Azerbaijani (390×844)
+  ✓ the interface is in az (html lang="az")
+  ✗ az: 88 controls measured on 5 screens — icon-only ≥44×44, text controls ≥34 high, fields ≥36
+      ↳ ["recurring: \"Dayandır\" 50×32 (needs ≥34 high)","recurring: \"Dayandır\" 50×32 (needs ≥34 high)","add form: \"Dayandır\" 50×32 (needs ≥34 high)","add form: \"Dayandır\" 50×32 (needs ≥34 high)"]
+  ✓ az: no JavaScript errors
+  ✓ az: 362 text elements across 6 screens meet WCAG AA (4.5:1, or 3:1 for large text)
+
+RU. Touch targets and contrast in Russian (390×844)
+  ✓ the interface is in ru (html lang="ru")
+  ✗ ru: 98 controls measured on 5 screens — icon-only ≥44×44, text controls ≥34 high, fields ≥36
+      ↳ ["recurring: \"Приостановить\" 81×32 (needs ≥34 high)","recurring: \"Приостановить\" 81×32 (needs ≥34 high)"]
+  ✓ ru: no JavaScript errors
+  ✓ ru: 448 text elements across 6 screens meet WCAG AA (4.5:1, or 3:1 for large text)
+
+e2e_ux_lang: 2 FAILED, 6 passed

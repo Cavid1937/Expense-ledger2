@@ -1,0 +1,37 @@
+﻿  ✓ the previous app version (version 9: the exact files of commit 12a0c19) builds for this test
+
+DG-1. The current app writes the ledger and its mirror
+  ✓ start: bills set electricity (90) aside → discretionary +1,892
+  ✓ the ledger holds 2 bills and 3 linked payments
+  ✗ the mirror (own key) holds the same 2 bills and the 3 links
+      ↳ null
+  ✗ the mirror holds only bills and links, no other ledger data
+
+DG-2. Starting the previous app version (cannot be patched: it is already live) on that ledger
+  ✓ (guard) the old app really reads the ledger the new app wrote: it sees the 2 bills at start
+  ✓ KNOWN, version 9 cannot change: just opening it rewrites the ledger without the bills and without any payment link (the 4 entries stay)
+  ✓ every entry keeps its id, amount, date, name, note and category
+  ✗ the old app leaves the mirror key untouched
+  ✓ and its Safe to Spend shows the old collision again: +1,982 (electricity not set aside)
+
+DG-3. Back on the current app: the loss is offered back, never applied silently
+  ✗ a banner says an older version removed 2 bills and offers to restore them
+  ✓ nothing was restored by itself
+  ✗ while the offer is open the mirror is kept as it was (ignoring the banner loses nothing)
+  ✗ Restore brings back the same 2 bills (same ids and fields) and the same 3 links; no entry changed
+  ✗ Safe to Spend is +1,892 again
+  ✗ a recovery copy of the data was kept first, and the banner is gone
+  ✗ Undo puts the data back as it was before restoring, and the offer is open again (the mirror still has the bills)
+  ✗ after reloading: the 2 bills are there, no banner, +1,892
+  ✓ no JavaScript errors
+
+DG-4. 'No thanks' is final, and nothing is offered without a real loss
+  ✗ after another rollback the offer appears again
+  ✗ No thanks: nothing restored, the banner closes, and the mirror now follows the ledger (no repeated nagging)
+  ✓ after reloading there is no banner
+  ✓ a brand-new install: no banner and no mirror key (users without bills get no extra storage)
+  ✗ deleting a bill on purpose updates the mirror too (1 bill left)
+  ✓ after reloading there is no banner: a deliberate delete is not mistaken for a rollback
+  ✓ no JavaScript errors
+
+e2e_downgrade: 13 FAILED, 13 passed

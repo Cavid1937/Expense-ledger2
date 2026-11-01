@@ -1,0 +1,48 @@
+﻿
+R9-1. Placeholders are readable (Add form and Ledger search)
+  ✓ en: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+  ✓ az: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+  ✓ ru: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+
+R9-2. Header: no Settings gear anywhere; the + matches the screen
+  ✗ no screen has a Settings gear in its title bar; every screen has the privacy eye there
+      ↳ {"Home":{"gear":true,"eye":false,"add":"Add transaction"},"Ledger":{"gear":true,"eye":false,"add":"Add transaction"},"Monthly":{"gear":true,"eye":false,"add":"Add transaction"},"Goals":{"gear":true,"eye":false,"add":"Add transaction"},"More":{"gear":true,"eye":false,"add":"Add transaction"},"Recurring":{"gear":true,"eye":false,"add":"Add transaction"},"ImportExport":{"gear":true,"eye":false,"add":"Add transaction"}}
+  ✗ + adds a transaction on Home and Transactions; Analytics, More and Import / Export have no +
+      ↳ {"Home":{"gear":true,"eye":false,"add":"Add transaction"},"Ledger":{"gear":true,"eye":false,"add":"Add transaction"},"Monthly":{"gear":true,"eye":false,"add":"Add transaction"},"Goals":{"gear":true,"eye":false,"add":"Add transaction"},"More":{"gear":true,"eye":false,"add":"Add transaction"},"Recurring":{"gear":true,"eye":false,"add":"Add transaction"},"ImportExport":{"gear":true,"eye":false,"add":"Add transaction"}}
+  ✗ Budgets & Goals: '+' = Add budget; Recurring: '+' = Add recurring payment
+      ↳ {"goals":"Add transaction","rec":"Add transaction"}
+  ✗ Recurring '+' opens the Add form with 'Recurring' already switched on
+  ✗ on the Goals segment '+' = Add goal and opens the new-goal form
+      ↳ Add transaction
+  ✗ on the Budgets segment '+' opens a 'new budget' form (category + monthly limit)
+  ✓ Settings opens from More → Settings
+  ✓ no JavaScript errors
+
+R9-3. Privacy mode hides amounts, names and chart values on every screen (en / az / ru)
+node : node:internal/modules/run_main:107
+At line:1 char:482
++ ... nv:E2E_IMP_DIR="$w\imp"; node tests\browser\e2e_run9.mjs 2>&1 | Tee-O ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:internal/modules/run_main:107:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    triggerUncaughtException(
+    ^
+
+Error [TypeError]: Cannot read properties of null (reading 'getAttribute')
+    at evaluate (evaluate at 
+file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_run9.mjs:82:27, 
+<anonymous>:0:57)
+    at #evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/li
+b/puppeteer/cdp/ExecutionContext.js:402:19)
+    at async ExecutionContext.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_mod
+ules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:16)
+    at async IsolatedWorld.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_module
+s/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pup
+peteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/api/Page.js:832:20)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_run9.mjs:82:16
+
+Node.js v24.22.1

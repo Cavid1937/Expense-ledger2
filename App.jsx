@@ -333,6 +333,16 @@ function normaliseTxn(t, opts={}) {
 }
 // Run 22: a trip is a short free-text label (max 40 characters) on ordinary entries. Anything that is not text gives no trip.
 function tripName(v) { return typeof v==="string" ? v.replace(/[\u0000-\u001f\u007f\s]+/g," ").trim().slice(0,40).trim() : ""; }
+// Run 24: one category's all-time total and a total per month (newest first), in whole cents. Loan instalments count only their interest, like every spending view.
+function catTotals(list, catId) {
+  const by=new Map(); let cents=0, n=0;
+  forSpending(list||[]).forEach(x=>{
+    if (!x || x.category!==catId) return;
+    const c=Math.round((Number(x.amount)||0)*100), m=String(x.date||"").slice(0,7);
+    cents+=c; n++; const g=by.get(m)||{ month:m, cents:0, n:0 }; g.cents+=c; g.n++; by.set(m,g);
+  });
+  return { total:cents/100, n, months:[...by.values()].filter(g=>/^\d{4}-\d{2}$/.test(g.month)).sort((a,b)=>b.month.localeCompare(a.month)).map(g=>({ month:g.month, total:g.cents/100, n:g.n })) };
+}
 // Expenses per trip (loan instalments count only their interest, like every spending view), whole cents so 0.1 + 0.2 is exactly 0.30.
 // "Baku" and "baku" are one trip; the spelling of the first entry in the list (newest first) is shown. Largest total first.
 function tripTotals(list) {
@@ -4145,6 +4155,7 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
   },[transactions,search,typeFilter,catFilter,walletFilter,tripFilter,dateFrom,dateTo,locale()]);
   // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
   const trips=useMemo(()=>tripTotals(transactions),[transactions]);
+  const catSel=useMemo(()=>catFilter==="all" ? null : catTotals(transactions,catFilter),[transactions,catFilter]);   // Run 24
   const tripSel=tripFilter==="all" ? null : trips.find(x=>x.name.toLowerCase()===tripFilter.toLowerCase()) || null;
   // Run 16: the wallet filter is offered only when at least one entry has a wallet, and lists only the wallets in use.
   const usedWallets=useMemo(()=>[...new Set(transactions.map(x=>walletId(x.wallet)).filter(Boolean))],[transactions]);
@@ -4194,6 +4205,12 @@ function LedgerPage({ transactions, currency, onDelete, onEdit, onView, onAdd })
           {["all",...trips.map(x=>x.name)].map(n=>(
             <button key={n} className={`chip${tripFilter===n?" on":""}`} aria-pressed={tripFilter===n} onClick={()=>setTripFilter(n)}>{n==="all"?t("trip.filterAll"):n}</button>
           ))}
+        </div>
+      )}
+      {catSel&&catSel.n>0&&(
+        <div className="list-sub" data-section="tx-cat-totals" style={{margin:"2px 2px 8px"}}>
+          <div style={{fontWeight:600}}>{t("cat.allTime",{total:fmt(catSel.total),n:catSel.n})}</div>
+          {catSel.months.slice(0,12).map(m=><div key={m.month} data-month={m.month}>{t("cat.month",{month:monthName(m.month),total:fmt(m.total)})}</div>)}
         </div>
       )}
       {tripSel&&<div className="list-sub" data-section="tx-trip-total" style={{margin:"2px 2px 8px"}}>{t("trip.total",{name:tripSel.name,total:fmt(tripSel.total),n:tripSel.n})}</div>}

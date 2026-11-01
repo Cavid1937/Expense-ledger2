@@ -1,0 +1,25 @@
+﻿
+N-B1. Share succeeded
+  ✓ with the native hook the 'save a backup somewhere else' button is offered
+  ✓ the hook gets one call: a ledger-backup-<date>.json file of type application/json
+  ✓ the text is the complete version-10 backup (all entries, the bills list)
+  ✓ only now does the app say the backup was sent and record the time
+  ✓ no browser download was started as well
+  ✓ the plain 'Create backup file' button also goes through the native hand-over (a download link would do nothing there)
+  ✓ no JavaScript errors
+
+N-B2. The user closes the share sheet
+  ✓ nothing is recorded and no success message is shown
+
+N-B3. The native step fails
+  ✓ the user is told it failed (and not that it was sent)
+  ✓ the backup time is not updated
+  ✓ the same through the plain button: told, nothing recorded
+
+N-B4. CSV export goes the same way
+  ✗ the hook gets a ledger-<date>.csv file of type text/csv whose first row is the header
+      ↳ [["ledger-2026-10-28.csv","text/csv;charset=utf-8;","﻿\"Date\",\"Typ"]]
+  ✓ success message after "shared"; no browser download
+  ✓ a failed CSV hand-over is reported as a failure, not as created
+
+e2e_native: 1 FAILED, 13 passed

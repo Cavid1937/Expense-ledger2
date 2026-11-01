@@ -1,0 +1,23 @@
+﻿
+=== run 1 exit=0
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 2 exit=0
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 3 exit=0
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 4 exit=0
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 5 exit=0
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 6 exit=1
+  ✗ 99 controls measured on 5 screens: every icon-only control is ≥44×44 and every text control ≥34 high
+      ↳ ["recurring: \"Pause\" 34×29 (needs ≥34 high)"]
+e2e_ux: 1 FAILED, 29 passed
+=== run 7 exit=1
+  ✗ 99 controls measured on 5 screens: every icon-only control is ≥44×44 and every text control ≥34 high
+      ↳ ["recurring: \"Pause\" 34×29 (needs ≥34 high)"]
+e2e_ux: 1 FAILED, 29 passed
+=== run 8 exit=1
+  ✗ 99 controls measured on 5 screens: every icon-only control is ≥44×44 and every text control ≥34 high
+      ↳ ["recurring: \"Pause\" 34×29 (needs ≥34 high)"]
+e2e_ux: 1 FAILED, 29 passed

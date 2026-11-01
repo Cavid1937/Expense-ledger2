@@ -1,0 +1,41 @@
+﻿
+R2-A. A sheet opened from a long Ledger list is on screen and above the tab bar
+  ✓ list scrolled to the top: the category sheet sits at the bottom of the screen (top 319, bottom 844, screen 844)
+  ✓ …and it covers the tab bar (the tab bar is not drawn over it)
+  ✓ list scrolled to the bottom: the category sheet sits at the bottom of the screen (top 319, bottom 844, screen 844)
+  ✓ …and it covers the tab bar (the tab bar is not drawn over it)
+  ✓ no JavaScript errors
+
+R2-B. The category list follows Expenses / Income
+  ✓ All: both expense and income categories are listed
+  ✓ Expenses: only expense categories (no Salary)
+  ✓ Income: only income categories (no Food & Dining)
+  ✓ switching to Income drops a Transport filter instead of showing an empty list
+
+R2-C. A search with no match shows 'No results' and does not crash
+  ✓ searching 'zzqq' shows 'No results' with no JavaScript error
+  ✓ searching part of a month name works too (it reaches the month-name check)
+
+R2-D. The phone's Back button
+  ✓ Settings is open (precondition)
+  ✓ Back closes the Settings sheet and stays in the app
+  ✓ Back closes the Ledger category sheet and stays on Ledger
+  ✓ Back on Ledger returns to Home
+  ✓ Back closes the Add form
+  ✓ Back on Home with nothing open does not leave at once: it says 'Press Back again to exit'
+  ✓ no JavaScript errors
+
+R2-E. Swiping left / right moves between sections
+  ✓ starts on Home
+  ✓ swipe left on Home → Ledger
+  ✓ swipe left again → Monthly
+  ✓ swipe right → back to Ledger
+  ✓ a mostly vertical drag (scrolling) does not change section
+  ✓ a short sideways nudge (30px) does not change section
+  ✓ a swipe on the sideways-scrolling filter chips scrolls them instead of changing section
+  ✓ with a sheet open, a sideways swipe does not change section
+  ✓ swipe right on Home (the first section) stays on Home
+  ✓ swipe left on Recurring (the last section) stays on Recurring
+  ✓ no JavaScript errors
+
+e2e_run2: ALL 29 CHECKS PASSED

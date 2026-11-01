@@ -1,0 +1,47 @@
+﻿
+R12-1. Old data: convert to bills (with Undo), then split the merged pair
+  ✓ before: the two utility bills are one inferred schedule → discretionary +1,982 (electricity not set aside)
+  ✓ the Recurring page explains the old grouping and offers 'Convert to bills'
+  ✓ one bill is created, every old recurring payment points to it, the offer disappears
+  ✓ no entry's id, amount, date, name or note changed
+  ✓ a recovery copy of the data was kept before converting
+  ✓ Undo puts the data back exactly as before the conversion
+  ✓ the payment says which bill it belongs to
+  ✓ the electricity payment now has its own bill (90)
+  ✓ Safe to Spend now sets electricity aside: discretionary +1,892 (was +1,982, overstated by 90)
+  ✓ after reloading the page (the real load path): the same two bills, the same three links, the same +1,892
+  ✓ no JavaScript errors
+
+R12-2. A new user: add two bills from the same company, pay one
+  ✓ two bills saved with the chosen due date
+  ✓ both are set aside: 2,000 − 90 − 18 = +1,892
+  ✓ Record payment on the water bill opens the form with that bill already chosen
+  ✓ one payment, linked to the water bill only
+  ✓ water counted once as spent, electricity still set aside: 2,000 − 18 − 90 = +1,892
+  ✓ deleting the electricity bill keeps every entry; it is no longer set aside (+1,982)
+  ✓ no JavaScript errors
+
+R12-3. Mixed state: some bills, some recurring payments still grouped the old way (the real starting point)
+  ✓ start: rent paid, the Gym bill (50, due on day 26) not yet paid → +1,150 (2,000 − 800 − 50)
+  ✓ Record payment on the Gym bill opens the form with that bill chosen — even though old-style groups still exist
+  ✓ the payment is linked to the Gym bill (was: saved with no link)
+  ✓ Recurring still shows exactly two schedules — Rent and the Gym bill — not a third copy of Gym
+  ✓ Gym is counted once, as paid: +1,150 (was: paid AND still set aside → +1,100)
+  ✓ linking an ordinary expense to a bill from its detail sheet works in the mixed state too (was: the link was lost)
+  ✓ no JavaScript errors
+
+R12-4. Adding the same recurring bill again asks; it never silently multiplies bills
+  ✓ saving 'Rent 800, recurring' while a Rent bill exists asks first: payment of that bill, or a separate bill? Nothing is saved yet
+  ✓ 'It is a payment of Rent' → saved as that bill's payment; still one bill
+  ✓ 'It is a separate bill' → a second bill, and that payment points to it
+  ✓ no JavaScript errors
+
+R12-5. Deleting a bill that has payments does not bring the money back into Safe to Spend
+  ✓ start: the Gym bill is unpaid this month → set aside: +1,950
+  ✗ the bill is gone; its payment stays in the history as an ordinary entry (same amount, date, name)
+  ✗ the Recurring page does NOT offer to convert anything (the deleted bill is not resurrected as a paused group)
+  ✗ the add form still offers "A new bill (from this entry)" — adding bills is not blocked afterwards
+  ✓ nothing is set aside for a bill the user deleted: +2,000 (was: +1,950, regrouped as a live schedule)
+  ✓ Undo brings the bill and the payment back exactly
+
+e2e_run12: 3 FAILED, 32 passed

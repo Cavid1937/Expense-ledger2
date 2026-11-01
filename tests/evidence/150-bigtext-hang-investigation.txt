@@ -1,0 +1,21 @@
+﻿
+run 1 exit= in 1147s
+  âœ“ 200% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  âœ“ 200% zoom, en: no JavaScript errors
+  âœ“ 200% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  âœ“ 200% zoom, az: no JavaScript errors
+      at CdpFrame.evaluate (file:///C:/Users/cavid/AppData/Local/Temp/ledger-cleanroom-run5-20261027-104101/repo/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:364:43)
+      at CdpFrame.<anonymous> (file:///C:/Users/cavid/AppData/Local/Temp/ledger-cleanroom-run5-20261027-104101/repo/node_modules/puppeteer-core/lib/puppeteer/util/decorators.js:101:27)
+}
+
+Node.js v24.22.1
+run 2 exit= in 68s
+  âœ“ minimum 16px text, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  âœ“ minimum 16px text, ru: no JavaScript errors
+
+e2e_bigtext: ALL 25 CHECKS PASSED
+run 3 exit= in 72s
+  âœ“ minimum 16px text, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  âœ“ minimum 16px text, ru: no JavaScript errors
+
+e2e_bigtext: ALL 25 CHECKS PASSED

@@ -1,0 +1,96 @@
+﻿== clean room: C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458
+== node v24.22.1, npm 11.19.1
+== started 2026-10-27T12:34:59.2312651+04:00
+candidate snapshot: 35D3A754A59367270F39D1AE97B3673CA5B2D75F0FA4C987EBF917FA6541911C / 92A25AE0B87EA5292F3466CF0612F34420B8346630065CF05211DF6ACEFE5453
+== 1. package
+package: 49 files -> C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\pkg
+verify: 49 files listed, 0 problems
+verify exit=0
+== 2. exact commit a1b16e2 via git archive
+archive exit=0
+package.json same as package copy: True
+== 3. fresh install
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm install exit=0
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm extra exit=0
+== 4A. exact preview commit a1b16e2 (unchanged): the Run 5, 6 and 7 checks are expected to fail, nothing else
+A logic exit=1
+A browser exit=1
+[run-logic] node=v24.22.1
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx bytes=279840 sha256=210b99ceef871582fec251ca4b5db3166d8b4bd23b3ab0072b69880c75e604a7 gitblob=3b9796faf7ed60ba50ec666641d98293b9cef8f5 gitblob-lf=9d29737121d0638566e28e90ffd1ca8ea37deeb4
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\i18n.js bytes=98563 sha256=72e9da993e3b431cc625c6d3e09b13558e90a566f7001f8b94c269df3c156aad gitblob=64baee1af6e48edeb1c1927e3064caa6c18bb30b gitblob-lf=e972bc241b6d81e2d6833375674bb78faf0a117f
+[run-logic] core.test.mjs exit=0 passed=39 failed=0 missing=0 expected=39
+[run-logic] data.test.mjs exit=0 passed=122 failed=0 missing=0 expected=122
+[run-logic] finance.test.mjs exit=0 passed=91 failed=0 missing=0 expected=91
+[run-logic] i18n.test.mjs exit=1 passed=67 failed=2 missing=0 expected=69 PROBLEM: exit=1
+[run-logic] phase2.test.mjs exit=0 passed=48 failed=0 missing=0 expected=48
+[run-logic] phase3.test.mjs exit=1 passed=24 failed=1 missing=0 expected=25 PROBLEM: exit=1
+[run-logic] run3.test.mjs exit=0 passed=19 failed=0 missing=0 expected=19
+[run-logic] run5.test.mjs exit=1 passed=11 failed=5 missing=0 expected=16 PROBLEM: exit=1
+[run-logic] run6.test.mjs exit=1 passed=11 failed=31 missing=0 expected=42 PROBLEM: exit=1
+[run-logic] run7.test.mjs exit=1 passed=3 failed=9 missing=0 expected=12 PROBLEM: exit=1
+[run-logic] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx
+[run-logic] 10 files, 5 with problems; checks passed=435 failed=48 missing=0
+[run-browser] node=v24.22.1
+[run-browser] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx bytes=279840 sha256=210b99ceef871582fec251ca4b5db3166d8b4bd23b3ab0072b69880c75e604a7 gitblob=3b9796faf7ed60ba50ec666641d98293b9cef8f5 gitblob-lf=9d29737121d0638566e28e90ffd1ca8ea37deeb4
+[run-browser] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\i18n.js bytes=98563 sha256=72e9da993e3b431cc625c6d3e09b13558e90a566f7001f8b94c269df3c156aad gitblob=64baee1af6e48edeb1c1927e3064caa6c18bb30b gitblob-lf=e972bc241b6d81e2d6833375674bb78faf0a117f
+[run-browser] e2e.mjs exit=0 passed=27 failed=0 missing=0 expected=27
+[run-browser] e2e_bigtext.mjs exit=0 passed=25 failed=0 missing=0 expected=25
+[run-browser] e2e_import.mjs exit=1 passed=50 failed=1 missing=0 expected=51 PROBLEM: exit=1
+[run-browser] e2e_lang.mjs exit=1 passed=56 failed=1 missing=0 expected=57 PROBLEM: exit=1
+[run-browser] e2e_phase2.mjs exit=1 passed=19 failed=5 missing=0 expected=24 PROBLEM: exit=1
+[run-browser] e2e_phase2_layout.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+[run-browser] e2e_run2.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+[run-browser] e2e_run3.mjs exit=1 passed=36 failed=1 missing=0 expected=37 PROBLEM: exit=1
+[run-browser] e2e_run5.mjs exit=1 passed=8 failed=4 missing=0 expected=12 PROBLEM: exit=1
+[run-browser] e2e_run6.mjs exit=1 passed=0 failed=0 missing=14 expected=14 PROBLEM: exit=1; no summary line (the file stopped before finishing); executed 0 checks, expected 14
+[run-browser] e2e_run7.mjs exit=1 passed=5 failed=16 missing=0 expected=21 PROBLEM: exit=1
+[run-browser] e2e_ux.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+[run-browser] e2e_ux_lang.mjs exit=0 passed=8 failed=0 missing=0 expected=8
+[run-browser] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx
+[run-browser] scratch=C:\Users\cavid\AppData\Local\Temp\ledger-e2e-VR2AKM
+[run-browser] 13 files, 7 with problems; checks passed=318 failed=28 missing=14
+== 4B. Run 7 candidate snapshot
+B logic exit=0
+B browser exit=0
+B build exit=0
+[run-logic] node=v24.22.1
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx bytes=286509 sha256=35d3a754a59367270f39d1ae97b3673ca5b2d75f0fa4c987ebf917fa6541911c gitblob=04b21d3fe15f7fd49fc012273d99a1763e0ff28b gitblob-lf=b9250e01859091726d4444b2a3301b1be47b1132
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\i18n.js bytes=104898 sha256=92a25ae0b87ea5292f3466cf0612f34420b8346630065cf05211df6acefe5453 gitblob=9642d7c077250864f8c696a83b6a78ebb0c13870 gitblob-lf=9642d7c077250864f8c696a83b6a78ebb0c13870
+[run-logic] core.test.mjs exit=0 passed=39 failed=0 missing=0 expected=39
+[run-logic] data.test.mjs exit=0 passed=122 failed=0 missing=0 expected=122
+[run-logic] finance.test.mjs exit=0 passed=91 failed=0 missing=0 expected=91
+[run-logic] i18n.test.mjs exit=0 passed=69 failed=0 missing=0 expected=69
+[run-logic] phase2.test.mjs exit=0 passed=48 failed=0 missing=0 expected=48
+[run-logic] phase3.test.mjs exit=0 passed=25 failed=0 missing=0 expected=25
+[run-logic] run3.test.mjs exit=0 passed=19 failed=0 missing=0 expected=19
+[run-logic] run5.test.mjs exit=0 passed=16 failed=0 missing=0 expected=16
+[run-logic] run6.test.mjs exit=0 passed=42 failed=0 missing=0 expected=42
+[run-logic] run7.test.mjs exit=0 passed=12 failed=0 missing=0 expected=12
+[run-logic] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx
+[run-logic] 10 files, 0 with problems; checks passed=483 failed=0 missing=0
+[run-browser] node=v24.22.1
+[run-browser] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx bytes=286509 sha256=35d3a754a59367270f39d1ae97b3673ca5b2d75f0fa4c987ebf917fa6541911c gitblob=04b21d3fe15f7fd49fc012273d99a1763e0ff28b gitblob-lf=b9250e01859091726d4444b2a3301b1be47b1132
+[run-browser] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\i18n.js bytes=104898 sha256=92a25ae0b87ea5292f3466cf0612f34420b8346630065cf05211df6acefe5453 gitblob=9642d7c077250864f8c696a83b6a78ebb0c13870 gitblob-lf=9642d7c077250864f8c696a83b6a78ebb0c13870
+[run-browser] e2e.mjs exit=0 passed=27 failed=0 missing=0 expected=27
+[run-browser] e2e_bigtext.mjs exit=0 passed=25 failed=0 missing=0 expected=25
+[run-browser] e2e_import.mjs exit=0 passed=51 failed=0 missing=0 expected=51
+[run-browser] e2e_lang.mjs exit=0 passed=57 failed=0 missing=0 expected=57
+[run-browser] e2e_phase2.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+[run-browser] e2e_phase2_layout.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+[run-browser] e2e_run2.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+[run-browser] e2e_run3.mjs exit=0 passed=37 failed=0 missing=0 expected=37
+[run-browser] e2e_run5.mjs exit=0 passed=12 failed=0 missing=0 expected=12
+[run-browser] e2e_run6.mjs exit=0 passed=14 failed=0 missing=0 expected=14
+[run-browser] e2e_run7.mjs exit=0 passed=21 failed=0 missing=0 expected=21
+[run-browser] e2e_ux.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+[run-browser] e2e_ux_lang.mjs exit=0 passed=8 failed=0 missing=0 expected=8
+[run-browser] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx
+[run-browser] scratch=C:\Users\cavid\AppData\Local\Temp\ledger-e2e-k70kdx
+[run-browser] 13 files, 0 with problems; checks passed=360 failed=0 missing=0
+dist/assets/manifest-wyF7OkiL.json    0.42 kB │ gzip:   0.23 kB
+dist/assets/index-CmE-HPUE.js       413.78 kB │ gzip: 122.40 kB
+== finished 2026-10-27T12:46:38.4638938+04:00

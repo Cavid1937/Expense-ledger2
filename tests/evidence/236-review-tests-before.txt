@@ -1,0 +1,63 @@
+﻿
+R12-1. Old data: convert to bills (with Undo), then split the merged pair
+  ✓ before: the two utility bills are one inferred schedule → discretionary +1,982 (electricity not set aside)
+  ✓ the Recurring page explains the old grouping and offers 'Convert to bills'
+  ✓ one bill is created, every old recurring payment points to it, the offer disappears
+  ✓ no entry's id, amount, date, name or note changed
+  ✓ a recovery copy of the data was kept before converting
+  ✓ Undo puts the data back exactly as before the conversion
+  ✓ the payment says which bill it belongs to
+  ✓ the electricity payment now has its own bill (90)
+  ✓ Safe to Spend now sets electricity aside: discretionary +1,892 (was +1,982, overstated by 90)
+  ✓ no JavaScript errors
+
+R12-2. A new user: add two bills from the same company, pay one
+  ✓ two bills saved with the chosen due date
+  ✓ both are set aside: 2,000 − 90 − 18 = +1,892
+  ✓ Record payment on the water bill opens the form with that bill already chosen
+  ✓ one payment, linked to the water bill only
+  ✓ water counted once as spent, electricity still set aside: 2,000 − 18 − 90 = +1,892
+  ✓ deleting the electricity bill keeps every entry; it is no longer set aside (+1,982)
+  ✓ no JavaScript errors
+
+R12-3. Mixed state: some bills, some recurring payments still grouped the old way (the real starting point)
+  ✓ start: rent paid, the Gym bill (50, due on day 26) not yet paid → +1,150 (2,000 − 800 − 50)
+  ✗ Record payment on the Gym bill opens the form with that bill chosen — even though old-style groups still exist
+  ✗ the payment is linked to the Gym bill (was: saved with no link)
+      ↳ [{"type":"expense","amount":50,"category":"health","subcategory":"","merchant":"Gym","note":"","date":"2026-10-27","recurring":true,"recurFreq":"monthly","isActive":true,"id":1793127917993.5427,"createdAt":"2026-10-27T19:05:17.993Z"}]
+  ✗ Recurring still shows exactly two schedules — Rent and the Gym bill — not a third copy of Gym
+      ↳ 3
+  ✗ Gym is counted once, as paid: +1,150 (was: paid AND still set aside → +1,100)
+  ✗ linking an ordinary expense to a bill from its detail sheet works in the mixed state too (was: the link was lost)
+  ✓ no JavaScript errors
+
+R12-4. Adding the same recurring bill again asks; it never silently multiplies bills
+  ✗ saving 'Rent 800, recurring' while a Rent bill exists asks first: payment of that bill, or a separate bill? Nothing is saved yet
+      ↳ {"bills":2,"txns":2}
+node : node:internal/modules/run_main:107
+At line:1 char:919
++ ... 200,$_.Line.Length)) }; node tests\browser\e2e_run12.mjs 2>&1 | Tee-O ...
++                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:internal/modules/run_main:107:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    triggerUncaughtException(
+    ^
+
+Error [TypeError]: Cannot read properties of null (reading 'click')
+    at evaluate (evaluate at 
+file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_run12.mjs:119:14, 
+<anonymous>:0:46)
+    at #evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/li
+b/puppeteer/cdp/ExecutionContext.js:402:19)
+    at async ExecutionContext.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_mod
+ules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:16)
+    at async IsolatedWorld.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_module
+s/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pup
+peteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/api/Page.js:832:20)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_run12.mjs:119:3
+
+Node.js v24.22.1

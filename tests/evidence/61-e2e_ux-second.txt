@@ -1,0 +1,65 @@
+﻿
+S1. Recurring screen groups payments into schedules
+  ✓ rent recorded 3 months + Netflix + Spotify = 3 rows, not 5 (found 3)
+  ✓ rent row says '3 payments recorded'; typical monthly outgoing = 450 + 15 + 15 = 480.00 ₼
+  ✓ pausing one schedule pauses every payment recorded under it
+  ✓ …all members of that schedule and no others
+  ✓ a Paused section appears
+  ✓ reactivating restores the whole schedule
+  ✓ Home: Safe to Spend lists upcoming/unrecorded payments and says how many schedules it used
+  ✓ no JavaScript errors
+  ✓ with no recurring payments the card says upcoming bills are NOT included (no silent optimism)
+
+S2. Sheets: dismissal, gestures, focus
+  ✓ opening a sheet moves focus into it
+  ✓ Escape closes it and focus returns to the button that opened it
+  ✓ tapping the backdrop closes it
+  ✗ 45 presses of Tab never leave the open sheet (focus stays inside)
+  ✓ a fast swipe down dismisses the sheet
+  ✓ the sheet follows the finger 1:1 (moved 60px for a 60px drag)
+  ✓ a short slow drag springs back to its place and the sheet stays open
+  ✓ grabbing the sheet mid-spring continues from where it is (no jump: 104 → 104)
+  ✓ Escape closes the add form
+
+S3. Keyboard and switches
+  ✓ the Recurring switch toggles with Space and Enter
+  ✓ the Safe to Spend switch toggles with Space and the setting is saved
+  ✓ keyboard focus is visible (outline or ring)
+
+S4. Touch targets (effective tappable area)
+  ✗ 96 controls measured on 5 screens: every icon-only control is ≥44×44 and every text control ≥34 high
+      ↳ ["home: \"I have the file\" 81×22 (needs ≥34 high)","home: \"Dismiss\" 14×20 (needs ≥34 high)","home: \"Add transaction\" 34×34 (icon-only, needs 44×44)","ledger: \"I have the file\" 81×22 (needs ≥34 high)","ledger: \"Dismiss\" 14×20 (needs ≥34 high)","ledger: \"Add transaction\" 34×34 (icon-only, needs 44×44)","ledger: \"Search\" 81×38 (icon-only, needs 44×44)","recurring: \"I have the file\" 81×22 (needs ≥34 high)","recurring: \"Dismiss\" 14×20 (needs ≥34 high)","recurring: \"Add transaction\" 34×34 (icon-only, needs 44×44)","add form: \"I have the file\" 1×1 (needs ≥34 high)","add form: \"Dismiss\" 1×1 (needs ≥34 high)"]
+
+S5. Contrast measured on the rendered page
+  ✗ 436 text elements across 6 screens: all meet WCAG AA (4.5:1, or 3:1 for large text)
+      ↳ ["Settings: 4.15:1 10px \"25%\" (rgb(116, 111, 103))","Settings: 4.15:1 9px \"6,800.00 ₼ to go\" (rgb(116, 111, 103))","Settings: 4.15:1 10px \"50%\" (rgb(116, 111, 103))","Settings: 4.15:1 9px \"16,800.00 ₼ to go\" (rgb(116, 111, 103))","Settings: 4.15:1 10px \"75%\" (rgb(116, 111, 103))","Settings: 4.15:1 9px \"26,800.00 ₼ to go\" (rgb(116, 111, 103))","Settings: 4.15:1 10px \"100%\" (rgb(116, 111, 103))","Settings: 4.15:1 9px \"36,800.00 ₼ to go\" (rgb(116, 111, 103))"]
+
+S6. User preferences
+  ✓ reduced motion: the sheet's entrance animation is effectively off (0.00001s)
+node : node:internal/modules/run_main:107
+At line:1 char:685
++ ... ndex.html"; node "$wt\tests\browser\e2e_ux.mjs" *> "$wt\tests\evidenc ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (node:internal/modules/run_main:107:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    triggerUncaughtException(
+    ^
+
+Error [TypeError]: Cannot read properties of null (reading 'style')
+    at evaluate (evaluate at 
+file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_ux.mjs:137:15, 
+<anonymous>:0:39)
+    at #evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/li
+b/puppeteer/cdp/ExecutionContext.js:402:19)
+    at async ExecutionContext.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_mod
+ules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:16)
+    at async IsolatedWorld.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_module
+s/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pup
+peteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/api/Page.js:832:20)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_ux.mjs:137:4
+
+Node.js v24.22.1

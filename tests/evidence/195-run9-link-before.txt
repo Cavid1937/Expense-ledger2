@@ -1,0 +1,60 @@
+﻿
+R9-1. Placeholders are readable (Add form and Ledger search)
+  ✓ en: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+  ✓ az: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+  ✓ ru: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+
+R9-2. Header: no Settings gear anywhere; the + matches the screen
+  ✓ no screen has a Settings gear in its title bar; every screen has the privacy eye there
+  ✓ + adds a transaction on Home and Transactions; Analytics, More and Import / Export have no +
+  ✓ Budgets & Goals: '+' = Add budget; Recurring: '+' = Add recurring payment
+  ✓ Recurring '+' opens the Add form with 'Recurring' already switched on
+  ✓ on the Goals segment '+' = Add goal and opens the new-goal form
+  ✓ on the Budgets segment '+' opens a 'new budget' form (category + monthly limit)
+  ✓ Settings opens from More → Settings
+  ✓ no JavaScript errors
+
+R9-3. Privacy mode hides amounts, names and chart values on every screen (en / az / ru)
+  ✓ en: the eye button says what it will do and reports its state (aria-pressed)
+  ✓ en: with privacy on, no amount, percentage, merchant, note or goal name is shown or read out on 10 screens
+  ✓ en: the spending ring is blurred and privacy is still on after visiting every screen
+  ✓ en: tab labels stay readable (navigation is not blurred)
+  ✓ en: turning privacy on writes nothing to storage (ledger data untouched)
+  ✓ en: turning it off shows the amounts again
+  ✓ en: privacy is for this session only — after a reload it is off
+  ✓ en: no JavaScript errors
+  ✓ az: the eye button says what it will do and reports its state (aria-pressed)
+  ✓ az: with privacy on, no amount, percentage, merchant, note or goal name is shown or read out on 10 screens
+  ✓ az: the spending ring is blurred and privacy is still on after visiting every screen
+  ✓ az: tab labels stay readable (navigation is not blurred)
+  ✓ az: turning privacy on writes nothing to storage (ledger data untouched)
+  ✓ az: turning it off shows the amounts again
+  ✓ az: privacy is for this session only — after a reload it is off
+  ✓ az: no JavaScript errors
+  ✓ ru: the eye button says what it will do and reports its state (aria-pressed)
+  ✓ ru: with privacy on, no amount, percentage, merchant, note or goal name is shown or read out on 10 screens
+  ✓ ru: the spending ring is blurred and privacy is still on after visiting every screen
+  ✓ ru: tab labels stay readable (navigation is not blurred)
+  ✓ ru: turning privacy on writes nothing to storage (ledger data untouched)
+  ✓ ru: turning it off shows the amounts again
+  ✓ ru: privacy is for this session only — after a reload it is off
+  ✓ ru: no JavaScript errors
+
+R9-4. A rent paid as an ordinary expense is linked to the bill only when the user says so
+  ✓ before: this month's rent is still set aside (−800) although 800 was spent on 'Rent' — the double count the user can't see
+  ✓ nothing was linked automatically (same merchant and amount are not enough)
+node : file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/lib.mjs:56
+At line:1 char:482
++ ... nv:E2E_IMP_DIR="$w\imp"; node tests\browser\e2e_run9.mjs 2>&1 | Tee-O ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (file:///C:/User...wser/lib.mjs:56:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  if (!found) throw new Error(`no element ${sel} matching ${re}`); await wait(150);
+                    ^
+
+Error: no element .sheet button matching /payment of a recurring bill/i
+    at clickText (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/lib.mjs:56:21)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_run9.mjs:124:3
+
+Node.js v24.22.1

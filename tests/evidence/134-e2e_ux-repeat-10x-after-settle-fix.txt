@@ -1,0 +1,29 @@
+﻿
+=== run 1 exit=0
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 17 ms)
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 2 exit=0
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 18 ms)
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 3 exit=0
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 15 ms)
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 4 exit=0
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 23 ms)
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 5 exit=0
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 17 ms)
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 6 exit=0
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 25 ms)
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 7 exit=0
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 15 ms)
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 8 exit=1
+  ✗ a fast swipe down dismisses the sheet
+=== run 9 exit=0
+  ✓ reduced motion: a long swipe still dismisses, without the spring (closed after 15 ms)
+e2e_ux: ALL 30 CHECKS PASSED
+=== run 10 exit=1
+  ✗ a fast swipe down dismisses the sheet

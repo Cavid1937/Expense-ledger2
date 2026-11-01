@@ -1,0 +1,4 @@
+﻿M1 re-link payments that already point to a bill: [run-logic] billsmirror.test.mjs exit=1 passed=18 failed=2 missing=0 expected=20 PROBLEM: exit=1 | [run-logic] run13.test.mjs exit=0 passed=28 failed=0 missing=0 expected=28
+M2 treat a same-named bill as already present: [run-logic] billsmirror.test.mjs exit=1 passed=18 failed=2 missing=0 expected=20 PROBLEM: exit=1 | [run-logic] run13.test.mjs exit=0 passed=28 failed=0 missing=0 expected=28
+M3 accept any mirror version: [run-logic] billsmirror.test.mjs exit=1 passed=19 failed=1 missing=0 expected=20 PROBLEM: exit=1 | [run-logic] run13.test.mjs exit=0 passed=28 failed=0 missing=0 expected=28
+M4 restore links to bills that are not offered: [run-logic] billsmirror.test.mjs exit=1 passed=19 failed=1 missing=0 expected=20 PROBLEM: exit=1 | [run-logic] run13.test.mjs exit=0 passed=28 failed=0 missing=0 expected=28

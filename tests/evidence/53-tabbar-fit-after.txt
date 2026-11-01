@@ -1,0 +1,9 @@
+﻿320 az {"font":"9.5px","minGap":10.9,"rightEdgeGap":4.9,"lines":[11,11,11,11,11]}
+320 en {"font":"9.5px","minGap":20.5,"rightEdgeGap":10,"lines":[11,11,11,11,11]}
+320 ru {"font":"9.5px","minGap":10.3,"rightEdgeGap":3.5,"lines":[11,11,11,11,11]}
+360 az {"font":"9.5px","minGap":18.9,"rightEdgeGap":8.9,"lines":[11,11,11,11,11]}
+360 en {"font":"9.5px","minGap":28.5,"rightEdgeGap":14,"lines":[11,11,11,11,11]}
+360 ru {"font":"9.5px","minGap":18.3,"rightEdgeGap":7.5,"lines":[11,11,11,11,11]}
+390 az {"font":"10.5px","minGap":19.3,"rightEdgeGap":9,"lines":[12,12,12,12,12]}
+390 en {"font":"10.5px","minGap":30,"rightEdgeGap":14.7,"lines":[12,12,12,12,12]}
+390 ru {"font":"10.5px","minGap":18.7,"rightEdgeGap":7.5,"lines":[12,12,12,12,12]}

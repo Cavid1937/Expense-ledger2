@@ -1,0 +1,48 @@
+﻿
+S1. Recurring screen groups payments into schedules
+  ✓ rent recorded 3 months + Netflix + Spotify = 3 rows, not 5 (found 3)
+  ✓ rent row says '3 payments recorded'; typical monthly outgoing = 450 + 15 + 15 = 480.00 ₼
+  ✓ pausing one schedule pauses every payment recorded under it
+  ✓ …all members of that schedule and no others
+  ✓ a Paused section appears
+  ✓ reactivating restores the whole schedule
+  ✓ Home: Safe to Spend lists upcoming/unrecorded payments and says how many schedules it used
+  ✓ no JavaScript errors
+  ✓ with no recurring payments the card says upcoming bills are NOT included (no silent optimism)
+
+S2. Sheets: dismissal, gestures, focus
+  ✗ opening a sheet moves focus into it
+  ✗ Escape closes it and focus returns to the button that opened it
+  ✓ tapping the backdrop closes it
+  ✗ 45 presses of Tab never leave the open sheet (focus stays inside)
+      ↳ press 1: BUTTON.tab-btn active "Home"
+node : ERROR: The process with PID 29244 (child process of PID 23224) could not be terminated.
+At line:1 char:931
++ ... ndex.html"; node "$wt\tests\browser\e2e_ux.mjs" *> "$wt\tests\evidenc ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: The proc... be terminated.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Reason: The operation attempted is not supported.
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+Error [TypeError]: Cannot read properties of null (reading 'getBoundingClientRect')
+    at evaluate (evaluate at gripCenter 
+(file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_ux.mjs:49:31), 
+<anonymous>:0:56)
+    at #evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/li
+b/puppeteer/cdp/ExecutionContext.js:402:19)
+    at async ExecutionContext.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_mod
+ules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:16)
+    at async IsolatedWorld.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_module
+s/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pup
+peteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/api/Page.js:832:20)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_ux.mjs:51:35
+
+Node.js v24.22.1

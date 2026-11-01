@@ -1,0 +1,51 @@
+﻿
+B1. Untouched form closes at once by every route
+  ✓ untouched form + × → closed, no question
+  ✓ untouched form + Cancel → closed, no question
+  ✓ untouched form + Escape → closed, no question
+  ✓ untouched form + phone Back → closed, no question
+  ✓ no JavaScript errors
+
+B2. Something typed: every route asks; Keep editing keeps the values; Close without saving discards
+  ✓ typed 12.50 + × → the form stays open and asks "This entry isn't saved"
+  ✓ …Keep editing closes the question and keeps the amount 12.50
+  ✓ …Close without saving closes the form and saves nothing (3 entries before and after)
+  ✓ no JavaScript errors
+  ✓ typed 12.50 + Cancel → the form stays open and asks "This entry isn't saved"
+  ✓ …Keep editing closes the question and keeps the amount 12.50
+  ✓ …Close without saving closes the form and saves nothing (3 entries before and after)
+  ✓ no JavaScript errors
+  ✓ typed 12.50 + Escape → the form stays open and asks "This entry isn't saved"
+  ✓ …Keep editing closes the question and keeps the amount 12.50
+  ✓ …Close without saving closes the form and saves nothing (3 entries before and after)
+  ✓ no JavaScript errors
+  ✓ typed 12.50 + phone Back → the form stays open and asks "This entry isn't saved"
+  ✓ …Keep editing closes the question and keeps the amount 12.50
+  ✓ …Close without saving closes the form and saves nothing (3 entries before and after)
+  ✓ no JavaScript errors
+
+B2b. Back and Escape while the question is shown mean Keep editing
+  ✓ Back on a typed form → the question appears
+  ✓ Back again → the question closes, the form and its amount stay
+  ✓ Escape on the typed form → the question appears
+  ✓ Escape again → the question closes, the form stays
+
+B3. What counts as typed input
+  ✓ switching Expense/Income only (no typing) closes without a question
+  ✓ an existing entry opens in the edit form (precondition)
+  ✓ edit form with nothing changed closes without a question
+  ✓ edit form with the amount changed (23.40 → 25) asks before closing
+  ✓ …and Close without saving leaves the stored entry at 23.40
+
+B4. Saving is unaffected; the question exists in Azerbaijani and Russian
+  ✓ typed + Record → saved and closed with no question
+  ✓ az: the question is shown in az with no English left
+  ✓ ru: the question is shown in ru with no English left
+
+C. Home and Analytics show what has happened; entries dated later this month are listed apart
+  ✓ Home: '10.00 ₼ spent this month' (the 670 dated tomorrow is not spent yet)
+  ✓ Home: '+670.00 ₼ in expenses dated later this month (not counted yet)'
+  ✓ Analytics: no concentration claim or top-expense entry from the payment dated tomorrow
+  ✓ no JavaScript errors
+
+e2e_run3: ALL 37 CHECKS PASSED

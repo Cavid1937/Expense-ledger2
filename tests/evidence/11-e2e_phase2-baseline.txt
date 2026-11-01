@@ -1,0 +1,79 @@
+﻿
+E2-B. Safe to Spend card: income dated later this month is shown but not counted
+  ✗ row 'Income received so far' shows 2,000.00 (today's income only)
+      ↳ SAFE TO SPEND
+2,470.00 ₼
+411.67 ₼/day · 6 days left in Oct (today included)
+Income this month
+3,000.00 ₼
+Goal contributions
+−500.00 ₼
+Recorded spend
+−30.00 ₼
+Upcoming & unrecorded payments
+none this month
+Discretionary remaining
++2,470.00 ₼
+Goal contributions (500.00 ₼) exceed the savings floor (300.00 ₼) — using the higher amount
+  ✗ a separate row shows the 1,000.00 dated later as expected, not counted
+      ↳ SAFE TO SPEND
+2,470.00 ₼
+411.67 ₼/day · 6 days left in Oct (today included)
+Income this month
+3,000.00 ₼
+Goal contributions
+−500.00 ₼
+Recorded spend
+−30.00 ₼
+Upcoming & unrecorded payments
+none this month
+Discretionary remaining
++2,470.00 ₼
+Goal contributions (500.00 ₼) exceed the savings floor (300.00 ₼) — using the higher amount
+  ✗ Safe to Spend = 2000 − 500 reserve − 30 spent = 1,470.00 (not 2,470.00)
+      ↳ SAFE TO SPEND
+2,470.00 ₼
+411.67 ₼/day · 6 days left in Oct (today included)
+Income this month
+3,000.00 ₼
+Goal contributi
+  ✓ no JavaScript errors
+  ✗ without future-dated income the 'expected' row is not shown
+      ↳ SAFE TO SPEND
+1,470.00 ₼
+245.00 ₼/day · 6 days left in Oct (today included)
+Income this month
+2,000.00 ₼
+Goal contributions
+−500.00 ₼
+Recorded spend
+−30.00 ₼
+Upcoming & unrecorded payments
+none this month
+Discretionary remaining
++1,470.00 ₼
+Goal contributions (500.00 ₼) exceed the savings floor (300.00 ₼) — using the higher amount
+
+E2-A. Analytics per-day tile
+  ✗ ₼10 every day so far → 'Per day, weekdays = weekends' (no 'heavier' claim)
+  ✗ weekends 30/day vs weekdays 10/day → '30.00 ₼ Per weekend day (higher)'; the 5,000 planned later is ignored
+  ✓ no JavaScript errors
+
+E2-C. Backup reminder
+  ✗ file created but never confirmed → the banner asks the user to confirm (not hidden for 7 days)
+      ↳ 
+node : file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/lib.mjs:38
+At line:1 char:849
++ ... ndex.html"; node "$wt\tests\browser\e2e_phase2.mjs" *> "$wt\tests\evi ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (file:///C:/User...wser/lib.mjs:38:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  if (!found) throw new Error(`no element ${sel} matching ${re}`); await wait(150);
+                    ^
+
+Error: no element .backup-banner-btn matching /I have the file/
+    at clickText (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/lib.mjs:38:21)
+    at async file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_phase2.mjs:48:1
+
+Node.js v24.22.1

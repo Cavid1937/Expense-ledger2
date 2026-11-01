@@ -1,0 +1,49 @@
+﻿
+S1. Recurring screen groups payments into schedules
+  ✓ rent recorded 3 months + Netflix + Spotify = 3 rows, not 5 (found 3)
+  ✓ rent row says '3 payments recorded'; typical monthly outgoing = 450 + 15 + 15 = 480.00 ₼
+  ✓ pausing one schedule pauses every payment recorded under it
+  ✓ …all members of that schedule and no others
+  ✓ a Paused section appears
+  ✓ reactivating restores the whole schedule
+  ✓ Home: Safe to Spend lists upcoming/unrecorded payments and says how many schedules it used
+  ✓ no JavaScript errors
+  ✓ with no recurring payments the card says upcoming bills are NOT included (no silent optimism)
+
+S2. Sheets: dismissal, gestures, focus
+  ✓ opening a sheet moves focus into it
+  ✓ Escape closes it and focus returns to the button that opened it
+  ✓ tapping the backdrop closes it
+  ✗ 45 presses of Tab never leave the open sheet (focus stays inside)
+  ✓ a fast swipe down dismisses the sheet
+  ✓ the sheet follows the finger 1:1 (moved 60px for a 60px drag)
+  ✓ a short slow drag springs back to its place and the sheet stays open
+  ✗ grabbing the sheet mid-spring continues from where it is (no jump: 308 → 105)
+  ✓ Escape closes the add form
+
+S3. Keyboard and switches
+  ✓ the Recurring switch toggles with Space and Enter
+  ✓ the Safe to Spend switch toggles with Space and the setting is saved
+node : file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/lib/puppeteer
+/util/assert.js:15
+At line:1 char:721
++ ... ndex.html"; node "$wt\tests\browser\e2e_ux.mjs" *> "$wt\tests\evidenc ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (file:///C:/User...il/assert.js:15:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+        throw new Error(message);
+              ^
+
+Error: Unknown key: "Shift+Tab"
+    at assert (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/lib/p
+uppeteer/util/assert.js:15:15)
+    at #keyDescriptionForString (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pu
+ppeteer-core/lib/puppeteer/cdp/Input.js:72:9)
+    at CdpKeyboard.down (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-
+core/lib/puppeteer/cdp/Input.js:28:58)
+    at CdpKeyboard.press (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer
+-core/lib/puppeteer/cdp/Input.js:143:20)
+    at file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/browser/e2e_ux.mjs:78:86
+
+Node.js v24.22.1

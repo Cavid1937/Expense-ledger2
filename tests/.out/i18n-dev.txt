@@ -1,0 +1,74 @@
+﻿
+L1. Catalog completeness and form
+  ✓ three languages with native names: Azərbaycan dili, English, Русский
+  ✓ every one of 525 keys has az, en and ru text
+  ✓ every plural entry has all forms its language needs (en/az: one, other · ru: one, few, many, other)
+  ✓ the same {placeholders} appear in all three languages (no value silently dropped; 2 documented exceptions)
+  ✓ every plural form for counts other than one shows the number {n}
+  ✓ Russian text is written in Cyrillic (no English left in the ru column)
+  ✓ Azerbaijani text uses the Latin alphabet (no Cyrillic)
+  ✓ no Azerbaijani entry is just a copy of the English
+  ✓ Azerbaijani letters (ə ğ ı İ ö ş ü ç) are present and the file is UTF-8
+
+L2. t() / tn() behaviour
+  ✓ Russian plural forms: 1 / 2 / 5 / 21
+  ✓ Azerbaijani: noun stays singular after a number
+  ✓ English: one / other
+  ✓ placeholders are filled in the language's own word order
+  ✓ values are inserted literally (no $-pattern or placeholder re-expansion)
+  ✓ an unknown key shows the key itself (visible in review, never blank)
+  ✓ an invalid language falls back to English
+  ✓ tIn reads one language without switching the current one
+
+L3. Every key the app uses exists, and every key in the catalog is used
+  ✓ all 359 keys passed directly to t()/tn()/tIn() exist in the catalog
+  ✓ every quoted key name in App.jsx (including ones picked by a condition) exists
+  ✓ App.jsx builds keys with the prefix "nav."
+  ✓ App.jsx builds keys with the prefix "cat."
+  ✓ App.jsx builds keys with the prefix "tile."
+  ✓ App.jsx builds keys with the prefix "sub."
+  ✓ App.jsx builds keys with the prefix "dow."
+  ✓ App.jsx builds keys with the prefix "dow.pl."
+  ✓ App.jsx builds keys with the prefix "dow.cmp."
+  ✓ App.jsx builds keys with the prefix "freq."
+  ✓ App.jsx builds keys with the prefix "freqCap."
+  ✓ App.jsx builds keys with the prefix "surplus."
+  ✓ App.jsx builds keys with the prefix "an.rate."
+  ✓ App.jsx builds keys with the prefix "month.net."
+  ✓ App.jsx builds keys with the prefix "an.perDay."
+  ✓ App.jsx builds keys with the prefix "ledger.type."
+  ✓ App.jsx builds keys with the prefix "reason."
+  ✓ every key built at run time (category, subcategory, weekday, frequency, reason …) exists
+  ✓ no unused keys in the catalog
+
+L4. No hard-coded English text left in the interface
+  ✗ no English text written directly into elements (96 text children inspected)
+      ↳ ["weekly","biweekly","monthly","yearly"]
+  ✓ no fixed English placeholder / aria-label / title / alt attributes
+  ✓ no fixed English text passed to toasts, snackbars, load notices, form errors or prompts
+  ✓ no fixed English sentences in validation problems, warnings, insights, helper cards or import errors
+
+L5. Language preference: stored with the existing settings, backward compatible
+  ✓ a genuinely fresh install (nothing stored) has no language yet → the chooser is shown
+  ✓ data saved by an earlier version (no language field) → English, no chooser (existing users are not sent through onboarding)
+  ✓ a saved "az" is restored and applied before anything is shown
+  ✓ a saved "ru" is restored and applied before anything is shown
+  ✓ a saved "en" is restored and applied before anything is shown
+  ✓ fresh install that was saved before a choice was made (language: null) → chooser shown again, not skipped
+  ✓ an unsupported stored value falls back to English
+  ✓ a user migrating from an older storage key is an existing user → English, no chooser
+  ✓ unreadable stored data (recovery copy kept) still counts as an existing user
+  ✓ a backup file does not carry the language (it is a preference of one device)
+  ✓ merge import keeps this device's language
+  ✓ replace import keeps this device's language
+
+L6. Changing the language never changes data or calculations
+  ✓ Safe to Spend figures are identical in all three languages
+  ✓ the transactions themselves are untouched (ids, amounts, categories, English subcategory)
+  ✓ CSV import maps categories the same way whatever the interface language (English CSV names are the identifiers)
+  ✓ display names follow the language; a user's own subcategory is shown exactly as typed
+  ✓ skip reasons are shown in the interface language
+  ✓ …and unchanged in English
+  ✓ the same insights are produced in every language (only the wording differs)
+
+i18n: 1 FAILED, 58 passed

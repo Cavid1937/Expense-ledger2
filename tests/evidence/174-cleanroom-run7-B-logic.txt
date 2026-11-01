@@ -1,0 +1,641 @@
+﻿[run-logic] node=v24.22.1
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx bytes=286509 sha256=35d3a754a59367270f39d1ae97b3673ca5b2d75f0fa4c987ebf917fa6541911c gitblob=04b21d3fe15f7fd49fc012273d99a1763e0ff28b gitblob-lf=b9250e01859091726d4444b2a3301b1be47b1132
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\i18n.js bytes=104898 sha256=92a25ae0b87ea5292f3466cf0612f34420b8346630065cf05211df6acefe5453 gitblob=9642d7c077250864f8c696a83b6a78ebb0c13870 gitblob-lf=9642d7c077250864f8c696a83b6a78ebb0c13870
+harness: 77 exports from App.jsx -> C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\tests\.out\real.mjs
+
+1. Smart Helper pace warning uses the budget
+  ✓ budget exists + spending far above pace → pace card appears
+  ✓ no budget → no pace claim at all
+  ✓ under budget pace → no warning
+
+2. Break-even label and colour
+  ✓ label: surplus / break-even / deficit
+  ✓ colour: green / neutral / red
+  ✓ Monthly net label has all three states; 'Net saved' is gone
+
+3. Goal guard in Safe to Spend
+  ✓ active goal reserves its contribution
+  ✓ fully funded goal reserves nothing
+  ✓ goal with target 0 / missing reserves nothing
+  ✓ mixed list: only the valid active goal counts
+
+4. Merchant memory is transaction-type-aware
+  ✓ expense suggestion → food / Snacks (latest expense choice)
+  ✓ income suggestion → salary; counts kept separately per type
+  ✓ income-only merchant → nothing suggested for an expense
+  ✓ add form dropdown and hint both read the type-matched entry
+
+5. Storage recovery
+  ✓ fresh install: empty state, no notice, nothing preserved
+  ✓ 2 valid records loaded (ids 0 and a fractional id preserved exactly)
+  ✓ the 4 malformed records are preserved in a recovery key
+  ✓ notice produced; other settings untouched (empty templates stay empty)
+  ✓ unparseable value → starts empty, original preserved byte-for-byte, user told
+  ✓ wrong-shaped object is preserved too
+  ✓ legacy migration survives a null record and de-duplicates by original id
+
+6. Month arithmetic (real functions)
+  ✓ Mar 31 → previous month is 2026-02
+  ✓ Oct 31 → 2026-09
+  ✓ Jan 31 → 2025-12
+  ✓ 6-month list from Aug 31 is correct
+
+7. Smart Helper daily limit from the REMAINING budget
+  ✓ ₼300 budget, ₼200 spent on day 15 of 30 → ₼100 left over the 16 days from today on → ₼6.25/day (not ₼10)
+  ✓ overspent → 'fully used … 50.00 ₼ over'
+  ✓ exactly at budget → 'fully used', no 'over'
+
+9. Month-end-safe dates
+  ✓ Jan 31+1m = Feb 28; leap Feb 29; Aug 31+6m = Feb 28; Feb 29+12m = Feb 28
+  ✓ monthly from the 31st, Feb 10 → Feb 28
+  ✓ …Mar 5 → Mar 31 (no drift to the 3rd)
+  ✓ …Apr 5 → Apr 30
+  ✓ yearly from Feb 29 2024 → Feb 28 2026 (via the Mar 1 2025 view)
+  ✓ weekly / biweekly still correct
+
+11. Recovery safeguard when a copy cannot be saved
+  ✓ quota failure while preserving → saving blocked; notice honest (does NOT claim records were set aside)
+  ✓ unparseable data + failed copy → blocked too
+  ✓ normal case: copy saved, not blocked
+  ✓ localStorage unavailable → app still starts with an empty state
+  ✓ App never calls writeRaw(KEY) while blocked
+
+core: ALL 39 CHECKS PASSED
+[run-logic] core.test.mjs exit=0 passed=39 failed=0 missing=0 expected=39
+
+12. Money grammar
+  ✓ accepts "12"
+  ✓ accepts "12.5"
+  ✓ accepts "12.50"
+  ✓ accepts ".5"
+  ✓ accepts "0.05"
+  ✓ accepts "007"
+  ✓ accepts " 7 "
+  ✓ accepts "999999999.99"
+  ✓ accepts 12.5
+  ✓ accepts 0.6
+  ✓ accepts 1234567.89
+  ✓ rejects ""
+  ✓ rejects "   "
+  ✓ rejects "12."
+  ✓ rejects "-5"
+  ✓ rejects "+5"
+  ✓ rejects "1e3"
+  ✓ rejects "1E3"
+  ✓ rejects "0x10"
+  ✓ rejects "0b1"
+  ✓ rejects "1,5"
+  ✓ rejects "1 000"
+  ✓ rejects "NaN"
+  ✓ rejects "Infinity"
+  ✓ rejects "-Infinity"
+  ✓ rejects "25abc"
+  ✓ rejects "abc"
+  ✓ rejects "1e999"
+  ✓ rejects "12.345"
+  ✓ rejects "1234567890"
+  ✓ rejects "1000000000"
+  ✓ rejects ",5"
+  ✓ rejects "5,"
+  ✓ rejects "٣٤"
+  ✓ rejects NaN
+  ✓ rejects Infinity
+  ✓ rejects -Infinity
+  ✓ rejects 1000000000000000
+  ✓ rejects 1e+300
+  ✓ rejects -5
+  ✓ rejects true
+  ✓ rejects false
+  ✓ rejects null
+  ✓ rejects undefined
+  ✓ rejects {}
+  ✓ rejects []
+  ✓ zero: allowed where ≥0, refused where >0
+  ✓ upper limit is 999,999,999.99
+  ✓ reasons are specific and accurate
+  ✓ strictNum never reads a prefix
+
+13. Transaction record contract
+  ✓ negative amount (number or text) → rejected, never abs()'d
+  ✓ zero → rejected
+  ✓ empty / absent → rejected
+  ✓ malformed text → rejected
+  ✓ huge numbers → rejected
+  ✓ valid decimal / integer text / integer → accepted
+  ✓ no date is never turned into today
+  ✓ dates: real calendar dates only (ISO timestamps allowed)
+  ✓ unknown types are rejected, not turned into expenses
+  ✓ recurring needs a valid frequency
+  ✓ non-objects rejected
+  ✓ normalise keeps id 0, exact amount, date-only, type
+  ✓ legacy 'amt' field and fractional id preserved
+  ✓ normaliseTxn itself never takes abs() — a negative can only be stopped, never flipped (defence in depth behind checkRawTxn)
+  ✓ mixed list → 2 stored, 7 rejected (2/7)
+  ✓ stored amounts are exactly the valid inputs — the −5 did not become +5
+  ✓ duplicate ids: first kept, later one re-keyed, nothing dropped
+
+13b. Loading stored / legacy data applies the same contract
+  ✓ stored negative / zero / dateless / unsupported-type records are NOT loaded
+  ✓ …and are preserved byte-for-byte in a recovery key
+  ✓ notice says why
+  ✓ legacy migration: a −30 is set aside, not flipped to +30
+
+14. Settings contract
+  ✓ budgets: valid kept, legacy key 'sport' → health, negative/unknown/scientific skipped
+  ✓ …and the skip is reported
+  ✓ budgets with no valid entry → section rejected (current value kept)
+  ✓ budgets of the wrong type → rejected
+  ✓ templates: 1 valid kept; blank name / negative / income category / malformed / null skipped
+  ✓ goals: valid kept (optional fields default to 0 / null); impossible date, negative target/saved, malformed monthly rejected
+  ✓ …reported
+  ✓ currency: 1–3 characters only
+  ✓ Safe to Spend: valid forms
+  ✓ Safe to Spend: bad flag / negative floor / wrong type → section rejected
+  ✓ malformed stored settings are reset to safe defaults
+  ✓ …the originals are preserved and the user is told
+
+15. Import planning — CSV
+  ✓ BOM + CRLF + display category names import correctly
+  ✓ amounts −5, 0, '', abc, 1e3, 999999999999 are skipped; 12.50 and 7 imported with exact values
+  ✓ skipped rows are counted and explained
+  ✓ rows with no / malformed date are skipped — never given today's date
+  ✓ quoted commas, escaped quotes and newlines inside quotes
+  ✓ unterminated quote → whole file refused with a clear message
+  ✓ missing required columns → refused, lists the headers it found
+  ✓ unexpected extra headers are ignored
+  ✓ Recurring column: 'monthly' kept, blank = not recurring, 'yes' (no frequency) rejected
+  ✓ unknown category is filed under Other AND the user is told
+  ✓ every row rejected → refused with the reasons
+
+15b. Import planning — JSON backups
+  ✓ app backup → export → import: transactions and every setting identical
+  ✓ backup from a newer app version is refused
+  ✓ invalid version numbers are refused
+  ✓ transaction-count mismatch → warning (possible truncation)
+  ✓ invalid export date → warning
+  ✓ a valid transaction list does NOT make malformed settings trustworthy: all 5 bad sections rejected and reported
+  ✓ non-backup content refused
+  ✓ bare array accepted
+  ✓ legacy 'entries' accepted
+  ✓ duplicate ids inside a file are re-keyed and reported
+  ✓ a settings-only backup is allowed
+  ✓ all-invalid JSON refused
+
+16. Merge / Replace semantics
+  ✓ merge: same id (2) not duplicated; new ids added; look-alike (id 10) added when not skipping
+  ✓ merge: budgets combined — imported category wins, others kept
+  ✓ merge: your currency and Safe to Spend are NOT overwritten
+  ✓ merge: new goals added; a goal that reuses an existing id gets a fresh id
+  ✓ merge: new templates added with unique ids
+  ✓ merge + skip look-alikes: id 10 (same date, amount, merchant) is skipped
+  ✓ suspected-duplicate count: ids 2 and 10 look like existing ones
+  ✓ replace: transactions and every section PRESENT in the file are replaced
+  ✓ replace: sections ABSENT from the file are kept, not wiped
+  ✓ lastBackup untouched by either mode
+  ✓ applyImport never mutates the existing state
+
+17. Export → import round trips
+  ✓ CSV export → import: all 15 categories, no skips (15 rows, 0 skipped)
+  ✓ …every field survives exactly (category ids incl. Finance and Other Income, decimals, unicode, quotes, newlines, recurrence)
+  ✓ an older export WITHOUT the CategoryId column still maps Finance and Other Income by name
+  ✓ JSON backup round trip: all 15 categories identical incl. ids
+  ✓ CSV export starts with a BOM so Excel reads UTF-8
+
+data: ALL 122 CHECKS PASSED
+[run-logic] data.test.mjs exit=0 passed=122 failed=0 missing=0 expected=122
+
+18. Recurring schedules (a schedule is one commitment; its occurrences are the dated payments)
+  ✓ rent recorded in 3 months = ONE schedule with 3 occurrences
+  ✓ a bill whose amount changes stays one schedule; its amount is the latest (42)
+  ✓ same category/amount/frequency but different merchants = 2 schedules
+  ✓ merchant matching ignores case and spacing
+  ✓ different frequency = different schedule
+  ✓ income and expense are separate schedules
+  ✓ unnamed entries split by amount (two different bills never merge)
+  ✓ non-recurring and invalid-frequency entries are not schedules
+  ✓ paused (all members inactive) → schedule inactive
+
+19. Safe to Spend
+  ✓ Netflix paid Oct 5; Spotify (anchor Sep 20) still due Oct 20 → 15 committed (was 0: one match hid the other)
+  ✓ utility paid this month (42) → last month's 40 is NOT counted again (was 40)
+  ✓ weekly 10 paid Oct 6 → Oct 13, 20, 27 still to come = 30
+  ✓ …paid Oct 6 and 13 → Oct 20, 27 = 20
+  ✓ biweekly 20 paid Oct 1 → Oct 15 and Oct 29 = 40
+  ✓ rent ×3: typical monthly = 450 (was 1350); nothing still to come
+  ✓ paused schedule contributes nothing
+  ✓ yearly 120 anniversary Oct 20 → still due this month
+  ✓ yearly with a November anniversary → nothing in October
+  ✓ monthly gym last seen Sep 5, nothing in Oct → the missed Oct 5 payment is counted (never optimistic) and flagged as unrecorded
+  ✓ a payment entered ahead of time (Oct 25) is recorded spend, not an extra commitment
+  ✓ monthly from Jan 31, today Feb 10 → expected Feb 28, still to come
+  ✓ …and settled once Feb 28 is recorded
+  ✓ three different commitments of 15 each → 45 (not merged)
+  ✓ 2000 − 100 − (15 + 50) − 15 = 1820
+  ✓ daily allowance = 1820 ÷ 19 days (Oct 13…31, today included)
+  ✓ last day of the month: allowance = everything remaining (not 0)
+  ✓ no income recorded → not feasible (no figure is presented as safe)
+  ✓ a recurring INCOME schedule is never subtracted as a commitment
+  ✓ reserve = larger of the savings floor and goal contributions
+
+20. Month-aware progress, pace and budgets
+  ✓ Feb 2026 (28 days) on the 14th: 14 passed, 15 left incl. today
+  ✓ Feb 2028 (leap, 29 days) on the 29th: today is the last day
+  ✓ April (30 days) on the 30th
+  ✓ April on May 1 → past, fully elapsed
+  ✓ Oct 31 → last day
+  ✓ Dec 31: Dec has 1 day left, Jan 2027 is future with 31 days to come
+  ✓ year boundary: on Jan 1, December is past
+  ✓ a PAST month (Sept, viewed on Oct 13): 30 days passed, projection = actual 300, within the 600 budget (was: day 13)
+  ✓ past month over its budget → not on track
+  ✓ a FUTURE month claims no elapsed days and no pace
+  ✓ current: budget 310/31 = 10 a day × 13 days = 130 expected; 130 spent → on track
+  ✓ 5% tolerance: 136 ≤ 136.5 on track, 137 is not
+  ✓ no budget → no on-track claim
+  ✓ day 10, 100 spent → 10 a day → 310 projected
+  ✓ day 3 → projection flagged as unreliable
+  ✓ current month: 60% spent vs 42% of month (13/31) → ahead of pace; 19 days left
+  ✓ past month: no 'ahead of pace', 0 days left (was 17)
+  ✓ future month: 31 days to come, no pace claim
+  ✓ spent-to-date counts entries up to today only (Oct: 10 + 20; the Oct 20 one is planned); past month = all; future = 0
+  ✓ Safe to Spend and pace use the same day count
+
+21. Insights are supported by the numbers
+  ✓ IDENTICAL spending every day → NO weekend/weekday claim (the old formula claimed 150% higher)
+  ✓ window holds 16 weekend and 40 weekday days (counted independently)
+  ✓ weekends 25/day vs weekdays 10/day → '150% more' (25−10)/10, shown with the per-day amounts
+  ✓ weekend = 4 small purchases a day (20/day) vs weekday = 1 purchase (10/day) → '100% more' per day (a per-transaction average would say 50% LESS)
+  ✓ no spending at all on weekends → no ratio claimed
+  ✓ only 20 days of history → too little to claim a weekend pattern
+  ✓ history shorter than 56 days: only the days since tracking began are counted
+  ✓ weekday comparison ignores days with fewer than 3 transactions
+  ✓ all three Monday purchases on ONE Monday → no claim about 'Mondays' (one day is not a weekly pattern)
+  ✓ Monday 1000+5+5 vs Tuesday 5+5+5: a typical purchase is the same size → NO claim (a per-transaction average said '6633% more')
+  ✓ per-weekday data keeps both: Monday median 5 (what the chart draws) and average 336.67
+  ✓ Monday 20,20,20 vs Tuesday 10,10,10 → a typical transaction '100% larger', with the sample sizes
+  ✓ a 5-fold difference is stated as '5.0×', not as '400%'
+  ✓ 20% difference in the typical transaction is below the 30% threshold → no claim
+  ✓ September 4 × 10; October 1000 + 3 × 10 → a typical purchase is unchanged → NO 'higher than last month' claim
+  ✓ September 4 × 10; October 4 × 15 → a typical transaction '50% larger' than last month, with the sample sizes
+  ✓ food 100,100,100,100,100,200 → increasing; slope 1500/105 = 14.29; last vs previous = +100%
+  ✓ …and the insight states +100%
+  ✓ steady +20 a month: last vs previous = +11% (below the 20% threshold) → no insight
+  ✓ a tiny part-month (5 so far in October) does NOT create a '−95%' trend
+  ✓ 10 × 10 history + one 100 → flagged, '10.0× the usual'
+  ✓ 12 against a flat history of 10 is above Q3+1.5·IQR but under 1.5× the median → not flagged
+  ✓ fewer than 8 prior values → no anomaly claims
+  ✓ food + transport on 12 of 12 days → reported as 'often recorded on the same day'
+  ✓ only 5 spending days → no co-occurrence claim
+  ✓ 150 random datasets: no insight, anomaly or trend contains NaN / Infinity / undefined
+
+22. Goals
+  ✓ 20:00 on Oct 13, target Oct 14 → 1 day (calendar days; was 0)
+  ✓ 00:05 on Oct 13 → still 1
+  ✓ target today = 0; yesterday = −1
+  ✓ needs 3 months (Jan 13) but target is Dec 22 → behind (the old heuristic said fine)
+  ✓ finishing exactly on the target date → on track
+  ✓ one day late → behind
+  ✓ from Jan 31, one month → February (never March)
+  ✓ fully funded: complete; a passed date is not 'overdue'; no projections
+  ✓ unfinished with a passed target date → overdue
+  ✓ no monthly contribution → no projection, but what-if rates are offered
+  ✓ what-if at 60 / 100 / 140 per month → ceil(300/60)=5, 3, ceil(300/140)=3 months
+  ✓ malformed goal values never produce NaN / Infinity / undefined
+  ✓ invalid date → no countdown; target 0 → 0%
+
+23. Numeric stability
+  ✓ 1000 transactions at the maximum amount still total finitely and display normally
+  ✓ display rounds to cents consistently
+  ✓ float noise (0.1+0.1+0.1) displays as 0.30
+
+finance: ALL 91 CHECKS PASSED
+[run-logic] finance.test.mjs exit=0 passed=91 failed=0 missing=0 expected=91
+
+L1. Catalog completeness and form
+  ✓ three languages with native names: Azərbaycan dili, English, Русский
+  ✓ every one of 603 keys has az, en and ru text
+  ✓ every plural entry has all forms its language needs (en/az: one, other · ru: one, few, many, other)
+  ✓ the same {placeholders} appear in all three languages (no value silently dropped; 2 documented exceptions)
+  ✓ every plural form for counts other than one shows the number {n}
+  ✓ Russian text is written in Cyrillic (no English left in the ru column)
+  ✓ Azerbaijani text uses the Latin alphabet (no Cyrillic)
+  ✓ no Azerbaijani entry is just a copy of the English
+  ✓ Azerbaijani letters (ə ğ ı İ ö ş ü ç) are present and the file is UTF-8
+
+L2. t() / tn() behaviour
+  ✓ Russian plural forms: 1 / 2 / 5 / 21
+  ✓ Azerbaijani: noun stays singular after a number
+  ✓ English: one / other
+  ✓ placeholders are filled in the language's own word order
+  ✓ values are inserted literally (no $-pattern or placeholder re-expansion)
+  ✓ an unknown key shows the key itself (visible in review, never blank)
+  ✓ an invalid language falls back to English
+  ✓ tIn reads one language without switching the current one
+
+L2b. Dates are written from the catalog (Chrome has no Azerbaijani date data: it showed "2026 M10")
+  ✓ Azerbaijani: Oktyabr 2026 · İyun 2026 (dotted capital İ) · sen · 13 oktyabr 2026
+  ✓ Russian: nominative month alone, genitive inside a date (13 октября 2026 г.)
+  ✓ English output is unchanged from before (October 2026 · Oct · 13 October 2026)
+  ✓ goal estimates use the same month names (Yanvar 2027)
+  ✓ no screen formats dates with the browser's locale data any more (the one remaining call is the Ledger search also accepting English month names)
+
+L3. Every key the app uses exists, and every key in the catalog is used
+  ✓ all 372 keys passed directly to t()/tn()/tIn() exist in the catalog
+  ✓ every quoted key name in App.jsx (including ones picked by a condition) exists
+  ✓ App.jsx builds keys with the prefix "nav."
+  ✓ App.jsx builds keys with the prefix "cat."
+  ✓ App.jsx builds keys with the prefix "tile."
+  ✓ App.jsx builds keys with the prefix "sub."
+  ✓ App.jsx builds keys with the prefix "dow."
+  ✓ App.jsx builds keys with the prefix "dow.pl."
+  ✓ App.jsx builds keys with the prefix "dow.cmp."
+  ✓ App.jsx builds keys with the prefix "freq."
+  ✓ App.jsx builds keys with the prefix "freqCap."
+  ✓ App.jsx builds keys with the prefix "surplus."
+  ✓ App.jsx builds keys with the prefix "month.net."
+  ✓ App.jsx builds keys with the prefix "an.perDay."
+  ✓ App.jsx builds keys with the prefix "ledger.type."
+  ✓ App.jsx builds keys with the prefix "reason."
+  ✓ App.jsx builds keys with the prefix "mon."
+  ✓ App.jsx builds keys with the prefix "monGen."
+  ✓ App.jsx builds keys with the prefix "monShort."
+  ✓ App.jsx builds keys with the prefix "wdShort."
+  ✓ App.jsx builds keys with the prefix "wdNarrow."
+  ✓ App.jsx builds keys with the prefix "tpl."
+  ✓ every key built at run time (category, subcategory, weekday, frequency, reason …) exists
+  ✓ no unused keys in the catalog
+
+L4. No hard-coded English text left in the interface
+  ✓ no English text written directly into elements (89 text children inspected)
+  ✓ no fixed English placeholder / aria-label / title / alt attributes
+  ✓ no fixed English text passed to toasts, snackbars, load notices, form errors or prompts
+  ✓ no fixed English sentences in validation problems, warnings, insights, helper cards or import errors
+
+L5. Language preference: stored with the existing settings, backward compatible
+  ✓ a genuinely fresh install (nothing stored) has no language yet → the chooser is shown
+  ✓ data saved by an earlier version (no language field) → English, no chooser (existing users are not sent through onboarding)
+  ✓ a saved "az" is restored and applied before anything is shown
+  ✓ a saved "ru" is restored and applied before anything is shown
+  ✓ a saved "en" is restored and applied before anything is shown
+  ✓ fresh install that was saved before a choice was made (language: null) → chooser shown again, not skipped
+  ✓ an unsupported stored value falls back to English
+  ✓ a user migrating from an older storage key is an existing user → English, no chooser
+  ✓ unreadable stored data (recovery copy kept) still counts as an existing user
+  ✓ a backup file does not carry the language (it is a preference of one device)
+  ✓ merge import keeps this device's language
+  ✓ replace import keeps this device's language
+
+L6. Changing the language never changes data or calculations
+  ✓ Safe to Spend figures are identical in all three languages
+  ✓ the transactions themselves are untouched (ids, amounts, categories, English subcategory)
+  ✓ CSV import maps categories the same way whatever the interface language (English CSV names are the identifiers)
+  ✓ display names follow the language; a user's own subcategory is shown exactly as typed
+  ✓ skip reasons are shown in the interface language
+  ✓ …and unchanged in English
+  ✓ the same insights are produced in every language (only the wording differs)
+
+i18n: ALL 69 CHECKS PASSED
+[run-logic] i18n.test.mjs exit=0 passed=69 failed=0 missing=0 expected=69
+
+P2-B. Safe to Spend counts income received to date, not income dated later this month
+  ✓ salary Oct 2 (2000) counted; a payment dated Oct 25 (1000) is NOT counted yet → income 2000
+  ✓ …the Oct 25 income is reported separately as expected later this month (1000)
+  ✓ remaining = 2000 received − 0 − 0 − 0 = 2000 (was 3000)
+  ✓ daily allowance = 2000 ÷ 19 days left incl. today (was 3000 ÷ 19)
+  ✓ income dated TODAY counts (even late in the day)
+  ✓ …and early in the day (local calendar date, not a time comparison)
+  ✓ only future-dated income → not feasible (no figure is presented as safe), expected 1000 still reported
+  ✓ last month's income is not this month's income
+  ✓ identity unchanged by a future salary: 2000 − 100 − (15 + 50) − 15 = 1820
+  ✓ an expense dated later this month is still counted (conservative): 2000 − 300 = 1700
+  ✓ overspent → remaining is negative (−200), never clamped to 0
+  ✓ exactly spent → 0
+  ✓ missing Safe to Spend settings and goals → treated as 0 reserve, no NaN
+  ✓ last day of month: income dated that day counts
+  ✓ month boundary: on Nov 1 only November's income counts
+  ✓ empty ledger → no NaN / Infinity / undefined
+
+P2-A. Analytics weekday/weekend comparison uses spending PER ELAPSED DAY
+  ✓ calcWeekdayWeekend() exists in the candidate
+  ✓ Oct 2026 has 9 weekend and 22 weekday days
+  ✓ ₼10 every day → 10/day both → 'same' (raw totals 90 vs 220 must not say weekdays are heavier)
+  ✓ documented defect: the old tile compared raw totals 220 vs 90 for identical daily spending
+  ✓ weekends 25/day vs weekdays 10/day → weekend heavier (totals 225 vs 220 would barely differ)
+  ✓ weekdays 12/day vs weekends 5/day → weekday heavier
+  ✓ no spending → no claim
+  ✓ income is not spending → no claim
+  ✓ no weekend day has passed yet → zero denominator → no claim (avg null, not Infinity/NaN)
+  ✓ future-dated Oct 20 / Oct 24 entries are excluded; days counted up to today only
+  ✓ Feb 2026 (28 days, past): 8 weekend / 20 weekday days
+  ✓ Feb 2028 (leap, 29 days): 8 weekend / 21 weekday days, flat spending → same
+  ✓ April 2026 (30 days): 8 weekend / 22 weekday days
+  ✓ a FUTURE month has no elapsed days → no claim
+  ✓ local-date boundary: Saturday 3 Oct (late evening) is a weekend day and counted as elapsed
+  ✓ no NaN / Infinity / undefined in the result
+
+P2-C. Backup reminder: a created file is not treated as a confirmed backup
+  ✓ backupReminderDue() exists in the candidate
+  ✓ reminder interval is 7 days
+  ✓ no backup ever → reminder due
+  ✓ file created yesterday, never confirmed → ask the user to confirm (not silently hidden for 7 days)
+  ✓ file created and confirmed yesterday → no reminder
+  ✓ confirmed 8 days ago → due again
+  ✓ boundary: confirmed exactly 7 days ago → due (same ≥ 7-day rule as before); 6 days ago → not due
+  ✓ old unconfirmed file (12 days) and an older confirmation → due
+  ✓ a newer unconfirmed file after an older confirmation → ask to confirm the new one
+  ✓ malformed dates → treated as no backup (due), never a crash
+  ✓ stored backupConfirmedAt is loaded and kept
+  ✓ data saved by the previous version (no backupConfirmedAt) loads; confirmation starts empty
+  ✓ malformed backupConfirmedAt is ignored
+  ✓ a backup file never carries the 'confirmed' flag (it is a fact about one device)
+  ✓ merge import keeps this device's lastBackup and backupConfirmedAt
+  ✓ replace import keeps this device's lastBackup and backupConfirmedAt
+
+phase2: ALL 48 CHECKS PASSED
+[run-logic] phase2.test.mjs exit=0 passed=48 failed=0 missing=0 expected=48
+
+P3-1. Existing transaction identifiers are preserved
+  ✓ a UUID string id is kept exactly (was replaced by a new random number)
+  ✓ short and numeric-looking string ids are kept as they are
+  ✓ numeric ids (0, fractional) still kept
+  ✓ unusable id undefined → a fresh numeric id
+  ✓ unusable id null → a fresh numeric id
+  ✓ unusable id "" → a fresh numeric id
+  ✓ unusable id "   " → a fresh numeric id
+  ✓ unusable id true → a fresh numeric id
+  ✓ unusable id {} → a fresh numeric id
+  ✓ unusable id [] → a fresh numeric id
+  ✓ unusable id null → a fresh numeric id
+  ✓ unusable id null → a fresh numeric id
+  ✓ stored records with string ids load with the same ids
+  ✓ merging a backup with string ids adds only the missing record (no duplicate of uuid-1, even with look-alike skipping off)
+  ✓ merging the same backup a second time adds nothing
+
+P3-2. Imported amounts must be whole cents (refused, never rounded)
+  ✓ 12.34, 999999999.99 and 7 accepted; 12.345, 0.000000001 and 0.30000000000000004 refused
+  ✓ the refused rows are counted with a precise reason
+  ✓ accepted amounts are stored exactly as given (no rounding)
+  ✓ CSV text with 3 decimals is refused too (typed-text grammar)
+  ✓ data already stored on this device with 12.345 is set aside with a recovery copy and a notice (Run 6: same whole-cent rule as imports)
+
+P3-3. CSV export cannot inject spreadsheet formulas, and round trips stay exact
+  ✓ no exported cell starts with = + - @ tab or CR (spreadsheets would run it as a formula)
+  ✓ risky text is prefixed with a single apostrophe so spreadsheets show it as text
+  ✓ re-importing the app's own CSV restores the original text exactly (the apostrophe is removed)
+  ✓ only the guard apostrophe (before = + - @) is removed; an ordinary leading apostrophe stays
+  ✓ ordinary text is exported unchanged
+
+phase3: ALL 25 CHECKS PASSED
+[run-logic] phase3.test.mjs exit=0 passed=25 failed=0 missing=0 expected=25
+
+F1. Month totals: actual to date vs planned later this month
+  ✓ spent this month = 20 (to date); 670 dated 28 Oct is planned; whole month 690
+  ✓ income = 2000 received; 300 dated 25 Oct is expected later
+  ✓ surplus rate uses what happened: (2000−20)/2000 = 99%
+  ✓ a past month counts the whole month (105), nothing planned
+  ✓ a future month: nothing has happened yet (0), 40 planned
+  ✓ an entry dated today counts as happened
+
+F2. Category spend, budgets and statistics follow 'to date'
+  ✓ category spend this month: food 20; housing 670 (dated 28 Oct) not yet spent
+  ✓ a housing budget of 500 is not 'over' on 13 Oct because of a payment dated 28 Oct
+  ✓ transaction count this month = 1 (the future-dated one is not counted)
+  ✓ a past month's category spend is unchanged
+
+F3. Safe to Spend still treats an expense entered ahead of time as committed money (unchanged)
+  ✓ the 670 dated 28 Oct still reduces Safe to Spend by 670
+
+F4. Insights and 'what changed' use only what has happened
+  ✓ concentration is about money actually spent: food 100%, not 'housing 93%' from a payment dated 28 Oct
+  ✓ a large expense dated 28 Oct is not reported as an 'unusual transaction this month' on 13 Oct
+  ✓ …the same expense dated 12 Oct (already happened) is reported
+  ✓ 'what changed vs last month' does not list a merchant whose only entry is dated 28 Oct
+
+F5. Small samples: a one-month spike is a fact, not a trend
+  ✓ 100,100,100,100,100 then 500: states '+400% last month' but does not claim a trend 'over recent months'
+  ✓ a steady rise 100→320 over six months is still described as increasing over recent months (+28% last month)
+  ✓ one old spike (500 then 100s) with no change last month → no trend claim
+  ✓ food and transport together on only 3 days (of 3 spending days) → no 'often on the same day' claim
+
+run3: ALL 19 CHECKS PASSED
+[run-logic] run3.test.mjs exit=0 passed=19 failed=0 missing=0 expected=19
+
+R5-1. Base month (hand-worked)
+  ✓ spent to date 90; nothing dated later; Safe to Spend = 2000 − 90 = 1,910
+
+R5-2. Adding 300 dated 20 Oct: planned, committed — not spent
+  ✓ month summary: spent to date stays 90; planned later rises by 300; whole month 390
+  ✓ category spend to date unchanged (no housing yet)
+  ✓ transaction count to date unchanged
+  ✓ calcSpentToDate unchanged
+  ✓ insights, anomalies and patterns are identical with and without the later-dated entry
+  ✓ 'what changed vs last month' identical with and without it
+  ✓ Safe to Spend: Recorded expenses 390; discretionary remaining 1,910 → 1,610 (the commitment is set aside)
+  ✓ Safe to Spend reports that 300 of the 390 is dated later this month (shown on the card as 'set aside, not spent yet')
+
+R5-3. Control: the same 300 dated today has happened
+  ✓ month summary: spent to date 90 → 390; nothing planned
+  ✓ category spend now has housing 300; count +1
+  ✓ Safe to Spend is the same 1,610 whether the 300 is dated today or later; only the 'dated later' part differs (0 here)
+
+R5-4. A recurring bill is set aside exactly once, recorded ahead or not
+  ✓ not yet entered: 500 counted once as an upcoming payment
+  ✓ entered ahead for 20 Oct: 500 counted once as a recorded expense dated later, not again as upcoming
+  ✓ either way Safe to Spend = 2000 − 90 − 500 = 1,410
+
+R5-5. Later-dated income is still not counted (Run 3 rule unchanged)
+  ✓ 1000 dated 25 Oct is 'expected', and Safe to Spend stays 1,910
+
+run5: ALL 16 CHECKS PASSED
+[run-logic] run5.test.mjs exit=0 passed=16 failed=0 missing=0 expected=16
+
+D16. A failed read of the saved data is never treated as a fresh install
+  ✓ getItem(expense_ledger_v5) throws → saving is paused (the next save cannot overwrite the stored ledger)
+  ✓ the user is told the data could not be read and saving is paused
+  ✓ the stored ledger is byte-for-byte unchanged
+  ✓ …and older-version data is NOT migrated over it while the current data is unreadable
+  ✓ storage completely unavailable → the app still starts (empty view) with saving paused
+
+D17. An empty string stored under the key is unreadable data, not 'nothing saved'
+  ✓ a recovery copy of the empty value is kept before anything can overwrite it
+  ✓ the user is told the saved data could not be read
+  ✓ it is treated as an existing user (no first-launch language chooser)
+  ✓ …and if that copy cannot be made, saving is paused
+
+D18. Older-version data that cannot be read blocks saving instead of being skipped
+  ✓ reading an older key throws → saving is paused and the user is told (the older data is not hidden behind an empty ledger)
+  ✓ an unparseable older key: a recovery copy is kept, the readable older data still migrates
+  ✓ older keys are never modified or removed
+  ✓ control: a normal migration is unchanged (1 record, no notice, not blocked)
+
+D8/D14. A file with no usable transactions can never empty the ledger with Replace
+  ✓ settings-only file: importable for its settings, but Replace is not offered (canReplace=false)
+  ✓ even if Replace is forced, the 2 existing transactions stay; only the valid settings are applied
+  ✓ settings + only invalid rows: same (1 skipped, Replace not offered)
+  ✓ settings + an explicitly empty list: Replace not offered and cannot empty the ledger
+  ✓ control: a backup with 1 valid transaction still replaces as before
+
+D9/D15. isActive and recurring accept only true/false (or the words true/false)
+  ✓ true/false, "true"/"false" (any case, trimmed) are read as written; a missing flag means active
+  ✓ isActive null / 0 / 1 / "yes" / "no" / {} / [] → every record refused (never guessed)
+  ✓ recurring "yes" / 1 refused; "false" → not recurring; true + monthly → recurring
+  ✓ stored data: "false" stays paused; an unreadable flag is set aside with a recovery copy (not silently activated)
+
+D13/D22. Every stored or imported money value must be whole cents
+  ✓ stored 12.345 and 0.1+0.2 (0.30000000000000004) are set aside with a recovery copy, not rounded; 12.34 kept
+  ✓ the user is told 2 records were set aside, and why
+  ✓ budget 12.345 refused (transport 50 kept)
+  ✓ goals with saved 12.345 or monthly 10.005 refused; a whole-cent goal kept
+  ✓ Safe to Spend savings floor 12.345 refused (your current value is kept)
+  ✓ template 1.005 refused; 1.50 kept
+  ✓ control: whole-cent settings are accepted unchanged
+
+D1. Two different bills from the same merchant stay two schedules
+  ✓ electricity 90 and water 18 (same merchant, category, monthly) → 2 schedules
+  ✓ water paid on 5 Oct does not settle electricity: 90 still owed → 2000 − 18 − 90 = 1,892 (was 1,982)
+  ✓ control: one bill whose price changed 30 → 35 stays ONE schedule (latest amount 35)
+
+D19. A bill due on the 31st returns to the 31st after a short month
+  ✓ 31 Jan, 28 Feb → March due 31 Mar (not 28 Mar)
+  ✓ → April 30; and 31 Mar, 30 Apr → 31 May
+  ✓ control: the 15th stays the 15th
+  ✓ a deliberate change (paid on 28 Mar, not month-end) moves the due day to the 28th
+
+D21. A 29 February yearly payment returns to 29 February in a leap year
+  ✓ 29 Feb 2024, 28 Feb 2025 → 28 Feb 2026, 29 Feb 2028
+  ✓ control: a 10 March yearly payment is due 10 March only
+
+D10. Identical rows inside one file: all imported, the user is told; re-importing the file skips them
+  ✓ 3 identical coffees + 1 with a note → all 4 imported; '2 rows are identical…' warning (the first one is not counted)
+  ✓ merging into an empty ledger with 'skip look-alikes' on keeps all 4 (look-alikes are judged against the ledger, not the file itself)
+  ✓ importing the same purchases again with new ids and 'skip look-alikes' on adds none
+  ✓ control: different amounts → no warning
+
+run6: ALL 42 CHECKS PASSED
+[run-logic] run6.test.mjs exit=0 passed=42 failed=0 missing=0 expected=42
+
+V9-1. The current month is compared with the same days of the previous month
+  ✓ 27 Oct: October 1–27 (200) vs September 1–27 (300) → 100 less (was: vs all of September 800 → 600 less)
+  ✓ the summary says which window it used (same days, 27) and still reports September's full total (800)
+
+V9-2. A finished month is compared whole with the whole previous month
+  ✓ September (800) vs August (500) → 300 more, full months
+
+V9-3. A future month is not compared
+  ✓ November (nothing has happened yet) → no comparison
+
+V9-4. Month lengths and the year boundary
+  ✓ 31 Oct: the window is days 1–31, so all 30 days of September count (800)
+  ✓ 30 Mar 2026: February has 28 days, all counted (100)
+  ✓ 29 Mar 2024 (leap year): 29 Feb is inside days 1–29 (100)
+  ✓ 15 Jan 2027: December 1–15 (20) vs January 1–15 (30) → 10 more; 20 Dec is outside the window
+  ✓ 1 Oct: day 1 vs day 1 (25)
+
+V9-5. 'What changed' uses the same window
+  ✓ total change: 200 − 300 = −100
+  ✓ the 500 rent paid on 29 Sep (after day 27) is not listed as a change, nor is the 999 planned for 30 Oct
+  ✓ food: 200 vs 300 → −100
+
+run7: ALL 12 CHECKS PASSED
+[run-logic] run7.test.mjs exit=0 passed=12 failed=0 missing=0 expected=12
+[run-logic] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run7-20261027-123458\repo\App.jsx
+[run-logic] 10 files, 0 with problems; checks passed=483 failed=0 missing=0

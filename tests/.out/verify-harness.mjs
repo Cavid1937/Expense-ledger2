@@ -1,0 +1,14 @@
+﻿import fs from "fs";
+const [cand, gen] = process.argv.slice(2);
+const src = fs.readFileSync(cand, "utf8").replace(/\r\n/g, "\n");
+const out = fs.readFileSync(gen, "utf8");
+const marker = "// \u2500\u2500\u2500 SVG icon system";
+const pre = src.split(marker)[0];
+const importLines = pre.split("\n").filter(l => /^import /.test(l));
+const expectedData = pre.replace(/^import .*$/gm, "");
+const i = out.indexOf(expectedData);
+console.log("candidate logic section found verbatim in harness output:", i >= 0, "| import lines removed:", importLines.length, JSON.stringify(importLines));
+const before = out.slice(0, i), after = out.slice(i + expectedData.length);
+console.log("text before it = clock/storage stub only:", /globalThis\.Date=FakeDate/.test(before) && !/function calc/.test(before));
+console.log("appended after it: calcHelperCards copied verbatim:", after.includes(src.slice(src.indexOf("function calcHelperCards("), src.indexOf("\n}\n", src.indexOf("function calcHelperCards("))+3)));
+console.log("export line:", (after.match(/export \{[^}]*\}/)||[""])[0].length, "chars;", (after.match(/export \{([^}]*)\}/)[1].split(",").length), "names");

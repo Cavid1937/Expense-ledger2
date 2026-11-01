@@ -1,0 +1,10 @@
+﻿
+R9-1. Placeholders are readable (Add form and Ledger search)
+  ✗ en: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+      ↳ [{"ph":"0.00","ratio":1.66}]
+  ✗ az: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+      ↳ [{"ph":"0.00","ratio":1.66}]
+  ✗ ru: 4 placeholders, all ≥ 4.5:1 (the empty amount "0.00" included)
+      ↳ [{"ph":"0.00","ratio":1.66}]
+
+e2e_run9: 3 FAILED, 0 passed

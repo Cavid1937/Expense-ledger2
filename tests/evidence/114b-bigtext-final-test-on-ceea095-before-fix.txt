@@ -1,0 +1,40 @@
+﻿
+Z. Page zoom 130% / 150% / 200% (390px phone → narrower CSS viewport)
+  ✓ 130% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 130% zoom, en: no JavaScript errors
+  ✗ 130% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["130% az tab 1: tab label cut \"Əməliyyatlar\"","130% az tab 2: tab label cut \"Əməliyyatlar\"","130% az tab 3: tab label cut \"Əməliyyatlar\"","130% az tab 4: tab label cut \"Əməliyyatlar\"","130% az tab 5: tab label cut \"Əməliyyatlar\"","130% az add form: tab label cut \"Əməliyyatlar\"","130% az settings: tab label cut \"Əməliyyatlar\"","130% az settings (scrolled): tab label cut \"Əməliyyatlar\"","130% az settings (scrolled): tab label cut \"Əməliyyatlar\"","130% az settings (scrolled): tab label cut \"Əməliyyatlar\""]
+  ✓ 130% zoom, az: no JavaScript errors
+  ✓ 130% zoom, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 130% zoom, ru: no JavaScript errors
+  ✗ 150% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["150% en tab 1: clipped backup notice text squeezed to 111px of 260","150% en tab 2: clipped backup notice text squeezed to 111px of 260","150% en tab 3: clipped \"91%\" runs past the screen edge (right=265)","150% en tab 3: clipped \"8%\" runs past the screen edge (right=265)","150% en tab 3: clipped \"1%\" runs past the screen edge (right=265)","150% en tab 3: clipped \"0%\" runs past the screen edge (right=265)","150% en tab 3: clipped backup notice text squeezed to 111px of 260","150% en tab 4: clipped \"91%\" runs past the screen edge (right=265)","150% en tab 4: clipped \"8%\" runs past the screen edge (right=265)","150% en tab 4: clipped \"1%\" runs past the screen edge (right=265)"]
+  ✓ 150% zoom, en: no JavaScript errors
+  ✗ 150% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["150% az tab 1: clipped backup notice text squeezed to 106px of 260","150% az tab 1: tab label cut \"Əməliyyatlar\"","150% az tab 1: tab label cut \"Təkrarlanan\"","150% az tab 2: clipped backup notice text squeezed to 106px of 260","150% az tab 2: tab label cut \"Əməliyyatlar\"","150% az tab 2: tab label cut \"Təkrarlanan\"","150% az tab 3: clipped \"91%\" runs past the screen edge (right=265)","150% az tab 3: clipped \"8%\" runs past the screen edge (right=265)","150% az tab 3: clipped \"1%\" runs past the screen edge (right=265)","150% az tab 3: clipped \"0%\" runs past the screen edge (right=265)"]
+  ✓ 150% zoom, az: no JavaScript errors
+  ✗ 150% zoom, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["150% ru tab 1: clipped backup notice text squeezed to 114px of 260","150% ru tab 1: tab label cut \"Аналитика\"","150% ru tab 1: tab label cut \"Регулярные\"","150% ru tab 2: clipped backup notice text squeezed to 114px of 260","150% ru tab 2: tab label cut \"Аналитика\"","150% ru tab 2: tab label cut \"Регулярные\"","150% ru tab 3: clipped \"91%\" runs past the screen edge (right=265)","150% ru tab 3: clipped \"8%\" runs past the screen edge (right=265)","150% ru tab 3: clipped \"1%\" runs past the screen edge (right=265)","150% ru tab 3: clipped \"0%\" runs past the screen edge (right=265)"]
+  ✓ 150% zoom, ru: no JavaScript errors
+  ✗ 200% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["200% en tab 1: page scrolls sideways by 11px","200% en tab 1: clipped wider than the screen: ","200% en tab 1: clipped \"Salary\" 12>7","200% en tab 1: clipped \"Home · Rent\" 13>4","200% en tab 1: clipped backup notice text squeezed to 58px of 195","200% en tab 1: tab label cut \"Monthly\"","200% en tab 1: tab label cut \"Analytics\"","200% en tab 1: tab label cut \"Recurring\"","200% en tab 2: page scrolls sideways by 11px","200% en tab 2: clipped wider than the screen: "]
+  ✓ 200% zoom, en: no JavaScript errors
+  ✗ 200% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["200% az tab 1: page scrolls sideways by 27px","200% az tab 1: clipped wider than the screen: .backup-dismiss right=207","200% az tab 1: clipped \"×\" runs past the screen edge (right=207)","200% az tab 1: clipped \"Maaş\" 12>7","200% az tab 1: clipped \"Ev · İcarə haqqı\" 12>4","200% az tab 1: clipped backup notice text squeezed to 70px of 195","200% az tab 1: tab label cut \"Əməliyyatlar\"","200% az tab 1: tab label cut \"Təkrarlanan\"","200% az tab 2: page scrolls sideways by 27px","200% az tab 2: clipped wider than the screen: .backup-dismiss right=207, .SPAN right=225"]
+  ✓ 200% zoom, az: no JavaScript errors
+  ✗ 200% zoom, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["200% ru tab 1: page scrolls sideways by 17px","200% ru tab 1: clipped wider than the screen: .backup-dismiss right=197, .hero-stat right=203, .hero-stat-val right=197","200% ru tab 1: clipped \"×\" runs past the screen edge (right=197)","200% ru tab 1: clipped \"Профицит\" runs past the screen edge (right=197)","200% ru tab 1: clipped \"Профицит\" spills out of .hero-stats","200% ru tab 1: clipped \"в этом месяце нет\" runs past the screen edge (right=211)","200% ru tab 1: clipped \"Зарплата\" 12>7","200% ru tab 1: clipped \"Дом · Аренда\" 13>4","200% ru tab 1: clipped backup notice text squeezed to 67px of 195","200% ru tab 1: tab label cut \"Главная\""]
+  ✓ 200% zoom, ru: no JavaScript errors
+
+M. Minimum font size 16px (text grows, boxes do not), 390px
+  ✓ (setting is active: a tab button reports font-size 16px; rendered glyphs are raised to ≥16px by the preference)
+  ✓ minimum 16px text, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ minimum 16px text, en: no JavaScript errors
+  ✗ minimum 16px text, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["min16 az tab 1: tab label cut \"Əməliyyatlar\"","min16 az tab 1: tab label cut \"Təkrarlanan\"","min16 az tab 2: tab label cut \"Əməliyyatlar\"","min16 az tab 2: tab label cut \"Təkrarlanan\"","min16 az tab 3: tab label cut \"Əməliyyatlar\"","min16 az tab 3: tab label cut \"Təkrarlanan\"","min16 az tab 4: tab label cut \"Əməliyyatlar\"","min16 az tab 4: tab label cut \"Təkrarlanan\"","min16 az tab 5: tab label cut \"Əməliyyatlar\"","min16 az tab 5: tab label cut \"Təkrarlanan\""]
+  ✓ minimum 16px text, az: no JavaScript errors
+  ✗ minimum 16px text, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["min16 ru tab 1: tab label cut \"Операции\"","min16 ru tab 1: tab label cut \"Аналитика\"","min16 ru tab 1: tab label cut \"Регулярные\"","min16 ru tab 2: tab label cut \"Операции\"","min16 ru tab 2: tab label cut \"Аналитика\"","min16 ru tab 2: tab label cut \"Регулярные\"","min16 ru tab 3: tab label cut \"Операции\"","min16 ru tab 3: tab label cut \"Аналитика\"","min16 ru tab 3: tab label cut \"Регулярные\"","min16 ru tab 4: tab label cut \"Операции\""]
+  ✓ minimum 16px text, ru: no JavaScript errors
+
+e2e_bigtext: 9 FAILED, 16 passed

@@ -1,0 +1,168 @@
+﻿diff --git a/App.jsx b/App.jsx
+index 53a3203..83b9b70 100644
+--- a/App.jsx
++++ b/App.jsx
+@@ -357,2 +357,3 @@ function migrateAndLoad() {
+     const lastBackup=(typeof current.lastBackup==="string" && !Number.isNaN(Date.parse(current.lastBackup))) ? current.lastBackup : null;
++    const backupConfirmedAt=(typeof current.backupConfirmedAt==="string" && !Number.isNaN(Date.parse(current.backupConfirmedAt))) ? current.backupConfirmedAt : null;
+     return {
+@@ -365,2 +366,3 @@ function migrateAndLoad() {
+       lastBackup,
++      backupConfirmedAt,
+     };
+@@ -408,2 +410,3 @@ function buildState(transactions=[], settings=null) {
+     lastBackup:  null,
++    backupConfirmedAt: null,
+   };
+@@ -554,2 +557,16 @@ function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
+ 
++// Backup reminder. lastBackup = when a backup FILE was last created (a download was started); backupConfirmedAt = when the
++// user last told the app they have that file. The page cannot see the Downloads folder, so only the user can confirm.
++//   "confirm" → a file was created recently but not confirmed: ask the user to check it, never assume it was kept
++//   "none"    → a backup was confirmed less than BACKUP_REMINDER_DAYS ago
++//   "due"     → otherwise (no backup, or the last one is old)
++const BACKUP_REMINDER_DAYS=7;
++function backupReminderDue(s, now=new Date()) {
++  const at=(v)=>(typeof v==="string" && !Number.isNaN(Date.parse(v))) ? Date.parse(v) : null;
++  const created=at(s?.lastBackup), confirmed=at(s?.backupConfirmedAt);
++  const recent=(ms)=>ms!==null && (now.getTime()-ms)/86400000<BACKUP_REMINDER_DAYS;
++  if (recent(created) && (confirmed===null || created>confirmed)) return "confirm";
++  return recent(confirmed) ? "none" : "due";
++}
++
+ function buildBackup(state, now=new Date().toISOString()) {
+@@ -792,2 +809,24 @@ function calcTxnStats(transactions, mon=curMon()) {
+ 
++// Weekend vs weekday spending PER DAY for one month, counting only days that have passed (today included) and only
++// expenses dated on those days. A month has ~2.5× more weekdays than weekend days, so raw totals are never compared.
++// heavier: "weekend" | "weekday" | "same" (equal to the cent) | null (no spending, or a group has no elapsed day yet).
++function calcWeekdayWeekend(transactions, mon=curMon(), now=new Date()) {
++  const p=monthProgress(mon,now);
++  const [y,m]=mon.split("-").map(Number);
++  let weDays=0, wdDays=0;
++  for (let d=1; d<=p.daysPassed; d++) { if ([0,6].includes(new Date(y,m-1,d).getDay())) weDays++; else wdDays++; }
++  const lastStr=p.daysPassed>0 ? `${mon}-${String(p.daysPassed).padStart(2,"0")}` : "";
++  const isWkend=d=>[0,6].includes(parseLocalDate(d).getDay());
++  const inWindow=transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&t.date<=lastStr);
++  const weTotal=inWindow.filter(t=>isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
++  const wdTotal=inWindow.filter(t=>!isWkend(t.date)).reduce((s,t)=>s+t.amount,0);
++  const weAvg=weDays>0 ? weTotal/weDays : null, wdAvg=wdDays>0 ? wdTotal/wdDays : null;
++  let heavier=null;
++  if (weAvg!==null && wdAvg!==null && (weTotal>0 || wdTotal>0)) {
++    const a=Math.round(weAvg*100), b=Math.round(wdAvg*100);
++    heavier = a===b ? "same" : a>b ? "weekend" : "weekday";
++  }
++  return { weDays, wdDays, weTotal, wdTotal, weAvg, wdAvg, heavier };
++}
++
+ // S3: What Changed — category + merchant-level explanation + recurring/one-off flag
+@@ -904,3 +943,6 @@ function scheduleNextDue(s, transactions, now=new Date()) {
+ 
+-// S4: Safe to Spend = income recorded so far − savings reserve − spending recorded this month − commitments still to come.
++// S4: Safe to Spend = income received so far this month − savings reserve − spending recorded this month − commitments still to come.
++// "Received so far" = income dated today or earlier. Income dated later this month is expected, not available yet: it is
++// reported separately (expectedInc) and never added, so the figure is never optimistic. Expenses dated later this month ARE
++// subtracted (they are planned spending).
+ // "Commitments still to come" = every expected payment of an active schedule this month that has no matching recorded payment:
+@@ -910,4 +952,7 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
+   const { savingsTarget=0 }=safeConfig||{};
+-  const mon=localMonthStr(now);
+-  const { curInc,curExp }=calcMonthSummary(transactions,mon);
++  const mon=localMonthStr(now), todayStr=localDateStr(now);
++  const { curExp }=calcMonthSummary(transactions,mon);
++  const monthInc=transactions.filter(t=>t.type==="income"&&t.date.startsWith(mon));
++  const curInc=monthInc.filter(t=>t.date<=todayStr).reduce((s,t)=>s+t.amount,0);
++  const expectedInc=monthInc.filter(t=>t.date>todayStr).reduce((s,t)=>s+t.amount,0);
+   const p=monthProgress(mon,now);
+@@ -935,3 +980,3 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date()) {
+   return {
+-    curInc, curExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
++    curInc, expectedInc, curExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
+     futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount,
+@@ -1225,5 +1270,5 @@ html,body{background:var(--bg);color:var(--ink);font-family:'DM Sans',system-ui,
+ .safe-daily{font-size:11px;color:var(--ink-3);margin-top:2px}
+-.safe-row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--rule);font-size:11px}
++.safe-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:4px 0;border-bottom:1px solid var(--rule);font-size:11px}
+ .safe-row:last-child{border-bottom:none}
+-.safe-lbl{color:var(--ink-3)}.safe-val{font-family:'Playfair Display',serif;font-weight:600;color:var(--ink)}
++.safe-lbl{color:var(--ink-3)}.safe-val{font-family:'Playfair Display',serif;font-weight:600;color:var(--ink);white-space:nowrap;text-align:right}
+ /* Templates */
+@@ -1486,7 +1531,5 @@ export default function App() {
+   stateRef.current = state;   // always the latest committed state, for callbacks that must not close over a stale copy
+-  const [showBackupBanner, setShowBackupBanner] = useState(() => {
+-    const s=readRaw(KEY);
+-    if (!s?.lastBackup) return true;
+-    return (Date.now()-new Date(s.lastBackup).getTime())/86400000>=7;
+-  });
++  // Dismissing the backup reminder hides it for this visit only; it is worked out from the saved state on every render.
++  const [backupDismissed, setBackupDismissed] = useState(false);
++  const backupReminder = backupReminderDue(state);
+   const snackTimer=useRef(null);
+@@ -1583,4 +1626,5 @@ export default function App() {
+     // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
++    // It is not a confirmed backup until the user says they have the file (see backupReminderDue).
+     setState(s=>({...s,lastBackup:now}));
+-    setShowBackupBanner(false);
++    setBackupDismissed(false);
+     showToast(`Backup file created — ${state.transactions.length} transactions. Check your Downloads folder: the app can't confirm it was saved.`,5000);
+@@ -1646,3 +1690,3 @@ export default function App() {
+         )}
+-        {showBackupBanner&&transactions.length>0&&(
++        {!backupDismissed&&backupReminder==="due"&&transactions.length>0&&(
+           <div className="backup-banner" role="alert">
+@@ -1650,3 +1694,10 @@ export default function App() {
+             <button className="backup-banner-btn" onClick={exportJSON}>Back up now</button>
+-            <button className="backup-dismiss" onClick={()=>setShowBackupBanner(false)} aria-label="Dismiss">×</button>
++            <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label="Dismiss">×</button>
++          </div>
++        )}
++        {!backupDismissed&&backupReminder==="confirm"&&transactions.length>0&&(
++          <div className="backup-banner" role="status">
++            <span>A backup file was created. The app can't see your Downloads — once you've found the file, confirm it here.</span>
++            <button className="backup-banner-btn" onClick={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(`Thanks — the next reminder is in ${BACKUP_REMINDER_DAYS} days`); }}>I have the file</button>
++            <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label="Dismiss">×</button>
+           </div>
+@@ -1834,5 +1885,11 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
+             <div className="safe-row">
+-              <span className="safe-lbl">Income this month</span>
++              <span className="safe-lbl">Income received so far</span>
+               <span className="safe-val">{fmt(safeInfo.curInc,currency)}</span>
+             </div>
++            {safeInfo.expectedInc>0&&(
++              <div className="safe-row">
++                <span className="safe-lbl">Expected later this month (not counted)</span>
++                <span className="safe-val" style={{color:"var(--ink-4)"}}>{fmt(safeInfo.expectedInc,currency)}</span>
++              </div>
++            )}
+             {/* Fix 4: Show goal contributions if they exceed manual savings target */}
+@@ -1878,4 +1935,4 @@ function HomePage({ transactions, budgets, templates, currency, safeToSpend, goa
+           {safeInfo.scheduleCount>0
+-            ? `Counts income recorded so far. Includes ${safeInfo.upcomingCount} upcoming and ${safeInfo.unrecordedCount} unrecorded payment${safeInfo.upcomingCount+safeInfo.unrecordedCount===1?"":"s"} from ${safeInfo.scheduleCount} recurring schedule${safeInfo.scheduleCount===1?"":"s"}.`
+-            : "Counts income recorded so far. No recurring payments are set up, so upcoming bills are not included."}
++            ? `Counts income received so far (dated today or earlier). Includes ${safeInfo.upcomingCount} upcoming and ${safeInfo.unrecordedCount} unrecorded payment${safeInfo.upcomingCount+safeInfo.unrecordedCount===1?"":"s"} from ${safeInfo.scheduleCount} recurring schedule${safeInfo.scheduleCount===1?"":"s"}.`
++            : "Counts income received so far (dated today or earlier). No recurring payments are set up, so upcoming bills are not included."}
+         </div>
+@@ -2207,2 +2264,3 @@ function AnalyticsPage({ transactions, currency, budgets }) {
+   const txnStats   =calcTxnStats(transactions,now);
++  const perDay     =calcWeekdayWeekend(transactions,now);
+   const budgetItems=calcBudgetStatus(budgets||{},catSpend,now);
+@@ -2332,5 +2390,5 @@ function AnalyticsPage({ transactions, currency, budgets }) {
+           <div className="stat-cell"><div className="stat-val">{fmt(txnStats.medTxn,currency)}</div><div className="stat-lbl">Median</div></div>
+-          <div className="stat-cell">
+-            <div className="stat-val">{fmt(txnStats.weekendExp>txnStats.weekdayExp?txnStats.weekendExp:txnStats.weekdayExp,currency)}</div>
+-            <div className="stat-lbl">{txnStats.weekendExp>txnStats.weekdayExp?"Weekends":"Weekdays"} heavier</div>
++          <div className="stat-cell" title="Average spending per day, counting only the days of this month so far">
++            <div className="stat-val">{perDay.heavier===null?"—":fmt(perDay.heavier==="weekday"?perDay.wdAvg:perDay.weAvg,currency)}</div>
++            <div className="stat-lbl">{perDay.heavier===null?"Per day: too early to compare":perDay.heavier==="same"?"Per day, weekdays = weekends":`Per ${perDay.heavier} day (higher)`}</div>
+           </div>
+@@ -3254,2 +3312,5 @@ function SettingsSheet({ state, onExportCSV, onExportJSON, onImportFile, onSetBu
+             <strong style={{color:"var(--ink-2)"}}>Last backup file created:</strong> {new Date(state.lastBackup).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}
++            <div>{state.backupConfirmedAt && Date.parse(state.backupConfirmedAt)>=Date.parse(state.lastBackup)
++              ? <>You confirmed you have it on {new Date(state.backupConfirmedAt).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"})}.</>
++              : <>Not confirmed yet — the reminder at the top asks once you've found the file.</>}</div>
+             <div style={{fontStyle:"italic",color:"var(--ink-4)"}}>The app can't tell whether your browser kept the file — check it, and store a copy somewhere safe.</div>
+@@ -3500,3 +3561,3 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency) {
+       text:`You have spent ${fmt(Math.abs(safeInfo.remaining),currency)} beyond your discretionary budget this month.`,
+-      impact:`Income: ${fmt(safeInfo.curInc,currency)} − commitments − savings target leaves no room. Review recurring or reduce spending.`,
++      impact:`Income received so far: ${fmt(safeInfo.curInc,currency)} − commitments − savings target leaves no room.${safeInfo.expectedInc>0?` ${fmt(safeInfo.expectedInc,currency)} more is expected later this month.`:""} Review recurring or reduce spending.`,
+     });

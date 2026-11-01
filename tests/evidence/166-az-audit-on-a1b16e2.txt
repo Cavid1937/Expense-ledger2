@@ -1,0 +1,20 @@
+﻿Azerbaijani localization audit — 2026-10-27T08:18:45.379Z
+Catalog: 592 keys, 652 rendered forms (plural forms counted separately). Keys passed directly to t()/tn() in App.jsx: 383.
+Review sheet: az-review-sheet.csv (UTF-8, opens in Excel/Sheets) — one row per form, example values filled in, empty reviewer columns.
+
+A. Turkish spellings in Azerbaijani text: 0
+B. A value slotted in directly before a suffix-bearing word (ending cannot agree with the value): 4
+   home.momLess: {month} ilə müqayisədə {amount} az
+   home.momMore: {month} ilə müqayisədə {amount} çox
+   month.vs: {month} ilə müqayisədə {amount}
+   wc.title: {month} ilə müqayisədə nə dəyişib
+C. Short month names passed into sentences: 6
+   home.spentThisMonth / better / worse / arrowDown / arrowUp / home.momLess / home.momMore
+   wc.title
+   home.momLess / home.momMore
+   wc.title
+   month.vs
+   month.vsSpentIn
+
+Not checked automatically (needs the native reviewer): grammar and word order of complete sentences, natural financial terms,
+tone, punctuation, and whether each sentence reads well with real values. Nothing here marks the wording as reviewed.

@@ -1,0 +1,148 @@
+// Data-integrity contract: money grammar, record contract, settings, import planning, merge/replace, round trips.
+import { H, KEY, ok, section, eq, reset, keysLike, T, finish } from "./lib.mjs";
+const { parseMoney, moneyReason, strictNum, checkRawTxn, normaliseTxn, partitionTransactions, ensureUniqueIds, validateSettings, planImport, applyImport,
+  buildBackup, buildCsv, countSuspectedDuplicates, migrateAndLoad, getNotice, MAX_AMOUNT } = H;
+
+section("12. Money grammar");
+for (const v of ["12","12.5","12.50",".5","0.05","007"," 7 ","999999999.99",12.5,0.6,1234567.89])
+  ok(parseMoney(v,{positive:true})===Number(typeof v==="string"?v.trim():v),`accepts ${JSON.stringify(v)}`);
+for (const v of ["","   ","12.","-5","+5","1e3","1E3","0x10","0b1","1,5","1 000","NaN","Infinity","-Infinity","25abc","abc","1e999","12.345","1234567890","1000000000",",5","5,","٣٤",Number.NaN,Infinity,-Infinity,1e15,1e300,-5,true,false,null,undefined,{},[]])
+  ok(parseMoney(v)===null,`rejects ${typeof v==="number"?String(v):JSON.stringify(v)}`);
+ok(parseMoney("0")===0&&parseMoney("0",{positive:true})===null&&parseMoney(0,{positive:true})===null,"zero: allowed where ≥0, refused where >0");
+ok(parseMoney(MAX_AMOUNT,{positive:true})===MAX_AMOUNT&&parseMoney(MAX_AMOUNT+1)===null,"upper limit is 999,999,999.99");
+ok(moneyReason("-5")==="negative amount"&&moneyReason(-5)==="negative amount"&&moneyReason("abc")==="invalid amount"&&moneyReason("")==="missing amount"&&moneyReason("0",{positive:true})==="zero amount"&&moneyReason(1e12)==="amount too large","reasons are specific and accurate");
+ok(Number.isNaN(strictNum("25abc"))&&Number.isNaN(strictNum("0x10"))&&strictNum("12.5")===12.5,"strictNum never reads a prefix");
+
+section("13. Transaction record contract");
+const rs=(o)=>checkRawTxn({date:"2026-09-01",amount:10,...o});
+ok(rs({amount:-50})==="negative amount"&&rs({amount:"-50"})==="negative amount","negative amount (number or text) → rejected, never abs()'d");
+ok(rs({amount:0})==="zero amount"&&rs({amount:"0.00"})==="zero amount","zero → rejected");
+ok(rs({amount:undefined})==="missing amount"&&rs({amount:""})==="missing amount","empty / absent → rejected");
+ok(rs({amount:"25abc"})==="invalid amount"&&rs({amount:"1e3"})==="invalid amount"&&rs({amount:"12,5"})==="invalid amount","malformed text → rejected");
+ok(rs({amount:1e300})==="amount too large"&&rs({amount:1e12})==="amount too large","huge numbers → rejected");
+ok(rs({amount:12.34})===null&&rs({amount:"7"})===null&&rs({amount:100})===null,"valid decimal / integer text / integer → accepted");
+ok(checkRawTxn({amount:5})==="missing date"&&checkRawTxn({amount:5,date:""})==="missing date"&&checkRawTxn({amount:5,date:20260901})==="invalid date","no date is never turned into today");
+ok(rs({date:"2026-02-30"})==="invalid date"&&rs({date:"01/09/2026"})==="invalid date"&&rs({date:"garbage"})==="invalid date"&&rs({date:"2026-09-30T11:57:15.003Z"})===null,"dates: real calendar dates only (ISO timestamps allowed)");
+ok(rs({type:"transfer"})==="unsupported type"&&rs({type:"refund"})==="unsupported type"&&rs({type:"Income"})===null&&rs({type:"EXPENSE"})===null&&rs({type:undefined})===null,"unknown types are rejected, not turned into expenses");
+ok(rs({recurring:true})==="invalid recurrence"&&rs({recurring:true,recurFreq:"daily"})==="invalid recurrence"&&rs({recurring:true,recurFreq:"monthly"})===null,"recurring needs a valid frequency");
+ok(checkRawTxn(null)==="not a transaction record"&&checkRawTxn("x")==="not a transaction record"&&checkRawTxn([])==="not a transaction record","non-objects rejected");
+const n1=normaliseTxn({id:0,amount:"12.50",date:"2026-09-30T11:57:15.003Z",type:"Income",category:"salary"});
+ok(n1.id===0&&n1.amount===12.5&&n1.date==="2026-09-30"&&n1.type==="income","normalise keeps id 0, exact amount, date-only, type");
+ok(normaliseTxn({id:1790769435003.98,amt:4.3,date:"2026-09-04"}).amount===4.3&&normaliseTxn({id:1790769435003.98,amt:4.3,date:"2026-09-04"}).id===1790769435003.98,"legacy 'amt' field and fractional id preserved");
+ok(normaliseTxn({date:"2026-09-01",amount:-5}).amount===-5,"normaliseTxn itself never takes abs() — a negative can only be stopped, never flipped (defence in depth behind checkRawTxn)");
+const mixed=[T({id:1}),T({id:2,amount:-5}),T({id:3,amount:0}),T({id:4,date:""}),T({id:5,type:"transfer"}),T({id:6,amount:"abc"}),null,T({id:7,amount:1e12}),T({id:8,amount:"12.50"})];
+const part=partitionTransactions(mixed);
+ok(part.good.length===2&&part.bad.length===7,`mixed list → 2 stored, 7 rejected (${part.good.length}/${part.bad.length})`);
+ok(part.good.every(t=>t.amount>0)&&eq(part.good.map(t=>t.amount),[10,12.5]),"stored amounts are exactly the valid inputs — the −5 did not become +5");
+const dup=ensureUniqueIds([T({id:1}),T({id:1,amount:20}),T({id:2})]);
+ok(dup.rekeyed===1&&new Set(dup.list.map(t=>String(t.id))).size===3&&dup.list[0].id===1&&dup.list[1].amount===20,"duplicate ids: first kept, later one re-keyed, nothing dropped");
+
+section("13b. Loading stored / legacy data applies the same contract");
+reset();
+const bad=[T({id:2,amount:-5}),T({id:3,amount:0}),T({id:4,date:""}),T({id:5,type:"transfer"})];
+localStorage.setItem(KEY,JSON.stringify({transactions:[T({id:1}),...bad]}));
+let st=migrateAndLoad();
+ok(st.transactions.length===1&&st.transactions[0].id===1,"stored negative / zero / dateless / unsupported-type records are NOT loaded");
+const rej=keysLike(KEY+"__rejected_");
+ok(rej.length===1&&eq(JSON.parse(localStorage.getItem(rej[0])),bad),"…and are preserved byte-for-byte in a recovery key");
+ok(/4 unreadable records set aside \(.*negative amount.*\)/.test(getNotice()||""),"notice says why",getNotice());
+reset();
+localStorage.setItem("finance_os_v3",JSON.stringify({transactions:[{id:"a",amount:-30,date:"2026-02-02",category:"food"},{id:"b",amount:30,date:"2026-02-02",category:"food"}],currency:"₼"}));
+st=migrateAndLoad();
+ok(st.transactions.length===1&&st.transactions[0].amount===30&&keysLike(KEY+"__legacy_").length===1,"legacy migration: a −30 is set aside, not flipped to +30");
+
+section("14. Settings contract");
+let v=validateSettings({budgets:{food:"120",transport:-5,junk:50,shopping:"1e3",housing:0,sport:40}});
+ok(eq(v.settings.budgets,{food:120,housing:0,health:40}),"budgets: valid kept, legacy key 'sport' → health, negative/unknown/scientific skipped",v.settings.budgets);
+ok(v.problems.length===1&&/3 invalid budget entries were skipped/.test(v.problems[0]),"…and the skip is reported",v.problems);
+v=validateSettings({budgets:{a:1,b:"x"}}); ok(v.settings.budgets===undefined&&/All 2 budget entries were invalid/.test(v.problems[0]),"budgets with no valid entry → section rejected (current value kept)");
+v=validateSettings({budgets:"oops"}); ok(v.settings.budgets===undefined&&v.problems.length===1,"budgets of the wrong type → rejected");
+v=validateSettings({templates:[{id:"t1",name:"Bus",amount:0.6,catId:"transport"},{name:"",amount:1,catId:"food"},{name:"X",amount:-1,catId:"food"},{name:"Y",amount:1,catId:"salary"},{name:"Z",amount:"abc",catId:"food"},null]});
+ok(v.settings.templates.length===1&&v.settings.templates[0].amount===0.6&&/5 invalid templates were skipped/.test(v.problems[0]),"templates: 1 valid kept; blank name / negative / income category / malformed / null skipped",v.problems);
+v=validateSettings({goals:[{name:"A",target:1000,saved:100,monthlyTarget:50,targetDate:"2027-01-31"},{name:"B",target:500},{name:"C",target:100,targetDate:"2027-02-30"},{name:"D",target:-1},{name:"E",target:10,saved:-1},{name:"F",target:10,monthlyTarget:"abc"}]});
+ok(v.settings.goals.length===2&&v.settings.goals[1].saved===0&&v.settings.goals[1].monthlyTarget===0&&v.settings.goals[1].targetDate===null,"goals: valid kept (optional fields default to 0 / null); impossible date, negative target/saved, malformed monthly rejected",v.settings.goals);
+ok(/4 invalid goals were skipped/.test(v.problems[0]),"…reported");
+ok(validateSettings({currency:"€"}).settings.currency==="€"&&validateSettings({currency:" ₼ "}).settings.currency==="₼"&&validateSettings({currency:""}).problems.length===1&&validateSettings({currency:"abcd"}).problems.length===1&&validateSettings({currency:5}).problems.length===1,"currency: 1–3 characters only");
+ok(eq(validateSettings({safeToSpend:{enabled:true,savingsTarget:"300"}}).settings.safeToSpend,{savingsTarget:300,enabled:true})&&eq(validateSettings({safeToSpend:{}}).settings.safeToSpend,{savingsTarget:0,enabled:false}),"Safe to Spend: valid forms");
+ok(validateSettings({safeToSpend:{enabled:"yes"}}).problems.length===1&&validateSettings({safeToSpend:{savingsTarget:-5}}).problems.length===1&&validateSettings({safeToSpend:7}).problems.length===1,"Safe to Spend: bad flag / negative floor / wrong type → section rejected");
+reset();
+localStorage.setItem(KEY,JSON.stringify({transactions:[T({id:1})],budgets:{food:-9},templates:"oops",goals:[{name:"x",target:-1}],currency:"abcd",safeToSpend:{savingsTarget:"x"}}));
+st=migrateAndLoad();
+ok(eq(st.budgets,{})&&Array.isArray(st.templates)&&st.templates.length>0&&eq(st.goals,[])&&st.currency==="₼"&&eq(st.safeToSpend,{savingsTarget:0,enabled:false}),"malformed stored settings are reset to safe defaults");
+ok(keysLike(KEY+"__settings_rejected_").length===1&&/Some saved settings were not valid/.test(getNotice()||""),"…the originals are preserved and the user is told");
+
+section("15. Import planning — CSV");
+const csv=(rows,head="Date,Type,Category,Subcategory,Merchant,Amount,Note,Recurring")=>head+"\r\n"+rows.join("\r\n");
+let pl=planImport("\uFEFF"+csv(['2026-09-01,expense,Food & Dining,Coffee,Costa,6.50,latte,','2026-09-02,income,Salary,,Employer,2000,,']),"x.csv");
+ok(pl.ok&&pl.transactions.length===2&&pl.transactions[0].amount===6.5&&pl.transactions[1].type==="income"&&pl.transactions[1].category==="salary","BOM + CRLF + display category names import correctly",pl.error);
+const amtRows=["-5","0","","abc","1e3","999999999999","12.50","7"].map((a,i)=>`2026-09-0${i+1},expense,Food & Dining,,M,${a},`);
+pl=planImport(csv(amtRows),"x.csv");
+ok(pl.ok&&pl.transactions.length===2&&eq(pl.transactions.map(t=>t.amount),[12.5,7]),"amounts −5, 0, '', abc, 1e3, 999999999999 are skipped; 12.50 and 7 imported with exact values");
+ok(pl.skippedCount===6&&/1 negative amount/.test(pl.skippedSummary)&&/1 zero amount/.test(pl.skippedSummary)&&/1 missing amount/.test(pl.skippedSummary)&&/3 invalid amount/.test(pl.skippedSummary),"skipped rows are counted and explained",pl.skippedSummary);
+pl=planImport(csv(["2026-09-01,expense,Food & Dining,,M,5,","    ,expense,Food & Dining,,M,5,","garbage,expense,Food & Dining,,M,5,","2026-02-31,expense,Food & Dining,,M,5,","01/09/2026,expense,Food & Dining,,M,5,"]),"x.csv");
+ok(pl.transactions.length===1&&/1 missing date/.test(pl.skippedSummary)&&/3 invalid date/.test(pl.skippedSummary),"rows with no / malformed date are skipped — never given today's date",pl.skippedSummary);
+pl=planImport('Date,Amount,Merchant\r\n2026-09-01,5,"Bakı, Böyük ""Mərkəz"""\r\n2026-09-02,6,"two\nlines"',"x.csv");
+ok(pl.ok&&pl.transactions[0].merchant==='Bakı, Böyük "Mərkəz"'&&pl.transactions[1].merchant==="two\nlines","quoted commas, escaped quotes and newlines inside quotes");
+pl=planImport('Date,Amount,Merchant\r\n2026-09-01,5,"never closed\r\n2026-09-02,6,ok',"x.csv");
+ok(!pl.ok&&/never closed/.test(pl.error),"unterminated quote → whole file refused with a clear message");
+pl=planImport("When,How much\r\n2026-09-01,5","x.csv"); ok(!pl.ok&&/needs a date and amount column/.test(pl.error)&&/When, How much/.test(pl.error),"missing required columns → refused, lists the headers it found");
+pl=planImport("date,amount,colour,whatever\r\n2026-09-01,5,red,x","x.csv"); ok(pl.ok&&pl.transactions.length===1,"unexpected extra headers are ignored");
+pl=planImport(csv(["2026-09-01,expense,Food & Dining,,Gym,35,,monthly","2026-09-02,expense,Food & Dining,,Gym,35,,yes","2026-09-03,expense,Food & Dining,,Gym,35,,"]),"x.csv");
+ok(pl.transactions.length===2&&pl.transactions[0].recurring===true&&pl.transactions[0].recurFreq==="monthly"&&pl.transactions[1].recurring===false&&/1 invalid recurrence/.test(pl.skippedSummary),"Recurring column: 'monthly' kept, blank = not recurring, 'yes' (no frequency) rejected");
+pl=planImport(csv(["2026-09-01,expense,Mystery Box,,M,5,","2026-09-02,expense,Other,,M,5,"]),"x.csv");
+ok(pl.transactions.length===2&&pl.warnings.some(w=>/1 transaction has a category the app does not recognise/.test(w)),"unknown category is filed under Other AND the user is told");
+pl=planImport(csv(["2026-09-01,expense,F,,M,-1,","2026-09-01,expense,F,,M,0,"]),"x.csv"); ok(!pl.ok&&/Nothing could be imported — 1 negative amount, 1 zero amount/.test(pl.error),"every row rejected → refused with the reasons",pl.error);
+
+section("15b. Import planning — JSON backups");
+const S0={transactions:[T({id:1,amount:12.34,merchant:"Bakı"}),T({id:2,amount:5,type:"income",category:"salary"})],budgets:{food:100},templates:[{id:"t1",name:"Bus",amount:0.6,catId:"transport",subcat:"Bus",merchant:"",note:""}],currency:"₼",goals:[{id:"g1",name:"Fund",target:1000,saved:10,monthlyTarget:50,targetDate:null}],safeToSpend:{savingsTarget:300,enabled:true},lastBackup:null};
+pl=planImport(JSON.stringify(buildBackup(S0)),"b.json");
+ok(pl.ok&&eq(pl.transactions,S0.transactions.map(t=>normaliseTxn(t)))&&eq(pl.settings.budgets,S0.budgets)&&eq(pl.settings.goals,S0.goals)&&eq(pl.settings.safeToSpend,S0.safeToSpend)&&pl.settings.currency==="₼"&&pl.problems.length===0,"app backup → export → import: transactions and every setting identical");
+const v10=planImport(JSON.stringify({...buildBackup(S0),version:11}),"b.json"); /* Run 12: the app writes version 10 now; 11 is "newer" */ ok(!v10.ok&&/newer version/.test(v10.error),"backup from a newer app version is refused");
+ok(!planImport(JSON.stringify({...buildBackup(S0),version:"x"}),"b.json").ok&&!planImport(JSON.stringify({...buildBackup(S0),version:0}),"b.json").ok&&!planImport(JSON.stringify({...buildBackup(S0),version:9.5}),"b.json").ok,"invalid version numbers are refused");
+pl=planImport(JSON.stringify({...buildBackup(S0),meta:{transactionCount:99}}),"b.json"); ok(pl.ok&&pl.warnings.some(w=>/99 transactions but contains 2/.test(w)),"transaction-count mismatch → warning (possible truncation)");
+pl=planImport(JSON.stringify({...buildBackup(S0),exportedAt:"yesterday-ish"}),"b.json"); ok(pl.ok&&pl.warnings.some(w=>/export date is not valid/.test(w)),"invalid export date → warning");
+pl=planImport(JSON.stringify({...buildBackup(S0),budgets:{food:-5,x:1},goals:"oops",currency:"abcd",safeToSpend:{enabled:"y"},templates:[{}]}),"b.json");
+ok(pl.ok&&pl.transactions.length===2&&pl.settings.budgets===undefined&&pl.settings.goals===undefined&&pl.settings.currency===undefined&&pl.settings.safeToSpend===undefined&&pl.settings.templates===undefined&&pl.problems.length===5,"a valid transaction list does NOT make malformed settings trustworthy: all 5 bad sections rejected and reported",pl.problems);
+ok(planImport("{not json","b.json").ok===false&&planImport("42","b.json").ok===false&&planImport('"str"',"b.json").ok===false,"non-backup content refused");
+pl=planImport(JSON.stringify([T({id:1}),T({id:2})]),"b.json"); ok(pl.ok&&pl.transactions.length===2,"bare array accepted");
+pl=planImport(JSON.stringify({entries:[T({id:1})]}),"b.json"); ok(pl.ok&&pl.transactions.length===1,"legacy 'entries' accepted");
+pl=planImport(JSON.stringify({transactions:[T({id:5}),T({id:5,amount:9})]}),"b.json"); ok(pl.ok&&new Set(pl.transactions.map(t=>t.id)).size===2&&pl.warnings.some(w=>/duplicate id/.test(w)),"duplicate ids inside a file are re-keyed and reported");
+pl=planImport(JSON.stringify({transactions:[],budgets:{food:50}}),"b.json"); ok(pl.ok&&pl.transactions.length===0&&pl.settings.budgets.food===50,"a settings-only backup is allowed");
+pl=planImport(JSON.stringify({transactions:[T({amount:-5}),T({amount:0})]}),"b.json"); ok(!pl.ok&&/Nothing could be imported/.test(pl.error),"all-invalid JSON refused");
+
+section("16. Merge / Replace semantics");
+const frozen=(o)=>JSON.parse(JSON.stringify(o));
+const cur={transactions:[T({id:1,date:"2026-09-05",amount:10,merchant:"A"}),T({id:2,date:"2026-09-06",amount:20,merchant:"B"})],budgets:{food:100,transport:50},templates:[{id:"t1",name:"Bus",amount:0.6,catId:"transport",subcat:"",merchant:"",note:""}],currency:"₼",goals:[{id:"g1",name:"Fund",target:1000,saved:10,monthlyTarget:50,targetDate:null}],safeToSpend:{savingsTarget:500,enabled:true},lastBackup:"2026-09-01T00:00:00.000Z"};
+const snapshot=frozen(cur);
+const mkPlan=(o)=>({ok:true,transactions:[T({id:2,date:"2026-09-06",amount:20,merchant:"B"}),T({id:9,date:"2026-09-07",amount:30,merchant:"C"}),T({id:10,date:"2026-09-05",amount:10,merchant:"A"})],settings:{budgets:{food:200},currency:"€",goals:[{id:"g1",name:"Other",target:5,saved:0,monthlyTarget:0,targetDate:null},{id:"g2",name:"Trip",target:300,saved:0,monthlyTarget:10,targetDate:null}],safeToSpend:{savingsTarget:1,enabled:false},templates:[{id:"t1",name:"Metro",amount:0.7,catId:"transport",subcat:"",merchant:"",note:""}]},...o});
+let r=applyImport(cur,mkPlan(),"merge",{skipDuplicates:false});
+ok(eq(r.transactions.map(t=>t.id).sort((a,b)=>a-b),[1,2,9,10]),"merge: same id (2) not duplicated; new ids added; look-alike (id 10) added when not skipping");
+ok(eq(r.budgets,{food:200,transport:50}),"merge: budgets combined — imported category wins, others kept");
+ok(r.currency==="₼"&&eq(r.safeToSpend,{savingsTarget:500,enabled:true}),"merge: your currency and Safe to Spend are NOT overwritten");
+ok(r.goals.length===3&&r.goals.map(g=>g.id).includes("g2")&&new Set(r.goals.map(g=>g.id)).size===3,"merge: new goals added; a goal that reuses an existing id gets a fresh id");
+ok(r.templates.length===2&&new Set(r.templates.map(t=>t.id)).size===2,"merge: new templates added with unique ids");
+r=applyImport(cur,mkPlan(),"merge",{skipDuplicates:true});
+ok(eq(r.transactions.map(t=>t.id).sort((a,b)=>a-b),[1,2,9]),"merge + skip look-alikes: id 10 (same date, amount, merchant) is skipped");
+ok(countSuspectedDuplicates(cur.transactions,mkPlan().transactions)===2,"suspected-duplicate count: ids 2 and 10 look like existing ones");
+r=applyImport(cur,mkPlan(),"replace");
+ok(eq(r.transactions.map(t=>t.id).sort((a,b)=>a-b),[2,9,10])&&eq(r.budgets,{food:200})&&r.currency==="€"&&eq(r.safeToSpend,{savingsTarget:1,enabled:false})&&r.goals.length===2,"replace: transactions and every section PRESENT in the file are replaced");
+r=applyImport(cur,{ok:true,transactions:[T({id:9})],settings:{}},"replace");
+ok(eq(r.budgets,cur.budgets)&&r.currency==="₼"&&eq(r.goals,cur.goals)&&eq(r.templates,cur.templates)&&eq(r.safeToSpend,cur.safeToSpend),"replace: sections ABSENT from the file are kept, not wiped");
+ok(r.lastBackup===cur.lastBackup&&applyImport(cur,mkPlan(),"merge").lastBackup===cur.lastBackup,"lastBackup untouched by either mode");
+ok(eq(cur,snapshot),"applyImport never mutates the existing state");
+
+section("17. Export → import round trips");
+const CATS=["food","transport","shopping","gifts","entertain","digital","health","edu","travel","housing","finance","other","salary","freelance","income"];
+const tricky=["Bakı, Böyük \"Mərkəz\"","Manatlıq B-S","line1\nline2","  spaced  ","=SUM(A1)","ə ı ö ü ğ ş ç İ"];
+const all=CATS.map((c,i)=>T({id:100+i,type:["salary","freelance","income"].includes(c)?"income":"expense",category:c,subcategory:i%2?"Sub "+i:"",merchant:tricky[i%tricky.length],note:tricky[(i+2)%tricky.length],amount:[0.01,0.6,12.34,100,999999999.99][i%5],date:`2026-0${(i%9)+1}-1${i%9}`,recurring:i%4===0,recurFreq:i%4===0?"monthly":null}));
+let rt=planImport(buildCsv(all),"export.csv");
+const proj=(t)=>({d:t.date,ty:t.type,a:t.amount,c:t.category,s:t.subcategory,m:t.merchant.trim(),n:t.note.trim(),r:t.recurring,f:t.recurFreq});
+ok(rt.ok&&rt.skippedCount===0&&rt.transactions.length===15,`CSV export → import: all 15 categories, no skips (${rt.transactions&&rt.transactions.length} rows, ${rt.skippedCount} skipped)`,rt.error||rt.skippedSummary);
+ok(eq(rt.transactions.map(proj),all.map(proj)),"…every field survives exactly (category ids incl. Finance and Other Income, decimals, unicode, quotes, newlines, recurrence)");
+const legacyNoId=buildCsv(all).split("\r\n").map(l=>l.replace(/,"[a-z]+"$/,"")).join("\r\n").replace(',"CategoryId"',"");
+rt=planImport(legacyNoId,"old.csv"); ok(rt.ok&&rt.transactions.find(t=>t.category==="finance")&&rt.transactions.find(t=>t.category==="income"),"an older export WITHOUT the CategoryId column still maps Finance and Other Income by name");
+rt=planImport(JSON.stringify(buildBackup({...S0,transactions:all})),"b.json");
+ok(rt.ok&&eq(rt.transactions,all.map(t=>normaliseTxn(t))),"JSON backup round trip: all 15 categories identical incl. ids");
+ok(buildCsv([]).startsWith("\uFEFF"),"CSV export starts with a BOM so Excel reads UTF-8");
+
+finish("data");

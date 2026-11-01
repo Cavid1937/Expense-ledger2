@@ -1,0 +1,48 @@
+﻿
+UX-K1. Transaction rows work from the keyboard
+  ✗ a transaction row is a keyboard-focusable button
+      ↳ {"role":null,"tab":null}
+  ✗ pressing Tab from the search box reaches a transaction row
+      ↳ 0
+  ✓ the focused row shows a visible focus outline (2 px or more)
+  ✗ Enter opens the transaction's detail sheet
+  ✗ Space opens it too
+  ✓ no JavaScript errors
+
+UX-K2. Recurring payments / bills
+  ✗ the bill row is one keyboard-focusable button; its decorative icon is hidden from screen readers (one tab stop, not two)
+      ↳ {"role":null,"tab":null,"iconHidden":null}
+  ✗ Enter opens the bill sheet
+  ✓ pressing Enter on 'Pause' pauses the bill and does NOT also open the sheet (no double action)
+
+UX-K3. Importing a backup by keyboard (was impossible)
+  ✗ the import tile is a focusable button with a readable name
+      ↳ {"role":null,"tab":null,"name":"Import\nA CSV file or a JSON backup"}
+  ✗ Tab reaches the import tile
+      ↳ 0
+  ✗ Enter opens the file chooser
+
+UX-K4. Analytics month bars
+  ✗ each month bar is a button with a name that includes the month and its amount, and a pressed state
+      ↳ {"role":null,"tab":null,"pressed":null,"label":null}
+  ✗ Enter selects the bar (pressed = true)
+  ✓ with privacy mode on, the bar names reveal no amount
+
+UX-K5. Banners: routine reminders only where they can be acted on; critical ones everywhere
+  ✗ the 'did you keep the backup file?' reminder shows on Home and Import / Export only
+      ↳ {"Home":true,"Ledger":true,"Monthly":true,"Goals":true,"More":true,"Recurring":true,"ImportExport":true}
+  ✗ a critical 'cannot save' warning still shows on the Transactions tab
+
+UX-K6. Motion: no staggered slide-in of every section; focus ring on controls that lacked one
+  ✗ all sections of a screen appear together (no per-section delay)
+      ↳ {"n":5,"delays":["0.04s","0s","0.12s","0.28s"],"dur":["0.28s"]}
+  ✗ the screen-change animation is a short fade only (no sliding)
+      ↳ @keyframes pageIn { 
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0px); }
+} @keyframes sectionIn { 
+  0% { opaci
+  ✗ focus rings exist for rows, bars, the import tile and bill rows
+  ✓ with 'reduce motion' on there is no animation at all
+
+e2e_ux_keyboard: 16 FAILED, 5 passed

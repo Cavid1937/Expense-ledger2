@@ -1,0 +1,77 @@
+﻿
+Z. Page zoom 130% / 150% / 200% (390px phone → narrower CSS viewport)
+  ✓ 130% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 130% zoom, en: no JavaScript errors
+  ✗ 130% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["130% az tab 1: tab label cut \"Əməliyyatlar\"","130% az tab 2: tab label cut \"Əməliyyatlar\"","130% az tab 3: tab label cut \"Əməliyyatlar\"","130% az tab 4: tab label cut \"Əməliyyatlar\"","130% az tab 5: tab label cut \"Əməliyyatlar\"","130% az add form: tab label cut \"Əməliyyatlar\"","130% az settings: tab label cut \"Əməliyyatlar\"","130% az settings (scrolled): tab label cut \"Əməliyyatlar\"","130% az settings (scrolled): tab label cut \"Əməliyyatlar\"","130% az settings (scrolled): tab label cut \"Əməliyyatlar\""]
+  ✓ 130% zoom, az: no JavaScript errors
+  ✓ 130% zoom, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 130% zoom, ru: no JavaScript errors
+  ✓ 150% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+  ✓ 150% zoom, en: no JavaScript errors
+  ✗ 150% zoom, az: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["150% az tab 1: tab label cut \"Əməliyyatlar\"","150% az tab 1: tab label cut \"Təkrarlanan\"","150% az tab 2: tab label cut \"Əməliyyatlar\"","150% az tab 2: tab label cut \"Təkrarlanan\"","150% az tab 3: tab label cut \"Əməliyyatlar\"","150% az tab 3: tab label cut \"Təkrarlanan\"","150% az tab 4: tab label cut \"Əməliyyatlar\"","150% az tab 4: tab label cut \"Təkrarlanan\"","150% az tab 5: tab label cut \"Əməliyyatlar\"","150% az tab 5: tab label cut \"Təkrarlanan\""]
+  ✓ 150% zoom, az: no JavaScript errors
+  ✗ 150% zoom, ru: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["150% ru tab 1: tab label cut \"Аналитика\"","150% ru tab 1: tab label cut \"Регулярные\"","150% ru tab 2: tab label cut \"Аналитика\"","150% ru tab 2: tab label cut \"Регулярные\"","150% ru tab 3: tab label cut \"Аналитика\"","150% ru tab 3: tab label cut \"Регулярные\"","150% ru tab 4: tab label cut \"Аналитика\"","150% ru tab 4: tab label cut \"Регулярные\"","150% ru tab 5: tab label cut \"Аналитика\"","150% ru tab 5: tab label cut \"Регулярные\""]
+  ✓ 150% zoom, ru: no JavaScript errors
+  ✗ 200% zoom, en: 7 screens without sideways scrolling, clipped text or a hidden Save button
+      ↳ ["200% en tab 1: page scrolls sideways by 11px","200% en tab 1: clipped wider than the screen: ","200% en tab 1: clipped \"Salary\" 12>7","200% en tab 1: clipped \"Home · Rent\" 13>4","200% en tab 1: tab label cut \"Monthly\"","200% en tab 1: tab label cut \"Analytics\"","200% en tab 1: tab label cut \"Recurring\"","200% en tab 2: page scrolls sideways by 11px","200% en tab 2: clipped wider than the screen: ","200% en tab 2: clipped \"Salary · Today\" 12>7"]
+  ✓ 200% zoom, en: no JavaScript errors
+node : ERROR: The process with PID 26280 (child process of PID 25172) could not be terminated.
+At line:1 char:865
++ ... GTEXT_DUMP; node tests\browser\e2e_bigtext.mjs *> tests\evidence\114- ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR: The proc... be terminated.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Reason: There is no running instance of the task.
+
+file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/lib/puppeteer/common
+/CallbackRegistry.js:88
+            this._reject(callback, new TargetCloseError('Target closed'));
+                                   ^
+
+TargetCloseError: Protocol error (Runtime.callFunctionOn): Target closed
+    at CallbackRegistry.clear (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/common/CallbackRegistry.js:88:36)
+    at CdpCDPSession.onClosed (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/cdp/CdpSession.js:121:25)
+    at #onClose (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/lib
+/puppeteer/cdp/Connection.js:217:21)
+    at WebSocket.<anonymous> (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppe
+teer-core/lib/puppeteer/node/NodeWebSocketTransport.js:61:30)
+    at callListener 
+(C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\node_modules\ws\lib\event-target.js:290:14)
+    at WebSocket.onClose 
+(C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\node_modules\ws\lib\event-target.js:220:9)
+    at WebSocket.emit (node:events:514:28)
+    at WebSocket.emitClose 
+(C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\node_modules\ws\lib\websocket.js:292:10)
+    at Socket.socketOnClose 
+(C:\Users\cavid\OneDrive\Documents\GitHub\Expense-ledger2-fixes\node_modules\ws\lib\websocket.js:1374:15)
+    at Socket.emit (node:events:514:28) {
+  cause: ProtocolError
+      at <instance_members_initializer> (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_mo
+dules/puppeteer-core/lib/puppeteer/common/CallbackRegistry.js:108:14)
+      at new Callback (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-co
+re/lib/puppeteer/common/CallbackRegistry.js:112:16)
+      at CallbackRegistry.create (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/p
+uppeteer-core/lib/puppeteer/common/CallbackRegistry.js:27:26)
+      at Connection._rawSend (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppe
+teer-core/lib/puppeteer/cdp/Connection.js:125:26)
+      at CdpCDPSession.send (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppet
+eer-core/lib/puppeteer/cdp/CdpSession.js:72:14)
+      at #evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppeteer-core/
+lib/puppeteer/cdp/ExecutionContext.js:374:50)
+      at ExecutionContext.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules
+/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:36)
+      at IsolatedWorld.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pu
+ppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:30)
+      at CdpFrame.evaluate (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/puppete
+er-core/lib/puppeteer/api/Frame.js:364:43)
+      at CdpFrame.<anonymous> (file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/node_modules/pupp
+eteer-core/lib/puppeteer/util/decorators.js:101:27)
+}
+
+Node.js v24.22.1

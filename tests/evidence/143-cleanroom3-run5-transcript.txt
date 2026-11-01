@@ -1,0 +1,143 @@
+﻿== clean room: C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101
+== node v24.22.1, npm 11.19.1
+== started 2026-10-27T10:41:02.3764551+04:00
+== 1. package
+package: 44 files -> C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\pkg
+verify: 44 files listed, 0 problems
+verify exit=0
+== 2. exact commit a1b16e2 via git archive
+archive exit=0
+public
+.env.example
+.env.local.example
+account.schema.ts
+accounts.api.ts
+app-routes-patch.js
+app.js
+app.json
+App.jsx
+auth.schema.ts
+backend-package.json
+backend-push-token-snippet.js
+BudgetProgress.tsx
+budgets.api.ts
+b_Lc6vPYexnB1.zip
+categories.api.ts
+CategoryPicker.tsx
+CLAUDE_IMPLEMENTATION_SPEC.md
+client.ts
+deployment-checklist.sh
+eas.json
+expense-ledger-deploy.zip
+expense-ledger.jsx.txt
+expense-tracker.jsx
+frontend-package.json
+gym-tracker.jsx
+i18n.js
+index.html
+knexfile.js
+LedgerItem.tsx
+main.jsx
+manifest.json
+migrations.js
+package.json
+QuickAddFAB.tsx
+README.md
+ReceiptUploader.tsx
+server.js
+SettingsRow.tsx
+SummaryCard.tsx
+theme.ts
+transaction.schema.ts
+transactions.api.ts
+useExportCsv.ts
+user.api.ts
+vite.config.js
+package.json same as package copy: True
+== 3. fresh install
+npm warn install-scripts   esbuild@0.21.5 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm install exit=0
+npm warn install-scripts   esbuild@0.21.5 (postinstall: node install.js)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm extra exit=0
+== 4A. run on the exact preview commit a1b16e2 (unchanged): only the new Run 5 checks may fail
+A logic exit=1
+A browser exit=1
+[run-logic] node=v24.22.1
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\App.jsx bytes=279840 sha256=210b99ceef871582fec251ca4b5db3166d8b4bd23b3ab0072b69880c75e604a7 gitblob=3b9796faf7ed60ba50ec666641d98293b9cef8f5 gitblob-lf=9d29737121d0638566e28e90ffd1ca8ea37deeb4
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\i18n.js bytes=98563 sha256=72e9da993e3b431cc625c6d3e09b13558e90a566f7001f8b94c269df3c156aad gitblob=64baee1af6e48edeb1c1927e3064caa6c18bb30b gitblob-lf=e972bc241b6d81e2d6833375674bb78faf0a117f
+[run-logic] core.test.mjs exit=0 passed=39 failed=0 missing=0 expected=39
+[run-logic] data.test.mjs exit=0 passed=122 failed=0 missing=0 expected=122
+[run-logic] finance.test.mjs exit=0 passed=91 failed=0 missing=0 expected=91
+[run-logic] i18n.test.mjs exit=0 passed=70 failed=0 missing=0 expected=70
+[run-logic] phase2.test.mjs exit=0 passed=48 failed=0 missing=0 expected=48
+[run-logic] phase3.test.mjs exit=0 passed=25 failed=0 missing=0 expected=25
+[run-logic] run3.test.mjs exit=0 passed=19 failed=0 missing=0 expected=19
+  ✗ spent to date 90; nothing dated later; Safe to Spend = 2000 − 90 = 1,910
+  ✗ Safe to Spend reports that 300 of the 390 is dated later this month (shown on the card as 'set aside, not spent yet')
+  ✗ Safe to Spend is the same 1,610 whether the 300 is dated today or later; only the 'dated later' part differs (0 here)
+  ✗ not yet entered: 500 counted once as an upcoming payment
+  ✗ entered ahead for 20 Oct: 500 counted once as a recorded expense dated later, not again as upcoming
+[run-logic] run5.test.mjs exit=1 passed=11 failed=5 missing=0 expected=16 PROBLEM: exit=1
+[run-logic] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\App.jsx
+[run-logic] 8 files, 1 with problems; checks passed=425 failed=5 missing=0
+[run-browser] node=v24.22.1
+[run-browser] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\App.jsx bytes=279840 sha256=210b99ceef871582fec251ca4b5db3166d8b4bd23b3ab0072b69880c75e604a7 gitblob=3b9796faf7ed60ba50ec666641d98293b9cef8f5 gitblob-lf=9d29737121d0638566e28e90ffd1ca8ea37deeb4
+[run-browser] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\i18n.js bytes=98563 sha256=72e9da993e3b431cc625c6d3e09b13558e90a566f7001f8b94c269df3c156aad gitblob=64baee1af6e48edeb1c1927e3064caa6c18bb30b gitblob-lf=e972bc241b6d81e2d6833375674bb78faf0a117f
+[run-browser] e2e.mjs exit=0 passed=27 failed=0 missing=0 expected=27
+[run-browser] e2e_bigtext.mjs exit=0 passed=25 failed=0 missing=0 expected=25
+[run-browser] e2e_import.mjs exit=0 passed=51 failed=0 missing=0 expected=51
+[run-browser] e2e_lang.mjs exit=0 passed=57 failed=0 missing=0 expected=57
+[run-browser] e2e_phase2.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+[run-browser] e2e_phase2_layout.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+[run-browser] e2e_run2.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+[run-browser] e2e_run3.mjs exit=0 passed=37 failed=0 missing=0 expected=37
+  ✗ en: 'Recorded expenses −330.00' followed by the later-dated 300.00 (set aside, not spent yet)
+  ✗ az: 'Recorded expenses −330.00' followed by the later-dated 300.00 (set aside, not spent yet)
+  ✗ ru: 'Recorded expenses −330.00' followed by the later-dated 300.00 (set aside, not spent yet)
+  ✗ only today's 30.00 recorded → no 'dated later' line
+[run-browser] e2e_run5.mjs exit=1 passed=8 failed=4 missing=0 expected=12 PROBLEM: exit=1
+[run-browser] e2e_ux.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+[run-browser] e2e_ux_lang.mjs exit=0 passed=8 failed=0 missing=0 expected=8
+[run-browser] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\App.jsx
+[run-browser] scratch=C:\Users\cavid\AppData\Local\Temp\ledger-e2e-Li7tTS
+[run-browser] 11 files, 1 with problems; checks passed=321 failed=4 missing=0
+== 4B. Run 5 candidate (App.jsx + i18n.js from the worktree) on the same clean room
+B logic exit=0
+B browser exit=1
+B build exit=0
+[run-logic] node=v24.22.1
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\App.jsx bytes=280431 sha256=d185509fd950713c6ffb2f5f743ec0d6f3162cd9f4f57a2d0233c04ea43d43ee gitblob=60d485da34ff9f73116c4699e81306c45a060269 gitblob-lf=904d47fe1e46d742052dd3d84c1ea2770556bfc1
+[run-logic] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\i18n.js bytes=98204 sha256=19f2f98f6de96dc3ff1d6b126bd0eb3c38118619edb9107981ec6fc9e5713f29 gitblob=2e41b10f43a7b2a82dfcb93152e9bbc7f8d84a33 gitblob-lf=2e41b10f43a7b2a82dfcb93152e9bbc7f8d84a33
+[run-logic] core.test.mjs exit=0 passed=39 failed=0 missing=0 expected=39
+[run-logic] data.test.mjs exit=0 passed=122 failed=0 missing=0 expected=122
+[run-logic] finance.test.mjs exit=0 passed=91 failed=0 missing=0 expected=91
+[run-logic] i18n.test.mjs exit=0 passed=70 failed=0 missing=0 expected=70
+[run-logic] phase2.test.mjs exit=0 passed=48 failed=0 missing=0 expected=48
+[run-logic] phase3.test.mjs exit=0 passed=25 failed=0 missing=0 expected=25
+[run-logic] run3.test.mjs exit=0 passed=19 failed=0 missing=0 expected=19
+[run-logic] run5.test.mjs exit=0 passed=16 failed=0 missing=0 expected=16
+[run-logic] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\App.jsx
+[run-logic] 8 files, 0 with problems; checks passed=430 failed=0 missing=0
+[run-browser] node=v24.22.1
+[run-browser] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\App.jsx bytes=280431 sha256=d185509fd950713c6ffb2f5f743ec0d6f3162cd9f4f57a2d0233c04ea43d43ee gitblob=60d485da34ff9f73116c4699e81306c45a060269 gitblob-lf=904d47fe1e46d742052dd3d84c1ea2770556bfc1
+[run-browser] source C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\i18n.js bytes=98204 sha256=19f2f98f6de96dc3ff1d6b126bd0eb3c38118619edb9107981ec6fc9e5713f29 gitblob=2e41b10f43a7b2a82dfcb93152e9bbc7f8d84a33 gitblob-lf=2e41b10f43a7b2a82dfcb93152e9bbc7f8d84a33
+[run-browser] e2e.mjs exit=0 passed=27 failed=0 missing=0 expected=27
+[run-browser] e2e_bigtext.mjs exit=null passed=0 failed=0 missing=25 expected=25 PROBLEM: exit=null error=spawnSync C:\Program Files\nodejs\node.exe ETIMEDOUT; no summary line (the file stopped before finishing); executed 0 checks, expected 25
+[run-browser] e2e_import.mjs exit=0 passed=51 failed=0 missing=0 expected=51
+[run-browser] e2e_lang.mjs exit=0 passed=57 failed=0 missing=0 expected=57
+[run-browser] e2e_phase2.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+[run-browser] e2e_phase2_layout.mjs exit=0 passed=24 failed=0 missing=0 expected=24
+[run-browser] e2e_run2.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+[run-browser] e2e_run3.mjs exit=0 passed=37 failed=0 missing=0 expected=37
+[run-browser] e2e_run5.mjs exit=0 passed=12 failed=0 missing=0 expected=12
+[run-browser] e2e_ux.mjs exit=0 passed=30 failed=0 missing=0 expected=30
+[run-browser] e2e_ux_lang.mjs exit=0 passed=8 failed=0 missing=0 expected=8
+[run-browser] candidate=C:\Users\cavid\AppData\Local\Temp\ledger-cleanroom-run5-20261027-104101\repo\App.jsx
+[run-browser] scratch=C:\Users\cavid\AppData\Local\Temp\ledger-e2e-LiXjTf
+[run-browser] 11 files, 1 with problems; checks passed=300 failed=0 missing=25
+dist/assets/index-vlrTbmbI.js       408.68 kB │ gzip: 120.50 kB
+== finished 2026-10-27T11:07:05.2273703+04:00

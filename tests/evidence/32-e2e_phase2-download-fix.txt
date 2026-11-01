@@ -1,0 +1,28 @@
+﻿
+E2-B. Safe to Spend card: income dated later this month is shown but not counted
+  ✓ row 'Income received so far' shows 2,000.00 (today's income only)
+  ✓ a separate row shows the 1,000.00 dated later as expected, not counted
+  ✓ Safe to Spend = 2000 − 500 reserve − 30 spent = 1,470.00 (not 2,470.00)
+  ✓ no JavaScript errors
+  ✓ without future-dated income the 'expected' row is not shown
+
+E2-A. Analytics per-day tile
+  ✓ ₼10 every day so far → 'Per day, weekdays = weekends' (no 'heavier' claim)
+  ✓ weekends 30/day vs weekdays 10/day → '30.00 ₼ Per weekend day (higher)'; the 5,000 planned later is ignored
+  ✓ no JavaScript errors
+
+E2-C. Backup reminder
+  ✓ file created but never confirmed → the banner asks the user to confirm (not hidden for 7 days)
+  ✓ tapping 'I have the file' stores backupConfirmedAt (not earlier than the file's creation)
+  ✓ …and the reminder disappears
+  ✓ …with a short confirmation toast
+  ✓ after a reload the confirmed backup still suppresses the reminder (persisted)
+  ✓ Settings shows the file's creation date and that the user confirmed it
+  ✓ a new export records a newer file date; the earlier confirmation is not carried over to it
+  ✓ …so the confirm banner returns for the new file
+  ✓ last confirmed backup 8 days ago → 'Back up your data' reminder
+  ✓ dismiss hides it for this visit
+  ✓ confirmed yesterday → no reminder
+  ✓ no JavaScript errors
+
+e2e_phase2: ALL 20 CHECKS PASSED

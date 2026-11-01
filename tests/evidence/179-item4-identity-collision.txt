@@ -1,0 +1,17 @@
+﻿{
+ "schedules": [
+  {
+   "key": "expense|housing|kommunal|monthly|utilities",
+   "amount": 18,
+   "occurrences": [
+    "2026-09-05",
+    "2026-09-05",
+    "2026-10-05"
+   ]
+  }
+ ],
+ "futureCommitments": 0,
+ "remaining": 1982,
+ "expectedRemaining": 1892
+}
+CONFIRMED: the two bills form ONE schedule; the 18 water payment on 5 Oct settles it, so the unpaid 90 electricity is not set aside (Safe to Spend 1982 instead of 1,892).

@@ -1,0 +1,15 @@
+﻿build exit=0 -> C:\Users\cavid\AppData\Local\Temp\ledger-pwa-04dYAT
+
+PWA-1. Manifest and service worker of the built app
+  ✓ the page links a working manifest with the dark colours, standalone display and two icons
+  ✓ the service worker is installed and active
+  ✓ after one reload the page is served through it
+
+PWA-2. With no network
+  ✓ the app opens with the network switched off
+  ✓ …and shows the saved data (Offlinecafe 12.34)
+  ✓ the saved data is untouched (the worker never reads or writes it)
+  ✓ only the app's own files are cached (no data, no other sites)
+  ✓ no JavaScript errors
+
+pwa-offline: ALL 8 CHECKS PASSED

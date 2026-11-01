@@ -1,0 +1,32 @@
+﻿
+R5-1. Base month (hand-worked)
+  ✗ spent to date 90; nothing dated later; Safe to Spend = 2000 − 90 = 1,910
+      ↳ {"m":{"curExp":90,"curInc":2000,"plannedExp":0,"plannedInc":0,"totalExp":90,"totalInc":2000,"prevExp":30,"prevInc":0,"momDiff":60,"surplusRate":96},"remaining":1910}
+
+R5-2. Adding 300 dated 20 Oct: planned, committed — not spent
+  ✓ month summary: spent to date stays 90; planned later rises by 300; whole month 390
+  ✓ category spend to date unchanged (no housing yet)
+  ✓ transaction count to date unchanged
+  ✓ calcSpentToDate unchanged
+  ✓ insights, anomalies and patterns are identical with and without the later-dated entry
+  ✓ 'what changed vs last month' identical with and without it
+  ✓ Safe to Spend: Recorded expenses 390; discretionary remaining 1,910 → 1,610 (the commitment is set aside)
+  ✗ Safe to Spend reports that 300 of the 390 is dated later this month (shown on the card as 'set aside, not spent yet')
+
+R5-3. Control: the same 300 dated today has happened
+  ✓ month summary: spent to date 90 → 390; nothing planned
+  ✓ category spend now has housing 300; count +1
+  ✗ Safe to Spend is the same 1,610 whether the 300 is dated today or later; only the 'dated later' part differs (0 here)
+      ↳ {"remaining":1610}
+
+R5-4. A recurring bill is set aside exactly once, recorded ahead or not
+  ✗ not yet entered: 500 counted once as an upcoming payment
+      ↳ {"fc":500,"curExp":90}
+  ✗ entered ahead for 20 Oct: 500 counted once as a recorded expense dated later, not again as upcoming
+      ↳ {"fc":0,"curExp":590}
+  ✓ either way Safe to Spend = 2000 − 90 − 500 = 1,410
+
+R5-5. Later-dated income is still not counted (Run 3 rule unchanged)
+  ✓ 1000 dated 25 Oct is 'expected', and Safe to Spend stays 1,910
+
+run5: 5 FAILED, 11 passed

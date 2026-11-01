@@ -1,0 +1,38 @@
+﻿== source identity
+App.jsx  9da824e1be074bebda120d4aba9cb51c370767dd
+i18n.js  b45a850cfe17cba26e9cdabff447946a2336fae9
+node v24.22.1  npm 11.19.1
+== npm install
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+== manifest check
+manifest mismatches: 0
+== logic
+exit=0
+
+logic.txt:55:  ✓ unparseable data + failed copy → blocked too
+logic.txt:60:core: ALL 39 CHECKS PASSED
+logic.txt:201:data: ALL 122 CHECKS PASSED
+logic.txt:307:finance: ALL 91 CHECKS PASSED
+logic.txt:394:i18n: ALL 70 CHECKS PASSED
+logic.txt:451:phase2: ALL 48 CHECKS PASSED
+logic.txt:485:phase3: ALL 25 CHECKS PASSED
+logic.txt:488:[run-logic] 6 files, 0 with failures
+== browser
+exit=0
+browser.txt:34:e2e: ALL 27 CHECKS PASSED
+browser.txt:96:  ✓ a failed write shows 'Could not save changes' with a Back up button
+browser.txt:110:e2e_import: ALL 51 CHECKS PASSED
+browser.txt:184:e2e_lang: ALL 57 CHECKS PASSED
+browser.txt:219:e2e_phase2: ALL 24 CHECKS PASSED
+browser.txt:254:e2e_phase2_layout: ALL 24 CHECKS PASSED
+browser.txt:296:e2e_run2: ALL 29 CHECKS PASSED
+browser.txt:343:e2e_ux: ALL 30 CHECKS PASSED
+browser.txt:347:[run-browser] 7 files, 0 with failures
+== build
+dist/assets/index-BmcfsH6A.js       402.73 kB │ gzip: 118.36 kB
+✓ built in 1.32s
+
+

@@ -1,0 +1,13 @@
+﻿node : (node:29112) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to 
+security vulnerabilities, as the arguments are not escaped, only concatenated.
+At line:1 char:476
++ ... &1 | Select-Object -Last 2; node tests/offline-check.mjs 2>&1 | Tee-O ...
++                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:29112) [D...y concatenated.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-deprecation ...` to show where the warning was created)
+ONLINE  : app shown = true | seeded entry visible = true | service worker controlling page = false | storage persisted = false
+ONLINE  : requests to Google Fonts = 17
+OFFLINE : reload → app shown = false | Press space to play Try: Checking the network cables, modem, and router Reconnecting to Wi-Fi Running Windows Network 
+BACK ONLINE: entries still stored in expense_ledger_v5 = 1

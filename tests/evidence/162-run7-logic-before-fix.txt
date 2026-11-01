@@ -1,0 +1,33 @@
+﻿
+V9-1. The current month is compared with the same days of the previous month
+  ✗ 27 Oct: October 1–27 (200) vs September 1–27 (300) → 100 less (was: vs all of September 800 → 600 less)
+      ↳ {"curExp":200,"curInc":0,"plannedExp":999,"plannedInc":0,"totalExp":1199,"totalInc":0,"prevExp":800,"prevInc":0,"momDiff":-600,"surplusRate":null}
+  ✗ the summary says which window it used (same days, 27) and still reports September's full total (800)
+      ↳ {}
+
+V9-2. A finished month is compared whole with the whole previous month
+  ✗ September (800) vs August (500) → 300 more, full months
+      ↳ {"curExp":800,"curInc":0,"plannedExp":0,"plannedInc":0,"totalExp":800,"totalInc":0,"prevExp":500,"prevInc":0,"momDiff":300,"surplusRate":null}
+
+V9-3. A future month is not compared
+  ✗ November (nothing has happened yet) → no comparison
+      ↳ {"curExp":0,"curInc":0,"plannedExp":0,"plannedInc":0,"totalExp":0,"totalInc":0,"prevExp":200,"prevInc":0,"momDiff":-200,"surplusRate":null}
+
+V9-4. Month lengths and the year boundary
+  ✗ 31 Oct: the window is days 1–31, so all 30 days of September count (800)
+      ↳ {"curExp":1199,"curInc":0,"plannedExp":0,"plannedInc":0,"totalExp":1199,"totalInc":0,"prevExp":800,"prevInc":0,"momDiff":399,"surplusRate":null}
+  ✓ 30 Mar 2026: February has 28 days, all counted (100)
+  ✓ 29 Mar 2024 (leap year): 29 Feb is inside days 1–29 (100)
+  ✗ 15 Jan 2027: December 1–15 (20) vs January 1–15 (30) → 10 more; 20 Dec is outside the window
+      ↳ {"curExp":30,"curInc":0,"plannedExp":0,"plannedInc":0,"totalExp":30,"totalInc":0,"prevExp":100,"prevInc":0,"momDiff":-70,"surplusRate":null}
+  ✗ 1 Oct: day 1 vs day 1 (25)
+      ↳ {"curExp":5,"curInc":0,"plannedExp":0,"plannedInc":0,"totalExp":5,"totalInc":0,"prevExp":100,"prevInc":0,"momDiff":-95,"surplusRate":null}
+
+V9-5. 'What changed' uses the same window
+  ✗ total change: 200 − 300 = −100
+      ↳ {"prev":800,"diff":-600}
+  ✗ the 500 rent paid on 29 Sep (after day 27) is not listed as a change, nor is the 999 planned for 30 Oct
+      ↳ [["housing",-500],["food",-100]]
+  ✓ food: 200 vs 300 → −100
+
+run7: 9 FAILED, 3 passed

@@ -1,0 +1,2 @@
+﻿{"jsAz":"ƏMƏLİYYATLAR GƏLİR","jsTr":"İSTANBUL","cssAzWidth":239.6875,"intlAz":"az"}
+{"cssUpper":44.453125,"dottedI":44.453125,"dotlessI":44.453125}

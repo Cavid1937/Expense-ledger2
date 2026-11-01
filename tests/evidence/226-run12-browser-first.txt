@@ -1,0 +1,23 @@
+﻿
+R12-1. Old data: convert to bills (with Undo), then split the merged pair
+  ✓ before: the two utility bills are one inferred schedule → discretionary +1,982 (electricity not set aside)
+  ✓ the Recurring page explains the old grouping and offers 'Convert to bills'
+  ✓ one bill is created, every old recurring payment points to it, the offer disappears
+  ✓ no entry's id, amount, date, name or note changed
+  ✓ a recovery copy of the data was kept before converting
+  ✓ Undo puts the data back exactly as before the conversion
+  ✓ the payment says which bill it belongs to
+  ✓ the electricity payment now has its own bill (90)
+  ✓ Safe to Spend now sets electricity aside: discretionary +1,892 (was +1,982, overstated by 90)
+  ✓ no JavaScript errors
+
+R12-2. A new user: add two bills from the same company, pay one
+  ✓ two bills saved with the chosen due date
+  ✓ both are set aside: 2,000 − 90 − 18 = +1,892
+  ✓ Record payment on the water bill opens the form with that bill already chosen
+  ✓ one payment, linked to the water bill only
+  ✓ water counted once as spent, electricity still set aside: 2,000 − 18 − 90 = +1,892
+  ✓ deleting the electricity bill keeps every entry; it is no longer set aside (+1,982)
+  ✓ no JavaScript errors
+
+e2e_run12: ALL 17 CHECKS PASSED

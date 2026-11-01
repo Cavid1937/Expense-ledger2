@@ -1,0 +1,52 @@
+﻿
+1. Dates: a date, or a date with a valid time — nothing else
+  ✓ date-only and valid ISO date-times (with/without seconds, ms, Z or ±hh:mm offset, T or space) are accepted as 2026-10-01
+  ✗ malformed suffixes / impossible times are refused (never cut down to a valid date)
+      ↳ {"kept":10,"skipped":0,"s":""}
+  ✗ CSV: '2026-10-01Tgarbage' refused, '2026-10-02T09:15' accepted
+      ↳ {"ok":true,"kind":"csv","filename":"a.csv","transactions":[{"id":1791878400000.2524,"type":"expense","amount":5,"category":"other","subcategory":"","merchant":"","note":"","date":"2026-10-01","recurring":false,"recurFreq":null,"isActive":true,"createdAt":"2026-10-13T08:00:00.000Z"},{"id":1791878400001.2397,"type":"expense","amount":6,"category":"other","subcategory":"","merchant":"","note":"","date":"2026-10-02","recurring":false,"recurFreq":null,"isActive":true,"createdAt":"2026-10-13T08:00:00.000Z"}],"canReplace":true,"skippedCount":0,"skippedSummary":"","settings":{},"problems":[],"warnings":[]}
+  ✗ stored data: the malformed date is set aside with a recovery copy
+      ↳ [1,2]
+  ✗ older-version data: the impossible time is set aside too
+      ↳ [8,7]
+
+2. Categories: exact names only — no guessing from part of a word
+  ✓ exact ids, names and aliases still map (case, spaces and 'and'/'&' normalised)
+  ✗ unknown text → Other (was: substring guess, e.g. 'Payment' → Salary, 'x' → Taxi/Exercise)
+      ↳ [["Payment","salary"],["Bus ticket","transport"],["x","health"],["ca","food"],["Car repair","other"],["Foodtruck festival","food"],["Pet supplies","other"],["Subway sandwich","other"]]
+  ✗ the import warns that 1 row's category was not recognised and goes to Other
+      ↳ []
+
+3. Replace is not offered when any row of the file is refused
+  ✗ 2 readable + 1 refused → Merge only (Replace would silently lose the refused row)
+      ↳ {"n":2,"skipped":1,"canReplace":true}
+  ✗ …and even if Replace is forced, the 3 existing transactions stay
+  ✓ control: a fully readable backup still replaces
+
+5. One early or late payment does not move a bill's due day
+  ✗ due on the 31st, paid early on 25 Apr → May still due 31 May (was: 25 May)
+      ↳ ["2026-05-25"]
+  ✗ due on the 15th, paid late on 20 Mar → April still due 15 Apr
+      ↳ ["2026-04-20"]
+  ✓ two payments in a row on the 20th = a real change → May due 20 May
+  ✓ controls: 31 Jan/28 Feb → 31 Mar; 31 Mar/30 Apr → 31 May
+  ✓ control: 29 Feb 2024 / 28 Feb 2025 → 29 Feb 2028
+
+10. An older record with isActive: null keeps the meaning it always had (paused), visibly
+  ✗ isActive: null → paused (as the old app read it), not set aside and not re-activated
+      ↳ [[2,true]]
+node : file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/logic/run8.test.mjs:51
+At line:1 char:529
++ ... .jsx).Path; node tests/logic/run8.test.mjs *> tests\evidence\178-run8 ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (file:///C:/User...un8.test.mjs:51:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ok(plan.transactions.length === 1 && plan.transactions[0].isActive === false && plan.skippedCount === 1, "in a file: 
+null → paused; 0 is still refused (ambiguous)", plan.transactions?.map((t) => t.isActive));
+                     ^
+
+TypeError: Cannot read properties of undefined (reading 'length')
+    at file:///C:/Users/cavid/OneDrive/Documents/GitHub/Expense-ledger2-fixes/tests/logic/run8.test.mjs:51:22
+
+Node.js v24.22.1

@@ -1,0 +1,47 @@
+﻿
+S1. Recurring screen groups payments into schedules
+  ✓ rent recorded 3 months + Netflix + Spotify = 3 rows, not 5 (found 3)
+  ✓ rent row says '3 payments recorded'; typical monthly outgoing = 450 + 15 + 15 = 480.00 ₼
+  ✓ pausing one schedule pauses every payment recorded under it
+  ✓ …all members of that schedule and no others
+  ✓ a Paused section appears
+  ✓ reactivating restores the whole schedule
+  ✓ Home: Safe to Spend lists upcoming/unrecorded payments and says how many schedules it used
+  ✓ no JavaScript errors
+  ✓ with no recurring payments the card says upcoming bills are NOT included (no silent optimism)
+
+S2. Sheets: dismissal, gestures, focus
+  ✓ opening a sheet moves focus into it
+  ✓ Escape closes it and focus returns to the button that opened it
+  ✓ tapping the backdrop closes it
+  ✓ 45 presses of Tab never leave the open sheet (focus stays inside)
+  ✓ a fast swipe down dismisses the sheet
+  ✓ the sheet follows the finger 1:1 (moved 60px for a 60px drag)
+  ✓ a short slow drag springs back to its place and the sheet stays open
+  ✓ grabbing the sheet mid-spring continues from where it is (no jump: 103 → 103)
+  ✓ Escape closes the add form
+
+S3. Keyboard and switches
+  ✓ the Recurring switch toggles with Space and Enter
+  ✓ the Safe to Spend switch toggles with Space and the setting is saved
+  ✓ keyboard focus is visible (outline or ring)
+
+S4. Touch targets (effective tappable area)
+  ✗ 100 controls measured on 5 screens: every icon-only control is ≥44×44 and every text control ≥34 high
+      ↳ ["settings (scrolled): \"Delete goal Master's\" 44×35 (icon-only, needs 44×44)"]
+
+S5. Contrast measured on the rendered page
+  ✓ 436 text elements across 6 screens: all meet WCAG AA (4.5:1, or 3:1 for large text)
+
+S6. User preferences
+  ✓ reduced motion: the sheet's entrance animation is effectively off (0.00001s)
+  ✓ reduced motion: a released short drag resets at once (no spring)
+  ✓ reduced motion: a long swipe still dismisses, without the spring
+  ✓ reduced transparency: the top bar is solid (no blur, opaque background)
+  ✓ increased contrast: text and border tokens switch to the stronger set
+
+S7. Small screens and the on-screen keyboard
+  ✓ with a short viewport (keyboard open) the focused field is scrolled into view
+  ✓ the Record button can always be scrolled into reach
+
+e2e_ux: 1 FAILED, 29 passed
