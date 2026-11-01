@@ -597,6 +597,25 @@ const MESSAGES = {
   "common.save":   { en: "Save", az: "Yadda saxla", ru: "Сохранить" },
   "common.edit":   { en: "Edit", az: "Redaktə et", ru: "Изменить" },
   "common.delete": { en: "Delete", az: "Sil", ru: "Удалить" },
+  "import.bankSkipped": { en: "{n} rows of the bank statement were skipped because their date or amount could not be read.", az: "Bank çıxarışının {n} sətri tarixi və ya məbləği oxunmadığı üçün buraxıldı.", ru: "Строк банковской выписки пропущено: {n} — не удалось прочитать дату или сумму." },
+  "mycat.title":   { en: "My categories", az: "Mənim kateqoriyalarım", ru: "Мои категории" },
+  "mycat.sub":     { en: "Add your own categories. They appear everywhere categories are chosen. A category can be removed only when no entry or budget uses it.", az: "Öz kateqoriyalarınızı əlavə edin. Onlar kateqoriya seçilən hər yerdə görünür. Kateqoriyanı yalnız heç bir qeyd və ya büdcə istifadə etmədikdə silmək olar.", ru: "Добавьте свои категории. Они появятся везде, где выбирается категория. Удалить категорию можно, только если её не используют операции и бюджеты." },
+  "mycat.name":    { en: "Category name", az: "Kateqoriya adı", ru: "Название категории" },
+  "mycat.type":    { en: "Category type", az: "Kateqoriya növü", ru: "Тип категории" },
+  "mycat.color":   { en: "Colour", az: "Rəng", ru: "Цвет" },
+  "mycat.add":     { en: "Add category", az: "Kateqoriya əlavə et", ru: "Добавить категорию" },
+  "mycat.added":   { en: "Category added", az: "Kateqoriya əlavə edildi", ru: "Категория добавлена" },
+  "mycat.removed": { en: "Category removed", az: "Kateqoriya silindi", ru: "Категория удалена" },
+  "mycat.removeBtn": { en: "Remove", az: "Sil", ru: "Удалить" },
+  "mycat.remove":  { en: "Remove category {name}", az: "{name} kateqoriyasını sil", ru: "Удалить категорию {name}" },
+  "mycat.inUse":   { en: "This category is used by an entry or a budget, so it cannot be removed.", az: "Bu kateqoriya bir qeyd və ya büdcədə istifadə olunur, buna görə silinə bilməz.", ru: "Эта категория используется в операции или бюджете, поэтому её нельзя удалить." },
+  "mycat.saveFailed": { en: "Could not save the category. Free some storage and try again.", az: "Kateqoriyanı saxlamaq mümkün olmadı. Yaddaşı boşaldıb yenidən cəhd edin.", ru: "Не удалось сохранить категорию. Освободите память и повторите." },
+  "mycat.err.empty": { en: "Type a name first.", az: "Əvvəlcə ad yazın.", ru: "Сначала введите название." },
+  "mycat.err.long":  { en: "That name is too long (24 characters at most).", az: "Ad çox uzundur (ən çox 24 simvol).", ru: "Название слишком длинное (не более 24 символов)." },
+  "mycat.err.dup":   { en: "A category with that name already exists.", az: "Bu adda kateqoriya artıq var.", ru: "Категория с таким названием уже есть." },
+  "mycat.err.full":  { en: "You have reached the limit of 30 own categories.", az: "30 şəxsi kateqoriya həddinə çatdınız.", ru: "Достигнут предел — 30 своих категорий." },
+  "bill.icsBtn":  { en: "Add upcoming bills to my calendar (.ics)", az: "Yaxın ödənişləri təqvimimə əlavə et (.ics)", ru: "Добавить ближайшие платежи в календарь (.ics)" },
+  "bill.icsNone": { en: "No unpaid bill dates in the next 12 months.", az: "Növbəti 12 ayda ödənilməmiş ödəniş tarixi yoxdur.", ru: "В ближайшие 12 месяцев нет неоплаченных платежей." },
   "ledger.select":     { en: "Select", az: "Seç", ru: "Выбрать" },
   "ledger.selectDone": { en: "Done", az: "Hazır", ru: "Готово" },
   "ledger.selectAll":  { en: "Select all ({n})", az: "Hamısını seç ({n})", ru: "Выбрать все ({n})" },
@@ -1419,6 +1438,56 @@ function resolveCategory(raw, keepUnknownId=false) {
   return "other";
 }
 
+// ─── Custom categories (Run 24; Phase 2 of the custom-categories design note) ──────────────────────────────────────────────
+// The user's own categories live in their own storage key and are added to CATEGORIES at start-up, so every picker, chart and budget
+// sees them. An entry keeps only the category's id ("u_…"); the ledger shape is unchanged. A phone or older version that does not
+// know an id shows the entry as "Other" and keeps the id (see resolveCategory), and the backup file carries the list.
+const CCAT_KEY=KEY+"__cats", CCAT_MAX=30, CCAT_LEN=24, CCAT_COLORS=["#F28B82","#F6AD55","#ECC94B","#68D391","#4FD1C5","#63B3ED","#A78BFA","#F687B3"];
+function cleanCustomCats(raw) {
+  const src=Array.isArray(raw) ? raw : (raw && Array.isArray(raw.cats) ? raw.cats : []);
+  const ids=new Set(), names=new Set(CATEGORIES.filter(c=>!c.custom).map(c=>catKey(c.name)).concat(CATEGORIES.filter(c=>!c.custom).map(c=>catKey(c.id)))), out=[];
+  src.forEach(v=>{
+    if (!isPlainObject(v) || out.length>=CCAT_MAX) return;
+    const id=typeof v.id==="string" && /^u_[a-z0-9]{3,12}$/.test(v.id) ? v.id : null;
+    const name=typeof v.name==="string" ? v.name.trim().replace(/\s+/g," ") : "";
+    if (!id || !name || name.length>CCAT_LEN || ids.has(id) || names.has(catKey(name))) return;
+    ids.add(id); names.add(catKey(name));
+    out.push({ id, name, income:v.income===true, color:typeof v.color==="string" && /^#[0-9a-fA-F]{6}$/.test(v.color) ? v.color : CCAT_COLORS[out.length%CCAT_COLORS.length] });
+  });
+  return out;
+}
+const currentCustomCats=()=>CATEGORIES.filter(c=>c.custom).map(c=>({ id:c.id, name:c.name, income:c.income, color:c.color }));
+function applyCustomCats(list) {   // replaces the custom entries of CATEGORIES in place (same array, so every reader sees the change)
+  for (let i=CATEGORIES.length-1;i>=0;i--) if (CATEGORIES[i].custom) { const c=CATEGORIES.splice(i,1)[0]; delete CATEGORY_LOOKUP[c.id]; delete CATEGORY_LOOKUP[catKey(c.name)]; }
+  cleanCustomCats(list).forEach(c=>{ CATEGORIES.push({ id:c.id, name:c.name, tile:c.name, color:c.color, income:c.income, subs:[], custom:true }); CATEGORY_LOOKUP[c.id]=c.id; CATEGORY_LOOKUP[catKey(c.name)]=c.id; });
+}
+function mergeCustomCats(a, b) { return cleanCustomCats([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])]); }
+function readCustomCats() { try { const r=localStorage.getItem(CCAT_KEY); return r ? cleanCustomCats(JSON.parse(r)) : []; } catch { return []; } }
+function writeCustomCats(list) {
+  try { const c=cleanCustomCats(list); if (!c.length) localStorage.removeItem(CCAT_KEY); else localStorage.setItem(CCAT_KEY,JSON.stringify({ version:1, cats:c })); return true; } catch { return false; }
+}
+function newCustomCatId(list) { const used=new Set((list||[]).map(c=>c.id)); let id; do { id="u_"+Math.random().toString(36).slice(2,8).replace(/[^a-z0-9]/g,"a").padEnd(6,"a"); } while (used.has(id)); return id; }
+// Adds a category to a list; returns the new list or a reason it was refused (empty, long, duplicate of a built-in or own name, full).
+function addCustomCat(list, name, income, color) {
+  const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
+  if (!n) return { list, added:false, reason:"empty" };
+  if (n.length>CCAT_LEN) return { list, added:false, reason:"long" };
+  if ((list||[]).length>=CCAT_MAX) return { list, added:false, reason:"full" };
+  const next=cleanCustomCats([...(list||[]),{ id:newCustomCatId(list), name:n, income:!!income, color }]);
+  return next.length>(list||[]).length ? { list:next, added:true, reason:"" } : { list, added:false, reason:"dup" };
+}
+function customCatInUse(id, transactions, budgets) { return (transactions||[]).some(x=>x && x.category===id) || !!(budgets && budgets[id]>0); }
+try { applyCustomCats(readCustomCats()); } catch {}
+
+// planImport reads a backup's own categories first, so its entries keep their category instead of becoming "Other"; nothing is stored here.
+function planImportWithCats(raw, filename="") {
+  let inc=[]; try { const p=JSON.parse(String(raw).replace(/^﻿/,"")); if (isPlainObject(p)) inc=cleanCustomCats(p.customCategories); } catch {}
+  if (!inc.length) return planImport(raw,filename);
+  const had=currentCustomCats();
+  applyCustomCats(mergeCustomCats(had,inc));
+  try { const r=planImport(raw,filename); if (r && r.ok) r.customCats=inc; return r; } finally { applyCustomCats(had); }
+}
+
 // Callers validate with checkRawTxn() first (see partitionTransactions). normaliseTxn never takes abs(),
 // never defaults a date and never turns an unknown type into an expense.
 function normaliseTxn(t, opts={}) {
@@ -2161,13 +2230,82 @@ const CSV_COLUMNS = { date:["date"], amount:["amount","amt","value"], type:["typ
   categoryId:["categoryid","category id","category_id"], subcategory:["subcategory","subcat"], merchant:["merchant"],
   note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"], wallet:["wallet","paid with"], trip:["trip","group"] };
 
-function parseCsvImport(raw) {
+// Run 24: bank statements. Banks name columns differently, split money into Debit/Credit columns, use ; or tab, day-first dates and
+// comma decimals. This rewrites such a file into the app's own CSV (date, amount, type, merchant, note); the normal import review,
+// validation and duplicate checks then run on the result. Files the app wrote itself are never touched (they have Date + Amount).
+const BANK_HEADERS = {
+  date:["date","transaction date","booking date","posting date","value date","tarix","\u0259m\u0259liyyat tarixi","\u0434\u0430\u0442\u0430","\u0434\u0430\u0442\u0430 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438","\u0434\u0430\u0442\u0430 \u0442\u0440\u0430\u043D\u0437\u0430\u043A\u0446\u0438\u0438"],
+  amount:["amount","sum","m\u0259bl\u0259\u011F","\u0441\u0443\u043C\u043C\u0430","\u0441\u0443\u043C\u043C\u0430 \u043E\u043F\u0435\u0440\u0430\u0446\u0438\u0438"],
+  debit:["debit","withdrawal","withdrawals","paid out","money out","x\u0259rc","\u00E7\u0131x\u0131\u015F","\u0440\u0430\u0441\u0445\u043E\u0434","\u0441\u043F\u0438\u0441\u0430\u043D\u0438\u0435"],
+  credit:["credit","deposit","deposits","paid in","money in","g\u0259lir","m\u0259daxil","\u043F\u0440\u0438\u0445\u043E\u0434","\u0437\u0430\u0447\u0438\u0441\u043B\u0435\u043D\u0438\u0435"],
+  desc:["description","details","narrative","payee","merchant","reference","t\u0259svir","t\u0259yinat","\u043E\u043F\u0438\u0441\u0430\u043D\u0438\u0435","\u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435 \u043F\u043B\u0430\u0442\u0435\u0436\u0430","\u043D\u0430\u0437\u043D\u0430\u0447\u0435\u043D\u0438\u0435","\u0434\u0435\u0442\u0430\u043B\u0438"] };
+function splitDelimited(text, d) {
+  const rows=[]; let row=[], cur="", q=false;
+  for (let i=0;i<text.length;i++) {
+    const c=text[i];
+    if (q) { if (c==='"') { if (text[i+1]==='"') { cur+='"'; i++; } else q=false; } else cur+=c; }
+    else if (c==='"') q=true;
+    else if (c===d) { row.push(cur); cur=""; }
+    else if (c==="\n"||c==="\r") { if (c==="\r"&&text[i+1]==="\n") i++; row.push(cur); cur=""; if (row.some(x=>x.trim()!=="")) rows.push(row); row=[]; }
+    else cur+=c;
+  }
+  row.push(cur); if (row.some(x=>x.trim()!=="")) rows.push(row);
+  return rows;
+}
+function bankMoney(s) {   // "1 234,56" "1.234,56" "1,234.56" "-12,5 AZN" "(45.00)" -> cents (integer, signed) or null
+  let v=String(s==null?"":s).replace(/[\u00A0\s]/g,"").trim(); if (!v) return null;
+  let neg=false; if (/^\(.*\)$/.test(v)) { neg=true; v=v.slice(1,-1); }
+  v=v.replace(/[^\d.,+\-]/g,""); if (/^-/.test(v)) { neg=!neg; } v=v.replace(/[+\-]/g,"");
+  if (!/\d/.test(v)) return null;
+  const lc=v.lastIndexOf(","), ld=v.lastIndexOf(".");
+  if (lc>-1 && ld>-1) v = lc>ld ? v.replace(/\./g,"").replace(",",".") : v.replace(/,/g,"");
+  else if (lc>-1) v = /,\d{1,2}$/.test(v) && v.indexOf(",")===lc ? v.replace(",",".") : v.replace(/,/g,"");
+  else if (ld>-1 && v.indexOf(".")!==ld) v=v.replace(/\./g,"");
+  if (!/^\d*\.?\d+$|^\d+\.$/.test(v)) return null;
+  const c=Math.round(parseFloat(v)*100); return neg ? -c : c;
+}
+function bankDate(s) {   // yyyy-mm-dd, dd.mm.yyyy, dd/mm/yyyy, dd-mm-yyyy (day first); times ignored; real calendar dates only
+  const v=String(s||"").trim(); let y,m,d, x;
+  if ((x=v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/))) { y=+x[1]; m=+x[2]; d=+x[3]; }
+  else if ((x=v.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})(?:[\sT].*)?$/))) { d=+x[1]; m=+x[2]; y=+x[3]; }
+  else return null;
+  const dt=new Date(y,m-1,d); if (dt.getFullYear()!==y||dt.getMonth()!==m-1||dt.getDate()!==d) return null;
+  return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+function bankCsvToStandard(raw) {
+  const text=String(raw).replace(/^\uFEFF/,""), first=text.split(/\r?\n/,1)[0]||"";
+  const d=[";","\t",","].map(c=>[c,first.split(c).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const rows=splitDelimited(text,d); if (rows.length<2) return null;
+  const hdr=rows[0].map(h=>h.replace(/^\uFEFF/,"").trim().toLowerCase());
+  const col=(k)=>BANK_HEADERS[k].map(n=>hdr.indexOf(n)).find(i=>i!==-1) ?? -1;
+  const ci={ date:col("date"), amount:col("amount"), debit:col("debit"), credit:col("credit"), desc:col("desc") };
+  if (ci.date===-1 || (ci.amount===-1 && ci.debit===-1 && ci.credit===-1)) return null;
+  const out=["date,amount,type,merchant,note"]; let skipped=0;
+  rows.slice(1).forEach(r=>{
+    const date=bankDate(r[ci.date]); let cents=null, type="expense";
+    if (ci.amount!==-1) { const a=bankMoney(r[ci.amount]); if (a!==null && a!==0) { cents=Math.abs(a); type=a<0?"expense":"income"; } }
+    if (cents===null && (ci.debit!==-1||ci.credit!==-1)) {
+      const dv=ci.debit===-1?null:bankMoney(r[ci.debit]), cv=ci.credit===-1?null:bankMoney(r[ci.credit]);
+      if (dv) { cents=Math.abs(dv); type="expense"; } else if (cv) { cents=Math.abs(cv); type="income"; }
+    }
+    if (!date || !cents) { skipped++; return; }
+    const desc=ci.desc===-1?"":String(r[ci.desc]||"").trim().replace(/\s+/g," ").slice(0,80);
+    const q=(s)=>`"${s.replace(/"/g,'""')}"`;
+    out.push([date,(cents/100).toFixed(2),type,q(desc),'""'].join(","));
+  });
+  return out.length>1 ? { text:out.join("\n"), skipped } : null;
+}
+
+function parseCsvImport(raw, _bank=false) {
   const rows=parseCSV(String(raw).replace(/^\uFEFF/,""));
   if (rows.unterminated) return { error:t("csv.unterminated") };
   if (rows.length<2) return { error:t("csv.noRows") };
   const headers=rows[0].map(h=>h.replace(/^\uFEFF/,"").trim().toLowerCase());
   const idx={}; Object.entries(CSV_COLUMNS).forEach(([k,names])=>{ idx[k]=names.map(n=>headers.indexOf(n)).find(i=>i!==-1) ?? -1; });
   const missing=["date","amount"].filter(k=>idx[k]===-1);
+  if (!_bank && (missing.length || (idx.date!==-1 && !/^\d{4}-\d{2}-\d{2}/.test(String(rows[1][idx.date]||"").trim())))) {   // Run 24: bank statement layouts
+    const conv=bankCsvToStandard(raw); if (conv) return { ...parseCsvImport(conv.text,true), bankSkipped:conv.skipped };
+  }
   if (missing.length) return { error:t(missing.length===2 ? "csv.needDateAmount" : missing[0]==="date" ? "csv.needDate" : "csv.needAmount", { found:rows[0].map(h=>h.trim()).filter(Boolean).join(", ")||t("csv.noHeaders") }) };
   // A leading apostrophe before = + - @ tab or CR is the formula guard added by buildCsv: remove it to restore the original text.
   const cell=(row,k)=>{ const v=idx[k]===-1 ? "" : String(row[idx[k]] ?? "").trim(); return /^'[=+\-@\t\r]/.test(v) ? v.slice(1) : v; };
@@ -2193,6 +2331,7 @@ function planImport(raw, filename="") {
     const r=parseCsvImport(text);
     if (r.error) return { ok:false, error:r.error };
     list=r.records;
+    if (r.bankSkipped) warnings.push(t("import.bankSkipped",{ n:r.bankSkipped }));
   } else {
     let parsed;
     try { parsed=JSON.parse(text); } catch { return { ok:false, error:t("import.notJsonCsv") }; }
@@ -2302,8 +2441,10 @@ function buildBackup(state, now=new Date().toISOString()) {
   const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
   const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
   const dd=cleanDebtData(state.debtData);   // Run 17: debts and loans, optional in the same way
+  const ccats=cleanCustomCats(state.customCats);   // Run 24: the user's own categories, optional in the same way
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
     transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}),
+    ...(ccats.length ? { customCategories:ccats } : {}),
     ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
 }
 
@@ -2925,6 +3066,27 @@ function scheduleNextDue(s, transactions, now=new Date()) {
   return null;
 }
 
+// Run 24: upcoming unpaid bill dates (next 12 months) as an iCalendar file other calendar apps can import. All-day events, one per
+// date; nothing leaves the device and the ledger is not touched. Text is escaped and lines folded per RFC 5545.
+function icsEscape(s) { return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/\r?\n/g,"\\n").replace(/;/g,"\\;").replace(/,/g,"\\,"); }
+function icsFold(line) { const out=[]; let rest=line; while (rest.length>73) { out.push(rest.slice(0,73)); rest=" "+rest.slice(73); } out.push(rest); return out.join("\r\n"); }
+function billsToIcs(schedules, transactions, now=new Date(), opts={}) {
+  const months=opts.months||12, label=opts.label||((x)=>x.merchant||x.note||x.category), amountText=opts.amountText||((x)=>String(x.amount));
+  const todayStr=localDateStr(now), stamp=now.toISOString().replace(/[-:]/g,"").replace(/\.\d+Z$/,"Z");
+  const ev=[]; let n=0;
+  (Array.isArray(schedules)?schedules:[]).filter(s=>s && s.isActive && s.type==="expense").forEach(s=>{
+    for (let i=0;i<months;i++) {
+      const mon=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i));
+      scheduleMonthStatus(s,transactions,mon,now).remaining.filter(d=>d>=todayStr).forEach(d=>{
+        const next=localDateStr(new Date(parseLocalDate(d).getFullYear(),parseLocalDate(d).getMonth(),parseLocalDate(d).getDate()+1));
+        ev.push(["BEGIN:VEVENT","UID:"+icsEscape(String(s.key)+"-"+d)+"@expense-ledger","DTSTAMP:"+stamp,"DTSTART;VALUE=DATE:"+d.replace(/-/g,""),"DTEND;VALUE=DATE:"+next.replace(/-/g,""),
+          "SUMMARY:"+icsEscape(label(s)+" · "+amountText(s)),"TRANSP:TRANSPARENT","END:VEVENT"].map(icsFold).join("\r\n")); n++;
+      });
+    }
+  });
+  return { text:["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Expense Ledger//Bills//EN","CALSCALE:GREGORIAN",...ev,"END:VCALENDAR"].join("\r\n")+"\r\n", count:n };
+}
+
 // Run 18: how many payments of a bill with an end date are still to come (today or later, none recorded for them yet). null = no end date.
 function billPaymentsLeft(s, transactions, now=new Date()) {
   const end=s && s.bill && s.bill.endDate; if (!end) return null;
@@ -3372,6 +3534,6 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bi
 
 
 
-export { migrateAndLoad, buildMerchantMemory, merchantSuggest, memKey, calcHelperCards, calcSafeToSpend, calcSpendingPace, calcBudgetStatus, calcMonthSummary, calcPatterns, calcGoalProgress, goalRequiredMonthly, goalScenario, walletId, WALLET_IDS, lastWallet, calcWalletSpend, cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats, writeSubcats, calcCategorySpend, calcWhatChanged, calcTxnStats, calcSpentToDate, prevMon, nMon, surplusLabel, surplusColor, normaliseTxn, addMonths, strictNum, parseMoney, moneyReason, isUsableRawTxn, checkRawTxn, isValidDateStr, localDateStr, localMonthStr, parseLocalDate, daysInMonth, daysBetween, parseCSV, validateSettings, planImport, applyImport, buildBackup, buildCsv, countSuspectedDuplicates, txnFingerprint, partitionTransactions, ensureUniqueIds, summariseReasons, noteLoad, buildSchedules, scheduleOccurrences, scheduleMonthStatus, scheduleNextDue, scheduleKey, monthProgress, toMonthlyAmountHelper, fmt, detectRecurrence, calcMerchantProfile, resolveCategory, curMon, sanitizeTransactions, MAX_AMOUNT, CATEGORIES, CAT, calcWeekdayWeekend, backupReminderDue, BACKUP_REMINDER_DAYS, pctShares, donutSlices, cumulativeByDay, greetingKey, storageProtection, shareBackupFile, shareViaNative, nativeShareHook, appVersionOf, checkForUpdate, validateBill, convertLegacySchedules, assignToBill, BACKUP_VERSION, buildBillsMirror, planBillRestore, applyBillRestore, BILLS_MIRROR_KEY, calcMonthEndForecast, calcCoach, forSpending, loanCashOut, debtsHealth, debtCashFlow, debtLinkRef, billPaymentsLeft, loanExtraEffect, PRIVACY_KEY, readPrivacy, writePrivacy, LOCK_KEY, LOCK_TIMEOUTS, validPin, lockSupported, readLock, writeLock, removeLock, makeLockRecord, verifyPin, lockWaitMs, lockShouldEngage, cleanProfileName, PROFILE_NAME_MAX, loanSchedule, impliedNominalPct, debtRemaining, debtCanPay, cleanDebtData, readDebts, writeDebts, mergeDebtData, tripName, tripTotals, catTotals, budgetCrossing, parseCsvImport, t, tn, tIn, setLang, getLang, MESSAGES, LANGS, LANG_NAMES, LOCALES, catName, subName, monthName, monthShort, fmtLongDate };
+export { migrateAndLoad, buildMerchantMemory, merchantSuggest, memKey, calcHelperCards, calcSafeToSpend, calcSpendingPace, calcBudgetStatus, calcMonthSummary, calcPatterns, calcGoalProgress, goalRequiredMonthly, goalScenario, walletId, WALLET_IDS, lastWallet, calcWalletSpend, cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats, writeSubcats, calcCategorySpend, calcWhatChanged, calcTxnStats, calcSpentToDate, prevMon, nMon, surplusLabel, surplusColor, normaliseTxn, addMonths, strictNum, parseMoney, moneyReason, isUsableRawTxn, checkRawTxn, isValidDateStr, localDateStr, localMonthStr, parseLocalDate, daysInMonth, daysBetween, parseCSV, validateSettings, planImport, applyImport, buildBackup, buildCsv, countSuspectedDuplicates, txnFingerprint, partitionTransactions, ensureUniqueIds, summariseReasons, noteLoad, buildSchedules, scheduleOccurrences, scheduleMonthStatus, scheduleNextDue, scheduleKey, monthProgress, toMonthlyAmountHelper, fmt, detectRecurrence, calcMerchantProfile, resolveCategory, curMon, sanitizeTransactions, MAX_AMOUNT, CATEGORIES, CAT, calcWeekdayWeekend, backupReminderDue, BACKUP_REMINDER_DAYS, pctShares, donutSlices, cumulativeByDay, greetingKey, storageProtection, shareBackupFile, shareViaNative, nativeShareHook, appVersionOf, checkForUpdate, validateBill, convertLegacySchedules, assignToBill, BACKUP_VERSION, buildBillsMirror, planBillRestore, applyBillRestore, BILLS_MIRROR_KEY, calcMonthEndForecast, calcCoach, forSpending, loanCashOut, debtsHealth, debtCashFlow, debtLinkRef, billPaymentsLeft, loanExtraEffect, PRIVACY_KEY, readPrivacy, writePrivacy, LOCK_KEY, LOCK_TIMEOUTS, validPin, lockSupported, readLock, writeLock, removeLock, makeLockRecord, verifyPin, lockWaitMs, lockShouldEngage, cleanProfileName, PROFILE_NAME_MAX, loanSchedule, impliedNominalPct, debtRemaining, debtCanPay, cleanDebtData, readDebts, writeDebts, mergeDebtData, tripName, tripTotals, catTotals, budgetCrossing, billsToIcs, icsEscape, bankMoney, bankDate, cleanCustomCats, applyCustomCats, addCustomCat, mergeCustomCats, customCatInUse, planImportWithCats, parseCsvImport, t, tn, tIn, setLang, getLang, MESSAGES, LANGS, LANG_NAMES, LOCALES, catName, subName, monthName, monthShort, fmtLongDate };
 export const getNotice=()=>LOAD_NOTICE; export const getSaveBlocked=()=>SAVE_BLOCKED;
 export const resetFlags=()=>{LOAD_NOTICE=null;SAVE_BLOCKED=false;if(typeof SAVE_BLOCKED_READ!=='undefined')SAVE_BLOCKED_READ=false;};

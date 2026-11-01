@@ -5209,7 +5209,7 @@ function MyCategories({ state, onChanged, showToast }) {
         {[false,true].map(v=>(<button key={String(v)} className={`chip${income===v?" on":""}`} aria-pressed={income===v} onClick={()=>setIncome(v)}>{t(v?"add.income":"add.expense")}</button>))}
       </div>
       <div className="filter-bar" role="group" aria-label={t("mycat.color")}>
-        {CCAT_COLORS.map(c=>(<button key={c} aria-label={c} aria-pressed={color===c} onClick={()=>setColor(c)} style={{width:28,height:28,borderRadius:99,background:c,border:color===c?"3px solid var(--ink)":"2px solid transparent",padding:0}}/>))}
+        {CCAT_COLORS.map(c=>(<button key={c} aria-label={c} aria-pressed={color===c} onClick={()=>setColor(c)} style={{width:44,minWidth:44,height:44,flex:"none",background:"none",border:"none",padding:0,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><span aria-hidden="true" style={{width:28,height:28,borderRadius:99,background:c,border:color===c?"3px solid var(--ink)":"2px solid transparent",boxSizing:"border-box"}}/></button>))}
       </div>
       <button className="btn btn-ghost btn-full" data-section="mycat-add" disabled={!name.trim()} onClick={add} style={{marginTop:6}}>{t("mycat.add")}</button>
     </div>
