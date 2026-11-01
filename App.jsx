@@ -4960,6 +4960,12 @@ function SettingsSheet({ state, onCurrencyChange, onSafeToSpendChange, onClose, 
 
         {/* Currency */}
         <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
+        {/* Run 24: common currencies are one tap, so nobody has to find the symbol on the keyboard; the box below still takes any other symbol. */}
+        <div className="filter-bar" role="group" aria-label={t("set.currencyPick")} data-section="currency-chips">
+          {["₼","$","€","₽","£","₺","¥","₸","₴"].map(c=>(
+            <button key={c} className={`chip${currency===c?" on":""}`} aria-pressed={currency===c} onClick={()=>{ setCurSym(c); onCurrencyChange(c); showToast(t("set.currencyUpdated")); }}>{c}</button>
+          ))}
+        </div>
         <div className="settings-row">
           <div><div className="settings-row-title" id="set-cur-lbl">{t("set.currency")}</div><div className="settings-row-sub">{t("set.currencySub",{currency})}</div></div>
           <div style={{display:"flex",gap:7,alignItems:"center"}}>
