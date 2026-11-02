@@ -334,6 +334,16 @@ function addCustomCat(list, name, income, color) {
   const next=cleanCustomCats([...(list||[]),{ id:newCustomCatId(list), name:n, income:!!income, color }]);
   return next.length>(list||[]).length ? { list:next, added:true, reason:"" } : { list, added:false, reason:"dup" };
 }
+// Renames a category and/or changes its colour. Entries and budgets point at the id, so nothing else changes; the type stays as it was.
+function editCustomCat(list, id, name, color) {
+  const cur=(list||[]).find(c=>c.id===id);
+  if (!cur) return { list, edited:false, reason:"missing" };
+  const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
+  if (!n) return { list, edited:false, reason:"empty" };
+  if (n.length>CCAT_LEN) return { list, edited:false, reason:"long" };
+  const next=cleanCustomCats(list.map(c=>c.id===id ? { ...c, name:n, color:color||c.color } : c));
+  return next.length===list.length && next.some(c=>c.id===id) ? { list:next, edited:true, reason:"" } : { list, edited:false, reason:"dup" };
+}
 function customCatInUse(id, transactions, budgets) { return (transactions||[]).some(x=>x && x.category===id) || !!(budgets && budgets[id]>0); }
 try { applyCustomCats(readCustomCats()); } catch {}
 
@@ -3975,6 +3985,7 @@ function AppInner() {
             onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}
             onAddTemplate={tpl=>setState(s=>({...s,templates:[...s.templates,{...tpl,id:"t"+Date.now()}]}))}
             onDeleteTemplate={id=>setState(s=>({...s,templates:s.templates.filter(t=>t.id!==id)}))}
+            onUpdateTemplate={(id,patch)=>setState(s=>({...s,templates:s.templates.map(x=>x.id===id?{...x,...patch}:x)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
           {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} onSettings={()=>setShowSettings(true)} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
@@ -5393,12 +5404,17 @@ function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClos
 // Run 24: the user's own categories — add (name, expense or income, colour) and remove one that no entry or budget uses.
 function MyCategories({ state, onChanged, showToast }) {
   const [list,setList]=useState(()=>readCustomCats());
-  const [name,setName]=useState(""), [income,setIncome]=useState(false), [color,setColor]=useState(CCAT_COLORS[5]);
+  const [name,setName]=useState(""), [income,setIncome]=useState(false), [color,setColor]=useState(CCAT_COLORS[5]), [editing,setEditing]=useState(null);
   const commit=(next)=>{ if (!writeCustomCats(next)) { showToast(t("mycat.saveFailed"),5000); return false; } applyCustomCats(next); setList(readCustomCats()); onChanged(); return true; };
   const add=()=>{
     const r=addCustomCat(list,name,income,color);
     if (!r.added) { showToast({ empty:t("mycat.err.empty"), long:t("mycat.err.long"), dup:t("mycat.err.dup"), full:t("mycat.err.full") }[r.reason],4000); return; }
     if (commit(r.list)) { setName(""); showToast(t("mycat.added")); }
+  };
+  const saveEdit=()=>{
+    const r=editCustomCat(list,editing.id,editing.name,editing.color);
+    if (!r.edited) { showToast({ empty:t("mycat.err.empty"), long:t("mycat.err.long"), dup:t("mycat.err.dup"), missing:t("mycat.err.empty") }[r.reason],4000); return; }
+    if (commit(r.list)) { setEditing(null); showToast(t("acc.edited")); }
   };
   const remove=(c)=>{
     if (customCatInUse(c.id,state.transactions,state.budgets)) { showToast(t("mycat.inUse"),5000); return; }
@@ -5408,13 +5424,28 @@ function MyCategories({ state, onChanged, showToast }) {
     <div className="card prefs-card" data-section="my-categories">
       <div className="settings-section-lbl" style={{marginTop:14}}>{t("mycat.title")}</div>
       <div className="list-sub" style={{marginBottom:8}}>{t("mycat.sub")}</div>
-      {list.map(c=>(
+      {list.map(c=>editing&&editing.id===c.id ? (
+        <div key={c.id} data-cat-edit={c.id} style={{padding:"8px 0"}}>
+          <div className="field"><label className="field-lbl" htmlFor="mycat-edit-name">{t("mycat.name")}</label>
+            <input id="mycat-edit-name" className="field-input" value={editing.name} maxLength={CCAT_LEN} onChange={e=>setEditing({...editing,name:e.target.value})}/></div>
+          <div className="filter-bar" role="group" aria-label={t("mycat.color")}>
+            {CCAT_COLORS.map(col=>(<button key={col} aria-label={col} aria-pressed={editing.color===col} onClick={()=>setEditing({...editing,color:col})} style={{width:44,minWidth:44,height:44,flex:"none",background:"none",border:"none",padding:0,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><span aria-hidden="true" style={{width:28,height:28,borderRadius:99,background:col,border:editing.color===col?"3px solid var(--ink)":"2px solid transparent",boxSizing:"border-box"}}/></button>))}
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setEditing(null)}>{t("common.cancel")}</button>
+            <button className="btn btn-primary" style={{flex:1}} data-section="mycat-edit-save" disabled={!editing.name.trim()} onClick={saveEdit}>{t("common.save")}</button>
+          </div>
+        </div>
+      ) : (
         <div key={c.id} className="settings-row" data-cat={c.id}>
           <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
             <span aria-hidden="true" style={{width:14,height:14,borderRadius:99,background:c.color,flex:"none"}}/>
             <div style={{minWidth:0}}><div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{c.name}</div><div className="settings-row-sub">{t(c.income?"add.income":"add.expense")}</div></div>
           </div>
-          <button className="chip" aria-label={t("mycat.remove",{name:c.name})} onClick={()=>remove(c)}>{t("mycat.removeBtn")}</button>
+          <div style={{display:"flex",gap:6,flexShrink:0}}>
+            <button className="chip" aria-label={t("mycat.remove",{name:c.name})} onClick={()=>remove(c)}>{t("mycat.removeBtn")}</button>
+            <button className="chip" data-section="mycat-edit" aria-label={t("common.edit")+": "+c.name} onClick={()=>setEditing({ id:c.id, name:c.name, color:c.color })}>{t("common.edit")}</button>
+          </div>
         </div>
       ))}
       <div className="field"><label className="field-lbl" htmlFor="mycat-name">{t("mycat.name")}</label>
@@ -5589,8 +5620,9 @@ function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToast }) {
 }
 
 // Goals: quick-add templates (the buttons on Home). A template can carry a subcategory.
-function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate, showToast }) {
+function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate, onUpdateTemplate, showToast }) {
   const [showNewTpl,  setShowNewTpl]  = useState(false);
+  const [editTplId,   setEditTplId]   = useState(null);
   const [tplName,     setTplName]     = useState("");
   const [tplAmt,      setTplAmt]      = useState("");
   const [tplCatId,    setTplCatId]    = useState("food");
@@ -5603,14 +5635,16 @@ function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate
   const saveTpl=()=>{
     const tAmt=formMoney(tplAmt,{positive:true});
     if (!tplName.trim()||tAmt===null) { showToast(t("set.tplInvalid")); return; }
-    onAddTemplate({name:tplName.trim(),amount:tAmt,catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()});
-    setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);
+    const data={name:tplName.trim(),amount:tAmt,catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()};
+    if (editTplId) onUpdateTemplate(editTplId,data); else onAddTemplate(data);
+    setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);setEditTplId(null);
   };
+  const startEdit=(tpl)=>{ setEditTplId(tpl.id); setTplName(tpl.name||""); setTplAmt(String(tpl.amount)); setTplCatId(tpl.catId||"food"); setTplSubcat(tpl.subcat||""); setTplMerchant(tpl.merchant||""); setTplNote(tpl.note||""); setShowNewTpl(true); };
   return (
     <div data-section="gl-templates">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"14px 2px 10px"}}>
         <span className="section-title" style={{margin:0}}>{t("set.templates")}</span>
-        <button className="btn btn-sm" onClick={()=>setShowNewTpl(s=>!s)}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
+        <button className="btn btn-sm" onClick={()=>{ if (showNewTpl) { setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); } setShowNewTpl(s=>!s); }}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
       </div>
       {showNewTpl&&(
         <div className="card">
@@ -5644,6 +5678,7 @@ function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate
                 <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{tpl.name}</div>
                 <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(tpl.amount,currency)}{tpl.merchant?` · ${tpl.merchant}`:""} · {catName(tpl.catId)}{tpl.subcat?` › ${subName(tpl.subcat)}`:""}</div>
               </div>
+              <button className="chip" data-section="tpl-edit" aria-label={t("common.edit")+": "+tpl.name} onClick={()=>startEdit(tpl)}>{t("common.edit")}</button>
               <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteTemplate(tpl.id)} aria-label={t("set.deleteTemplate",{name:tpl.name})}><Icon name="trash" size={14}/></button>
             </div>
           ))}
@@ -5786,6 +5821,18 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
       },6000,"debtpay");
     }
   };
+  // Edit a debt's name, amount and due date. The amount can never drop below what has already been repaid.
+  const [dEdit,setDEdit]=useState(null), [lEdit,setLEdit]=useState(null);
+  const saveDebtEdit=()=>{
+    const d=data.debts.find(x=>x.id===dEdit.id); if (!d) { setDEdit(null); return; }
+    const principal=toQ(dEdit.amt,{positive:true}), name=dEdit.name.trim(), paid=d.principal-debtRemaining(d);
+    if (!name || principal===null || !isQapik(principal) || principal<paid || (dEdit.due && !isValidDateStr(dEdit.due))) { showToast(t("debt.invalid")); return; }
+    if (save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,name,principal,dueDate:dEdit.due||""}:x) })) { setDEdit(null); showToast(t("acc.edited")); }
+  };
+  const saveLoanEdit=()=>{
+    const lender=lEdit.lender.trim(); if (!lender) { showToast(t("loan.invalid")); return; }
+    if (save({ ...data, loans:data.loans.map(x=>x.id===lEdit.id?{...x,lender}:x) })) { setLEdit(null); showToast(t("acc.edited")); }
+  };
   const delDebt=(d)=>{
     const linked=d.payments.filter(p=>p.txnId!==undefined);
     if (!window.confirm(t(linked.length?"debt.confirmDeleteLinked":"debt.confirmDelete"))) return;
@@ -5867,8 +5914,24 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
                 <div className="goal-name">{maskText(d.name)}</div>
                 <div className="list-sub">{t(d.direction==="owe"?"debt.badgeOwe":"debt.badgeOwed")}{d.dueDate?` · ${t("debt.dueOn",{date:fmtDate(d.dueDate)})}`:""}</div>
               </div>
-              <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delDebt(d)} aria-label={t("debt.delete",{name:maskText(d.name)})}><Icon name="trash" size={15}/></button>
+              <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                <button className="btn btn-sm" data-section="debt-edit" aria-label={t("common.edit")+": "+maskText(d.name)} onClick={()=>setDEdit({ id:d.id, name:d.name, amt:(d.principal/100).toFixed(2), due:d.dueDate||"" })}>{t("common.edit")}</button>
+                <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delDebt(d)} aria-label={t("debt.delete",{name:maskText(d.name)})}><Icon name="trash" size={15}/></button>
+              </div>
             </div>
+            {dEdit&&dEdit.id===d.id&&(
+              <div data-section="debt-edit-form" style={{marginTop:10}}>
+                <div className="field-row" style={{marginBottom:10}}>
+                  <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-name">{t("debt.person")}</label><input id="debt-edit-name" className="field-input" value={dEdit.name} maxLength={60} onChange={e=>setDEdit({...dEdit,name:e.target.value})}/></div>
+                  <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-amt">{t("debt.amount")}</label><input id="debt-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={dEdit.amt} onChange={e=>setDEdit({...dEdit,amt:cleanMoneyText(e.target.value)})}/></div>
+                </div>
+                <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-edit-due">{t("debt.due")}</label><input id="debt-edit-due" className="field-input" lang={locale()} type="date" value={dEdit.due} onChange={e=>setDEdit({...dEdit,due:e.target.value})}/></div>
+                <div style={{display:"flex",gap:8}}>
+                  <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setDEdit(null)}>{t("common.cancel")}</button>
+                  <button className="btn btn-primary" style={{flex:1}} data-section="debt-edit-save" onClick={saveDebtEdit}>{t("common.save")}</button>
+                </div>
+              </div>
+            )}
             <div style={{marginTop:8}}>
               <div className="list-sub">{t("debt.remaining")}</div>
               {left>0 ? <div className="big-num debt-remaining">{q(left)} <span className="list-sub">{t("debt.of",{total:q(d.principal)})}</span></div> : <div className="big-num debt-remaining" style={{color:"var(--pos)"}}>{t("debt.settled")}</div>}
@@ -5935,8 +5998,20 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
             <div key={l.id} className="card" data-section="loan-card" data-id={l.id}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                 <div style={{minWidth:0}}><div className="goal-name">{maskText(l.lender)}</div><div className="list-sub">{t(LOAN_KIND_KEY[l.kind])} · {q(l.principal)}</div></div>
-                <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delLoan(l)} aria-label={t("debt.delete",{name:maskText(l.lender)})}><Icon name="trash" size={15}/></button>
+                <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                  <button className="btn btn-sm" data-section="loan-edit" aria-label={t("common.edit")+": "+maskText(l.lender)} onClick={()=>setLEdit({ id:l.id, lender:l.lender })}>{t("common.edit")}</button>
+                  <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delLoan(l)} aria-label={t("debt.delete",{name:maskText(l.lender)})}><Icon name="trash" size={15}/></button>
+                </div>
               </div>
+              {lEdit&&lEdit.id===l.id&&(
+                <div data-section="loan-edit-form" style={{marginTop:10}}>
+                  <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-lender">{t("loan.lender")}</label><input id="loan-edit-lender" className="field-input" value={lEdit.lender} maxLength={60} onChange={e=>setLEdit({...lEdit,lender:e.target.value})}/></div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setLEdit(null)}>{t("common.cancel")}</button>
+                    <button className="btn btn-primary" style={{flex:1}} data-section="loan-edit-save" onClick={saveLoanEdit}>{t("common.save")}</button>
+                  </div>
+                </div>
+              )}
               <div style={{marginTop:8}}>
                 <div className="list-sub">{t("loan.monthly")}</div>
                 <div className="big-num loan-monthly">{q(sc.payments[0].payment)}</div>
@@ -6108,7 +6183,7 @@ function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onCo
 }
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
-function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onSafeToSpendChange }) {
+function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange }) {
   const { transactions, budgets={}, goals=[], currency, templates=[], safeToSpend={} }=state;
   const setSeg=onSeg;
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
@@ -6123,7 +6198,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
     window.scrollTo(0,0);
   },[addSignal]);
   const [goalName,setGoalName]=useState(""), [goalTarget,setGoalTarget]=useState(""), [goalSaved,setGoalSaved]=useState("");
-  const [goalMonthly,setGoalMonthly]=useState(""), [goalDate,setGoalDate]=useState("");
+  const [goalMonthly,setGoalMonthly]=useState(""), [goalDate,setGoalDate]=useState(""), [editGoalId,setEditGoalId]=useState(null);
   const now=curMon();
   const catSpend=calcCategorySpend(transactions,now);
   const items=calcBudgetStatus(budgets,catSpend,now);
@@ -6139,9 +6214,11 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
     if (!goalName.trim()||gTarget===null) { showToast(t("set.goalInvalidTarget")); return; }
     if (gSaved===null||gMonthly===null) { showToast(t("set.goalInvalidAmounts")); return; }
     if (goalDate && !isValidDateStr(goalDate)) { showToast(t("set.goalInvalidDate")); return; }
-    onAddGoal({name:goalName.trim(),target:gTarget,saved:gSaved,monthlyTarget:gMonthly,targetDate:goalDate||null});
-    setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);
+    const g={name:goalName.trim(),target:gTarget,saved:gSaved,monthlyTarget:gMonthly,targetDate:goalDate||null};
+    if (editGoalId) onUpdateGoal(editGoalId,g); else onAddGoal(g);
+    setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);setEditGoalId(null);
   };
+  const startEditGoal=(g)=>{ setEditGoalId(g.id); setGoalName(g.name||""); setGoalTarget(String(g.target||"")); setGoalSaved(String(g.saved||"")); setGoalMonthly(g.monthlyTarget?String(g.monthlyTarget):""); setGoalDate(g.targetDate||""); setShowNewGoal(true); window.scrollTo(0,0); };
   const editRow=(cat,limit)=>editBudget===cat.id&&(
     <div style={{display:"flex",gap:7,marginTop:9}}>
       <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} autoFocus style={{flex:1,padding:"8px 10px",fontSize:13}}/>
@@ -6229,7 +6306,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
       {seg==="goals"&&(<>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"4px 2px 10px"}}>
           <span className="section-title" style={{margin:0}}>{t("set.financialGoals")}</span>
-          <button className="btn btn-sm" onClick={()=>setShowNewGoal(s=>!s)}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
+          <button className="btn btn-sm" onClick={()=>{ if (showNewGoal) { setEditGoalId(null); setGoalName(""); setGoalTarget(""); setGoalSaved(""); setGoalMonthly(""); setGoalDate(""); } setShowNewGoal(s=>!s); }}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
         </div>
         {showNewGoal&&(
           <div className="card">
@@ -6258,11 +6335,12 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
                     <div className="list-sub">{t("goals.savedOf",{ saved:fmt(goal.saved||0,currency), target:fmt(goal.target||0,currency) })}</div>
                   </div>
                 </div>
-                <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"55%"}}>
                   <button className="btn btn-sm" onClick={()=>{
                     const newSaved=prompt(t("set.updatePrompt",{name:goal.name}),goal.saved||0);
                     if (newSaved!==null) { const v=formMoney(newSaved); if (v===null) showToast(t("set.updateInvalid")); else onUpdateGoal(goal.id,{saved:v}); }
                   }}>{t("set.update")}</button>
+                  <button className="btn btn-sm" data-section="goal-edit" aria-label={t("common.edit")+": "+maskText(goal.name)} onClick={()=>startEditGoal(goal)}>{t("common.edit")}</button>
                   <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>
                 </div>
               </div>
@@ -6293,7 +6371,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
           );
         })}
         <SavingsFloorCard safeToSpend={safeToSpend} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>
-        <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} showToast={showToast}/>
+        <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} onUpdateTemplate={onUpdateTemplate} showToast={showToast}/>
       </>)}
     </div>
   );
