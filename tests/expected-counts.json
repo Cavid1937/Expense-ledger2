@@ -123,7 +123,8 @@
     "e2e_run24_accedit.mjs": 7,
     "e2e_run24_setfeel.mjs": 5,
     "e2e_run24_exit.mjs": 5,
-    "e2e_run24_edits.mjs": 10
+    "e2e_run24_edits.mjs": 10,
+    "e2e_run24_hold.mjs": 5
   }
 }
 

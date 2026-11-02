@@ -2961,6 +2961,7 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .bill-row[role="button"]:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent);border-radius:12px}
 .field-input,.date-input{transition:border-color 200ms ease-out,box-shadow 200ms ease-out,background-color 200ms ease-out}
 @media (prefers-reduced-motion:reduce){.toggle-knob,.toggle-track,.txn-row{transition:none}}
+.txn-row{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}   /* press-and-hold selects rows, not text */
 .toast{animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1),toastOut 200ms ease-in var(--toast-out,1500ms) forwards}   /* it fades out just before it is removed */
 @keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(-6px)}}
 .goal-fill,.budget-fill{transition:width 0.6s cubic-bezier(0.22,1,0.36,1)}   /* no overshoot on progress bars */
@@ -4420,7 +4421,7 @@ function HomeDetails({ hasTxns, onAdd, onOpenLedger, onInfo }) {
 }
 
 // ─── Shared transaction components ───────────────────────────────────────────
-function GroupedTxns({ txns, currency, onDelete, onEdit, onView, compact }) {
+function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPress, compact }) {
   const groups=useMemo(()=>{
     const g={}; txns.forEach(t=>{ (g[t.date]=g[t.date]||[]).push(t); });
     return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));
@@ -4436,7 +4437,7 @@ function GroupedTxns({ txns, currency, onDelete, onEdit, onView, compact }) {
               {dayTotal>0&&<span className="txn-date-total">{fmt(dayTotal,currency)}</span>}
             </div>
             <div className="txn-list">
-              {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} compact={compact}/>)}
+              {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact={compact}/>)}
             </div>
           </div>
         );
@@ -4445,8 +4446,13 @@ function GroupedTxns({ txns, currency, onDelete, onEdit, onView, compact }) {
   );
 }
 
-function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
+function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, compact }) {
   const cat=CAT(txn.category);
+  // Press and hold a row (about half a second) to start selecting several; the tap that follows the hold is ignored.
+  const hold=useRef({ timer:0, x:0, y:0, fired:false });
+  const holdStart=(e)=>{ if (!onLongPress || (e.pointerType==="mouse" && e.button!==0)) return; const h=hold.current; h.fired=false; h.x=e.clientX; h.y=e.clientY; clearTimeout(h.timer); h.timer=setTimeout(()=>{ h.fired=true; try { navigator.vibrate&&navigator.vibrate(12); } catch { /* no vibration here */ } onLongPress(txn); },480); };
+  const holdMove=(e)=>{ const h=hold.current; if (h.timer && (Math.abs(e.clientX-h.x)>10 || Math.abs(e.clientY-h.y)>10)) { clearTimeout(h.timer); h.timer=0; } };
+  const holdEnd=()=>{ const h=hold.current; clearTimeout(h.timer); h.timer=0; };
   const isInc=txn.type==="income";
   const displayName=maskText(txn.merchant||txn.note)||catName(txn.category);
   const displaySub=[
@@ -4458,7 +4464,7 @@ function TxnRow({ txn, currency, onDelete, onEdit, onView, compact }) {
     !compact?fmtDate(txn.date):null,
   ].filter(Boolean).join(" · ");
   return (
-    <div className="txn-row" onClick={()=>onView?.(txn)} {...(onView ? { role:"button", tabIndex:0, onKeyDown:activateKey(()=>onView(txn)) } : {})}>
+    <div className="txn-row" onClick={()=>{ if (hold.current.fired) { hold.current.fired=false; return; } onView?.(txn); }} onPointerDown={holdStart} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerCancel={holdEnd} onPointerLeave={holdEnd} onContextMenu={onLongPress?e=>e.preventDefault():undefined} {...(onView ? { role:"button", tabIndex:0, onKeyDown:activateKey(()=>onView(txn)) } : {})}>
       <div className="txn-ico" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={txn.category} size={16} color={cat?.color}/></div>
       <div className="txn-body">
         <div className="txn-name">{displayName}</div>
@@ -4565,7 +4571,6 @@ function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onEdit, on
         <button className={`chip${(showDates||hasDateFilter)?" on":""}`} aria-pressed={!!(showDates||hasDateFilter)} onClick={()=>setShowDates(s=>!s)}>
           <Icon name="calendar" size={11}/> {t("ledger.date")}
         </button>
-        <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
         {(hasCatFilter||hasDateFilter||typeFilter!=="all"||walletFilter!=="all"||tripFilter!=="all")&&(
           <button className="chip on" style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)"}}
             onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");setTripFilter("all");}}>{t("ledger.clear")} ×</button>
@@ -4598,7 +4603,10 @@ function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onEdit, on
           <label className="date-input-wrap"><span className="date-lbl">{t("ledger.to")}</span><input type="date" lang={locale()} className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
         </div>
       )}
-      <div className="list-sub" style={{margin:"2px 2px 12px"}}>{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,margin:"2px 2px 12px"}}>
+        <div className="list-sub">{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</div>
+        <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
+      </div>
       {filtered.length===0?(
         <div className="empty" style={{padding:"36px 0"}}>
           <div className="empty-icon"><Icon name="search" size={28}/></div>
@@ -4626,7 +4634,7 @@ function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onEdit, on
           </div>
         );
       })():(
-        <GroupedTxns txns={filtered} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView}/>
+        <GroupedTxns txns={filtered} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={x=>{ setSelMode(true); setPicked(new Set([String(x.id)])); }}/>
       )}
       {showCatSheet&&(
         <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setShowCatSheet(false)}>
