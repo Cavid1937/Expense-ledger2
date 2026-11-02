@@ -14,9 +14,7 @@ section("R17-A1. The amount box is a text box with the decimal keyboard (not typ
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page); await openAdd(page);
   const a = await page.$eval(".amount-input", (el) => ({ type: el.type, mode: el.inputMode }));
-  ok(a.type === "text" && a.mode === "none", "type=text; inputmode=none while the in-app number pad is open (no phone keyboard)", a);
-  await page.evaluate(() => document.querySelector('[data-section="add-more-toggle"]').click()); await wait(200);
-  ok((await page.$eval(".amount-input", (el) => el.inputMode)) === "decimal", "with the pad closed the box asks the phone for the decimal keyboard");
+  ok(a.type === "text" && a.mode === "decimal", "type=text with the phone's decimal keyboard (there is no in-app pad any more)", a);
   await page.evaluate(() => document.querySelector(".amount-zone").click()); await wait(200);
   ok(await typed(page, "145.67") === "145.67", "typing 145.67 keeps the dot: the box shows 145.67");
   ok(await typed(page, "145,67") === "145.67", "typing 145,67 (comma keyboard) shows 145.67");

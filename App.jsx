@@ -2962,8 +2962,17 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .field-input,.date-input{transition:border-color 200ms ease-out,box-shadow 200ms ease-out,background-color 200ms ease-out}
 @media (prefers-reduced-motion:reduce){.toggle-knob,.toggle-track,.txn-row{transition:none}}
 .txn-row{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}   /* press-and-hold selects rows, not text */
-.toast{animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1),toastOut 200ms ease-in var(--toast-out,1500ms) forwards}   /* it fades out just before it is removed */
-@keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(-6px)}}
+.toast{animation:toastIn 280ms cubic-bezier(0.22,1,0.36,1),toastOut 200ms ease-in var(--toast-out,1500ms) forwards;border-radius:16px}   /* it fades out just before it is removed */
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(-8px)}}
+.snackbar{animation:snackIn 300ms cubic-bezier(0.22,1,0.36,1),snackOut 200ms ease-in var(--snack-out,3800ms) forwards;border-radius:16px}   /* in-app notices rise from the bottom edge, no scale, and ease out before they go */
+@keyframes snackIn{from{opacity:0;transform:translateX(-50%) translateY(24px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes snackOut{to{opacity:0;transform:translateX(-50%) translateY(12px)}}
+.backup-banner{animation:bannerIn 320ms cubic-bezier(0.22,1,0.36,1) backwards}
+@keyframes bannerIn{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){.backup-banner{animation:none}}
+.snackbar-undo{border-radius:999px;transition:background-color 120ms ease-out}
+.snackbar-undo:active{background:color-mix(in srgb,var(--ink) 12%,transparent)}
 .goal-fill,.budget-fill{transition:width 0.6s cubic-bezier(0.22,1,0.36,1)}   /* no overshoot on progress bars */
 .seg-btn{transition:background-color 180ms ease-out,color 180ms ease-out}
 .seg-btn:active{background:color-mix(in srgb,var(--ink) 8%,transparent)}
@@ -3518,7 +3527,7 @@ function AppInner() {
   const snackQueue=useRef([]), snackKind=useRef(null);
   const openSnack=useCallback(({msg,onUndo,ms,kind})=>{
     clearTimeout(snackTimer.current);
-    setSnackbar({msg,onUndo}); snackActive.current=true; snackKind.current=kind;
+    setSnackbar({msg,onUndo,ms}); snackActive.current=true; snackKind.current=kind;
     snackTimer.current=setTimeout(()=>closeSnack(),ms);
   },[]);
   const closeSnack=useCallback(()=>{
@@ -3906,7 +3915,7 @@ function AppInner() {
       <div className={`app${privacy?" privacy-on":""}`} lang={state.language}>
         {toast&&<div className="toast" role="status" style={{"--toast-out":Math.max(0,toastMs.current-220)+"ms"}}>{toast}</div>}
         {snackbar&&(
-          <div className="snackbar" role="status">
+          <div className="snackbar" role="status" key={snackbar.msg} style={{"--snack-out":Math.max(0,(snackbar.ms||4000)-220)+"ms"}}>
             <span>{snackbar.msg}</span>
             <button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();closeSnack();}}>{t("common.undo")}</button>
           </div>
@@ -4840,28 +4849,7 @@ function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedu
   );
 }
 
-// Run 17: an in-app number pad, so no phone keyboard covers the form and the decimal mark is always the same key.
-// Keys: 0-9, the decimal point, delete. Same text rules as the typed amount (cleanMoneyText); at most 9 whole digits.
-function NumPad({ value, onChange }) {
-  const press=(k)=>{
-    if (k==="back") { onChange(String(value).slice(0,-1)); return; }
-    if (k===".") { if (String(value).includes(".")) return; onChange(cleanMoneyText((String(value)||"0")+".")); return; }
-    if (!String(value).includes(".") && String(value).replace(/\D/g,"").length>=9) return;
-    onChange(cleanMoneyText(value==="0" ? k : String(value)+k));
-  };
-  const keys=["1","2","3","4","5","6","7","8","9",".","0","back"];
-  return (
-    <div className="numpad" role="group" aria-label={t("pad.label")}>
-      {keys.map(k=>(
-        <button key={k} type="button" className="numpad-key" data-key={k} onClick={()=>press(k)}
-          aria-label={k==="back"?t("pad.back"):k==="."?t("pad.decimal"):k}>
-          {k==="back"?<Icon name="backspace" size={22}/>:k}
-        </button>
-      ))}
-    </div>
-  );
-}
-
+// Run 25 (owner decision): the in-app number pad is gone; the amount box opens the phone's own number keyboard (no space lost to a pad).
 function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose, onOtherKind }) {
   // Run 12: which bill a recurring entry pays. Offered only when every recurring payment is already linked to a bill
   // (nothing inferred the old way); otherwise the entry is grouped as before, so it can't start a second copy of a bill
@@ -4898,7 +4886,6 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   };
   // Run 17: details (merchant, note, date, wallet, repeat) are folded away unless editing or already filled; the pad is open until a text field needs the room.
   const [more, setMore] = useState(!!(editId || prefill?.recurring || prefill?.billId || prefill?.merchant || prefill?.note));
-  const [padOpen, setPadOpen] = useState(true);
   const [err,      setErr]      = useState("");
   const [showMerchantSugs, setShowMerchantSugs] = useState(false);
   const amtRef=useRef();
@@ -4981,15 +4968,15 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
         <span className="add-title">{title}</span>
         <button className="add-close" onClick={requestClose} aria-label={t("common.close")}><Icon name="close" size={14}/></button>
       </div>
-      <div className="add-body" onFocusCapture={e=>{ const el=e.target; if (el && el.matches && el.matches("input,select,textarea") && !el.classList.contains("amount-input")) setPadOpen(false); }}>
+      <div className="add-body">
         <div className="type-toggle">
           <button className={`type-btn${type==="expense"?" active":""}`} aria-pressed={type==="expense"} onClick={()=>setType("expense")}>{t("add.expense")}</button>
           <button className={`type-btn${type==="income"?" active":""}`} aria-pressed={type==="income"} onClick={()=>setType("income")}>{t("add.income")}</button>
         </div>
         {!editId&&onOtherKind&&<div className="type-other-row">{["loans","debts"].map(k=><button key={k} type="button" className="btn btn-sm" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}>{t(k==="loans"?"add.loan":"add.debt")}</button>)}</div>}
-        <div className="amount-zone" onClick={()=>{ setPadOpen(true); amtRef.current?.focus(); }}>
+        <div className="amount-zone" onClick={()=>amtRef.current?.focus()}>
           <div className="amount-line">
-            <input ref={amtRef} className="amount-input" type="text" inputMode={padOpen?"none":"decimal"} autoComplete="off"
+            <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off" autoFocus={!editId}
               placeholder="0.00" value={amount} onChange={e=>{setAmount(cleanMoneyText(e.target.value));setErr("");}}
               min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}
               style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
@@ -5051,7 +5038,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
         </div>
 
         {/* Run 17: the form shows what most entries need; the rest sits under one toggle (open when editing). */}
-        <button type="button" className="more-toggle" data-section="add-more-toggle" aria-expanded={more} aria-controls="add-more-body" onClick={()=>{ setMore(m=>!m); setPadOpen(false); }}>
+        <button type="button" className="more-toggle" data-section="add-more-toggle" aria-expanded={more} aria-controls="add-more-body" onClick={()=>setMore(m=>!m)}>
           <span className="more-toggle-main">{t(more?"add.lessDetails":"add.moreDetails")}</span>
           <span className="more-toggle-sub">{moreSummary||t("add.moreHint")}</span>
           <Icon name={more?"chevUp":"chevDown"} size={16}/>
@@ -5174,7 +5161,6 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
         <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
       </div>
       <div className="add-foot">
-        {padOpen&&<><NumPad value={amount} onChange={v=>{ setAmount(v); setErr(""); }}/><button type="button" className="btn btn-sm pad-hide" data-section="pad-hide" style={{display:"block",margin:"0 auto 8px"}} onClick={()=>setPadOpen(false)}>{t("pad.hide")}</button></>}
         <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>submit()}>
           {isEditing?t("add.saveChanges"):t(type==="income"?"add.recordIncome":"add.recordExpense")}
         </button>
