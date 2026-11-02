@@ -2951,6 +2951,14 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .bill-row[role="button"]:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent);border-radius:12px}
 .field-input,.date-input{transition:border-color 200ms ease-out,box-shadow 200ms ease-out,background-color 200ms ease-out}
 @media (prefers-reduced-motion:reduce){.toggle-knob,.toggle-track,.txn-row{transition:none}}
+.toast{animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1),toastOut 200ms ease-in var(--toast-out,1500ms) forwards}   /* it fades out just before it is removed */
+@keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(-6px)}}
+.goal-fill,.budget-fill{transition:width 0.6s cubic-bezier(0.22,1,0.36,1)}   /* no overshoot on progress bars */
+.seg-btn,.lang-pill{transition:background-color 180ms ease-out,color 180ms ease-out,border-color 180ms ease-out}
+.seg-btn:active{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.seg-btn.on:active{background:var(--accent-fill)}
+.empty{animation:sectionIn 320ms ease-out both}   /* calm empty states: they ease in rather than appear */
+@media (prefers-reduced-motion:reduce){.seg-btn,.lang-pill{transition:none}}
 .sheet-overlay.leaving{animation:dimOut 200ms ease-in forwards;pointer-events:none}
 .sheet-overlay.leaving .sheet{animation:sheetFall 200ms cubic-bezier(0.4,0,1,1) forwards}
 @keyframes dimOut{from{opacity:1}to{opacity:0}}
@@ -3492,7 +3500,8 @@ function AppInner() {
 
   const toastTimer=useRef(null);
   // A new toast cancels the previous one's timer, so back-to-back messages are never cut short.
-  const showToast=useCallback((msg,ms=1800)=>{ clearTimeout(toastTimer.current); setToast(msg); toastTimer.current=setTimeout(()=>setToast(null),ms); },[]);
+  const toastMs=useRef(1800);
+  const showToast=useCallback((msg,ms=1800)=>{ clearTimeout(toastTimer.current); toastMs.current=ms; setToast(msg); toastTimer.current=setTimeout(()=>setToast(null),ms); },[]);
   // Undo snackbars (Run 8): a snackbar of the same kind replaces the open one (more deletions share one "N deleted" undo);
   // a different kind waits until the open one's undo window ends, so an undo is never silently taken away.
   const snackQueue=useRef([]), snackKind=useRef(null);
@@ -3884,7 +3893,7 @@ function AppInner() {
     <>
       <style>{CSS}</style>
       <div className={`app${privacy?" privacy-on":""}`} lang={state.language}>
-        {toast&&<div className="toast" role="status">{toast}</div>}
+        {toast&&<div className="toast" role="status" style={{"--toast-out":Math.max(0,toastMs.current-220)+"ms"}}>{toast}</div>}
         {snackbar&&(
           <div className="snackbar" role="status">
             <span>{snackbar.msg}</span>
