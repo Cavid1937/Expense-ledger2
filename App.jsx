@@ -2954,11 +2954,11 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .toast{animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1),toastOut 200ms ease-in var(--toast-out,1500ms) forwards}   /* it fades out just before it is removed */
 @keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(-6px)}}
 .goal-fill,.budget-fill{transition:width 0.6s cubic-bezier(0.22,1,0.36,1)}   /* no overshoot on progress bars */
-.seg-btn,.lang-pill{transition:background-color 180ms ease-out,color 180ms ease-out,border-color 180ms ease-out}
+.seg-btn{transition:background-color 180ms ease-out,color 180ms ease-out}
 .seg-btn:active{background:color-mix(in srgb,var(--ink) 8%,transparent)}
 .seg-btn.on:active{background:var(--accent-fill)}
 .empty{animation:sectionIn 320ms ease-out both}   /* calm empty states: they ease in rather than appear */
-@media (prefers-reduced-motion:reduce){.seg-btn,.lang-pill{transition:none}}
+@media (prefers-reduced-motion:reduce){.seg-btn{transition:none}}
 .sheet-overlay.leaving{animation:dimOut 200ms ease-in forwards;pointer-events:none}
 .sheet-overlay.leaving .sheet{animation:sheetFall 200ms cubic-bezier(0.4,0,1,1) forwards}
 @keyframes dimOut{from{opacity:1}to{opacity:0}}
