@@ -2940,6 +2940,17 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .list-card{padding:4px 16px}
 .list-row{display:flex;align-items:center;gap:14px;width:100%;min-height:60px;padding:12px 0;background:none;border:none;border-bottom:1px solid var(--rule);text-align:left;color:var(--ink);font:inherit;cursor:pointer}
 .list-row:last-child{border-bottom:none}
+/* Run 24: Claude-app feel across the app: no bounce anywhere, softer presses, one decelerating curve (~0.2-0.3 s) */
+.toggle-knob{transition:transform 220ms cubic-bezier(0.22,1,0.36,1)}
+.toggle-track{transition:background-color 200ms ease-out}
+.chip:active,.cat-filter-btn:active,.sub-chip:active,.cat-tile:active{transform:scale(0.97)}
+.tpl-card:active{transform:scale(0.97)}
+.tab-btn:active{transform:scale(0.94)}
+.txn-row{transition:background-color 120ms ease-out,transform 120ms ease-out}
+.txn-row:active{transform:none}
+.bill-row[role="button"]:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent);border-radius:12px}
+.field-input,.date-input{transition:border-color 200ms ease-out,box-shadow 200ms ease-out,background-color 200ms ease-out}
+@media (prefers-reduced-motion:reduce){.toggle-knob,.toggle-track,.txn-row{transition:none}}
 .prefs-card>.settings-section-lbl:first-child{margin-top:0!important;padding-top:0}   /* Run 24: Preferences sections sit in rounded cards, like Claude's grouped settings */
 .list-row{border-radius:12px;transition:background-color 120ms ease-out}
 .list-row:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent)}   /* Run 24: a pressed row becomes a soft rounded pill (Claude-app feel) */
