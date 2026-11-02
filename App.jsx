@@ -2955,7 +2955,8 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .sheet-overlay.leaving .sheet{animation:sheetFall 200ms cubic-bezier(0.4,0,1,1) forwards}
 @keyframes dimOut{from{opacity:1}to{opacity:0}}
 @keyframes sheetFall{from{transform:translateY(0)}to{transform:translateY(100%)}}
-.page.page-sub{animation:pageSlide 300ms cubic-bezier(0.22,1,0.36,1) backwards}   /* opened from a list (Recurring, Import/Export, Debts): comes in from the right */
+.page.page-sub{overflow-x:hidden}   /* the slide moves the page's contents inside it, so it can never create a horizontal scrollbar */
+.page.page-sub>*{animation:pageSlide 300ms cubic-bezier(0.22,1,0.36,1) backwards}   /* opened from a list (Recurring, Import/Export, Debts): comes in from the right */
 @keyframes pageSlide{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:translateX(0)}}
 .prefs-card>.settings-section-lbl:first-child{margin-top:0!important;padding-top:0}   /* Run 24: Preferences sections sit in rounded cards, like Claude's grouped settings */
 .list-row{border-radius:12px;transition:background-color 120ms ease-out}
