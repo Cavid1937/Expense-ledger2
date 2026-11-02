@@ -2951,6 +2951,12 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .bill-row[role="button"]:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent);border-radius:12px}
 .field-input,.date-input{transition:border-color 200ms ease-out,box-shadow 200ms ease-out,background-color 200ms ease-out}
 @media (prefers-reduced-motion:reduce){.toggle-knob,.toggle-track,.txn-row{transition:none}}
+.sheet-overlay.leaving{animation:dimOut 200ms ease-in forwards;pointer-events:none}
+.sheet-overlay.leaving .sheet{animation:sheetFall 200ms cubic-bezier(0.4,0,1,1) forwards}
+@keyframes dimOut{from{opacity:1}to{opacity:0}}
+@keyframes sheetFall{from{transform:translateY(0)}to{transform:translateY(100%)}}
+.page.page-sub{animation:pageSlide 300ms cubic-bezier(0.22,1,0.36,1) backwards}   /* opened from a list (Recurring, Import/Export, Debts): comes in from the right */
+@keyframes pageSlide{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:translateX(0)}}
 .prefs-card>.settings-section-lbl:first-child{margin-top:0!important;padding-top:0}   /* Run 24: Preferences sections sit in rounded cards, like Claude's grouped settings */
 .list-row{border-radius:12px;transition:background-color 120ms ease-out}
 .list-row:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent)}   /* Run 24: a pressed row becomes a soft rounded pill (Claude-app feel) */
@@ -3101,7 +3107,7 @@ function useSheetGestures() {
       const v=e.timeStamp-a.t>0 ? ((d.y-a.y)/(e.timeStamp-a.t))*1000 : 0;               // px/s, downwards positive
       // Where the sheet would come to rest if thrown (momentum projection, deceleration 0.99): dismiss past 45% of its height.
       const projected=d.y+(v/1000)*0.99/(1-0.99);
-      if (projected>d.h*0.45) spring(d.sheet,d.overlay,d.y,d.h,v,d.h,()=>{ d.overlay.click(); });
+      if (projected>d.h*0.45) spring(d.sheet,d.overlay,d.y,d.h,v,d.h,()=>{ d.overlay.dataset.out="1"; d.overlay.click(); });
       else spring(d.sheet,d.overlay,d.y,0,v,d.h,()=>{ d.sheet.style.transform=""; d.overlay.style.background=""; });
     };
     const onKey=(e)=>{
@@ -3116,6 +3122,24 @@ function useSheetGestures() {
         else if (!e.shiftKey && document.activeElement===last) { e.preventDefault(); first.focus(); }
       }
     };
+    // Closing a sheet (backdrop tap, its Close/Cancel button, Escape, Back) slides it down and fades the dim first, then runs the sheet's own close.
+    // The close itself is replayed unchanged after ~0.2 s, so every sheet keeps its own logic; if it refuses to close, the sheet comes back at once.
+    const exiting=new WeakSet();
+    const onClickCapture=(e)=>{
+      const ov=e.target && e.target.closest ? e.target.closest(".sheet-overlay") : null;
+      if (!ov || ov.dataset.out==="1" || reduced()) return;
+      const closer=e.target.closest("[data-closer]"), backdrop=e.target===ov;
+      if (!backdrop && !closer) return;
+      e.stopPropagation(); e.preventDefault();
+      if (exiting.has(ov)) return;
+      exiting.add(ov); ov.classList.add("leaving");
+      setTimeout(()=>{
+        if (!document.contains(ov)) return;
+        ov.dataset.out="1"; (backdrop?ov:closer).click();
+        setTimeout(()=>{ if (document.contains(ov)) { ov.classList.remove("leaving"); delete ov.dataset.out; } exiting.delete(ov); },60);
+      },190);
+    };
+    document.addEventListener("click",onClickCapture,true);
     const stack=[];
     const sync=()=>{
       document.querySelectorAll(".sheet,.add-overlay").forEach(el=>{
@@ -3128,7 +3152,7 @@ function useSheetGestures() {
     const mo=new MutationObserver(sync); mo.observe(document.body,{ childList:true, subtree:true });
     document.addEventListener("pointerdown",onDown); document.addEventListener("pointermove",onMove);
     document.addEventListener("pointerup",onUp); document.addEventListener("pointercancel",onUp); document.addEventListener("keydown",onKey);
-    return ()=>{ stop(); mo.disconnect(); document.removeEventListener("pointerdown",onDown); document.removeEventListener("pointermove",onMove);
+    return ()=>{ stop(); mo.disconnect(); document.removeEventListener("click",onClickCapture,true); document.removeEventListener("pointerdown",onDown); document.removeEventListener("pointermove",onMove);
       document.removeEventListener("pointerup",onUp); document.removeEventListener("pointercancel",onUp); document.removeEventListener("keydown",onKey); };
   },[]);
 }
@@ -3314,7 +3338,7 @@ function LockSheet({ onClose, showToast }) {
         <div className="sheet-grip"><div className="sheet-handle"/></div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
           <div className="card-title" style={{fontSize:17}}>{t("lock.title")}</div>
-          <button onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
+          <button data-closer="1" onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
         </div>
         <div className="list-sub" style={{lineHeight:1.55,marginBottom:12}} data-section="lock-notenc">{t("lock.notEnc")}</div>
         {!lockSupported()&&<div className="field-error" role="alert">{t("lock.unsupported")}</div>}
@@ -3928,7 +3952,7 @@ function AppInner() {
           </div>
         </header>
 
-        <main className="page" key={tabKey}>
+        <main className={SUBPAGE_PARENT[tab]?"page page-sub":"page"} key={tabKey}>
           {tab==="home"      && <HomePage transactions={spendTxns} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
@@ -4653,7 +4677,7 @@ function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast }) {
         )}
         <button className="btn btn-primary btn-full bill-save" onClick={save}>{t("common.save")}</button>
         {!isNew&&<button className="btn btn-ghost btn-full bill-delete" style={{color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>onDelete(bill.id)}>{t("bill.delete")}</button>}
-        <button className="btn btn-ghost btn-full" onClick={onClose}>{t("common.cancel")}</button>
+        <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose}>{t("common.cancel")}</button>
       </div>
     </div>
   );
@@ -5203,7 +5227,7 @@ function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClos
             <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700,marginBottom:2,lineHeight:1.25,overflowWrap:"anywhere"}}>{maskText(txn.merchant||txn.note)||catName(txn.category)}</div>
             <div style={{fontSize:12,color:"var(--ink-3)"}}>{catName(txn.category)}{txn.subcategory?` / ${subName(txn.subcategory)}`:""} · {fmtDate(txn.date)}</div>
           </div>
-          <button onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
+          <button data-closer="1" onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
         </div>
 
         {/* Amount */}
@@ -5347,7 +5371,7 @@ function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClos
           </div>
         )}
         <button className="btn btn-ghost btn-full" style={{color:"var(--neg)",borderColor:"var(--neg-bg)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:0}} onClick={onDelete}><Icon name="trash" size={14}/>{t("common.delete")}</button>
-        <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:6}}>{t("common.close")}</button>
+        <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose} style={{marginTop:6}}>{t("common.close")}</button>
       </div>
     </div>
   );
@@ -5532,7 +5556,7 @@ function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendCh
           </div>
         </div>
 
-        <button className="btn btn-ghost btn-full" onClick={onClose} style={{marginTop:18}}>{t("common.close")}</button>
+        <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose} style={{marginTop:18}}>{t("common.close")}</button>
       </div>
     </div>
   );
@@ -5677,7 +5701,7 @@ function InfoSheet({ kind, onClose }) {
         <div className="sheet-grip"><div className="sheet-handle"/></div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:14}}>
           <div className="card-title" style={{fontSize:17}}>{t("info."+kind+".title")}</div>
-          <button onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
+          <button data-closer="1" onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
         </div>
         {Array.from({length:n},(_,i)=>i+1).map(i=>(
           <div key={i} style={{marginBottom:14}}>
@@ -5685,7 +5709,7 @@ function InfoSheet({ kind, onClose }) {
             <div className="list-sub" style={{lineHeight:1.55,marginTop:2}}>{t("info."+kind+"."+i+".b")}</div>
           </div>
         ))}
-        <button className="btn btn-primary btn-full" style={{marginTop:4}} onClick={onClose}>{t("common.close")}</button>
+        <button className="btn btn-primary btn-full" style={{marginTop:4}} data-closer="1" onClick={onClose}>{t("common.close")}</button>
       </div>
     </div>
   );

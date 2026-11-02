@@ -33,7 +33,8 @@ section("R15-N3. A bottom sheet is closed before anything else");
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await tab(page, "Ledger"); await settle(page);
   await page.evaluate(() => document.querySelector(".txn-row").click()); await wait(400);
   ok(!!(await page.$(".sheet-overlay")), "an entry sheet is open");
-  ok((await back(page)) === "handled" && !(await page.$(".sheet-overlay")), "Back closes the sheet, not the app");
+  const handled = await back(page); await wait(450);   // the sheet slides away for ~0.2 s before it is removed
+  ok(handled === "handled" && !(await page.$(".sheet-overlay")), "Back closes the sheet, not the app");
   await page.close();
 }
 await browser.close();
