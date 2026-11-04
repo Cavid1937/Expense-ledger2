@@ -4,7 +4,7 @@
     "core.test.mjs": 39,
     "data.test.mjs": 122,
     "finance.test.mjs": 91,
-    "i18n.test.mjs": 72,
+    "i18n.test.mjs": 73,
     "phase2.test.mjs": 48,
     "phase3.test.mjs": 25,
     "run3.test.mjs": 19,
@@ -55,6 +55,7 @@
     "run24accedit.test.mjs": 10,
     "run24catedit.test.mjs": 8,
     "run25subrename.test.mjs": 13,
+    "run25themes.test.mjs": 16,
   "run18coach.test.mjs": 9
   },
   "browser": {

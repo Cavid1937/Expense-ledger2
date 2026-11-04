@@ -82,7 +82,7 @@ const dynamic = { "nav.": ["home", "ledger", "monthly", "goals", "more"], "cat."
   "freq.": FREQ, "freqCap.": FREQ, "surplus.": ["Surplus", "Deficit", "Break-even"], "month.net.": ["Net surplus", "Net deficit", "Break-even"],
   "an.perDay.": ["null", "same", "weekend", "weekday"], "ledger.type.": ["all", "expense", "income"], "reason.": REASONS,
   "mon.": [...Array(12)].map((_, i) => String(i + 1)), "monGen.": [...Array(12)].map((_, i) => String(i + 1)), "monShort.": [...Array(12)].map((_, i) => String(i + 1)),
-  "wdShort.": DAYS, "wdNarrow.": DAYS, "tpl.": ["t1", "t3", "t4", "t5"], "wallet.": ["cash", "card", "mobile", "other"], "subcat.err.": ["empty", "long", "dup", "full", "category"],
+  "wdShort.": DAYS, "wdNarrow.": DAYS, "tpl.": ["t1", "t3", "t4", "t5"], "wallet.": ["cash", "card", "mobile", "other"], "theme.": ["sea", "nordic", "mist", "dusk", "sapphire", "cocoa"], "subcat.err.": ["empty", "long", "dup", "full", "category"],
   "info.": ["how.title", "how.1.h", "how.1.b", "how.2.h", "how.2.b", "how.3.h", "how.3.b", "how.4.h", "how.4.b", "privacy.title", ...[1, 2, 3, 4, 5, 6, 7, 8].flatMap((i) => [`privacy.${i}.h`, `privacy.${i}.b`]), "safe.title", ...[1, 2, 3, 4, 5, 6].flatMap((i) => [`safe.${i}.h`, `safe.${i}.b`])] };   // Run 16: wallet names
 const dynMissing = [];
 for (const [p, vals] of Object.entries(dynamic)) { ok(src.includes(`"${p}"`) || src.includes(`"${p}"+`) || src.includes(`'${p}'`), `App.jsx builds keys with the prefix "${p}"`); for (const v of vals) if (!MESSAGES[p + v]) dynMissing.push(p + v); }

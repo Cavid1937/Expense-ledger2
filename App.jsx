@@ -826,6 +826,44 @@ function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().l
 
 // "Hide amounts" is remembered until the user changes it (Run 20, owner request): it is a preference, kept under its own key like the other
 // side settings, so the ledger key is not touched. An unreadable or blocked store simply means "off".
+// ─── Colour themes (Run 25, owner-supplied palettes) ───────────────────────────────────────────────────────────────────────────────
+// A theme is a set of overrides for the CSS colour variables, applied to the page root; "sea" (the original look) has none. The choice
+// is a plain preference in its own storage key (not in the ledger, so backups and imports never touch it). Meaning colours (income,
+// spending, warning) stay readable on every theme: tests/logic/run25themes checks the contrast of every text colour on every surface.
+const THEME_KEY=`${KEY}__theme`;
+const DARK_MEANING={ "--violet":"#B3A1FF","--info":"#83B9F5","--pos":"#8BD97A","--pos-bg":"#173622","--neg":"#FF8188","--neg-bg":"#3B1C22","--warn":"#F0C46F","--warn-bg":"#352B14" };
+const THEMES={
+  sea:{ swatch:["#07151A","#4CC9C4"], dark:true, vars:{} },
+  nordic:{ swatch:["#1F2933","#A68A64"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#171E26","--bg-card":"#1F2933","--bg-warm":"#2B3745","--bg-inset":"#232D39","--ink":"#F7F7F2","--ink-2":"#E2E3DE","--ink-3":"#B3B8BF","--ink-4":"#A0A7AF","--ink-5":"#3A4756",
+    "--rule":"#34414F","--rule-2":"#4B5B6C","--accent":"#C2A57C","--accent-light":"#3A3226","--accent-mid":"#D6BE9C","--accent-text":"#C2A57C","--accent-fill":"#A68A64","--on-accent":"#14181D" } },
+  mist:{ swatch:["#DEDCDC","#57707A"], dark:false, vars:{
+    "--bg":"#DEDCDC","--bg-card":"#EDEBEB","--bg-warm":"#D9D7D9","--bg-inset":"#E6E4E4","--ink":"#191D23","--ink-2":"#2D333B","--ink-3":"#4A525C","--ink-4":"#4B5661","--ink-5":"#B5B7BD",
+    "--rule":"#C6C4C6","--rule-2":"#A9AAB0","--accent":"#3A535D","--accent-light":"#CFD9DE","--accent-mid":"#57707A","--accent-text":"#3A535D","--accent-fill":"#57707A","--on-accent":"#FFFFFF",
+    "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1F5E1C","--pos-bg":"#D5E6D1","--neg":"#A11F18","--neg-bg":"#F0D6D3","--warn":"#7A5200","--warn-bg":"#EBDDB9" } },
+  dusk:{ swatch:["#0B132B","#D97706"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#0B132B","--bg-card":"#1C2541","--bg-warm":"#26365A","--bg-inset":"#16203D","--ink":"#FBF1E3","--ink-2":"#EAD9C0","--ink-3":"#B7C3D9","--ink-4":"#A3B0C8","--ink-5":"#3A506B",
+    "--rule":"#2C3A5E","--rule-2":"#46608A","--accent":"#F0A44B","--accent-light":"#38281A","--accent-mid":"#F4D6B0","--accent-text":"#F0A44B","--accent-fill":"#D97706","--on-accent":"#0B132B" } },
+  sapphire:{ swatch:["#000926","#0F52BA"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#000926","--bg-card":"#08143A","--bg-warm":"#10276A","--bg-inset":"#0B1B4D","--ink":"#E4EEF7","--ink-2":"#D6E6F3","--ink-3":"#A6C5D7","--ink-4":"#93B2C6","--ink-5":"#1E3A7A",
+    "--rule":"#16295F","--rule-2":"#2D4FA0","--accent":"#6FA3F5","--accent-light":"#0F2A63","--accent-mid":"#A6C5D7","--accent-text":"#6FA3F5","--accent-fill":"#0F52BA","--on-accent":"#FFFFFF" } },
+  cocoa:{ swatch:["#1A120E","#A88462"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#1A120E","--bg-card":"#261A13","--bg-warm":"#3A2418","--bg-inset":"#2E1F16","--ink":"#F2E8DA","--ink-2":"#D5C4AE","--ink-3":"#B9A58B","--ink-4":"#A8947B","--ink-5":"#4A3426",
+    "--rule":"#3A2A1F","--rule-2":"#5A4130","--accent":"#C9A882","--accent-light":"#3A2A1C","--accent-mid":"#D5C4AE","--accent-text":"#C9A882","--accent-fill":"#A88462","--on-accent":"#1A120E" } },
+};
+const THEME_IDS=Object.keys(THEMES);
+const themeId=(v)=>typeof v==="string" && Object.prototype.hasOwnProperty.call(THEMES,v) ? v : "sea";
+function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return "sea"; } }
+function writeTheme(id) { try { if (themeId(id)==="sea") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY,themeId(id)); return true; } catch { return false; } }
+function applyTheme(id) {   // sets (or clears) the colour variables on the page root; safe to call before the app renders
+  if (typeof document==="undefined" || !document.documentElement) return;
+  const th=THEMES[themeId(id)], root=document.documentElement, all=new Set(Object.values(THEMES).flatMap(x=>Object.keys(x.vars)));
+  all.forEach(k=>root.style.removeProperty(k));
+  Object.entries(th.vars).forEach(([k,v])=>root.style.setProperty(k,v));
+  root.style.colorScheme=th.dark?"dark":"light"; root.setAttribute("data-theme",themeId(id));
+  const m=document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content",th.vars["--bg"]||th.swatch[0]);
+}
+if (typeof document!=="undefined") applyTheme(readTheme());
 const PRIVACY_KEY=`${KEY}__privacy`;
 function readPrivacy() { try { return localStorage.getItem(PRIVACY_KEY)==="1"; } catch { return false; } }
 function writePrivacy(on) { try { if (on) localStorage.setItem(PRIVACY_KEY,"1"); else localStorage.removeItem(PRIVACY_KEY); return true; } catch { return false; } }
@@ -2511,7 +2549,7 @@ button{font-family:inherit;cursor:pointer}
 html,body{background:var(--bg);color:var(--ink);font-family:var(--font);min-height:100vh;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .app{max-width:430px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
-.topbar{position:sticky;top:0;z-index:60;background:rgba(7,21,26,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:10px 20px 6px;min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.topbar{position:sticky;top:0;z-index:60;background:rgba(7,21,26,0.92);background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:10px 20px 6px;min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
 .wordmark{font-family:var(--font);font-size:26px;font-weight:700;color:var(--ink);letter-spacing:-0.4px;line-height:1.15;min-width:0;overflow-wrap:anywhere}
 .topbar-back{display:flex;align-items:center;gap:2px;min-width:0;margin-left:-8px}
 .topbar-back .wordmark{font-size:22px}
@@ -2522,7 +2560,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 @media (prefers-reduced-motion:reduce){.fab-add{transition:none}}
 .topbar-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 120ms,color 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .topbar-btn:hover{background:var(--bg-inset);color:var(--ink)}.topbar-btn:active{transform:scale(0.88)}
-.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(7,21,26,0.94);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(7,21,26,0.94);background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
 .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;border:none;background:transparent;cursor:pointer;color:var(--ink-3);transition:color 150ms,transform 80ms;font-family:var(--font);-webkit-tap-highlight-color:transparent}
 .tab-btn.active{color:var(--ink)}.tab-btn:active{transform:scale(0.88)}
 /* Sentence case, no extra tracking: upper-case labels were up to 30% wider, so long Azerbaijani and Russian words
@@ -5600,6 +5638,7 @@ function MyAccounts({ state, currency, showToast }) {
 function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
   const { currency,safeToSpend={} }=state;
   const [curSym,      setCurSym]      = useState(currency);
+  const [theme,       setTheme]       = useState(()=>readTheme());
 
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -5616,6 +5655,18 @@ function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendCh
 
         <MyAccounts state={state} currency={state.currency} showToast={showToast}/>
         <MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/>
+
+        {/* Colour theme (Run 25): palettes supplied by the owner; a plain preference, separate from the ledger */}
+        <div className="settings-section-lbl" style={{marginTop:14}}>{t("theme.title")}</div>
+        <div className="filter-bar" role="radiogroup" aria-label={t("theme.title")} data-section="theme-chips" style={{flexWrap:"wrap"}}>
+          {THEME_IDS.map(id=>(
+            <button key={id} role="radio" aria-checked={theme===id} data-theme-id={id} className={`chip${theme===id?" on":""}`} style={{display:"inline-flex",alignItems:"center",gap:7}}
+              onClick={()=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; } applyTheme(id); setTheme(id); showToast(t("theme.changed")); }}>
+              <span aria-hidden="true" style={{display:"inline-block",width:16,height:16,borderRadius:"50%",background:`linear-gradient(135deg,${THEMES[id].swatch[0]} 50%,${THEMES[id].swatch[1]} 50%)`,border:"1px solid var(--rule-2)"}}/>
+              {t("theme."+id)}
+            </button>
+          ))}
+        </div>
 
         {/* Currency */}
         <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
