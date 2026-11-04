@@ -4,11 +4,11 @@ const browser = await launch();
 const seed = baseSeed({ language: "en", transactions: [tx({ id: 1790003000001, merchant: "Shop", amount: 5 })] });
 const bf = (page, sel) => page.evaluate((s) => { const e = document.querySelector(s); const c = e ? getComputedStyle(e) : null; return c ? [c.backdropFilter || c.webkitBackdropFilter || "none", c.backgroundColor] : null; }, sel);
 
-section("R22-M1. Default: the top bar and tab bar are translucent (blurred)");
+section("R22-M1. Default (changed in Run 25, layering research): the top bar and tab bar are solid, with no blur over scrolling lists");
 {
   const page = await openPage(browser, { seed }); await settle(page);
   const top = await bf(page, ".topbar"), tab = await bf(page, ".tabbar");
-  ok(top && /blur/.test(top[0]) && tab && /blur/.test(tab[0]), "both bars use a blur material by default", [top, tab]);
+  ok(top && tab && top[0] === "none" && tab[0] === "none" && /^rgb\(/.test(top[1]) && /^rgb\(/.test(tab[1]), "both bars are opaque with no blur by default", [top, tab]);
   await page.close();
 }
 section("R22-M2. 'Reduce transparency' on: no blur, solid backgrounds");
