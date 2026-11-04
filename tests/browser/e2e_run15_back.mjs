@@ -18,7 +18,8 @@ section("R15-N2. Back closes what is open first, then leaves a tab, then warns, 
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page);
   await openAdd(page);
-  ok((await back(page)) === "handled" && !(await page.$(".add-overlay")), "add form open: Back closes it and the app stays");
+  const handledAdd = await back(page); await wait(450);   // the form slides down for ~0.2 s before it is removed
+  ok(handledAdd === "handled" && !(await page.$(".add-overlay")), "add form open: Back closes it and the app stays");
   await tab(page, "Goals"); await wait(300);
   ok((await back(page)) === "handled" && (await page.evaluate(() => document.querySelectorAll(".tab-btn")[0].getAttribute("aria-current") === "page")), "on another tab: Back returns to Home");
   const r1 = await back(page); await wait(200);

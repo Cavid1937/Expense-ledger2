@@ -2979,6 +2979,8 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .seg-btn.on:active{background:var(--accent-fill)}
 .empty{animation:sectionIn 320ms ease-out both}   /* calm empty states: they ease in rather than appear */
 @media (prefers-reduced-motion:reduce){.seg-btn{transition:none}}
+.add-overlay.leaving{animation:addOut 220ms cubic-bezier(0.4,0,1,1) forwards;pointer-events:none}
+@keyframes addOut{from{transform:translateY(0);opacity:1}to{transform:translateY(100%);opacity:0.6}}
 .sheet-overlay.leaving{animation:dimOut 200ms ease-in forwards;pointer-events:none}
 .sheet-overlay.leaving .sheet{animation:sheetFall 200ms cubic-bezier(0.4,0,1,1) forwards}
 @keyframes dimOut{from{opacity:1}to{opacity:0}}
@@ -3459,6 +3461,7 @@ function AppInner() {
   const [goalsSeg, setGoalsSeg] = useState("budgets");
   const [goalsAdd, setGoalsAdd] = useState(0);
   const [showAdd,  setShowAdd]  = useState(false);
+  const [addLeaving, setAddLeaving] = useState(false), addTok=useRef(0);
   const [showSettings, setShowSettings] = useState(false);
   const [,setCatVer] = useState(0);   // Run 24: bumped when the user's own categories change, so every screen redraws with them
   const [toast,    setToast]    = useState(null);
@@ -3763,9 +3766,15 @@ function AppInner() {
 
   const openAdd=useCallback((prefillData=null,existingId=null)=>{
     if (existingId!==null && debtLinked(existingId)) { showToast(t("debt.linkedLocked"),5000); return; }
-    setPrefill(prefillData); setEditId(existingId); setShowAdd(true);
+    addTok.current++; setAddLeaving(false); setPrefill(prefillData); setEditId(existingId); setShowAdd(true);
   },[showToast]);
-  const closeAdd=useCallback(()=>{ setShowAdd(false); setPrefill(null); setEditId(null); },[]);
+  // Closing slides the form down for ~0.2 s, then removes it. A form opened again during that time is left alone (token check).
+  const closeAdd=useCallback(()=>{
+    const done=()=>{ setShowAdd(false); setPrefill(null); setEditId(null); setAddLeaving(false); };
+    if (typeof window!=="undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) { done(); return; }
+    const tok=++addTok.current; setAddLeaving(true);
+    setTimeout(()=>{ if (addTok.current===tok) done(); },200);
+  },[]);
 
   // Run 10: storage protection (asked once at start; again from Import / Export, where a tap counts as a user gesture) and
   // the browser's own "install" offer, kept for the Install button. Neither is stored in the ledger data.
@@ -4026,7 +4035,7 @@ function AppInner() {
           return a && <button className={`fab-add${fabHidden?" fab-hide":""}`} tabIndex={fabHidden?-1:undefined} aria-hidden={fabHidden||undefined} onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={26} color="var(--on-accent)"/></button>; })()}
 
         {showAdd&&(
-          <AddEditOverlay templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
+          <AddEditOverlay leaving={addLeaving} templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
             onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onClose={closeAdd}
             onOtherKind={k=>{ setDebtsStart(k); closeAdd(); switchTab("debts"); }}/>
         )}
@@ -4850,7 +4859,7 @@ function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedu
 }
 
 // Run 25 (owner decision): the in-app number pad is gone; the amount box opens the phone's own number keyboard (no space lost to a pad).
-function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose, onOtherKind }) {
+function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose, onOtherKind }) {
   // Run 12: which bill a recurring entry pays. Offered only when every recurring payment is already linked to a bill
   // (nothing inferred the old way); otherwise the entry is grouped as before, so it can't start a second copy of a bill
   // that is still inferred. "new" makes a bill from this entry; an id links to that bill.
@@ -4963,7 +4972,7 @@ function AddEditOverlay({ templates, currency, transactions, bills=[], prefill, 
   const title=isEditing?t("add.titleEdit"):t("add.titleNew");
 
   return (
-    <div className="add-overlay" role="dialog" aria-modal="true" aria-label={title}>
+    <div className={leaving?"add-overlay leaving":"add-overlay"} role="dialog" aria-modal="true" aria-label={title}>
       <div className="add-bar">
         <span className="add-title">{title}</span>
         <button className="add-close" onClick={requestClose} aria-label={t("common.close")}><Icon name="close" size={14}/></button>
