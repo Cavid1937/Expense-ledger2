@@ -125,7 +125,7 @@ section("R9-4. A rent paid as an ordinary expense is linked to the bill only whe
   const s0 = await safe();
   ok(/−800\.00/.test(s0.upcoming) && /\+1,400\.00/.test(s0.left), "before: this month's rent is still set aside (−800) although 800 was spent on 'Rent' — the double count the user can't see", s0);
   ok((await state(page)).transactions.find((t) => t.id === rentPaid.id).recurring === false, "nothing was linked automatically (same merchant and amount are not enough)");
-  await tab(page, "Ledger"); await page.evaluate((id) => [...document.querySelectorAll(".txn-row")].find((r) => /Today/.test(r.innerText) && /Rent/.test(r.innerText)).click(), rentPaid.id);
+  await tab(page, "Ledger"); await page.evaluate((id) => [...document.querySelectorAll(".txn-row")].find((r) => /Today/.test(r.closest(".txn-group")?.querySelector(".txn-date-hdr")?.innerText || "") && /Rent/.test(r.innerText)).click(), rentPaid.id);
   await page.waitForSelector(".sheet"); await wait(350);
   await clickText(page, ".sheet button", /payment of a recurring bill/i); await wait(300);
   const choices = await page.evaluate(() => [...document.querySelectorAll(".sheet .link-bill-option")].map((b) => b.innerText.replace(/\s+/g, " ")));

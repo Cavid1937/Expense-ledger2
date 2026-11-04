@@ -3174,7 +3174,12 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .bar,.budget-track,.goal-progress,.pace-track{height:12px;background:var(--surface-sunken);border:1px solid var(--rule);box-shadow:inset 0 1px 2px rgba(0,0,0,0.22);position:relative}
 .bar::after,.budget-track::after,.goal-progress::after,.pace-track::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(25% - 1px),color-mix(in srgb,var(--ink) 18%,transparent) calc(25% - 1px),color-mix(in srgb,var(--ink) 18%,transparent) 25%)}
 :root[data-fx="off"] :is(.bar,.budget-track,.goal-progress,.pace-track){box-shadow:none}
-.hero-amount .cur,.safe-amount .cur{font-size:.6em;font-weight:500;letter-spacing:0}
+.month-stat-val{font-weight:700}
+/* Run 25: a newly saved entry settles in: its row is tinted for a moment, then the tint fades (about 1.2 s, no movement). */
+@keyframes txn-settle{from{background:color-mix(in oklab,var(--accent) 22%,transparent)}to{background:transparent}}
+.txn-row.txn-fresh{animation:txn-settle 1200ms ease-out}
+@media (prefers-reduced-motion:reduce){.txn-row.txn-fresh{animation:none}}
+.hero-amount .cur,.safe-amount .cur,.month-stat-val .cur{font-size:.6em;font-weight:500;letter-spacing:0}
 /* Pressed rows change tone (a layer step), not shadow, so touch feedback stays cheap. */
 @media (hover:none){.txn-row:active,.setup-step:active{background:var(--surface-raised)}}
 .topbar,.tabbar{backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -3747,6 +3752,7 @@ function AppInner() {
     const before=stateRef.current;
     const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),...(accId(account)?{account:accId(account)}:{}),id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
     setState(next);
+    freshTxnId=id; setTimeout(()=>{ if (freshTxnId===id) freshTxnId=null; },1500);   // Run 25: the new row settles in (see TxnRow)
     const cross=budgetCrossing(before.transactions,next.transactions,next.budgets,{...data});
     const msg=cross ? t("toast.recorded")+". "+t(cross.kind==="over"?"budget.crossOver":"budget.crossNear",{ cat:catName(data.category), pct:cross.pct }) : t("toast.recorded");
     showSnackbar(msg,()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },6000,"add");
@@ -4582,7 +4588,7 @@ function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPress, co
               {dayTotal>0&&<span className="txn-date-total">{fmt(dayTotal,currency)}</span>}
             </div>
             <div className="txn-list">
-              {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact={compact}/>)}
+              {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact/>)}
             </div>
           </div>
         );
@@ -4591,6 +4597,7 @@ function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPress, co
   );
 }
 
+let freshTxnId=null;   // id of the entry saved a moment ago; its row plays the settle tint once
 function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, compact }) {
   const cat=CAT(txn.category);
   // Press and hold a row (about half a second) to start selecting several; the tap that follows the hold is ignored.
@@ -4609,7 +4616,7 @@ function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, compact 
     !compact?fmtDate(txn.date):null,
   ].filter(Boolean).join(" · ");
   return (
-    <div className="txn-row" onClick={()=>{ if (hold.current.fired) { hold.current.fired=false; return; } onView?.(txn); }} onPointerDown={holdStart} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerCancel={holdEnd} onPointerLeave={holdEnd} onContextMenu={onLongPress?e=>e.preventDefault():undefined} {...(onView ? { role:"button", tabIndex:0, onKeyDown:activateKey(()=>onView(txn)) } : {})}>
+    <div className={"txn-row"+(txn.id===freshTxnId?" txn-fresh":"")} onClick={()=>{ if (hold.current.fired) { hold.current.fired=false; return; } onView?.(txn); }} onPointerDown={holdStart} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerCancel={holdEnd} onPointerLeave={holdEnd} onContextMenu={onLongPress?e=>e.preventDefault():undefined} {...(onView ? { role:"button", tabIndex:0, onKeyDown:activateKey(()=>onView(txn)) } : {})}>
       <div className="txn-ico" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={txn.category} size={16} color={cat?.color}/></div>
       <div className="txn-body">
         <div className="txn-name">{displayName}</div>
@@ -6723,21 +6730,21 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
       {/* Summary stats */}
       <div className="month-stats" data-section="an-summary" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
         <div className="month-stat">
-          <div className="month-stat-val" style={{color:"var(--neg)"}}>{fmt(curExp,currency)}</div>
+          <div className="month-stat-val" style={{color:"var(--neg)"}}><MoneyText v={fmt(curExp,currency)}/></div>
           <div className="month-stat-lbl">{t("home.spent")}</div>
           {momDiff!==null&&<div className="month-cmp" style={{fontSize:11,color:momDiff<=0?"var(--pos)":"var(--neg)",fontWeight:600,marginTop:4}}>
             {momDiff<=0?"↓":"↑"} {cmpText(momDiff,cmpKind,currency)}
           </div>}
         </div>
         <div className="month-stat">
-          <div className="month-stat-val" style={{color:"var(--pos)"}}>{fmt(curInc,currency)}</div>
+          <div className="month-stat-val" style={{color:"var(--pos)"}}><MoneyText v={fmt(curInc,currency)}/></div>
           <div className="month-stat-lbl">{t("home.income")}</div>
           {curInc>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
             {fmtPct(Math.round(((curInc-curExp)/curInc)*100))} {t("surplus."+surplusLabel(curInc,curExp)).toLowerCase()}
           </div>}
         </div>
         <div className="month-stat" style={{gridColumn:"1 / -1"}}>
-          <div className="month-stat-val" style={{color:surplusColor(curInc,curExp)}}>{fmt(Math.abs(curInc-curExp),currency)}</div>
+          <div className="month-stat-val" style={{color:surplusColor(curInc,curExp)}}><MoneyText v={fmt(Math.abs(curInc-curExp),currency)}/></div>
           <div className="month-stat-lbl">{t("month.net."+(curInc>curExp?"Net surplus":curInc<curExp?"Net deficit":"Break-even"))}</div>
           {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
           {momDiff!==null&&cmpKind==="same"&&<div className="cmp-window" style={{fontSize:11,color:"var(--ink-3)",marginTop:2}}>{t("cmp.window",{d:cmpDays})}</div>}
