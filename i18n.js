@@ -862,6 +862,8 @@ export const MESSAGES = {
   "theme.title":     { en: "Colour theme", az: "Rəng temi", ru: "Цветовая тема" },
   "theme.changed":   { en: "Theme changed", az: "Tema dəyişdi", ru: "Тема изменена" },
   "theme.saveFailed": { en: "Could not save the theme choice on this device", az: "Tema seçimi bu cihazda saxlanıla bilmədi", ru: "Не удалось сохранить выбор темы на этом устройстве" },
+  "fx.title":        { en: "Reduce effects", az: "Effektləri azalt", ru: "Меньше эффектов" },
+  "fx.sub":          { en: "Turns off shadows and highlights. Layers stay visible through colour and edges.", az: "Kölgələri və işıqlanmanı söndürür. Qatlar rəng və kənarlar vasitəsilə görünməyə davam edir.", ru: "Отключает тени и подсветку. Слои остаются заметны по цвету и границам." },
   "theme.sea":       { en: "Sea glass", az: "Dəniz şüşəsi", ru: "Морское стекло" },
   "theme.nordic":    { en: "Nordic", az: "Şimal", ru: "Север" },
   "theme.mist":      { en: "Mist (light)", az: "Duman (açıq)", ru: "Дымка (светлая)" },

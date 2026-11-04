@@ -864,6 +864,13 @@ function applyTheme(id) {   // sets (or clears) the colour variables on the page
   const m=document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content",th.vars["--bg"]||th.swatch[0]);
 }
 if (typeof document!=="undefined") applyTheme(readTheme());
+
+// Run 25: "Reduce effects" - a plain preference (own key). Turns off shadows and highlights; tone and hairline edges stay, so layers remain readable.
+const FX_KEY=KEY+"__fx";
+function readFxOff() { try { return localStorage.getItem(FX_KEY)==="off"; } catch { return false; } }
+function writeFxOff(off) { try { if (off) localStorage.setItem(FX_KEY,"off"); else localStorage.removeItem(FX_KEY); return true; } catch { return false; } }
+function applyFx(off) { if (typeof document==="undefined" || !document.documentElement) return; if (off) document.documentElement.setAttribute("data-fx","off"); else document.documentElement.removeAttribute("data-fx"); }
+if (typeof document!=="undefined") applyFx(readFxOff());
 const PRIVACY_KEY=`${KEY}__privacy`;
 function readPrivacy() { try { return localStorage.getItem(PRIVACY_KEY)==="1"; } catch { return false; } }
 function writePrivacy(on) { try { if (on) localStorage.setItem(PRIVACY_KEY,"1"); else localStorage.removeItem(PRIVACY_KEY); return true; } catch { return false; } }
@@ -3141,6 +3148,28 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .privacy-toggle.on{color:var(--accent-text);background:var(--accent-light);border-radius:50%}
 .privacy-on .donut svg,.privacy-on .trend-card svg,.privacy-on .bar,.privacy-on .cat-bar-track,.privacy-on .budget-track,
 .privacy-on .goal-progress,.privacy-on .pace-track,.privacy-on .month-bars,.privacy-on .cal{filter:blur(6px)}
+/* Run 25: layers. Tone first, then a hairline edge; shadows only on things that float (sheet, menus, toasts, the + button).
+   Levels: 0 sunken (wells) - 1 page - 2 card - 3 raised - 4 floating. Everything is opaque on purpose: no blur behind numbers or lists. */
+:root{--sunken-mix:#000;--sunken-pct:32%;--raise-mix:var(--ink);--raise-pct:6%;--float-pct:11%;
+  --surface-sunken:color-mix(in oklab,var(--bg-card),var(--sunken-mix) var(--sunken-pct));
+  --surface-raised:color-mix(in oklab,var(--bg-card),var(--raise-mix) var(--raise-pct));
+  --surface-float:color-mix(in oklab,var(--bg-card),var(--raise-mix) var(--float-pct));
+  --lit-edge:inset 0 1px 0 color-mix(in srgb,var(--ink) 7%,transparent);
+  --shadow-card:0 0 0 0 transparent;
+  --shadow-float:0 12px 32px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3)}
+:root[data-theme="mist"]{--sunken-pct:5%;--raise-mix:#fff;--raise-pct:55%;--float-pct:85%;--lit-edge:0 0 0 0 transparent;
+  --shadow-card:0 1px 2px rgba(25,29,35,0.10);--shadow-float:0 12px 32px rgba(25,29,35,0.20),0 2px 8px rgba(25,29,35,0.12)}
+:root[data-fx="off"]{--lit-edge:0 0 0 0 transparent;--shadow-card:0 0 0 0 transparent;--shadow-float:0 0 0 0 transparent}
+.card,.safe-card,.a-card,.pace-card,.helper-card,.month-stat,.stat-cell,.goal-card{box-shadow:var(--lit-edge),var(--shadow-card)}
+.safe-card{background:var(--surface-raised)}
+.hero-stats{background:var(--surface-sunken)}
+.sheet,.snackbar,.toast,.merchant-suggestions{background:var(--surface-float);box-shadow:var(--shadow-float)}
+.fab-add{box-shadow:var(--shadow-float)}
+/* Pressed rows change tone (a layer step), not shadow, so touch feedback stays cheap. */
+@media (hover:none){.txn-row:active,.setup-step:active{background:var(--surface-raised)}}
+.topbar,.tabbar{backdrop-filter:none;-webkit-backdrop-filter:none}
+.topbar{background:var(--bg)}
+.tabbar{background:var(--bg-card)}
 /* Materials follow the user's preferences */
 @media (prefers-reduced-transparency: reduce){
   .topbar,.tabbar{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -5655,6 +5684,8 @@ function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendCh
   const { currency,safeToSpend={} }=state;
   const [curSym,      setCurSym]      = useState(currency);
   const [theme,       setTheme]       = useState(()=>readTheme());
+  const [fxOff,       setFxOff]       = useState(()=>readFxOff());
+  const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
 
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -5682,6 +5713,12 @@ function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendCh
               {t("theme."+id)}
             </button>
           ))}
+        </div>
+
+        {/* Run 25: Reduce effects - shadows and highlights off; layers stay readable through tone and edges */}
+        <div className="settings-row" style={{marginTop:6}}>
+          <div><div className="settings-row-title" id="set-fx-lbl">{t("fx.title")}</div><div className="settings-row-sub">{t("fx.sub")}</div></div>
+          <div className={`toggle-track${fxOff?" on":""}`} data-section="fx-toggle" onClick={toggleFx} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); toggleFx(); } }} role="switch" aria-checked={fxOff} aria-labelledby="set-fx-lbl" tabIndex={0}><div className="toggle-knob"/></div>
         </div>
 
         {/* Currency */}
