@@ -10,6 +10,12 @@ if (!cand || !fs.existsSync(cand)) { console.error(`build: CANDIDATE must name t
 // PAGE_OUT (optional) builds into another folder, so a second build cannot replace the page a running suite is using.
 const out = process.env.PAGE_OUT ? path.resolve(process.env.PAGE_OUT) : path.join(tools, "page"); fs.mkdirSync(out, { recursive: true });
 fs.copyFileSync(cand, path.join(out, "App.jsx"));
+// Run 25: the app's own font files (/fonts/*.woff2 in public/) are embedded into the COPY used by the tests, because the test page is opened from a
+// local file where "/fonts/..." would not resolve. The candidate itself is never modified.
+{ const fontDir = path.join(path.dirname(cand), "public", "fonts"), copy = path.join(out, "App.jsx");
+  let src = fs.readFileSync(copy, "utf8"), n = 0;
+  src = src.replace(/url\("\/fonts\/([^"]+\.woff2)"\)/g, (m, f) => { const p = path.join(fontDir, f); if (!fs.existsSync(p)) throw new Error("build: missing font file " + p); n++; return `url("data:font/woff2;base64,${fs.readFileSync(p).toString("base64")}")`; });
+  if (n) fs.writeFileSync(copy, src); }
 // Windows adaptation: the interface text lives in i18n.js next to the candidate (copied, never written).
 const i18nSrc = path.join(path.dirname(cand), "i18n.js"); if (fs.existsSync(i18nSrc)) fs.copyFileSync(i18nSrc, path.join(out, "i18n.js"));
 fs.writeFileSync(path.join(out, "entry.jsx"), `import { createRoot } from "react-dom/client";\nimport App from "./App.jsx";\ncreateRoot(document.getElementById("root")).render(<App/>);\n`);

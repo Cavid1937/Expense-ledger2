@@ -2533,6 +2533,11 @@ function CatIcon({ catId, size=16, color }) {
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
 const CSS = `
+/* Run 25: Onest (SIL OFL 1.1), self-hosted and saved offline by the service worker. Chosen because its Latin-extended file carries the
+   manat sign and every Azerbaijani letter and its Cyrillic file covers Russian (measured from the font files, not assumed). */
+@font-face{font-family:"Onest";font-style:normal;font-weight:100 900;font-display:swap;src:url("/fonts/onest-latin.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Onest";font-style:normal;font-weight:100 900;font-display:swap;src:url("/fonts/onest-latin-ext.woff2") format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Onest";font-style:normal;font-weight:100 900;font-display:swap;src:url("/fonts/onest-cyrillic.woff2") format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 button{font-family:inherit;cursor:pointer}
 /* "Caspian Ledger" dark design (Run 9, 2026-10-27; replaces the blue redesign of the same day). Surfaces: page #07151A,
@@ -2542,7 +2547,7 @@ button{font-family:inherit;cursor:pointer}
    warning #F0C46F, comparison #83B9F5. Every text colour is ≥ 5.5:1 on every surface. */
 :root{
   color-scheme:dark;
-  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font:"Onest",-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --bg:#07151A;--bg-card:#0E2229;--bg-warm:#153039;--bg-inset:#112A31;
   --ink:#F3F7F6;--ink-2:#D3DFDE;--ink-3:#A5B7B8;--ink-4:#93A7A8;--ink-5:#2A464E;
   --rule:#24414A;--rule-2:#36606A;
@@ -3165,6 +3170,10 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .hero-stats{background:var(--surface-sunken)}
 .sheet,.snackbar,.toast,.merchant-suggestions{background:var(--surface-float);box-shadow:var(--shadow-float)}
 .fab-add{box-shadow:var(--shadow-float)}
+/* Run 25 "vessel": budgets, goals and the spending pace fill like a measuring cup - a sunken well with quarter-mark ticks - instead of a hairline. */
+.bar,.budget-track,.goal-progress,.pace-track{height:12px;background:var(--surface-sunken);border:1px solid var(--rule);box-shadow:inset 0 1px 2px rgba(0,0,0,0.22);position:relative}
+.bar::after,.budget-track::after,.goal-progress::after,.pace-track::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(25% - 1px),color-mix(in srgb,var(--ink) 18%,transparent) calc(25% - 1px),color-mix(in srgb,var(--ink) 18%,transparent) 25%)}
+:root[data-fx="off"] :is(.bar,.budget-track,.goal-progress,.pace-track){box-shadow:none}
 /* Pressed rows change tone (a layer step), not shadow, so touch feedback stays cheap. */
 @media (hover:none){.txn-row:active,.setup-step:active{background:var(--surface-raised)}}
 .topbar,.tabbar{backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -4479,7 +4488,7 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
                 {safeInfo.futureCommitments>0?`−${fmt(safeInfo.futureCommitments,currency)}`:t("safe.noneThisMonth")}
               </span>
             </div>
-            <div className="safe-row" style={{borderBottom:"none",paddingTop:6,marginTop:2,borderTop:"1px solid var(--rule)"}}>
+            <div className="safe-row" style={{borderBottom:"none",paddingTop:8,marginTop:2,borderTop:"3px double var(--rule-2)"}}>
               <span className="safe-lbl" style={{fontWeight:700,color:"var(--ink)"}}>{t("safe.discretionary")}</span>
               <span className="safe-val" style={{color:safeInfo.remaining>=0?"var(--pos)":"var(--neg)",fontSize:13}}>
                 {safeInfo.remaining>=0?"+":""}{fmt(safeInfo.remaining,currency)}
