@@ -338,6 +338,7 @@ export const MESSAGES = {
   "add.moreDetails": { en: "More details", az: "Daha çox təfərrüat", ru: "Подробнее" },
   "add.lessDetails": { en: "Fewer details", az: "Daha az təfərrüat", ru: "Скрыть подробности" },
   "add.moreHint":    { en: "Merchant, note, date, wallet, repeat", az: "Satıcı, qeyd, tarix, ödəniş vasitəsi, təkrar", ru: "Продавец, заметка, дата, способ оплаты, повтор" },
+  "add.kindPrompt":  { en: "What do you want to record?", az: "Nəyi qeyd etmək istəyirsiniz?", ru: "Что вы хотите записать?" },
   "add.loan":        { en: "Loan", az: "Kredit", ru: "Кредит" },
   "add.debt":        { en: "Debt", az: "Borc", ru: "Долг" },
   "crash.title":  { en: "Something went wrong", az: "Gözlənilməz xəta baş verdi", ru: "Что-то пошло не так" },

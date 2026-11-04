@@ -2703,6 +2703,17 @@ input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-
 input[type=number]{-moz-appearance:textfield}
 /* Type toggle */
 .type-other-row{display:flex;flex-wrap:wrap;gap:8px;margin:-6px 0 14px}
+.type-picker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px}
+.type-picker.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.type-pick{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:64px;padding:10px 4px;border:1px solid var(--rule);border-radius:16px;background:var(--bg-card);color:var(--ink-2);font-family:var(--font);font-size:14px;font-weight:600;line-height:1.15;text-align:center;overflow-wrap:anywhere;cursor:pointer;transition:background 160ms,border-color 160ms,color 160ms,transform 120ms}
+.type-pick:active{transform:scale(0.96)}
+.type-pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.type-pick.active{background:var(--accent-light);border-color:var(--accent);color:var(--ink)}
+.type-pick.type-btn{background:var(--bg-card);color:var(--ink-2);flex:none;text-transform:none;letter-spacing:0;font-size:14px;padding:10px 4px;border:1px solid var(--rule);border-right:1px solid var(--rule)}
+.type-pick.type-btn.active{border-color:var(--accent);background:var(--accent-light);color:var(--ink)}
+.type-pick.type-btn:not(.active):hover{border-color:var(--rule-2)}
+.type-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+@media (prefers-reduced-motion:reduce){.type-pick{transition:none}.type-pick:active{transform:none}}
 .type-toggle{display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin-bottom:14px}
 .type-btn{flex:1;padding:9px;border:none;background:transparent;color:var(--ink-3);font-size:12px;font-weight:700;cursor:pointer;transition:background 120ms,color 120ms;font-family:var(--font);letter-spacing:0.3px;text-transform:uppercase}
 .type-btn:not(:last-child){border-right:1px solid var(--rule)}.type-btn.active{background:var(--accent-fill);color:var(--on-accent)}
@@ -5041,11 +5052,12 @@ function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], 
         <button className="add-close" onClick={requestClose} aria-label={t("common.close")}><Icon name="close" size={14}/></button>
       </div>
       <div className="add-body">
-        <div className="type-toggle">
-          <button className={`type-btn${type==="expense"?" active":""}`} aria-pressed={type==="expense"} onClick={()=>setType("expense")}>{t("add.expense")}</button>
-          <button className={`type-btn${type==="income"?" active":""}`} aria-pressed={type==="income"} onClick={()=>setType("income")}>{t("add.income")}</button>
+        {/* Run 25: the first choice is WHAT you are recording (expense, income, loan, debt), as four equal tiles; editing an entry offers only expense/income */}
+        <div className={`type-picker${!editId&&onOtherKind?"":" two"}`} role="group" aria-label={t("add.kindPrompt")} data-section="add-type-picker">
+          <button type="button" className={`type-pick type-btn${type==="expense"?" active":""}`} aria-pressed={type==="expense"} onClick={()=>setType("expense")}><span className="type-dot" style={{background:"var(--neg)"}} aria-hidden="true"/>{t("add.expense")}</button>
+          <button type="button" className={`type-pick type-btn${type==="income"?" active":""}`} aria-pressed={type==="income"} onClick={()=>setType("income")}><span className="type-dot" style={{background:"var(--pos)"}} aria-hidden="true"/>{t("add.income")}</button>
+          {!editId&&onOtherKind&&["loans","debts"].map(k=><button key={k} type="button" className="type-pick" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}><span className="type-dot" style={{background:k==="loans"?"var(--info)":"var(--warn)"}} aria-hidden="true"/>{t(k==="loans"?"add.loan":"add.debt")}</button>)}
         </div>
-        {!editId&&onOtherKind&&<div className="type-other-row">{["loans","debts"].map(k=><button key={k} type="button" className="btn btn-sm" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}>{t(k==="loans"?"add.loan":"add.debt")}</button>)}</div>}
         <div className="amount-zone" onClick={()=>amtRef.current?.focus()}>
           <div className="amount-line">
             <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off" autoFocus={!editId}

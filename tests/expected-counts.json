@@ -128,7 +128,8 @@
     "e2e_run24_edits.mjs": 10,
     "e2e_run24_hold.mjs": 5,
     "e2e_run25_terms.mjs": 15,
-    "e2e_run25_themes.mjs": 21
+    "e2e_run25_themes.mjs": 21,
+    "e2e_run25_typepicker.mjs": 14
   }
 }
 
