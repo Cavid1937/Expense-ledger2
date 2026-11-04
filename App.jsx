@@ -3174,6 +3174,7 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .bar,.budget-track,.goal-progress,.pace-track{height:12px;background:var(--surface-sunken);border:1px solid var(--rule);box-shadow:inset 0 1px 2px rgba(0,0,0,0.22);position:relative}
 .bar::after,.budget-track::after,.goal-progress::after,.pace-track::after{content:"";position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(90deg,transparent 0,transparent calc(25% - 1px),color-mix(in srgb,var(--ink) 18%,transparent) calc(25% - 1px),color-mix(in srgb,var(--ink) 18%,transparent) 25%)}
 :root[data-fx="off"] :is(.bar,.budget-track,.goal-progress,.pace-track){box-shadow:none}
+.hero-amount .cur,.safe-amount .cur{font-size:.6em;font-weight:500;letter-spacing:0}
 /* Pressed rows change tone (a layer step), not shadow, so touch feedback stays cheap. */
 @media (hover:none){.txn-row:active,.setup-step:active{background:var(--surface-raised)}}
 .topbar,.tabbar{backdrop-filter:none;-webkit-backdrop-filter:none}
@@ -4294,6 +4295,25 @@ function cmpText(diff, kind, currency) {
 const cmpTitle = (kind) => t(kind==="same" ? "cmp.titleSame" : "cmp.titleFull");
 const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevSame" : "cmp.prevFull", { amount:fmt(amount,currency) });
 
+// Run 25: the currency sign after a big figure is set smaller and lighter, so the number is the brand and the sign stays quiet.
+// The text is unchanged ("816.90 ₼"): the space and sign are the same characters, only wrapped.
+function MoneyText({ v }) { const i=typeof v==="string"?v.lastIndexOf(" "):-1; return i<0?v:<>{v.slice(0,i)}<span className="cur">{v.slice(i)}</span></>; }
+
+// Run 25: the empty-state picture - an open ledger page with ruled lines, a double rule and one accent mark. Drawn once, in the theme's own colours.
+function LedgerArt() {
+  const line=(y,w)=><line x1="26" y1={y} x2={26+w} y2={y} style={{stroke:"var(--rule-2)"}} strokeWidth="2" strokeLinecap="round"/>;
+  return (
+    <svg width="124" height="88" viewBox="0 0 124 88" fill="none" aria-hidden="true" focusable="false" style={{display:"block"}}>
+      <rect x="6" y="6" width="112" height="76" rx="12" style={{fill:"var(--bg-card)",stroke:"var(--rule-2)"}} strokeWidth="2"/>
+      <line x1="62" y1="12" x2="62" y2="76" style={{stroke:"var(--rule)"}} strokeWidth="2"/>
+      {line(26,24)}{line(40,32)}{line(54,20)}
+      <line x1="72" y1="62" x2="104" y2="62" style={{stroke:"var(--rule-2)"}} strokeWidth="1.5"/>
+      <line x1="72" y1="66" x2="104" y2="66" style={{stroke:"var(--rule-2)"}} strokeWidth="1.5"/>
+      <path d="M74 34l5 5 11-12" style={{stroke:"var(--accent)"}} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 function HomePage({ transactions, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
@@ -4320,7 +4340,7 @@ function HomePage({ transactions, latest=[], bills=[], budgets, templates, curre
       <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} currency={currency} now={now}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
-        <div className="hero-amount">{fmt(curExp,currency)}</div>
+        <div className="hero-amount"><MoneyText v={fmt(curExp,currency)}/></div>
         <div className="hero-sub">
           <span>{t("home.spentThisMonth")}</span>
           {momDiff!==null&&(
@@ -4434,7 +4454,7 @@ function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
             <Icon name="safe" size={12} color="var(--ink-3)"/>{t("safe.title")}
           </div>
           <div className="safe-amount" style={{color:safeInfo.remaining>=0?"var(--ink)":"var(--neg)"}}>
-            {fmt(safeInfo.remaining,currency)}
+            <MoneyText v={fmt(safeInfo.remaining,currency)}/>
           </div>
           {safeInfo.daysRemaining>0&&(
             <div className="safe-daily">
@@ -4536,7 +4556,7 @@ function HomeDetails({ hasTxns, onAdd, onOpenLedger, onInfo }) {
     </div>
   ):(
     <div className="empty section-enter section-enter-8" data-section="home-empty">
-      <div className="empty-icon"><Icon name="list" size={30}/></div>
+      <div className="empty-icon"><LedgerArt/></div>
       <div className="empty-title">{t("home.emptyTitle")}</div>
       <div className="empty-body">{t("home.emptyBody")}</div>
       <button className="btn btn-primary btn-full" style={{maxWidth:220,marginTop:4}} onClick={onAdd}>{t("home.emptyBtn")}</button>
@@ -4672,7 +4692,7 @@ function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onEdit, on
 
   if (transactions.length===0) return (
     <div className="empty">
-      <div className="empty-icon"><Icon name="list" size={30}/></div>
+      <div className="empty-icon"><LedgerArt/></div>
       <div className="empty-title">{t("ledger.emptyTitle")}</div>
       <div className="empty-body">{t("ledger.emptyBody")}</div>
       <button className="btn btn-primary btn-full" style={{maxWidth:220,marginTop:4}} onClick={onAdd}>{t("ledger.emptyBtn")}</button>

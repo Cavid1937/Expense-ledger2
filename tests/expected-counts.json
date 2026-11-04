@@ -132,7 +132,8 @@
     "e2e_run25_typepicker.mjs": 14,
     "e2e_run25_home.mjs": 4,
     "e2e_run25_layers.mjs": 26,
-    "e2e_run25_font.mjs": 13
+    "e2e_run25_font.mjs": 13,
+    "e2e_run25_identity.mjs": 6
   }
 }
 
