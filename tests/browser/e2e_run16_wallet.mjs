@@ -18,10 +18,10 @@ section("R16-B1. The add form offers four wallets; nothing is chosen the first t
   await record(page);
   let st = await state(page); ok(st.transactions[0].wallet === "cash" && st.transactions[0].amount === 12, "the new entry is saved with wallet cash", st.transactions[0]);
   ok(!("wallet" in st.transactions.find((t) => t.merchant === "Old shop")), "the older entry was not touched: it still has no wallet field");
-  await openAdd(page); c = await chips(page); ok(c[0][1] === "true", "the next new entry starts with Cash selected (the wallet used last)", c);
+  await openAdd(page); c = await chips(page); ok(c.every((x) => x[1] === "false"), "the next new entry starts with NO wallet chosen (Run 25: nothing is chosen for you)", c);
   await setAmount(page, "7"); await pick(page, 1); await record(page);
   st = await state(page); ok(st.transactions[0].wallet === "card", "choosing Bank card instead saves card", st.transactions[0].wallet);
-  await openAdd(page); await setAmount(page, "3"); await pick(page, 1); c = await chips(page); ok(c[1][1] === "false", "tapping the chosen wallet again clears it", c);
+  await openAdd(page); await setAmount(page, "3"); await pick(page, 1); await pick(page, 1); c = await chips(page); ok(c[1][1] === "false", "tapping the chosen wallet again clears it", c);
   await record(page); st = await state(page); ok(!("wallet" in st.transactions[0]), "a cleared wallet is not stored at all (no empty text)", st.transactions[0]);
   await page.close();
 }

@@ -4877,7 +4877,7 @@ function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], 
   const [recur,    setRecur]    = useState(prefill?.recurring||false);
   const [freq,     setFreq]     = useState(prefill?.recurFreq||"monthly");
   // Run 16: how it was paid. A new entry starts with the wallet used last (one tap fewer); editing keeps the entry's own.
-  const [wallet,   setWallet]   = useState(isEditing ? walletId(prefill?.wallet) : (prefill && "wallet" in prefill ? walletId(prefill.wallet) : lastWallet(transactions)));
+  const [wallet,   setWallet]   = useState(isEditing ? walletId(prefill?.wallet) : (prefill && "wallet" in prefill ? walletId(prefill.wallet) : ""));   // Run 25: a new entry never starts with a wallet chosen for you (it used to repeat the last one, unseen under "More details")
   // Run 22: optional trip / group name (free text; earlier names are suggested). Editing keeps the entry's own.
   const [trip, setTrip] = useState(tripName(prefill?.trip));
   const accData=useMemo(()=>readAccounts(),[]);   // Run 24: optional account (card, cash...) the entry belongs to
