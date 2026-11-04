@@ -2975,6 +2975,8 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .hero-stat-val{font-size:clamp(13px,3.9vw,16px);font-weight:700;letter-spacing:-0.2px}
 .hero-stat-lbl{font-size:11px;letter-spacing:0.2px;text-transform:none;color:var(--ink-3)}
 .hero-stat:not(:last-child)::after{background:var(--rule-2)}
+/* Run 25: with Safe to Spend on, that is the one big number on Home; this month's total steps down so two figures do not compete. */
+.hero.quiet .hero-amount{font-size:clamp(24px,7.5vw,30px);font-weight:600;letter-spacing:-.4px;margin-bottom:4px}
 .mom-badge{border-radius:999px;padding:3px 9px}
 /* Safe to Spend */
 .safe-card{padding:16px;margin-bottom:14px;background:var(--bg-card)}
@@ -4278,7 +4280,7 @@ function HomePage({ transactions, latest=[], bills=[], budgets, templates, curre
     <div>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
       <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} currency={currency} now={now}/>
-      <div className="hero card" data-section="home-month">
+      <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount">{fmt(curExp,currency)}</div>
         <div className="hero-sub">
@@ -4308,10 +4310,6 @@ function HomePage({ transactions, latest=[], bills=[], budgets, templates, curre
           </div>
         </div>
         <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
-        {curExp>0&&<div data-section="home-breakdown">
-          <div className="card-sub-title">{t("home.breakdown")}</div>
-          <SpendDonut catSpend={catSpend} total={curExp} currency={currency}/>
-        </div>}
       </div>
 
       {/* Due within 7 days */}
@@ -4344,6 +4342,12 @@ function HomePage({ transactions, latest=[], bills=[], budgets, templates, curre
           {latest.map(x=><TxnRow key={x.id} txn={x} currency={currency} onView={onView} compact/>)}
         </div>
       )}
+
+      {/* Run 25: the donut is long, so it follows the latest entries instead of pushing them off the first screen. */}
+      {curExp>0&&<div className="card section-enter section-enter-2" data-section="home-breakdown">
+        <div className="card-title" style={{marginBottom:8}}>{t("home.breakdown")}</div>
+        <SpendDonut catSpend={catSpend} total={curExp} currency={currency}/>
+      </div>}
 
       {/* Smart Helper — deterministic advice cards */}
       <div className="section-enter section-enter-2" data-section="home-coach">
