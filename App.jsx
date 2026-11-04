@@ -840,7 +840,7 @@ const THEMES={
   mist:{ swatch:["#DEDCDC","#57707A"], dark:false, vars:{
     "--bg":"#DEDCDC","--bg-card":"#EDEBEB","--bg-warm":"#D9D7D9","--bg-inset":"#E6E4E4","--ink":"#191D23","--ink-2":"#2D333B","--ink-3":"#4A525C","--ink-4":"#4B5661","--ink-5":"#B5B7BD",
     "--rule":"#C6C4C6","--rule-2":"#A9AAB0","--accent":"#3A535D","--accent-light":"#CFD9DE","--accent-mid":"#57707A","--accent-text":"#3A535D","--accent-fill":"#57707A","--on-accent":"#FFFFFF",
-    "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1F5E1C","--pos-bg":"#D5E6D1","--neg":"#A11F18","--neg-bg":"#F0D6D3","--warn":"#7A5200","--warn-bg":"#EBDDB9" } },
+    "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1B6B3A","--pos-bg":"#D5E6D1","--neg":"#A8360A","--neg-bg":"#F0D6D3","--warn":"#7A5200","--warn-bg":"#EBDDB9" } },
   dusk:{ swatch:["#0B132B","#D97706"], dark:true, vars:{ ...DARK_MEANING,
     "--bg":"#0B132B","--bg-card":"#1C2541","--bg-warm":"#26365A","--bg-inset":"#16203D","--ink":"#FBF1E3","--ink-2":"#EAD9C0","--ink-3":"#B7C3D9","--ink-4":"#A3B0C8","--ink-5":"#3A506B",
     "--rule":"#2C3A5E","--rule-2":"#46608A","--accent":"#F0A44B","--accent-light":"#38281A","--accent-mid":"#F4D6B0","--accent-text":"#F0A44B","--accent-fill":"#D97706","--on-accent":"#0B132B" } },
@@ -6275,7 +6275,7 @@ function MorePage({ language, profileName="", onLanguageChange, onProfileName, o
         <div className="list-sub" style={{marginTop:6}}>{t("lang.settingSub")}</div>
       </div>
       <div className="card more-id">
-        <span className="more-mark" aria-hidden="true"><Icon name="finance" size={22} color="var(--accent)"/></span>
+        <span className="more-mark" aria-hidden="true"><span style={{fontSize:24,fontWeight:700,color:"var(--accent)",lineHeight:1}}>₼</span></span>
         <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
       </div>
       <div className="card list-card">
@@ -6958,7 +6958,7 @@ function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[
       {/* A month without entries says so (the list of entries lives in Transactions) */}
       {monTxns.length===0&&(
         <div className="empty" style={{padding:"32px 0"}} data-section="an-empty">
-          <div className="empty-icon"><Icon name="calendar" size={28}/></div>
+          <div className="empty-icon"><LedgerArt/></div>
           <div className="empty-title">{t("month.emptyTitle")}</div>
           <div className="empty-body">{t("month.emptyBody",{month:monthName(selectedMon)})}</div>
         </div>

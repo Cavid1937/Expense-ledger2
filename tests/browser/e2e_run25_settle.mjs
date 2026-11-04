@@ -37,4 +37,13 @@ section("R25-S4. Analytics month figures use the quiet currency sign");
   ok(r.length === 3 && r.every(Boolean), "all three month figures set the sign smaller", r);
   await page.close();
 }
+section("R25-S5. Settings brand mark is the manat sign, not a dollar; empty Analytics shows the ledger picture");
+{
+  const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }) }); await tab(page, "Settings"); await settle(page); await wait(300);
+  const m = await page.evaluate(() => { const e = document.querySelector(".more-mark"); return e ? e.innerText.trim() : null; });
+  ok(m === "₼", "the Settings identity card carries ₼", m);
+  await tab(page, "Analytics"); await settle(page); await wait(300);
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="an-empty"] .empty-icon svg[aria-hidden="true"]')), "empty Analytics shows the decorative ledger picture");
+  await page.close();
+}
 await finish("e2e_run25_settle", browser);
