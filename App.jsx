@@ -502,6 +502,21 @@ function removeUserSubcat(map, catId, text) {
   if (rest.length) out[catId]=rest; else delete out[catId];
   return out;
 }
+// Run 25: renaming one of the user's own subcategories. Same rules as adding (length, no duplicate, not a built-in name); the position
+// in the list is kept. Entries that used the old name are renamed by renameSubcatInEntries (only that category's entries).
+function renameUserSubcat(map, catId, oldText, newText) {
+  const cat=CATEGORIES.find(c=>c.id===catId); if (!cat) return { map, edited:false, reason:"category" };
+  const mine=(map&&map[catId])||[], idx=mine.findIndex(x=>subKey(x)===subKey(oldText));
+  if (idx<0) return { map, edited:false, reason:"missing" };
+  const s=typeof newText==="string" ? newText.trim().replace(/\s+/g," ") : ""; if (!s) return { map, edited:false, reason:"empty" };
+  if (s.length>SUBCAT_LEN) return { map, edited:false, reason:"long" };
+  if ((cat.subs||[]).some(x=>subKey(x)===subKey(s)) || mine.some((x,i)=>i!==idx && subKey(x)===subKey(s))) return { map, edited:false, reason:"dup" };
+  const list=[...mine]; list[idx]=s;
+  return { map:{ ...map, [catId]:list }, edited:true, reason:"", name:s };
+}
+function renameSubcatInEntries(transactions, catId, oldText, newText) {
+  return (transactions||[]).map(x=> x && x.category===catId && typeof x.subcategory==="string" && subKey(x.subcategory)===subKey(oldText) ? { ...x, subcategory:newText } : x);
+}
 function mergeSubcats(a, b) { const out={}; const A=cleanSubcats(a), B=cleanSubcats(b); new Set([...Object.keys(A),...Object.keys(B)]).forEach(k=>{ out[k]=[...(A[k]||[]),...(B[k]||[])]; }); return cleanSubcats(out); }
 function readSubcats() { try { const r=localStorage.getItem(SUBCAT_KEY); return r ? cleanSubcats(JSON.parse(r)) : {}; } catch { return {}; } }
 function writeSubcats(map) {   // an empty list removes the key instead of keeping an empty shell
@@ -4037,6 +4052,7 @@ function AppInner() {
         {showAdd&&(
           <AddEditOverlay leaving={addLeaving} templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
             onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onClose={closeAdd}
+            onRenameSub={(cid,from,to)=>{ setState(s=>({...s,transactions:renameSubcatInEntries(s.transactions,cid,from,to)})); showToast(t("subcat.renamed")); }}
             onOtherKind={k=>{ setDebtsStart(k); closeAdd(); switchTab("debts"); }}/>
         )}
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
@@ -4859,7 +4875,7 @@ function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedu
 }
 
 // Run 25 (owner decision): the in-app number pad is gone; the amount box opens the phone's own number keyboard (no space lost to a pad).
-function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose, onOtherKind }) {
+function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose, onOtherKind, onRenameSub }) {
   // Run 12: which bill a recurring entry pays. Offered only when every recurring payment is already linked to a bill
   // (nothing inferred the old way); otherwise the entry is grouped as before, so it can't start a second copy of a bill
   // that is still inferred. "new" makes a bill from this entry; an id links to that bill.
@@ -4888,6 +4904,15 @@ function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], 
   const [newSub, setNewSub] = useState(null);   // null = closed; otherwise the text being typed
   const [subMsg, setSubMsg] = useState("");
   const saveMySubs=(m)=>{ setMySubs(m); if (!writeSubcats(m)) setSubMsg(t("subcat.saveFailed")); };
+  const [renSub, setRenSub] = useState(null);   // { from, text } while one of the user's own subcategories is being renamed
+  const renameMySub=()=>{
+    const r=renameUserSubcat(mySubs,catId,renSub.from,renSub.text);
+    if (!r.edited) { setSubMsg(t("subcat.err."+(r.reason==="missing"?"empty":r.reason))); return; }
+    if (!writeSubcats(r.map)) { setSubMsg(t("subcat.saveFailed")); return; }
+    setMySubs(r.map); if (subKey(subcat)===subKey(renSub.from)) setSubcat(r.name);
+    if (onRenameSub) onRenameSub(catId,renSub.from,r.name);
+    setRenSub(null); setSubMsg("");
+  };
   const addMySub=()=>{
     const r=addUserSubcat(mySubs,catId,newSub||"");
     if (!r.added) { setSubMsg(t("subcat.err."+r.reason)); return; }
@@ -5027,6 +5052,7 @@ function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], 
                 {(mySubs[catId]||[]).map(s=>(
                   <span key={"my-"+s} className="sub-chip-wrap" style={{display:"inline-flex",alignItems:"center",gap:2}}>
                     <button className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{s}</button>
+                    <button type="button" className="sub-chip-x" data-section="add-subcat-rename" aria-label={t("subcat.rename",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>{ setRenSub({ from:s, text:s }); setNewSub(null); setSubMsg(""); }}>✎</button>
                     <button type="button" className="sub-chip-x" aria-label={t("subcat.remove",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>saveMySubs(removeUserSubcat(mySubs,catId,s))}>×</button>
                   </span>
                 ))}
@@ -5034,6 +5060,13 @@ function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], 
                   <button key={s} className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{subName(s)}</button>
                 ))}
               </div>
+              {renSub&&(
+                <div style={{display:"flex",gap:7,marginTop:8}} data-section="add-subcat-rename-form">
+                  <input className="field-input" autoFocus aria-label={t("subcat.rename",{name:renSub.from})} maxLength={SUBCAT_LEN} value={renSub.text} onChange={e=>{ setRenSub({...renSub,text:e.target.value}); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); renameMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                  <button type="button" className="btn btn-sm btn-sm-primary" data-section="add-subcat-rename-save" onClick={renameMySub}>{t("common.save")}</button>
+                  <button type="button" className="btn btn-sm" onClick={()=>{ setRenSub(null); setSubMsg(""); }} aria-label={t("common.cancel")}>✕</button>
+                </div>
+              )}
               {newSub!==null&&(
                 <div style={{display:"flex",gap:7,marginTop:8}}>
                   <input className="field-input" autoFocus aria-label={t("subcat.mine")} placeholder={t("subcat.ph")} maxLength={SUBCAT_LEN} value={newSub} onChange={e=>{ setNewSub(e.target.value); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); addMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
@@ -5788,7 +5821,7 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
   const addDebt=()=>{
     const principal=toQ(dForm.amt,{positive:true}), name=dForm.name.trim();
     if (!name || principal===null || !isQapik(principal)) { setDMsg(t("debt.invalid")); return; }
-    save({ ...data, debts:[...data.debts,{ id:uid("d"), direction:dForm.dir, name, principal, dueDate:dForm.due, note:"", payments:[] }] });
+    if (save({ ...data, debts:[...data.debts,{ id:uid("d"), direction:dForm.dir, name, principal, dueDate:dForm.due, note:"", payments:[] }] })) showToast(t("debt.addedToast"));
     setDForm({ dir:"owe", name:"", amt:"", due:"" }); setDMsg(""); setShowDebt(false);
   };
   // Run 18 (owner decision "ask each time"): a repayment always reduces the debt; the user chooses whether it ALSO becomes a cash-flow entry
@@ -5833,13 +5866,19 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
     if (save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,name,principal,dueDate:dEdit.due||""}:x) })) { setDEdit(null); showToast(t("acc.edited")); }
   };
   const saveLoanEdit=()=>{
-    const lender=lEdit.lender.trim(); if (!lender) { showToast(t("loan.invalid")); return; }
-    if (save({ ...data, loans:data.loans.map(x=>x.id===lEdit.id?{...x,lender}:x) })) { setLEdit(null); showToast(t("acc.edited")); }
+    // Terms (amount, yearly rate, number of payments) can be changed too, but the new loan must still produce a valid schedule and
+    // cannot have fewer payments than were already marked paid. Recorded payments keep the amounts they were recorded with.
+    const old=data.loans.find(x=>x.id===lEdit.id); if (!old) { setLEdit(null); return; }
+    const lender=lEdit.lender.trim(), principal=toQ(lEdit.amt,{positive:true}), months=Number(lEdit.months);
+    const ratePct=old.rateType==="none" ? 0 : Number(String(lEdit.rate).replace(",","."));
+    const next={ ...old, lender, principal, months, ratePct };
+    if (!lender || principal===null || !isQapik(principal) || !Number.isInteger(months) || months<old.payments.length || (old.rateType!=="none" && (String(lEdit.rate).trim()==="" || !Number.isFinite(ratePct))) || loanSchedule(next)===null) { showToast(t("loan.invalid")); return; }
+    if (save({ ...data, loans:data.loans.map(x=>x.id===old.id?next:x) })) { setLEdit(null); showToast(t("acc.edited")); }
   };
   const delDebt=(d)=>{
     const linked=d.payments.filter(p=>p.txnId!==undefined);
     if (!window.confirm(t(linked.length?"debt.confirmDeleteLinked":"debt.confirmDelete"))) return;
-    if (save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) })) linked.forEach(p=>onRemoveEntry(p.txnId));
+    if (save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) })) { linked.forEach(p=>onRemoveEntry(p.txnId)); showToast(t("debt.removedToast")); }
   };
 
   const addLoan=()=>{
@@ -5847,7 +5886,7 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
     const rate=lForm.type==="none" ? 0 : Number(String(lForm.rate).replace(",","."));
     const loan={ id:uid("l"), lender:lForm.lender.trim(), kind:lForm.kind, principal, ratePct:rate, rateType:lForm.type, months, firstPayment:lForm.first, bankPayment:bank, payments:[] };
     if (!loan.lender || principal===null || (lForm.type!=="none" && lForm.rate.trim()==="") || (lForm.bank.trim()!=="" && bank===null) || loanSchedule(loan)===null) { setLMsg(t("loan.invalid")); return; }
-    save({ ...data, loans:[...data.loans,loan] });
+    if (save({ ...data, loans:[...data.loans,loan] })) showToast(t("loan.addedToast"));
     setLForm({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }); setLMsg(""); setShowLoan(false);
   };
   const markPaid=(l,sched)=>{
@@ -5864,9 +5903,9 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
   const delLoanPayment=(l,p)=>{
     if (!window.confirm(t("loan.confirmDeletePay"))) return;
     if (p.txnId!==undefined) onRemoveEntry(p.txnId);
-    save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:x.payments.filter(y=>y.id!==p.id)}:x) });
+    if (save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:x.payments.filter(y=>y.id!==p.id)}:x) })) showToast(t("loan.payRemovedToast"));
   };
-  const delLoan=(l)=>{ if (window.confirm(t("debt.confirmDelete"))) save({ ...data, loans:data.loans.filter(x=>x.id!==l.id) }); };
+  const delLoan=(l)=>{ if (window.confirm(t("debt.confirmDelete")) && save({ ...data, loans:data.loans.filter(x=>x.id!==l.id) })) showToast(t("loan.removedToast")); };
 
   const owe=data.debts.filter(d=>d.direction==="owe").reduce((s,d)=>s+debtRemaining(d),0), owed=data.debts.filter(d=>d.direction==="owed").reduce((s,d)=>s+debtRemaining(d),0);
   const loanLeft=data.loans.reduce((s,l)=>{ const sc=loanSchedule(l), k=l.payments.length; return s+(sc ? (k===0 ? l.principal : k>=sc.payments.length ? 0 : sc.payments[k-1].balance) : 0); },0);
@@ -6002,13 +6041,18 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
                 <div style={{minWidth:0}}><div className="goal-name">{maskText(l.lender)}</div><div className="list-sub">{t(LOAN_KIND_KEY[l.kind])} · {q(l.principal)}</div></div>
                 <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
-                  <button className="btn btn-sm" data-section="loan-edit" aria-label={t("common.edit")+": "+maskText(l.lender)} onClick={()=>setLEdit({ id:l.id, lender:l.lender })}>{t("common.edit")}</button>
+                  <button className="btn btn-sm" data-section="loan-edit" aria-label={t("common.edit")+": "+maskText(l.lender)} onClick={()=>setLEdit({ id:l.id, lender:l.lender, amt:(l.principal/100).toFixed(2), months:String(l.months), rate:String(l.ratePct) })}>{t("common.edit")}</button>
                   <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delLoan(l)} aria-label={t("debt.delete",{name:maskText(l.lender)})}><Icon name="trash" size={15}/></button>
                 </div>
               </div>
               {lEdit&&lEdit.id===l.id&&(
                 <div data-section="loan-edit-form" style={{marginTop:10}}>
                   <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-lender">{t("loan.lender")}</label><input id="loan-edit-lender" className="field-input" value={lEdit.lender} maxLength={60} onChange={e=>setLEdit({...lEdit,lender:e.target.value})}/></div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                    <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-edit-amt">{t("loan.amount")}</label><input id="loan-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={lEdit.amt} onChange={e=>setLEdit({...lEdit,amt:cleanMoneyText(e.target.value)})}/></div>
+                    <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-edit-months">{t("loan.months")}</label><input id="loan-edit-months" className="field-input" type="text" inputMode="numeric" autoComplete="off" value={lEdit.months} onChange={e=>setLEdit({...lEdit,months:e.target.value.replace(/[^0-9]/g,"")})}/></div>
+                  </div>
+                  {l.rateType!=="none"&&<div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-rate">{t("loan.rate")}</label><input id="loan-edit-rate" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={lEdit.rate} onChange={e=>setLEdit({...lEdit,rate:cleanMoneyText(e.target.value)})}/></div>}
                   <div style={{display:"flex",gap:8}}>
                     <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setLEdit(null)}>{t("common.cancel")}</button>
                     <button className="btn btn-primary" style={{flex:1}} data-section="loan-edit-save" onClick={saveLoanEdit}>{t("common.save")}</button>

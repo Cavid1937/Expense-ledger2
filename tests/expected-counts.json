@@ -54,6 +54,7 @@
     "run24patterns.test.mjs": 4,
     "run24accedit.test.mjs": 10,
     "run24catedit.test.mjs": 8,
+    "run25subrename.test.mjs": 13,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -124,7 +125,8 @@
     "e2e_run24_setfeel.mjs": 5,
     "e2e_run24_exit.mjs": 5,
     "e2e_run24_edits.mjs": 10,
-    "e2e_run24_hold.mjs": 5
+    "e2e_run24_hold.mjs": 5,
+    "e2e_run25_terms.mjs": 15
   }
 }
 
