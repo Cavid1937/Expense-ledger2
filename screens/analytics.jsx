@@ -152,22 +152,6 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
 
   return (
     <div onClick={()=>{setActiveBar(null);setCalDay(null);}}>
-      {/* Run 18: the all-time overview is the first thing on Analytics (it moved here from the bottom) */}
-        {transactions.length>0&&(()=>{
-          const totalInc=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
-          return (
-            <div className="a-card" data-section="an-overview">
-              <div className="a-card-title">{t("set.overview")}</div>
-              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
-                <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
-                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
-                  <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-
       {/* Month selector — the one month setting for everything above the Trends section */}
       <div className="month-selector" data-section="an-month">
         <button className="month-nav-btn" onClick={prevM} disabled={idx===allMonths.length-1} aria-label={t("month.prev")} style={{opacity:idx===allMonths.length-1?0.3:1}}>‹</button>
@@ -414,6 +398,22 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           <div className="empty-body">{t("month.emptyBody",{month:monthName(selectedMon)})}</div>
         </div>
       )}
+
+      {/* Run 27d: the all-time overview sits with the other not-month-specific part (Trends), below the selected month, so the page starts with the month the picker shows */}
+        {transactions.length>0&&(()=>{
+          const totalInc=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
+          return (
+            <div className="a-card" data-section="an-overview">
+              <div className="a-card-title">{t("set.overview")}</div>
+              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
+                <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
+                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
 
       {/* Trends — recent months up to today; not affected by the month selected above */}
       {hasTrends&&(<>

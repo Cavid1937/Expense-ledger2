@@ -716,4 +716,8 @@ html,.page,.sheet{scroll-behavior:smooth}
 .fold{margin-bottom:0}.fold-card{margin-bottom:10px}.fold-body{margin:-2px 0 10px;animation:fold-in 220ms ease-out}.fold-body>.card{margin-top:0}
 @keyframes fold-in{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.fold-body{animation:none}}[data-fx="off"] .fold-body{animation:none}
+/* Run 27d: Safe to Spend is the hero of Home (larger, accent-edged, with the month runway); the cards below stay quieter. */
+.safe-card{background:linear-gradient(165deg,color-mix(in srgb,var(--accent) 16%,var(--surface-raised)),var(--surface-raised) 62%);border-color:color-mix(in srgb,var(--accent) 38%,var(--rule));padding:18px 18px 14px}
+.safe-card .safe-amount{font-size:clamp(38px,12.5vw,50px);font-weight:800;letter-spacing:-1.5px;margin:6px 0 4px}
+.runway{display:flex;align-items:flex-end;gap:2px;height:16px;margin:12px 0 6px}.runway i{flex:1;height:7px;border-radius:2px;background:var(--rule-2);opacity:.55}.runway i.on{background:var(--accent);opacity:.9}.runway i.now{height:16px;background:var(--accent-text);opacity:1}
 `;
