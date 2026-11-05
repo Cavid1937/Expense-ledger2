@@ -100,7 +100,7 @@ for (const l of ["az", "ru"]) {
   // redesign: every tab, then the two pages under More
   for (const tb of ["ledger", "monthly", "goals", "more"]) { await page.evaluate((i) => document.querySelectorAll(".tab-btn")[i].click(), ["home", "ledger", "monthly", "goals", "more"].indexOf(tb)); await wait(250); await check(tb); }
   for (const sub of ["Recurring", "ImportExport"]) { await tab(page, sub); await wait(250); await check(sub); }
-  await openSettings(page); await check("Settings"); await page.evaluate(() => document.querySelector(".sheet-overlay").click()); await wait(300);
+  await openSettings(page); await check("Settings"); await wait(100);
   await openAdd(page); await check("Add form"); await page.evaluate(() => document.querySelector(".add-close").click()); await wait(200);
   ok(seen.length === 0, `${NAMES[l]}: no English interface text on Home, Ledger, Monthly, Recurring, Settings or the add form`, seen.slice(0, 15));
   const aria = await page.evaluate(() => [...document.querySelectorAll("[aria-label]")].map((e) => e.getAttribute("aria-label")));
@@ -155,7 +155,7 @@ for (const l of ["az", "en", "ru"]) for (const w of [320, 360, 390]) {
   }
   await openSettings(page); bad.push(...(await overflowing(page)).map((x) => "settings " + x));
   if (w === 320) await page.screenshot({ path: path.join(shots, `settings-320-${l}.png`) });
-  await page.evaluate(() => document.querySelector(".sheet-overlay").click()); await wait(300);
+  await wait(100);
   await openAdd(page); bad.push(...(await overflowing(page)).map((x) => "add " + x));
   if (w === 320) await page.screenshot({ path: path.join(shots, `add-320-${l}.png`) });
   const tabFit = await page.evaluate(() => [...document.querySelectorAll(".tab-lbl")].map((e) => ({ t: e.innerText, lines: Math.round(e.getBoundingClientRect().height / parseFloat(getComputedStyle(e).lineHeight || 12)) })));

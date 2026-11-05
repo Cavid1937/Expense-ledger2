@@ -1,5 +1,5 @@
 // UX + accessibility in the real UI: recurring schedules, sheet gestures, keyboard, touch targets, contrast, user preferences.
-import { openSafe, launch, openPage, state, toast, clickText, setInput, openSettings, openAdd, tab, wait, settle, ok, section, finish, tx, baseSeed, TODAY, daysAgo, ymd, bodyText } from "./lib.mjs";
+import { openSafe, launch, openPage, state, toast, clickText, setInput, openSettings, openHowSheet, openAdd, tab, wait, settle, ok, section, finish, tx, baseSeed, TODAY, daysAgo, ymd, bodyText } from "./lib.mjs";
 const browser = await launch();
 const now = new Date(), y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
 const dim = (yy, mm) => new Date(yy, mm + 1, 0).getDate();
@@ -36,13 +36,13 @@ await page.close();
 section("S2. Sheets: dismissal, gestures, focus");
 page = await openPage(browser);
 // Run 9: Settings opens from More → Settings; a keyboard user focuses that row and presses Enter.
-await tab(page, "More"); const settingsRow = '.more-page [data-more="prefs"]';
+await tab(page, "More"); const settingsRow = '.more-page [data-more="how"]';
 await page.focus(settingsRow); await page.keyboard.press("Enter"); await page.waitForSelector(".sheet"); await wait(350); await settle(page);
 ok(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains("sheet")), "opening a sheet moves focus into it");
 await page.keyboard.press("Escape"); await wait(300);
-ok(!(await page.$(".sheet")) && await page.evaluate(() => document.activeElement && document.activeElement.classList.contains("list-row") && /Preferences/.test(document.activeElement.innerText)), "Escape closes it and focus returns to the Preferences row that opened it");
-await openSettings(page); await page.evaluate(() => document.querySelector(".sheet-overlay").click()); await wait(300); ok(!(await page.$(".sheet")), "tapping the backdrop closes it");
-await openSettings(page);
+ok(!(await page.$(".sheet")) && await page.evaluate(() => document.activeElement && document.activeElement.classList.contains("list-row") && /How/i.test(document.activeElement.innerText)), "Escape closes it and focus returns to the Preferences row that opened it");
+await openHowSheet(page); await page.evaluate(() => document.querySelector(".sheet-overlay").click()); await wait(300); ok(!(await page.$(".sheet")), "tapping the backdrop closes it");
+await openHowSheet(page);
 // (2026-10-26: the failure now reports where focus went and after how many presses — same pass/fail rule as before)
 let escaped = false; for (let i = 0; i < 45; i++) { await page.keyboard.press("Tab"); const where = await page.evaluate(() => { const a = document.activeElement; return a.closest(".sheet") ? null : `${a.tagName}.${a.className} "${(a.getAttribute("aria-label") || a.textContent || "").trim().slice(0, 30)}"`; }); if (where) { escaped = `press ${i + 1}: ${where}`; break; } }
 ok(!escaped, "45 presses of Tab never leave the open sheet (focus stays inside)", escaped);
@@ -53,14 +53,14 @@ const sheetTop = () => page.evaluate(() => document.querySelector(".sheet") ? do
 const recordPointer = () => page.evaluate(() => { window.__ev = []; if (window.__evOn) return; window.__evOn = true;
   for (const t of ["pointerdown", "pointermove", "pointerup", "pointercancel", "lostpointercapture"]) document.addEventListener(t, (e) => window.__ev.push(`${t} y=${Math.round(e.clientY)} t=${Math.round(e.timeStamp)} on=${String(e.target.className || e.target.tagName).slice(0, 24)} sheet=${(document.querySelector(".sheet") || {}).style?.transform || "-"}`), true); });
 const pointerLog = () => page.evaluate(() => window.__ev);
-await openSettings(page); let g = await gripCenter(); await recordPointer();
+await openHowSheet(page); let g = await gripCenter(); await recordPointer();
 await page.mouse.move(g.x, g.y); await page.mouse.down(); for (let i = 1; i <= 8; i++) { await page.mouse.move(g.x, g.y + i * 55); await wait(12); } await page.mouse.up();
 // Test fix (Run 5): the dismiss spring advances at most 32 ms of simulated time per frame, so on a busy machine (slow frames)
 // it takes longer in real time; the recorded failure had the whole 440 px swipe and the release. Wait up to 3 s, not a fixed 900 ms.
 await page.waitForFunction(() => !document.querySelector(".sheet"), { timeout: 3000, polling: 50 }).catch(() => {});
 ok(!(await page.$(".sheet")), "a fast swipe down dismisses the sheet", { grip: g, events: await pointerLog() });
 if (await page.$(".sheet")) { await page.keyboard.press("Escape"); await wait(400); }   // keep the rest of the file independent of this result
-await openSettings(page); g = await gripCenter(); const top0 = await sheetTop();
+await openHowSheet(page); g = await gripCenter(); const top0 = await sheetTop();
 await page.mouse.move(g.x, g.y); await page.mouse.down();
 for (let i = 1; i <= 6; i++) { await page.mouse.move(g.x, g.y + i * 10); await wait(90); }
 const dragged = await sheetTop(); ok(Math.abs((dragged - top0) - 60) < 6, `the sheet follows the finger 1:1 (moved ${Math.round(dragged - top0)}px for a 60px drag)`);
@@ -81,7 +81,7 @@ page = await openPage(browser); await openAdd(page); await page.evaluate(() => d
 const sw = () => page.evaluate(() => document.querySelector('[role=switch][aria-label="Recurring"]').getAttribute("aria-checked"));
 await page.focus('[role=switch][aria-label="Recurring"]'); const before = await sw(); await page.keyboard.press("Space"); await wait(120); const afterSpace = await sw(); await page.keyboard.press("Enter"); await wait(120); const afterEnter = await sw();
 ok(before === "false" && afterSpace === "true" && afterEnter === "false", "the Recurring switch toggles with Space and Enter");
-await page.keyboard.press("Escape"); await wait(250); await openSettings(page);
+await page.keyboard.press("Escape"); await wait(250); await openHowSheet(page);
 const sws = () => page.evaluate(() => document.querySelector('[role=switch][aria-label="Safe to Spend"]').getAttribute("aria-checked"));
 await page.focus('[role=switch][aria-label="Safe to Spend"]'); const s0 = await sws(); await page.keyboard.press("Space"); await wait(150); const s1 = await sws();
 ok(s0 === "true" && s1 === "false" && (await state(page)).safeToSpend.enabled === false, "the Safe to Spend switch toggles with Space and the setting is saved");
@@ -130,7 +130,7 @@ await tab(page, "More"); counted += await collect("more"); await tab(page, "Impo
 await openAdd(page); counted += await collect("add form"); await page.keyboard.press("Escape"); await wait(250);
 await openSettings(page); counted += await collect("settings");
 // …then scroll the sheet in steps so the controls further down are measured too, each fully in view
-for (let i = 0; i < 12; i++) { const more = await page.evaluate(() => { const s = document.querySelector(".sheet"); const before = s.scrollTop; s.scrollTop += s.clientHeight * 0.6; return s.scrollTop > before; }); if (!more) break; await wait(80); counted += await collect("settings (scrolled)"); }
+for (let i = 0; i < 12; i++) { const more = await page.evaluate(() => { const before = scrollY; scrollBy(0, innerHeight * 0.6); return scrollY > before; }); if (!more) break; await wait(80); counted += await collect("settings (scrolled)"); }
 await page.keyboard.press("Escape"); await wait(250);
 ok(small.length === 0, `${counted} controls measured on 5 screens: every icon-only control is ≥44×44 and every text control ≥34 high`, small.slice(0, 12));
 await page.close();
@@ -175,7 +175,7 @@ section("S6. User preferences");
 page = await openPage(browser);
 const media = async (features) => { const c = await page.createCDPSession(); await c.send("Emulation.setEmulatedMedia", { features }); await wait(150); };
 await media([{ name: "prefers-reduced-motion", value: "reduce" }]);
-await openSettings(page); await wait(100);
+await openHowSheet(page); await wait(100);
 const dur = await page.evaluate(() => parseFloat(getComputedStyle(document.querySelector(".sheet")).animationDuration) || 0);
 ok(dur <= 0.01, `reduced motion: the sheet's entrance animation is effectively off (${dur}s)`);
 let g2 = await gripCenter(); await page.mouse.move(g2.x, g2.y); await page.mouse.down(); await page.mouse.move(g2.x, g2.y + 40); await wait(40); await page.mouse.up(); await wait(80);

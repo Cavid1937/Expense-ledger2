@@ -72,7 +72,7 @@ for (const lang of ["az", "ru"]) {
   await tabAt(page, 1); counted += await collect("ledger"); await tabAt(page, 3); counted += await collect("goals"); await tab(page, "Recurring"); counted += await collect("recurring");
   await openAdd(page); counted += await collect("add form"); await escape(page);
   await openSettings(page); counted += await collect("settings");
-  for (let i = 0; i < 12; i++) { const more = await page.evaluate(() => { const s = document.querySelector(".sheet"); const before = s.scrollTop; s.scrollTop += s.clientHeight * 0.6; return s.scrollTop > before; }); if (!more) break; await wait(80); counted += await collect("settings (scrolled)"); }
+  for (let i = 0; i < 12; i++) { const more = await page.evaluate(() => { const before = scrollY; scrollBy(0, innerHeight * 0.6); return scrollY > before; }); if (!more) break; await wait(80); counted += await collect("settings (scrolled)"); }
   await escape(page);
   ok(small.length === 0, `${lang}: ${counted} controls measured on 6 screens — icon-only ≥44×44, text controls ≥34 high, fields ≥36`, small.slice(0, 12));
   ok(page.errors.length === 0, `${lang}: no JavaScript errors`, page.errors[0]);

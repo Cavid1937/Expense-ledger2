@@ -17,9 +17,9 @@ section("R17-T1. The last tab is Settings and holds the profile and the language
   const langs = await page.evaluate(() => [...document.querySelectorAll('[data-section="st-language"] input[name="settings-language"]')].map((r) => [r.value, r.checked]));
   ok(langs.length === 3 && langs.find((x) => x[0] === "en")[1], "three language choices on the page, English selected", langs);
   await openSettings(page);
-  const sheet = await page.evaluate(() => ({ lang: !!document.querySelector(".sheet .lang-pill"), tpl: !!document.querySelector(".sheet #tpl-name") || /Quick-Add/i.test(document.querySelector(".sheet").innerText), over: /Overview/i.test(document.querySelector(".sheet").innerText), cur: !!document.querySelector(".sheet input[maxlength='3']"), sw: !!document.querySelector('.sheet [role="switch"]'), floor: /savings floor/i.test(document.querySelector(".sheet").innerText) }));
-  ok(!sheet.lang && !sheet.tpl && !sheet.over, "the Preferences sheet no longer holds language, templates or the overview", sheet);
-  ok(sheet.cur && sheet.sw, "it keeps the currency and the Safe to Spend switch", sheet);
+  const sheet = await page.evaluate(() => ({ gone: !document.querySelector(".sheet"), tpl: !!document.querySelector("#tpl-name") || /Quick-Add/i.test(document.querySelector(".more-page").innerText), over: /Overview/i.test(document.querySelector(".more-page").innerText), cur: !!document.querySelector(".more-page input[maxlength='3']"), sw: !!document.querySelector('.more-page [role="switch"]'), floor: /savings floor/i.test(document.querySelector(".more-page").innerText) }));
+  ok(sheet.gone && !sheet.tpl && !sheet.over, "no Preferences sheet any more, and the Settings page does not hold templates or the overview", sheet);
+  ok(sheet.cur && sheet.sw, "the currency and the Safe to Spend switch are on the Settings page itself", sheet);
   await page.close();
 }
 section("R17-T2. Language change from the page");

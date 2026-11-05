@@ -63,7 +63,9 @@ for (const lang of ["en", "az", "ru"]) {
   await visit(page, `${lang} Goals`, async () => { await page.evaluate(() => document.querySelectorAll(".goals-page .seg-btn")[1].click()); });
   await visit(page, `${lang} More`, async () => { await goTab(page, 4); await page.waitForSelector(".more-page"); });
   if (lang === "en") {
-    for (const id of ["accounts", "recurring", "debts", "io", "lock", "safe", "privacy", "prefs", "how"]) {
+    // Run 27b: Accounts and Preferences are open on the Settings page itself; each part of it is visited by scrolling to it.
+for (const sec of ["my-accounts", "my-categories", "st-money-options", "st-look"]) await visit(page, `${lang} Settings-${sec}`, async () => { await goTab(page, 4); await wait(250); await page.evaluate((s) => document.querySelector(`[data-section="${s}"]`).scrollIntoView({ block: "start" }), sec); await wait(400); });
+for (const id of ["recurring", "debts", "io", "lock", "safe", "privacy", "how"]) {
       await visit(page, `${lang} More-${id}`, async () => { await goTab(page, 4); await wait(250); await click(page, `.more-page [data-more="${id}"]`); await wait(600); });
       await page.keyboard.press("Escape"); await wait(200);
       await page.evaluate(() => { const o = document.querySelector(".sheet-overlay"); if (o) o.click(); }); await wait(350);

@@ -43,7 +43,7 @@ const leaks = (txt) => { const out = []; for (const n of SECRET.names) if (txt.i
   const money = txt.match(/(?<![×\d.,])\d[\d,]*\.\d{2}/g); if (money) out.push(...new Set(money)); const pct = txt.match(/\d+\s?%/g); if (pct) out.push(...new Set(pct)); return out; };
 const eyeBtn = (page) => page.$(".topbar .privacy-toggle");
 const togglePrivacy = async (page) => { await (await eyeBtn(page)).click(); await wait(250); };
-const goSettings = async (page) => { await tab(page, "More"); await page.evaluate(() => document.querySelector('.more-page [data-more="prefs"]').click()); await page.waitForSelector(".sheet"); await wait(350); };
+const goSettings = async (page) => { await tab(page, "More"); await wait(300); };
 const closeSheet = async (page) => { await page.evaluate(() => { const o = document.querySelectorAll(".sheet-overlay"); o[o.length - 1]?.click(); }); await wait(350); };
 
 section("R9-2. Header: no Settings gear anywhere; the + matches the screen");
@@ -69,7 +69,7 @@ section("R9-2. Header: no Settings gear anywhere; the + matches the screen");
   await (await page.$(".fab-add")).click(); await wait(300);
   ok(!!(await page.$(".goals-page .new-budget select")) && !!(await page.$(".goals-page .new-budget input")), "on the Budgets segment '+' opens a 'new budget' form (category + monthly limit)");
   await goSettings(page);
-  ok(!!(await page.$('.sheet[aria-label="Preferences"]')), "Settings opens from More → Settings");
+  ok(!!(await page.$('.more-page [data-section="my-accounts"]')) && !(await page.$(".sheet")), "Settings opens from the Settings tab with accounts open → Settings");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }

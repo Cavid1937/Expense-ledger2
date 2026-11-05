@@ -58,7 +58,7 @@ async function screens(page, label, problems) {
   await escape(page);
   if (await page.$(".discard-overlay")) { await page.evaluate(() => document.querySelector(".discard-overlay .discard-keep").click()); await escape(page); }
   await openSettings(page); note("settings", await page.evaluate(measure));
-  for (let k = 0; k < 10; k++) { const more = await page.evaluate(() => { const s = document.querySelector(".sheet"); const b = s.scrollTop; s.scrollTop += s.clientHeight * 0.6; return s.scrollTop > b; }); if (!more) break; await wait(80); note("settings (scrolled)", await page.evaluate(measure)); }
+  for (let k = 0; k < 10; k++) { const more = await page.evaluate(() => { const b = scrollY; scrollBy(0, innerHeight * 0.6); return scrollY > b; }); if (!more) break; await wait(80); note("settings (scrolled)", await page.evaluate(measure)); }
   await escape(page);
 }
 

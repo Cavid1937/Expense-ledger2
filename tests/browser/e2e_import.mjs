@@ -127,7 +127,7 @@ await openSettings(page);
 const cur2 = () => [...document.querySelectorAll(".settings-row")].find((r) => /Currency symbol/i.test(r.textContent)).querySelector("input");
 for (let i = 0; i < 3; i++) { await setInput(page, cur2, ""); await page.evaluate(() => [...document.querySelectorAll(".settings-row")].find((r) => /Currency symbol/i.test(r.textContent)).querySelector(".btn-sm-primary").click()); await wait(120); }
 ok((await banner()).some((t) => /unreadable records set aside/.test(t)), "…and it is still there after several toasts (nothing can replace it)");
-await page.evaluate(() => document.querySelector(".sheet-overlay").click()); await wait(300);
+await wait(100);
 await page.evaluate(() => [...document.querySelectorAll(".backup-banner")].find((b) => /unreadable/.test(b.innerText)).querySelector(".backup-dismiss").click()); await wait(200);
 ok(!(await banner()).some((t) => /unreadable/.test(t)), "dismissing it removes it");
 ok((await storageKeys(page)).some((k) => k.startsWith(KEY + "__rejected_")), "the set-aside records remain recoverable in storage");

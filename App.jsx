@@ -6,7 +6,7 @@ import { HomePage } from "./screens/home.jsx";
 import { LedgerPage, TxnDetailSheet, TxnRow } from "./screens/ledger.jsx";
 import { AddEditOverlay, BillSheet } from "./screens/add.jsx";
 import { RecurringHub } from "./screens/recurring.jsx";
-import { ImportExportPage, InfoSheet, LanguageChooser, MorePage, SettingsSheet } from "./screens/settings.jsx";
+import { ImportExportPage, InfoSheet, LanguageChooser, MorePage } from "./screens/settings.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
@@ -2711,8 +2711,8 @@ function AppInner() {
   const [goalsAdd, setGoalsAdd] = useState(0);
   const [showAdd,  setShowAdd]  = useState(false);
   const [addLeaving, setAddLeaving] = useState(false), addTok=useRef(0);
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsFocus, setSettingsFocus] = useState("");
+  const [moreScroll, setMoreScroll] = useState("");   // Run 27b: section the Settings tab should glide to when opened from Home
+  
   const [,setCatVer] = useState(0);   // Run 24: bumped when the user's own categories change, so every screen redraws with them
   const [toast,    setToast]    = useState(null);
   const [snackbar, setSnackbar] = useState(null);
@@ -3247,7 +3247,7 @@ function AppInner() {
         </header>
 
         <main className={SUBPAGE_PARENT[tab]?"page page-sub":"page"} key={tabKey}>
-          {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>{ setSettingsFocus("accounts"); setShowSettings(true); }} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+          {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>{ setMoreScroll("my-accounts"); switchTab("more"); }} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
@@ -3261,7 +3261,7 @@ function AppInner() {
             onDeleteTemplate={id=>setState(s=>({...s,templates:s.templates.filter(t=>t.id!==id)}))}
             onUpdateTemplate={(id,patch)=>setState(s=>({...s,templates:s.templates.map(x=>x.id===id?{...x,...patch}:x)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
-          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} onSettings={(f)=>{ setSettingsFocus(f||""); setShowSettings(true); }} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
+          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
@@ -3298,12 +3298,7 @@ function AppInner() {
         <ConfirmHost/>
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
         {showLock&&<LockSheet onClose={()=>setShowLock(false)} showToast={showToast}/>}
-        {showSettings&&(
-          <SettingsSheet focus={settingsFocus} state={state} onCatsChanged={()=>setCatVer(v=>v+1)}
-            onCurrencyChange={c=>setState(s=>({...s,currency:c}))}
-            onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}
-            onClose={()=>setShowSettings(false)} showToast={showToast}/>
-        )}
+        
         {importPending&&(
           <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setImportPending(null)}>
             <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("import.dialogLabel")}>

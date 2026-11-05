@@ -10,8 +10,8 @@ section("R26-M1. Accounts row on Settings; three accounts from quick-start chips
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page);
   await tab(page, "More"); await wait(200);
-  const row = await page.evaluate(() => { const r = [...document.querySelectorAll(".more-page .list-row")].find((x) => /Accounts/i.test(x.innerText)); if (r) r.click(); return !!r; });
-  ok(row, "the Settings tab has an Accounts row");
+  const row = await page.evaluate(() => !!document.querySelector('.more-page [data-section="my-accounts"]') && !document.querySelector('.more-page [data-more="accounts"]'));
+  ok(row, "the Settings tab shows Accounts open on the page (no Accounts row to open first)");
   await page.waitForSelector('[data-section="my-accounts"]'); await wait(900);
   for (const k of ["cash", "card", "wallet"]) { await click(page, `[data-preset="${k}"]`); await wait(120); await click(page, '[data-section="acc-add"]'); await wait(300); }
   const s = await store(page);
@@ -62,7 +62,7 @@ section("R26-M4. Home shows the accounts as a row of cards (designed in Figma); 
   const h = await page.evaluate(() => Math.min(...[...document.querySelectorAll("[data-acc-card]")].map((e) => e.getBoundingClientRect().height)));
   ok(h >= 44, "each card is a tappable button at least 44 high", h);
   await click(page, '[data-section="home-accounts-manage"]'); await wait(900);
-  ok(await page.evaluate(() => !!document.querySelector(".sheet") && !!document.querySelector('[data-section="my-accounts"]')), "Manage opens Preferences at the accounts section");
+  ok(await page.evaluate(() => !document.querySelector(".sheet") && !!document.querySelector(".more-page") && !!document.querySelector('[data-section="my-accounts"]')), "Manage opens the Settings page at the accounts section");
   await page.close();
   const p2 = await openPage(browser, { seed: baseSeed({ language: "en" }), fresh: true }); await settle(p2); await wait(400);
   ok(await p2.evaluate(() => !document.querySelector('[data-section="home-accounts"]')), "without accounts Home shows no accounts block");

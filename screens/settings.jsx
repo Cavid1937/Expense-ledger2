@@ -203,53 +203,22 @@ export function MyAccounts({ state, currency, showToast }) {
   );
 }
 
-export function SettingsSheet({ focus="", state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
+// Run 27b: Preferences is no longer a sheet behind a row. Its contents sit directly on the Settings tab, in two parts:
+// MoneySettings (accounts, categories, Safe to Spend switch, currency) and LookSettings (colour theme, reduce effects).
+export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast }) {
   const { currency,safeToSpend={} }=state;
-  // Opened from the Accounts row: after the sheet has risen, glide down to the Accounts section (never a jump).
-  useEffect(()=>{
-    if (focus!=="accounts") return;
-    const id=setTimeout(()=>{ const el=document.querySelector('[data-section="my-accounts"]'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:"smooth", block:"start" }); },340);
-    return ()=>clearTimeout(id);
-  },[focus]);
-  const [curSym,      setCurSym]      = useState(currency);
-  const [theme,       setTheme]       = useState(()=>readTheme());
-  const [fxOff,       setFxOff]       = useState(()=>readFxOff());
-  const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
-
+  const [curSym, setCurSym]=useState(currency);
   return (
-    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("set.preferences")}>
-        <div className="sheet-grip"><div className="sheet-handle"/></div>
-        <div className="sheet-title">{t("set.preferences")}</div>
-
+    <>
+      <MyAccounts state={state} currency={state.currency} showToast={showToast}/>
+      <MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/>
+      <div className="card st-card" data-section="st-money-options">
         {/* Safe to Spend: the switch only. The monthly savings floor is on Goals. */}
-        <div className="settings-section-lbl" style={{marginTop:6}}>{t("safe.title")}</div>
+        <div className="settings-section-lbl" style={{marginTop:0}}>{t("safe.title")}</div>
         <div className="settings-row">
           <div><div className="settings-row-title" id="set-safe-lbl">{t("set.safeEnable")}</div><div className="settings-row-sub">{t("set.safeEnableSub")}</div></div>
           <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-label={t("safe.title")} tabIndex={0}><div className="toggle-knob"/></div>
         </div>
-
-        <MyAccounts state={state} currency={state.currency} showToast={showToast}/>
-        <MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/>
-
-        {/* Colour theme (Run 25): palettes supplied by the owner; a plain preference, separate from the ledger */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("theme.title")}</div>
-        <div className="filter-bar" role="radiogroup" aria-label={t("theme.title")} data-section="theme-chips" style={{flexWrap:"wrap"}}>
-          {THEME_IDS.map(id=>(
-            <button key={id} role="radio" aria-checked={theme===id} data-theme-id={id} className={`chip${theme===id?" on":""}`} style={{display:"inline-flex",alignItems:"center",gap:7}}
-              onClick={()=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; } applyTheme(id); setTheme(id); showToast(t("theme.changed")); }}>
-              <span aria-hidden="true" style={{display:"inline-block",width:16,height:16,borderRadius:"50%",background:`linear-gradient(135deg,${THEMES[id].swatch[0]} 50%,${THEMES[id].swatch[1]} 50%)`,border:"1px solid var(--rule-2)"}}/>
-              {t("theme."+id)}
-            </button>
-          ))}
-        </div>
-
-        {/* Run 25: Reduce effects - shadows and highlights off; layers stay readable through tone and edges */}
-        <div className="settings-row" style={{marginTop:6}}>
-          <div><div className="settings-row-title" id="set-fx-lbl">{t("fx.title")}</div><div className="settings-row-sub">{t("fx.sub")}</div></div>
-          <div className={`toggle-track${fxOff?" on":""}`} data-section="fx-toggle" onClick={toggleFx} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); toggleFx(); } }} role="switch" aria-checked={fxOff} aria-labelledby="set-fx-lbl" tabIndex={0}><div className="toggle-knob"/></div>
-        </div>
-
         {/* Currency */}
         <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
         {/* Run 24: common currencies are one tap, so nobody has to find the symbol on the keyboard; the box below still takes any other symbol. */}
@@ -265,14 +234,36 @@ export function SettingsSheet({ focus="", state, onCatsChanged, onCurrencyChange
             <button className="btn btn-sm btn-sm-primary" onClick={()=>{if(!curSym.trim()){showToast(t("set.currencyEmpty"));return;} onCurrencyChange(curSym.trim());showToast(t("set.currencyUpdated"));}}>{t("common.save")}</button>
           </div>
         </div>
+      </div>
+    </>
+  );
+}
 
-        <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose} style={{marginTop:18}}>{t("common.close")}</button>
+export function LookSettings({ showToast }) {
+  const [theme, setTheme]=useState(()=>readTheme());
+  const [fxOff, setFxOff]=useState(()=>readFxOff());
+  const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
+  return (
+    <div className="card st-card" data-section="st-look">
+      {/* Colour theme (Run 25): palettes supplied by the owner; a plain preference, separate from the ledger */}
+      <div className="settings-section-lbl" style={{marginTop:0}}>{t("theme.title")}</div>
+      <div className="filter-bar" role="radiogroup" aria-label={t("theme.title")} data-section="theme-chips" style={{flexWrap:"wrap"}}>
+        {THEME_IDS.map(id=>(
+          <button key={id} role="radio" aria-checked={theme===id} data-theme-id={id} className={`chip${theme===id?" on":""}`} style={{display:"inline-flex",alignItems:"center",gap:7}}
+            onClick={()=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; } applyTheme(id); setTheme(id); showToast(t("theme.changed")); }}>
+            <span aria-hidden="true" style={{display:"inline-block",width:16,height:16,borderRadius:"50%",background:`linear-gradient(135deg,${THEMES[id].swatch[0]} 50%,${THEMES[id].swatch[1]} 50%)`,border:"1px solid var(--rule-2)"}}/>
+            {t("theme."+id)}
+          </button>
+        ))}
+      </div>
+      {/* Run 25: Reduce effects - shadows and highlights off; layers stay readable through tone and edges */}
+      <div className="settings-row" style={{marginTop:6}}>
+        <div><div className="settings-row-title" id="set-fx-lbl">{t("fx.title")}</div><div className="settings-row-sub">{t("fx.sub")}</div></div>
+        <div className={`toggle-track${fxOff?" on":""}`} data-section="fx-toggle" onClick={toggleFx} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); toggleFx(); } }} role="switch" aria-checked={fxOff} aria-labelledby="set-fx-lbl" tabIndex={0}><div className="toggle-knob"/></div>
       </div>
     </div>
   );
 }
-
-// Goals: the monthly savings floor used by Safe to Spend. Shown only while Safe to Spend is switched on.
 export function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToast }) {
   const [savingsT,setSavingsT]=useState(String(safeToSpend.savingsTarget||0));
   if (!safeToSpend.enabled) return null;
@@ -395,8 +386,10 @@ export function InfoSheet({ kind, onClose }) {
   );
 }
 
-export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onSettings, onInfo, onLock, version }) {
+export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, scrollTo="", onScrolled }) {
   const [name,setName]=useState(profileName);
+  // Opened from Home (Accounts > Manage): glide down to that section once the page has settled (never a jump).
+  useEffect(()=>{ if (!scrollTo) return; const id=setTimeout(()=>{ const el=document.querySelector(`[data-section="${scrollTo}"]`); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:"smooth", block:"start" }); if (onScrolled) onScrolled(); },340); return ()=>clearTimeout(id); },[scrollTo]);
   return (
     <div className="more-page">
       {/* Run 17: this tab is Settings. Profile name (used in the Home greeting) and the interface language are set here. */}
@@ -425,9 +418,10 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
       </div>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
+      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>
+      <LookSettings showToast={showToast}/>
       <div className="card list-card" data-section="more-money">
-        {/* Run 26: the list is grouped (Money / Data and safety / App) and every row has a name for tests and links; order inside the old flat list no longer matters */}
-        <ListRow id="accounts" icon="wallet" title={t("acc.title")} sub={t("more.accountsSub")} onClick={()=>onSettings("accounts")}/>
+        {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
         <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
         <ListRow id="debts" icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
       </div>
@@ -440,7 +434,6 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       </div>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupApp")}</div>
       <div className="card list-card" data-section="more-app">
-        <ListRow id="prefs" icon="settings" title={t("set.preferences")} sub={t("more.settingsSub")} onClick={()=>onSettings()}/>
         <ListRow id="how" icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
       </div>
       {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}

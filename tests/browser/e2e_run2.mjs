@@ -4,7 +4,7 @@
 //  R2-C  a Ledger search that matches nothing shows "No results" (was: a crash, a variable hid the translation function)
 //  R2-D  the phone's Back button closes the open sheet, then returns to Home, and only then leaves the app
 //  R2-E  swiping left/right on a page moves between the five sections
-import { launch, openPage, openSettings, tab, wait, ok, section, finish, tx, baseSeed, ymd, setInput } from "./lib.mjs";
+import { launch, openPage, openSettings, openHowSheet, tab, wait, ok, section, finish, tx, baseSeed, ymd, setInput } from "./lib.mjs";
 const browser = await launch();
 const now = new Date();
 const day = (k) => ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() - k));
@@ -69,10 +69,10 @@ section("R2-D. The phone's Back button");
 page = await phone(longList);
 const back = async () => { await page.evaluate(() => history.back()); await wait(500); };
 const inApp = () => page.evaluate(() => !!document.querySelector(".tabbar"));
-await openSettings(page);   // Run 9: Settings opens from More
-ok(await page.$(".sheet"), "Settings is open (precondition)");
+await openHowSheet(page);   // Run 27b: Preferences is no longer a sheet; "How it works" is the sheet used for the Back-button check
+ok(await page.$(".sheet"), "a sheet is open (precondition)");
 await back();
-ok(!(await page.$(".sheet")) && await inApp(), "Back closes the Settings sheet and stays in the app");
+ok(!(await page.$(".sheet")) && await inApp(), "Back closes the sheet and stays in the app");
 await tab(page, "Ledger"); await wait(300);
 await page.evaluate(() => document.querySelector(".cat-filter-btn").click()); await wait(500);
 await back();
