@@ -3218,7 +3218,7 @@ html,.page,.sheet{scroll-behavior:smooth}
 .io-backup .io-status{order:-1;padding:3px 10px;border:1px solid currentColor;border-radius:99px;font-size:11px}
 .io-backup>div{width:100%}
 .month-nav-btn,.add-close,.chip{position:relative}
-.month-nav-btn::after,.add-close::after{content:"";position:absolute;inset:-6px}
+.month-nav-btn::after{content:"";position:absolute;inset:-6px}
 .chip::after{content:"";position:absolute;inset:-6px -2px}
 .section-title{display:flex;align-items:center;gap:10px}
 .section-title::after{content:"";flex:1;height:1px;background:var(--rule)}
