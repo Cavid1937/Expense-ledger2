@@ -63,10 +63,16 @@ ok((await state(page)).goals.length === 1, "goal saved −1 → rejected");
 await setInput(page, F("^Saved so far"), "50"); await clickIn(page, saveG); await wait(250);
 const g2 = (await state(page)).goals; ok(g2.length === 2 && g2[1].target === 1000 && g2[1].saved === 50 && g2[1].monthlyTarget === 100, "valid goal → saved with exact values");
 const upd = () => [...document.querySelectorAll(".goals-page .btn-sm")].find((b) => /^Update$/.test(b.textContent.trim()));
-page.dialogAnswer = "abc"; await clickIn(page, upd);
-ok(/not a valid amount/i.test(await toast(page)) && (await state(page)).goals[0].saved === 3200, "prompt 'abc' → rejected, saved amount stays 3200");
-page.dialogAnswer = "-500"; await clickIn(page, upd); await wait(200); ok((await state(page)).goals[0].saved === 3200, "prompt −500 → rejected");
-page.dialogAnswer = "1e3"; await clickIn(page, upd); await wait(200); ok((await state(page)).goals[0].saved === 3200, "prompt 1e3 (scientific) → rejected");
-page.dialogAnswer = "4500"; await clickIn(page, upd); await wait(250); ok((await state(page)).goals[0].saved === 4500, "prompt 4500 → saved");
+// Run 26: the amount is typed in a row that opens inside the goal card (no browser pop-up). The box filters letters while typing, so the
+// invalid cases are checked by setting the value directly (as pasted text would arrive) and pressing Save.
+const putUpd = (v) => page.evaluate((v) => { const el = document.querySelector('[data-section="goal-update-input"]'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); }, v);
+const saveUpd = async () => { await page.evaluate(() => document.querySelector('[data-section="goal-update-save"]').click()); await wait(200); };
+await clickIn(page, upd); await wait(150);
+ok(await page.evaluate(() => !!document.querySelector('[data-section="goal-update-row"]')), "Update opens an amount row inside the card (no pop-up)");
+await putUpd("abc"); await saveUpd();
+ok(/not a valid amount/i.test(await toast(page)) && (await state(page)).goals[0].saved === 3200, "'abc' → rejected, saved amount stays 3200");
+await putUpd("-500"); await saveUpd(); ok((await state(page)).goals[0].saved === 3200, "−500 → rejected");
+await putUpd("1e3"); await saveUpd(); ok((await state(page)).goals[0].saved === 3200, "1e3 (scientific) → rejected");
+await putUpd("4500"); await saveUpd(); await wait(100); ok((await state(page)).goals[0].saved === 4500 && await page.evaluate(() => !document.querySelector('[data-section="goal-update-row"]')), "4500 → saved and the row closes");
 ok(page.errors.length === 0, "no JavaScript errors during the whole run" + (page.errors.length ? ": " + page.errors[0] : ""));
 await finish("e2e", browser);

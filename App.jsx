@@ -2502,6 +2502,7 @@ const ICONS = {
   arrowDown:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`,
   pace:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   goal:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
+  card:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 10h19M6 15h4"/></svg>`,
   wallet:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 015.5 5H19v14H5.5A2.5 2.5 0 013 16.5z"/><path d="M19 9h-4a2 2 0 000 4h4"/><circle cx="15.5" cy="11" r=".6" fill="currentColor"/></svg>`,
   safe:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`,
   merchant:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18"/><path d="M4 10V20h16V10"/><path d="M2 10l2-7h16l2 7"/><path d="M2 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M9 20v-5h6v5"/></svg>`,
@@ -3186,6 +3187,15 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 /* Run 26: movement that explains itself. Scrolling glides instead of jumping; forms ease open where they belong; cards rise in once
    when a screen opens (CSS animations only run on insertion, never on a re-render); presses give a small, quick squeeze. */
 html,.page,.sheet{scroll-behavior:smooth}
+.acc-strip{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 2px 4px;scrollbar-width:none}
+.acc-strip::-webkit-scrollbar{display:none}
+.acc-card{flex:0 0 150px;min-height:96px;scroll-snap-align:start;display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:14px;text-align:left;font:inherit;color:var(--ink);background:var(--surface-raised);border:1px solid var(--rule);border-radius:16px;cursor:pointer;transition:transform 90ms,background-color 120ms;-webkit-tap-highlight-color:transparent}
+.acc-card:active{transform:scale(0.97)}
+.acc-ico{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--accent-light);border:1px solid var(--accent)}
+.acc-name{font-size:13px;color:var(--ink-3);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-bal{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+.acc-bal .cur{font-size:.65em;font-weight:500}
+@media (prefers-reduced-motion:reduce){.acc-card{transition:none}.acc-card:active{transform:none}}
 @keyframes revealIn{from{opacity:0;transform:translateY(-10px) scale(0.985)}to{opacity:1;transform:none}}
 .reveal{animation:revealIn 320ms cubic-bezier(0.22,1,0.36,1);transform-origin:top center}
 @keyframes rowRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
@@ -4119,7 +4129,7 @@ function AppInner() {
         </header>
 
         <main className={SUBPAGE_PARENT[tab]?"page page-sub":"page"} key={tabKey}>
-          {tab==="home"      && <HomePage transactions={spendTxns} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+          {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>{ setSettingsFocus("accounts"); setShowSettings(true); }} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
@@ -4336,7 +4346,32 @@ function LedgerArt() {
   );
 }
 
-function HomePage({ transactions, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo }) {
+// Run 26 (designed in Figma, frame "Home - Accounts strip"): balances of the person's own accounts as a row of cards, shown only when
+// at least one visible account exists. Balances are derived (opening + entries + transfers), the same numbers as in Settings.
+function HomeAccounts({ transactions, currency, onManage }) {
+  const data=readAccounts(), shown=data.accounts.filter(a=>!a.hidden);
+  if (!shown.length) return null;
+  const bal=accountBalances(data,transactions);
+  const kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
+  const kindIcon={ cash:"finance", card:"card", wallet:"wallet", bank:"safe", other:"list" };
+  const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
+  return (
+    <div className="section-enter section-enter-1" data-section="home-accounts" style={{marginBottom:14}}>
+      <div className="card-head" style={{padding:"0 2px",marginBottom:8}}><span className="card-title">{t("acc.homeTitle")}</span><button className="btn btn-sm" data-section="home-accounts-manage" onClick={onManage}>{t("acc.manage")}</button></div>
+      <div className="acc-strip">
+        {shown.map(a=>(
+          <button key={a.id} className="acc-card" data-acc-card={a.id} onClick={onManage} aria-label={a.name+", "+kindName[a.kind]+", "+fmt(bal[a.id]||0,currency)}>
+            <span className="acc-ico" aria-hidden="true"><Icon name={kindIcon[a.kind]||"list"} size={16} color="var(--accent)"/></span>
+            <span className="acc-name">{a.name}</span>
+            <span className="acc-bal"><MoneyText v={fmt(bal[a.id]||0,currency)}/></span>
+          </button>
+        ))}
+      </div>
+      {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</div>}
+    </div>
+  );
+}
+function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -4391,6 +4426,8 @@ function HomePage({ transactions, latest=[], bills=[], budgets, templates, curre
         </div>
         <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
       </div>
+
+      <HomeAccounts transactions={accountTxns||transactions} currency={currency} onManage={onAccounts}/>
 
       {/* Due within 7 days */}
       {upcomingSchedules.length>0&&(
@@ -6405,6 +6442,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
   const setSeg=onSeg;
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
   const [showNewGoal,setShowNewGoal]=useState(false);
+  const [updGoal,setUpdGoal]=useState(null);   // Run 26: the saved amount is changed inline (null = closed; otherwise { id, val }), not in the browser's own pop-up
   // "New budget" form opened by the title bar's "+" on the Budgets half: pick a category without a limit, type the limit.
   const [newBudget,setNewBudget]=useState(null);   // null = closed; otherwise { catId, val }
   const seenSignal=useRef(addSignal);
@@ -6557,14 +6595,19 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
                   </div>
                 </div>
                 <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"55%"}}>
-                  <button className="btn btn-sm" onClick={()=>{
-                    const newSaved=prompt(t("set.updatePrompt",{name:goal.name}),goal.saved||0);
-                    if (newSaved!==null) { const v=formMoney(newSaved); if (v===null) showToast(t("set.updateInvalid")); else onUpdateGoal(goal.id,{saved:v}); }
-                  }}>{t("set.update")}</button>
+                  <button className="btn btn-sm" data-section="goal-update" aria-expanded={updGoal&&updGoal.id===goal.id} onClick={()=>setUpdGoal(u=>u&&u.id===goal.id?null:{ id:goal.id, val:String(goal.saved||0) })}>{t("set.update")}</button>
                   <button className="btn btn-sm" data-section="goal-edit" aria-label={t("common.edit")+": "+maskText(goal.name)} onClick={()=>startEditGoal(goal)}>{t("common.edit")}</button>
                   <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>
                 </div>
               </div>
+              {updGoal&&updGoal.id===goal.id&&(
+                <div className="reveal" data-section="goal-update-row" style={{display:"flex",gap:7,marginTop:10}}>
+                  <input className="field-input" type="text" inputMode="decimal" autoComplete="off" data-section="goal-update-input" aria-label={t("set.updatePrompt",{name:maskText(goal.name)})} value={updGoal.val} autoFocus onChange={e=>setUpdGoal({...updGoal,val:cleanMoneyText(e.target.value)})}
+                    onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); const v=formMoney(updGoal.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } } else if (e.key==="Escape") setUpdGoal(null); }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                  <button className="btn btn-sm btn-sm-primary" data-section="goal-update-save" onClick={()=>{ const v=formMoney(updGoal.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } }}>{t("common.save")}</button>
+                  <button className="btn btn-sm" onClick={()=>setUpdGoal(null)} aria-label={t("common.cancel")}>✕</button>
+                </div>
+              )}
               <div className="bud-bar-row" style={{marginTop:12}}>
                 <div className="bar"><div className="bar-fill" style={{width:`${pct}%`,background:"var(--accent)"}}/></div>
                 <span className="bud-pct">{fmtPct(Math.round(pct))}</span>

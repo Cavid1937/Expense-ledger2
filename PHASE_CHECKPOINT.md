@@ -429,3 +429,18 @@ Added: bill calendar .ics export, bank-statement CSV layouts, custom categories,
 - Motion pass: existing 320 ms sheets/spring dismiss/fades/reduced-motion judged sufficient; NOT built: sheet exit animation, sideways sub-screen slides. Real-phone look unverified.
 - Owner could not reproduce-describe "cannot add names": add worked on live at phone size; rename was the gap (now fixed).
 - Next: Home feel pass, Terms of use (needs owner details), Forgot-PIN backup prompt, App.jsx split.
+
+- 2 Nov: app-wide feel pass LIVE (sheet exit animation on backdrop/Close/Cancel/Escape/Back/swipe, sub-pages slide in, no-bounce switches, pill presses). Gate 53 logic 1160/1160, 66 browser 1104/1104. Lesson: a transform on .page itself made documentElement scroll width grow mid-animation (e2e_lang caught it); animate children inside an overflow-x:hidden page instead.
+
+## Run 25 UX waves (4-5 Nov 2026)
+- LIVE on main: d652764, e4d7737, 5057bd7, 0e0daea, 63fefcd (quiet currency sign, ledger picture), e2d27d1 (new-entry settle tint, no repeated date in grouped rows, quiet sign in Analytics month figures).
+- Evidence: gate58 (clean-room, 5 Nov 00:21): logic 56 files 1198 checks, browser 76 files 1210 checks, 0 failed/missing/standby, az audit 0. IMPLEMENTED BUT UNVERIFIED on a real phone.
+- Next: polish Goals/Settings spacing, colour-blind review, native az/ru review of fx strings, real-phone check.
+- LIVE bcfe08d (5 Nov 01:16 gate59: logic 1200, browser 1212, 0 failed/standby): Mist theme income/expense colours separable under simulated colour blindness (deuteranopia dE 15->32), manat mark on Settings card, ledger picture on empty Analytics. Dark themes unchanged on purpose (mint income was rejected earlier as too close to the teal accent; dark deuteranopia gap stays ~14, signs +/- always shown).
+
+## Run 26 (5 Nov 2026) - accounts discoverable, goal edit in place, motion
+- Commit e73b0f5: new account type 'Mobile wallet', quick-start chips (Cash / Bank card / Mobile wallet / Savings), 'Accounts' row in the Settings tab (opens Preferences and glides to Accounts). Accounts were already addable (up to 30; e2e_run24_accounts adds 2) - the problem was discoverability + no wallet type.
+- Goal Edit: form replaces the goal card in place (was: instant window.scrollTo(0,0)), eases in (revealIn 320 ms), smooth scroll, no jump. html/.page/.sheet scroll-behavior:smooth. Cards rise on screen open (40 ms stagger). Button press squeeze.
+- Tests: logic 56 files / 1200 checks pass; new e2e_run26_motion.mjs (13 checks) pass; e2e_run16_info updated (nine rows). Full gate60 pending at time of writing.
+- Figma: file niJNGDYGUTcihmIXyracwn 'Motion spec' page holds the written motion spec. Live-page capture via Playwright hung (30 min) - screens NOT captured. Figma gives no 'opinion'; it is a design tool.
+- Still unverified: feel on a real phone.

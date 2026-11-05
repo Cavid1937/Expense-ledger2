@@ -51,4 +51,21 @@ section("R26-M3. Reduced motion: no ease-in");
   ok(await page.evaluate(() => getComputedStyle(document.querySelector('[data-section="goal-form"]')).animationName === "none"), "with reduced motion the form appears without animation");
   await page.close();
 }
+section("R26-M4. Home shows the accounts as a row of cards (designed in Figma); none shown without accounts");
+{
+  const accs = { version: 1, accounts: [{ id: "a_cash01", name: "Cash", kind: "cash", opening: { amount: 120, date: "" }, hidden: false }, { id: "a_wall01", name: "Mobile wallet", kind: "wallet", opening: { amount: 60, date: "" }, hidden: false }, { id: "a_old001", name: "Old", kind: "bank", opening: { amount: 5, date: "" }, hidden: true }], transfers: [] };
+  const page = await openPage(browser, { seed: baseSeed({ language: "en" }), pre: () => { try { if (!sessionStorage.getItem("__a")) { sessionStorage.setItem("__a", "1"); localStorage.setItem("expense_ledger_v5__accounts", JSON.stringify({ version: 1, accounts: [{ id: "a_cash01", name: "Cash", kind: "cash", opening: { amount: 120, date: "" }, hidden: false }, { id: "a_wall01", name: "Mobile wallet", kind: "wallet", opening: { amount: 60, date: "" }, hidden: false }, { id: "a_old001", name: "Old", kind: "bank", opening: { amount: 5, date: "" }, hidden: true }], transfers: [] })); } } catch {} } });
+  await settle(page); await wait(500);
+  const r = await page.evaluate(() => ({ cards: [...document.querySelectorAll("[data-acc-card]")].map((e) => e.innerText.replace(/\s+/g, " ")), total: (document.querySelector('[data-section="home-accounts"]') || {}).innerText || "" }));
+  ok(r.cards.length === 2 && /Cash/.test(r.cards[0]) && /120\.00/.test(r.cards[0]) && /Mobile wallet/.test(r.cards[1]), "two visible accounts shown as cards with their balances (the hidden one is not)", r.cards);
+  ok(/180\.00/.test(r.total), "the total of the shown accounts is 180.00", r.total);
+  const h = await page.evaluate(() => Math.min(...[...document.querySelectorAll("[data-acc-card]")].map((e) => e.getBoundingClientRect().height)));
+  ok(h >= 44, "each card is a tappable button at least 44 high", h);
+  await click(page, '[data-section="home-accounts-manage"]'); await wait(900);
+  ok(await page.evaluate(() => !!document.querySelector(".sheet") && !!document.querySelector('[data-section="my-accounts"]')), "Manage opens Preferences at the accounts section");
+  await page.close();
+  const p2 = await openPage(browser, { seed: baseSeed({ language: "en" }), fresh: true }); await settle(p2); await wait(400);
+  ok(await p2.evaluate(() => !document.querySelector('[data-section="home-accounts"]')), "without accounts Home shows no accounts block");
+  await p2.close();
+}
 await finish("e2e_run26_motion", browser);

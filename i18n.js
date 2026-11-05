@@ -600,6 +600,8 @@ export const MESSAGES = {
   "acc.kind.card":  { en: "Card", az: "Kart", ru: "Карта" },
   "acc.kind.wallet": { en: "Mobile wallet", az: "Mobil pul kisəsi", ru: "Мобильный кошелёк" },
   "acc.kind.bank":  { en: "Bank account", az: "Bank hesabı", ru: "Банковский счёт" },
+  "acc.homeTitle": { en: "Accounts", az: "Hesablar", ru: "Счета" },
+  "acc.manage": { en: "Manage", az: "İdarə et", ru: "Управлять" },
   "acc.preset.cash":    { en: "Cash", az: "Nağd pul", ru: "Наличные" },
   "acc.preset.card":    { en: "Bank card", az: "Bank kartı", ru: "Банковская карта" },
   "acc.preset.wallet":  { en: "Mobile wallet", az: "Mobil pul kisəsi", ru: "Мобильный кошелёк" },
