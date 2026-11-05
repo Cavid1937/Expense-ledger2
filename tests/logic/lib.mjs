@@ -3,8 +3,9 @@
 if (!process.env.HARNESS || !process.env.CANDIDATE) { console.error("logic tests: run them through tests/run-logic.mjs (HARNESS and CANDIDATE must be set)"); process.exit(2); }
 export const H = await import(process.env.HARNESS);
 import fs from "fs";
+import { readSource } from "../source.mjs";
 export const KEY = "expense_ledger_v5";
-export const SRC = fs.readFileSync(process.env.CANDIDATE, "utf8");
+export const SRC = readSource(process.env.CANDIDATE);   // Run 27: App.jsx plus screens/*.jsx
 let fails = 0, passes = 0;
 export const ok = (c, msg, extra) => { console.log((c ? "  ✓ " : "  ✗ ") + msg); if (c) passes++; else { fails++; if (extra !== undefined) console.log("      ↳", typeof extra === "string" ? extra : JSON.stringify(extra)); } };
 export const section = (t) => console.log("\n" + t);

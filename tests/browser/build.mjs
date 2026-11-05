@@ -13,7 +13,8 @@ fs.copyFileSync(cand, path.join(out, "App.jsx"));
 // Run 25: the app's own font files (/fonts/*.woff2 in public/) are embedded into the COPY used by the tests, because the test page is opened from a
 // local file where "/fonts/..." would not resolve. The candidate itself is never modified.
 // Run 27: the stylesheet moved from App.jsx to styles.js (next to it); it is copied and embedded the same way.
-const stylesSrc = path.join(path.dirname(cand), "styles.js"); if (fs.existsSync(stylesSrc)) fs.copyFileSync(stylesSrc, path.join(out, "styles.js"));
+{ const scr = path.join(path.dirname(cand), "screens"); if (fs.existsSync(scr)) fs.cpSync(scr, path.join(out, "screens"), { recursive: true }); }   // Run 27: the screens beside App.jsx
+const stylesSrc =path.join(path.dirname(cand), "styles.js"); if (fs.existsSync(stylesSrc)) fs.copyFileSync(stylesSrc, path.join(out, "styles.js"));
 { const fontDir = path.join(path.dirname(cand), "public", "fonts");
   let total = 0;
   for (const name of ["App.jsx", "styles.js"]) {

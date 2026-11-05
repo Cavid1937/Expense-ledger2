@@ -8,7 +8,8 @@ if (!cand || !out) { console.error("usage: node tests/harness.mjs <candidate.jsx
 const src = fs.readFileSync(cand, "utf8").replace(/\r\n/g, "\n");
 const marker = "// ─── SVG icon system";
 if (src.split(marker).length !== 2) { console.error("SVG marker not found exactly once"); process.exit(1); }
-const data = src.split(marker)[0].replace(/^import .*$/gm, "");
+// Run 27: declarations above the marker may carry "export" so screens/*.jsx can import them; the logic bundle exports its own list below.
+const data = src.split(marker)[0].replace(/^import .*$/gm, "").replace(/^export (?=async |function|const|let|class)/gm, "");
 const grab = (name) => { const a = src.indexOf("function " + name + "("); if (a < 0) return ""; return src.slice(a, src.indexOf("\n}\n", a) + 3); };
 let extra = "";
 for (const nm of ["calcHelperCards", "nextDueDate"]) if (!data.includes("function " + nm + "(")) extra += grab(nm) + "\n";

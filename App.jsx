@@ -1,6 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, useRef, Fragment, Component } from "react";
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
 import { CSS } from "./styles.js";
+import { LockGate, LockSheet } from "./screens/lock.jsx";
+import { HomePage } from "./screens/home.jsx";
+import { LedgerPage, TxnDetailSheet, TxnRow } from "./screens/ledger.jsx";
+import { AddEditOverlay, BillSheet } from "./screens/add.jsx";
+import { RecurringHub } from "./screens/recurring.jsx";
+import { ImportExportPage, InfoSheet, LanguageChooser, MorePage, SettingsSheet } from "./screens/settings.jsx";
+import { DebtsPage } from "./screens/debts.jsx";
+import { BudgetsGoalsPage } from "./screens/goals.jsx";
+import { MonthlyView } from "./screens/analytics.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PERSONAL FINANCIAL OS v9
@@ -14,7 +23,7 @@ import { CSS } from "./styles.js";
 // S6: Merchant intelligence — profile in detail view
 // ─────────────────────────────────────────────────────────────────────────────
 
-const KEY = "expense_ledger_v5";
+export const KEY = "expense_ledger_v5";
 const KEYS_LEGACY = [
   "finance_app_data","finance_editorial_v1","finance_editorial_v2",
   "finance_editorial_v3","finance_editorial_v4","finance_os_v3",
@@ -64,10 +73,10 @@ function moneyReason(v, { positive=false } = {}) {
 }
 
 // Money typed by the user: a finite number > 0 ({positive:true}) or ≥ 0; anything else → null (never silently 0).
-function parseMoney(v, opts) { return moneyReason(v,opts)===null ? strictNum(v) : null; }
+export function parseMoney(v, opts) { return moneyReason(v,opts)===null ? strictNum(v) : null; }
 // Run 17: what a money box lets through while typing. Phones whose decimal key is a comma used to lose the mark (145,67 was saved as 14567 because the box was type=number).
 // Either "." or "," is the decimal mark; when both appear the LAST one is, the other is a thousands mark and goes. Digits are never changed, at most 2 decimals.
-function cleanMoneyText(raw) {
+export function cleanMoneyText(raw) {
   // A sign or an exponent is never turned into a different valid number (-5 must not become 5): it stays visible and is refused when saving.
   if (/[-+eE]/.test(String(raw??""))) return String(raw).replace(/[\s\u00a0\u202f]/g,"").slice(0,24);
   const s=String(raw??"").replace(/[\s\u00a0\u202f]/g,"").replace(/[^0-9.,]/g,"");
@@ -83,24 +92,24 @@ function cleanMoneyText(raw) {
 // Run 26: an in-app question instead of the browser's own confirm box (same look as the rest, animated, translated). askConfirm(text) gives
 // a promise of true/false; the <ConfirmHost/> in the app shell shows it. Without a host (never in the app) it falls back to window.confirm.
 let confirmHost=null;
-function askConfirm(message) { return new Promise(res=>{ if (!confirmHost) { res(typeof window!=="undefined" && window.confirm ? window.confirm(message) : false); return; } confirmHost({ message, res }); }); }
+export function askConfirm(message) { return new Promise(res=>{ if (!confirmHost) { res(typeof window!=="undefined" && window.confirm ? window.confirm(message) : false); return; } confirmHost({ message, res }); }); }
 // Run 26: one shared way to open an inline form without a jump: the view glides to it (smooth scroll) and the first box is focused
 // with preventScroll (a plain autoFocus makes phones snap the page). Use as ref={revealFocus}; it only acts once per element.
-function revealFocus(el) {
+export function revealFocus(el) {
   if (!el || el.dataset.shown) return; el.dataset.shown="1";
   requestAnimationFrame(()=>{ try { el.scrollIntoView({ behavior:"smooth", block:"center" }); const i=el.matches("input,select,textarea") ? el : el.querySelector("input,select,textarea"); if (i) i.focus({ preventScroll:true }); } catch {} });
 }
-function formMoney(v, opts) { return parseMoney(typeof v==="string" ? v.trim().replace(/\.$/,"") : v, opts); }
+export function formMoney(v, opts) { return parseMoney(typeof v==="string" ? v.trim().replace(/\.$/,"") : v, opts); }
 
 function isPlainObject(x) { return x!==null && typeof x==="object" && !Array.isArray(x); }
 // Run 14: a clickable <div> that acts as a button must answer Enter and Space too. Only when the key was pressed ON the element
 // itself, so a real button inside it keeps its own keys.
-const activateKey = (fn) => (e) => { if (e.target!==e.currentTarget) return; if (e.key==="Enter" || e.key===" ") { e.preventDefault(); fn(); } };
+export const activateKey = (fn) => (e) => { if (e.target!==e.currentTarget) return; if (e.key==="Enter" || e.key===" ") { e.preventDefault(); fn(); } };
 // A yes/no field: true/false, or the words "true"/"false" (any case, trimmed). Anything else → null (not guessed).
 const flagValue = (v) => { if (typeof v==="boolean") return v; if (typeof v==="string") { const s=v.trim().toLowerCase(); if (s==="true") return true; if (s==="false") return false; } return null; };
 const isTrue = (v) => flagValue(v)===true;
-const txt = (v) => typeof v==="string" ? v : (typeof v==="number" && Number.isFinite(v) ? String(v) : "");
-const norm = (v) => txt(v).trim().toLowerCase().replace(/\s+/g," ");
+export const txt = (v) => typeof v==="string" ? v : (typeof v==="number" && Number.isFinite(v) ? String(v) : "");
+export const norm = (v) => txt(v).trim().toLowerCase().replace(/\s+/g," ");
 
 // Keep a recoverable copy of anything we cannot use, so the next save never overwrites it.
 function preserveRaw(label, raw) {
@@ -108,7 +117,7 @@ function preserveRaw(label, raw) {
   catch { return false; }
 }
 
-function isValidDateStr(s) {
+export function isValidDateStr(s) {
   if (typeof s!=="string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const [y,m,d]=s.split("-").map(Number);
   const dt=new Date(y,m-1,d);
@@ -200,14 +209,14 @@ function sanitizeTransactions(list, label) {
 }
 
 // ─── Local date helpers (S0: all UTC bugs eliminated) ────────────────────────
-function localDateStr(d=new Date()) {
+export function localDateStr(d=new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
-function localMonthStr(d=new Date()) {
+export function localMonthStr(d=new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
 }
 // Parse a YYYY-MM-DD string as LOCAL calendar date (avoids UTC midnight shift)
-function parseLocalDate(s) {
+export function parseLocalDate(s) {
   if (!s) return new Date();
   const [y,m,d] = s.split("-").map(Number);
   return new Date(y, m-1, d);
@@ -219,13 +228,13 @@ function addMonths(d, n) {
   r.setDate(Math.min(d.getDate(), dim));
   return r;
 }
-const today   = () => localDateStr();
-const curMon  = () => localMonthStr();
-const prevMon = () => { const n=new Date(); const d=new Date(n.getFullYear(),n.getMonth()-1,1); return localMonthStr(d); };
-const nMon    = (n) => { const now=new Date(); const d=new Date(now.getFullYear(),now.getMonth()-n,1); return localMonthStr(d); };
+export const today   = () => localDateStr();
+export const curMon  = () => localMonthStr();
+export const prevMon = () => { const n=new Date(); const d=new Date(n.getFullYear(),n.getMonth()-1,1); return localMonthStr(d); };
+export const nMon    = (n) => { const now=new Date(); const d=new Date(now.getFullYear(),now.getMonth()-n,1); return localMonthStr(d); };
 
 // ─── Category system ──────────────────────────────────────────────────────────
-const CATEGORIES = [
+export const CATEGORIES = [
   { id:"food",     name:"Food & Dining",        tile:"Food",      color:"#F0C46F", income:false,
     subs:["Restaurants","Fast Food","Coffee","Groceries","Delivery","Snacks","Bakery","Market / Bazaar","Other"] },
   { id:"transport",name:"Transport",             tile:"Transport", color:"#83B9F5", income:false,
@@ -254,12 +263,12 @@ const CATEGORIES = [
   { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#7CCB9A", income:true, subs:[] },
   { id:"income",   name:"Other Income",          tile:"Other income",    color:"#9FDDA0", income:true, subs:[] },
 ];
-const CAT = (id) => CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==="other");
+export const CAT = (id) => CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==="other");
 // Display names in the interface language. The English `name` above stays the stored/CSV identifier and is never translated.
-const catName = (id) => MESSAGES["cat."+CAT(id).id] ? t("cat."+CAT(id).id) : CAT(id).name;
-const catTile = (id) => MESSAGES["tile."+CAT(id).id] ? t("tile."+CAT(id).id) : CAT(id).tile;
+export const catName = (id) => MESSAGES["cat."+CAT(id).id] ? t("cat."+CAT(id).id) : CAT(id).name;
+export const catTile = (id) => MESSAGES["tile."+CAT(id).id] ? t("tile."+CAT(id).id) : CAT(id).tile;
 // Built-in subcategory names are translated for display; anything the user typed is shown exactly as stored.
-const subName = (s) => (s && MESSAGES["sub."+s]) ? t("sub."+s) : s;
+export const subName = (s) => (s && MESSAGES["sub."+s]) ? t("sub."+s) : s;
 
 const CATEGORY_MAP = {
   "food":"food","transport":"transport","housing":"housing","digital":"digital",
@@ -311,7 +320,7 @@ function resolveCategory(raw, keepUnknownId=false) {
 // The user's own categories live in their own storage key and are added to CATEGORIES at start-up, so every picker, chart and budget
 // sees them. An entry keeps only the category's id ("u_…"); the ledger shape is unchanged. A phone or older version that does not
 // know an id shows the entry as "Other" and keeps the id (see resolveCategory), and the backup file carries the list.
-const CCAT_KEY=KEY+"__cats", CCAT_MAX=30, CCAT_LEN=24, CCAT_COLORS=["#F28B82","#F6AD55","#ECC94B","#68D391","#4FD1C5","#63B3ED","#A78BFA","#F687B3"];
+export const CCAT_KEY=KEY+"__cats", CCAT_MAX=30, CCAT_LEN=24, CCAT_COLORS=["#F28B82","#F6AD55","#ECC94B","#68D391","#4FD1C5","#63B3ED","#A78BFA","#F687B3"];
 function cleanCustomCats(raw) {
   const src=Array.isArray(raw) ? raw : (raw && Array.isArray(raw.cats) ? raw.cats : []);
   const ids=new Set(), names=new Set(CATEGORIES.filter(c=>!c.custom).map(c=>catKey(c.name)).concat(CATEGORIES.filter(c=>!c.custom).map(c=>catKey(c.id)))), out=[];
@@ -326,18 +335,18 @@ function cleanCustomCats(raw) {
   return out;
 }
 const currentCustomCats=()=>CATEGORIES.filter(c=>c.custom).map(c=>({ id:c.id, name:c.name, income:c.income, color:c.color }));
-function applyCustomCats(list) {   // replaces the custom entries of CATEGORIES in place (same array, so every reader sees the change)
+export function applyCustomCats(list) {   // replaces the custom entries of CATEGORIES in place (same array, so every reader sees the change)
   for (let i=CATEGORIES.length-1;i>=0;i--) if (CATEGORIES[i].custom) { const c=CATEGORIES.splice(i,1)[0]; delete CATEGORY_LOOKUP[c.id]; delete CATEGORY_LOOKUP[catKey(c.name)]; }
   cleanCustomCats(list).forEach(c=>{ CATEGORIES.push({ id:c.id, name:c.name, tile:c.name, color:c.color, income:c.income, subs:[], custom:true }); CATEGORY_LOOKUP[c.id]=c.id; CATEGORY_LOOKUP[catKey(c.name)]=c.id; });
 }
 function mergeCustomCats(a, b) { return cleanCustomCats([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])]); }
-function readCustomCats() { try { const r=localStorage.getItem(CCAT_KEY); return r ? cleanCustomCats(JSON.parse(r)) : []; } catch { return []; } }
-function writeCustomCats(list) {
+export function readCustomCats() { try { const r=localStorage.getItem(CCAT_KEY); return r ? cleanCustomCats(JSON.parse(r)) : []; } catch { return []; } }
+export function writeCustomCats(list) {
   try { const c=cleanCustomCats(list); if (!c.length) localStorage.removeItem(CCAT_KEY); else localStorage.setItem(CCAT_KEY,JSON.stringify({ version:1, cats:c })); return true; } catch { return false; }
 }
 function newCustomCatId(list) { const used=new Set((list||[]).map(c=>c.id)); let id; do { id="u_"+Math.random().toString(36).slice(2,8).replace(/[^a-z0-9]/g,"a").padEnd(6,"a"); } while (used.has(id)); return id; }
 // Adds a category to a list; returns the new list or a reason it was refused (empty, long, duplicate of a built-in or own name, full).
-function addCustomCat(list, name, income, color) {
+export function addCustomCat(list, name, income, color) {
   const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
   if (!n) return { list, added:false, reason:"empty" };
   if (n.length>CCAT_LEN) return { list, added:false, reason:"long" };
@@ -346,7 +355,7 @@ function addCustomCat(list, name, income, color) {
   return next.length>(list||[]).length ? { list:next, added:true, reason:"" } : { list, added:false, reason:"dup" };
 }
 // Renames a category and/or changes its colour. Entries and budgets point at the id, so nothing else changes; the type stays as it was.
-function editCustomCat(list, id, name, color) {
+export function editCustomCat(list, id, name, color) {
   const cur=(list||[]).find(c=>c.id===id);
   if (!cur) return { list, edited:false, reason:"missing" };
   const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
@@ -355,7 +364,7 @@ function editCustomCat(list, id, name, color) {
   const next=cleanCustomCats(list.map(c=>c.id===id ? { ...c, name:n, color:color||c.color } : c));
   return next.length===list.length && next.some(c=>c.id===id) ? { list:next, edited:true, reason:"" } : { list, edited:false, reason:"dup" };
 }
-function customCatInUse(id, transactions, budgets) { return (transactions||[]).some(x=>x && x.category===id) || !!(budgets && budgets[id]>0); }
+export function customCatInUse(id, transactions, budgets) { return (transactions||[]).some(x=>x && x.category===id) || !!(budgets && budgets[id]>0); }
 try { applyCustomCats(readCustomCats()); } catch {}
 
 // planImport reads a backup's own categories first, so its entries keep their category instead of becoming "Other"; nothing is stored here.
@@ -405,9 +414,9 @@ function normaliseTxn(t, opts={}) {
   };
 }
 // Run 22: a trip is a short free-text label (max 40 characters) on ordinary entries. Anything that is not text gives no trip.
-function tripName(v) { return typeof v==="string" ? v.replace(/[\u0000-\u001f\u007f\s]+/g," ").trim().slice(0,40).trim() : ""; }
+export function tripName(v) { return typeof v==="string" ? v.replace(/[\u0000-\u001f\u007f\s]+/g," ").trim().slice(0,40).trim() : ""; }
 // Run 24: one category's all-time total and a total per month (newest first), in whole cents. Loan instalments count only their interest, like every spending view.
-function catTotals(list, catId) {
+export function catTotals(list, catId) {
   const by=new Map(); let cents=0, n=0;
   forSpending(list||[]).forEach(x=>{
     if (!x || x.category!==catId) return;
@@ -418,7 +427,7 @@ function catTotals(list, catId) {
 }
 // Expenses per trip (loan instalments count only their interest, like every spending view), whole cents so 0.1 + 0.2 is exactly 0.30.
 // "Baku" and "baku" are one trip; the spelling of the first entry in the list (newest first) is shown. Largest total first.
-function tripTotals(list) {
+export function tripTotals(list) {
   const by=new Map();
   forSpending(list).forEach(x=>{
     const n=tripName(x && x.trip); if (!n || x.type==="income") return;
@@ -442,7 +451,7 @@ function debtLinkRef(v) {
   const ok=(x)=>typeof x==="string" && x.trim()!=="" && x.length<=64;
   return ok(v.debtId) && ok(v.paymentId) ? { debtId:v.debtId, paymentId:v.paymentId } : null;
 }
-function debtCashFlow(list, mon) {
+export function debtCashFlow(list, mon) {
   const out={ out:0, in:0, n:0 };
   (Array.isArray(list)?list:[]).forEach(t=>{
     if (!t || !t.debtLink || !debtLinkRef(t.debtLink) || String(t.date).slice(0,7)!==mon) return;
@@ -460,7 +469,7 @@ function forSpending(list) {
     return part>0 ? [{...t,amount:part}] : [];
   });
 }
-function loanCashOut(list, mon) {
+export function loanCashOut(list, mon) {
   const out={ paid:0, n:0, interest:0, unknown:0 };
   (Array.isArray(list)?list:[]).forEach(t=>{
     const r=t&&t.loan?loanRef(t.loan):null;
@@ -474,20 +483,20 @@ function loanCashOut(list, mon) {
 // Run 16: the wallet an entry was paid from. Only a tag (no balances, no transfers). The built-in ids are below; a short safe
 // text id this version does not know (a wallet from a newer version or file) is KEPT, never dropped or turned into another one,
 // and shown as "Other". "" means not set.
-const WALLET_IDS = ["cash","card","mobile","other"];
-function walletId(v) { const s=typeof v==="string" ? v.trim().toLowerCase() : ""; return /^[a-z0-9_-]{1,32}$/.test(s) ? s : ""; }
+export const WALLET_IDS = ["cash","card","mobile","other"];
+export function walletId(v) { const s=typeof v==="string" ? v.trim().toLowerCase() : ""; return /^[a-z0-9_-]{1,32}$/.test(s) ? s : ""; }
 // Names a person types in a CSV, mapped to the ids ("Bank card" has a space, so it is not an id by itself).
 const WALLET_ALIASES = { "bank card":"card", "credit card":"card", "debit card":"card", "mobile wallet":"mobile", "e wallet":"mobile" };
 function walletFromText(s) { const k=String(s||"").trim().toLowerCase(); return WALLET_ALIASES[k] || walletId(k); }
 // The wallet of the newest entry that has one (the list is newest first): the default for the next entry.
 function lastWallet(transactions) { const t=(transactions||[]).find(x=>walletId(x && x.wallet)); return t ? walletId(t.wallet) : ""; }
-const walletName=(id)=>WALLET_IDS.includes(id) ? t("wallet."+id) : t("wallet.other");   // an id this version does not know shows as "Other"
+export const walletName=(id)=>WALLET_IDS.includes(id) ? t("wallet."+id) : t("wallet.other");   // an id this version does not know shows as "Other"
 // Run 16: the user's own subcategories (Phase 1 of the custom-categories design note). A subcategory is already free text on each
 // entry, so these are only SUGGESTIONS in the picker, kept in their own storage key. The ledger and every entry stay untouched,
 // and an older version simply never shows them. Limits: 20 per category, 30 characters, no duplicates (ignoring case), nothing
 // equal to a built-in subcategory of that category.
-const SUBCAT_KEY=KEY+"__subcats", SUBCAT_MAX=20, SUBCAT_LEN=30;
-const subKey=(s)=>String(s).trim().toLowerCase();
+export const SUBCAT_KEY=KEY+"__subcats", SUBCAT_MAX=20, SUBCAT_LEN=30;
+export const subKey=(s)=>String(s).trim().toLowerCase();
 function cleanSubcats(raw) {
   const out={};
   const src=raw && typeof raw==="object" && !Array.isArray(raw) ? (raw.byCategory && typeof raw.byCategory==="object" && !Array.isArray(raw.byCategory) ? raw.byCategory : raw) : {};
@@ -499,7 +508,7 @@ function cleanSubcats(raw) {
   });
   return out;
 }
-function addUserSubcat(map, catId, text) {
+export function addUserSubcat(map, catId, text) {
   const cat=CATEGORIES.find(c=>c.id===catId); if (!cat) return { map, added:false, reason:"category" };
   const s=typeof text==="string" ? text.trim().replace(/\s+/g," ") : ""; if (!s) return { map, added:false, reason:"empty" };
   if (s.length>SUBCAT_LEN) return { map, added:false, reason:"long" };
@@ -508,14 +517,14 @@ function addUserSubcat(map, catId, text) {
   if (mine.length>=SUBCAT_MAX) return { map, added:false, reason:"full" };
   return { map:{ ...map, [catId]:[...mine,s] }, added:true, reason:"" };
 }
-function removeUserSubcat(map, catId, text) {
+export function removeUserSubcat(map, catId, text) {
   const rest=((map&&map[catId])||[]).filter(x=>subKey(x)!==subKey(text)), out={ ...map };
   if (rest.length) out[catId]=rest; else delete out[catId];
   return out;
 }
 // Run 25: renaming one of the user's own subcategories. Same rules as adding (length, no duplicate, not a built-in name); the position
 // in the list is kept. Entries that used the old name are renamed by renameSubcatInEntries (only that category's entries).
-function renameUserSubcat(map, catId, oldText, newText) {
+export function renameUserSubcat(map, catId, oldText, newText) {
   const cat=CATEGORIES.find(c=>c.id===catId); if (!cat) return { map, edited:false, reason:"category" };
   const mine=(map&&map[catId])||[], idx=mine.findIndex(x=>subKey(x)===subKey(oldText));
   if (idx<0) return { map, edited:false, reason:"missing" };
@@ -529,16 +538,16 @@ function renameSubcatInEntries(transactions, catId, oldText, newText) {
   return (transactions||[]).map(x=> x && x.category===catId && typeof x.subcategory==="string" && subKey(x.subcategory)===subKey(oldText) ? { ...x, subcategory:newText } : x);
 }
 function mergeSubcats(a, b) { const out={}; const A=cleanSubcats(a), B=cleanSubcats(b); new Set([...Object.keys(A),...Object.keys(B)]).forEach(k=>{ out[k]=[...(A[k]||[]),...(B[k]||[])]; }); return cleanSubcats(out); }
-function readSubcats() { try { const r=localStorage.getItem(SUBCAT_KEY); return r ? cleanSubcats(JSON.parse(r)) : {}; } catch { return {}; } }
-function writeSubcats(map) {   // an empty list removes the key instead of keeping an empty shell
+export function readSubcats() { try { const r=localStorage.getItem(SUBCAT_KEY); return r ? cleanSubcats(JSON.parse(r)) : {}; } catch { return {}; } }
+export function writeSubcats(map) {   // an empty list removes the key instead of keeping an empty shell
   try { const c=cleanSubcats(map); if (!Object.keys(c).length) localStorage.removeItem(SUBCAT_KEY); else localStorage.setItem(SUBCAT_KEY,JSON.stringify({ version:1, byCategory:c })); return true; } catch { return false; }
 }
 // ─── Accounts, balances and transfers (Run 24; see handoff/DESIGN_NOTE_ACCOUNTS_TRANSFERS) ────────────────────────────────
 // Accounts (a card, cash, a bank account) live in their own storage key with the transfers between them. An ordinary entry may carry
 // an optional `account` id. A balance is never stored: opening balance + income − expenses (entries with that account) + transfers in −
 // transfers out, all in whole cents. A transfer is its own record, so it can never count as income or spending.
-const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","wallet","bank","other"];
-const accId=(v)=>typeof v==="string" && /^a_[a-z0-9]{3,12}$/.test(v) ? v : "";
+export const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","wallet","bank","other"];
+export const accId=(v)=>typeof v==="string" && /^a_[a-z0-9]{3,12}$/.test(v) ? v : "";
 const centsOf=(v)=>{ const n=Number(v); return Number.isFinite(n) ? Math.round(n*100) : 0; };
 function cleanAccountData(raw) {
   const src=isPlainObject(raw) ? raw : {};
@@ -565,19 +574,19 @@ function mergeAccountData(a, b) {   // by id: what is already here wins; transfe
   const haveA=new Set(A.accounts.map(x=>x.id)), haveT=new Set(A.transfers.map(x=>x.id));
   return cleanAccountData({ accounts:[...A.accounts,...B.accounts.filter(x=>!haveA.has(x.id))], transfers:[...A.transfers,...B.transfers.filter(x=>!haveT.has(x.id))] });
 }
-function readAccounts() { try { const r=localStorage.getItem(ACC_KEY); return r ? cleanAccountData(JSON.parse(r)) : { accounts:[], transfers:[] }; } catch { return { accounts:[], transfers:[] }; } }
-function writeAccounts(data) {
+export function readAccounts() { try { const r=localStorage.getItem(ACC_KEY); return r ? cleanAccountData(JSON.parse(r)) : { accounts:[], transfers:[] }; } catch { return { accounts:[], transfers:[] }; } }
+export function writeAccounts(data) {
   try { const c=cleanAccountData(data); if (!c.accounts.length) localStorage.removeItem(ACC_KEY); else localStorage.setItem(ACC_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
 }
 // Run 26: the name of an account for a row label. Cached against the raw stored text, so listing many rows does not parse it again.
 let _accRaw=null, _accMap={};
-function accountName(id) {
+export function accountName(id) {
   if (!accId(id)) return "";
   try { const raw=localStorage.getItem(ACC_KEY); if (raw!==_accRaw) { _accRaw=raw; _accMap={}; cleanAccountData(raw?JSON.parse(raw):null).accounts.forEach(a=>{ _accMap[a.id]=a.name; }); } } catch { return ""; }
   return _accMap[id]||"";
 }
 // Balance per account id, in money (exact to the cent). Entries whose account is unknown here are not counted anywhere.
-function accountBalances(data, transactions) {
+export function accountBalances(data, transactions) {
   const d=cleanAccountData(data), out={};
   d.accounts.forEach(a=>{ out[a.id]=centsOf(a.opening.amount); });
   (transactions||[]).forEach(x=>{ if (!x || !(accId(x.account) in out)) return; const c=centsOf(x.amount); out[x.account]+= x.type==="income" ? c : x.type==="expense" ? -c : 0; });
@@ -586,7 +595,7 @@ function accountBalances(data, transactions) {
   return out;
 }
 function newAccId(prefix, used) { let id; do { id=prefix+Math.random().toString(36).slice(2,8).replace(/[^a-z0-9]/g,"a").padEnd(6,"a"); } while (used.has(id)); return id; }
-function addAccount(data, name, kind, openingAmount, openingDate) {
+export function addAccount(data, name, kind, openingAmount, openingDate) {
   const d=cleanAccountData(data), n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
   if (!n) return { data:d, added:false, reason:"empty" };
   if (n.length>40) return { data:d, added:false, reason:"long" };
@@ -597,7 +606,7 @@ function addAccount(data, name, kind, openingAmount, openingDate) {
   return { data:cleanAccountData({ accounts:[...d.accounts,{ id, name:n, kind, opening:{ amount:amt, date:openingDate||"" }, hidden:false }], transfers:d.transfers }), added:true, reason:"", id };
 }
 // Rename an account and/or set its opening amount (the date of the opening stays, or becomes the given date when it had none).
-function editAccount(data, id, name, openingAmount, openingDate) {
+export function editAccount(data, id, name, openingAmount, openingDate) {
   const d=cleanAccountData(data), cur=d.accounts.find(a=>a.id===id);
   if (!cur) return { data:d, edited:false, reason:"account" };
   const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
@@ -608,7 +617,7 @@ function editAccount(data, id, name, openingAmount, openingDate) {
   const accounts=d.accounts.map(a=>a.id!==id ? a : { ...a, name:n, opening:{ amount:Math.round(amt*100)/100, date:a.opening.date||openingDate||"" } });
   return { data:cleanAccountData({ accounts, transfers:d.transfers }), edited:true, reason:"" };
 }
-function addTransfer(data, from, to, amount, date, note="") {
+export function addTransfer(data, from, to, amount, date, note="") {
   const d=cleanAccountData(data), c=centsOf(amount);
   if (!d.accounts.some(a=>a.id===from) || !d.accounts.some(a=>a.id===to)) return { data:d, added:false, reason:"account" };
   if (from===to) return { data:d, added:false, reason:"same" };
@@ -619,21 +628,21 @@ function addTransfer(data, from, to, amount, date, note="") {
   return { data:cleanAccountData({ accounts:d.accounts, transfers:[{ id, from, to, amount:c/100, date, note },...d.transfers] }), added:true, reason:"", id };
 }
 // Removing an account is refused while any entry or transfer uses it (hide it instead), so nothing is ever orphaned silently.
-function accountInUse(data, id, transactions) { const d=cleanAccountData(data); return (transactions||[]).some(x=>x && x.account===id) || d.transfers.some(x=>x.from===id||x.to===id); }
+export function accountInUse(data, id, transactions) { const d=cleanAccountData(data); return (transactions||[]).some(x=>x && x.account===id) || d.transfers.some(x=>x.from===id||x.to===id); }
 // ─── Debts and loans (Run 17) ─────────────────────────────────────────────────
 // Informal DEBTS (person to person) and formal LOANS (a rate and a schedule). All money is whole qapik (integers); interest is rounded
 // half-up to the qapik each month. Stored under their own key, so the main saved-data key is never touched by this feature. The
 // remaining balance of a debt is always derived from its payments, never stored. The schedule of a loan is an ESTIMATE from the terms
 // the person typed: the bank's contract (its effective rate, day count and fees) is what counts, so a typed bank payment overrides ours.
 const DEBTS_KEY="expense_ledger_v5__debts";
-const LOAN_RATE_TYPES=["annuity","equal","flat","none"], LOAN_KINDS=["cash","card","taksit","other"], MAX_DEBTS=200, MAX_LOANS=100, MAX_QAPIK=1e12;
-const isQapik=(v)=>Number.isInteger(v) && v>0 && v<=MAX_QAPIK;
+export const LOAN_RATE_TYPES=["annuity","equal","flat","none"], LOAN_KINDS=["cash","card","taksit","other"], MAX_DEBTS=200, MAX_LOANS=100, MAX_QAPIK=1e12;
+export const isQapik=(v)=>Number.isInteger(v) && v>0 && v<=MAX_QAPIK;
 function loanDate(first, i) {   // same day of the month, shortened to the month's last day when it is shorter (no drift)
   const [y,m,d]=first.split("-").map(Number); const idx=(m-1)+i, yy=y+Math.floor(idx/12), mm=((idx%12)+12)%12;
   const day=Math.min(d,new Date(yy,mm+1,0).getDate());
   return `${String(yy).padStart(4,"0")}-${String(mm+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
 }
-function loanSchedule(l) {
+export function loanSchedule(l) {
   if (!isPlainObject(l) || !isQapik(l.principal) || !Number.isInteger(l.months) || l.months<1 || l.months>600 || !LOAN_RATE_TYPES.includes(l.rateType)) return null;
   const rate=l.rateType==="none" ? 0 : l.ratePct;
   if (typeof rate!=="number" || !Number.isFinite(rate) || rate<0 || rate>100) return null;
@@ -665,7 +674,7 @@ function loanSchedule(l) {
   return { payments:rows, totalInterest, totalPaid };
 }
 // The yearly rate (in %) on the FALLING balance that an equal payment implies: used to show what "18% flat" really costs.
-function impliedNominalPct(principal, months, payment) {
+export function impliedNominalPct(principal, months, payment) {
   const pv=(r)=>{ let s=0; for (let k=1;k<=months;k++) s+=payment/Math.pow(1+r,k); return s; };
   let lo=0, hi=1; if (pv(0)<principal) return null;
   for (let i=0;i<80;i++) { const mid=(lo+hi)/2; if (pv(mid)>principal) lo=mid; else hi=mid; }
@@ -674,7 +683,7 @@ function impliedNominalPct(principal, months, payment) {
 // Run 20 (coach R12): what an extra payment made now would change, with the regular payment kept as it is. An ESTIMATE on the typed terms, for
 // annuity loans only (the other repayment types do not shorten the same way). Returns null when it cannot say something true: other loan
 // types, an invalid amount, a loan already paid, or an extra payment that would clear the whole balance (then the loan is simply paid off).
-function loanExtraEffect(l, extra) {
+export function loanExtraEffect(l, extra) {
   const sc=loanSchedule(l); if (!sc || l.rateType!=="annuity" || !isQapik(extra)) return null;
   const k=Math.min(Array.isArray(l.payments)?l.payments.length:0, sc.payments.length);
   if (k>=sc.payments.length) return null;
@@ -692,8 +701,8 @@ function loanExtraEffect(l, extra) {
   }
   return { monthsSaved:origMonths-months, interestSaved:origInterest-interest, newMonths:months, origMonths };
 }
-function debtRemaining(d) { return Math.max(0,d.principal-(d.payments||[]).reduce((s,p)=>s+p.amount,0)); }
-function debtCanPay(d, amount) { return isQapik(amount) && amount<=debtRemaining(d); }
+export function debtRemaining(d) { return Math.max(0,d.principal-(d.payments||[]).reduce((s,p)=>s+p.amount,0)); }
+export function debtCanPay(d, amount) { return isQapik(amount) && amount<=debtRemaining(d); }
 
 function cleanPayments(list, withTxn) {
   if (!Array.isArray(list)) return [];
@@ -706,7 +715,7 @@ function cleanPayments(list, withTxn) {
   return out;
 }
 const cleanText=(v,max)=>typeof v==="string" ? Array.from(v.replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim()).slice(0,max).join("") : "";
-function cleanDebtData(raw) {
+export function cleanDebtData(raw) {
   const out={ debts:[], loans:[] };
   if (!isPlainObject(raw)) return out;
   const ids=new Set();
@@ -726,12 +735,12 @@ function cleanDebtData(raw) {
   });
   return out;
 }
-function readDebts() { try { const r=localStorage.getItem(DEBTS_KEY); return cleanDebtData(r ? JSON.parse(r) : null); } catch { return { debts:[], loans:[] }; } }
+export function readDebts() { try { const r=localStorage.getItem(DEBTS_KEY); return cleanDebtData(r ? JSON.parse(r) : null); } catch { return { debts:[], loans:[] }; } }
 // Run 18: unreadable or corrupt debts data is NEVER treated as an empty list that a later save may overwrite.
 //  corrupt / unreadable: the stored value stays exactly as it is, one safe copy is kept, every write is refused (an empty write too).
 //  partial (some records cannot be read): a safe copy of the original text is kept BEFORE the first write that would drop them.
 let DEBTS_PRESERVED=null;   // the raw text last kept as a safe copy, so repeated saves do not pile up copies
-function debtsHealth() {
+export function debtsHealth() {
   let raw; try { raw=localStorage.getItem(DEBTS_KEY); } catch { return { status:"unreadable", dropped:0, raw:null }; }
   if (raw===null || raw===undefined) return { status:"missing", dropped:0, raw:null };
   let parsed; try { parsed=JSON.parse(raw); } catch { return { status:"corrupt", dropped:0, raw }; }
@@ -739,7 +748,7 @@ function debtsHealth() {
   const c=cleanDebtData(parsed), total=(parsed.debts||[]).length+(parsed.loans||[]).length, kept=c.debts.length+c.loans.length;
   return kept<total ? { status:"partial", dropped:total-kept, raw } : { status:"ok", dropped:0, raw };
 }
-function writeDebts(data) {   // nothing to keep removes the key instead of storing an empty shell
+export function writeDebts(data) {   // nothing to keep removes the key instead of storing an empty shell
   try {
     const h=debtsHealth();
     if (h.status==="unreadable" || h.status==="corrupt") { if (h.raw!==null && h.raw!==DEBTS_PRESERVED && preserveRaw("debts_unreadable",h.raw)) DEBTS_PRESERVED=h.raw; return false; }
@@ -756,7 +765,7 @@ function mergeDebtData(a, b) {
 // From the research rulebook: R0 data gate, R1 spent vs recorded income, R9 instalment due soon / overdue, R13 money owed to you is late.
 // Facts with their window, never a score. A rule without enough data says so rather than showing a figure. Returns plain cards
 // ({id, ...numbers}); the screen words them. Amounts from the Debts page are whole qapik.
-function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
+export function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
   const txns=Array.isArray(transactions)?transactions:[], dd=debtData&&typeof debtData==="object"?debtData:{};
   const todayS=localDateStr(now), t0=new Date(now); t0.setDate(t0.getDate()-29);
   const startS=localDateStr(t0), midnight=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
@@ -850,7 +859,7 @@ function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().l
 // spending, warning) stay readable on every theme: tests/logic/run25themes checks the contrast of every text colour on every surface.
 const THEME_KEY=`${KEY}__theme`;
 const DARK_MEANING={ "--violet":"#B3A1FF","--info":"#83B9F5","--pos":"#8BD97A","--pos-bg":"#173622","--neg":"#FF8188","--neg-bg":"#3B1C22","--warn":"#F0C46F","--warn-bg":"#352B14" };
-const THEMES={
+export const THEMES={
   sea:{ swatch:["#07151A","#4CC9C4"], dark:true, vars:{} },
   nordic:{ swatch:["#1F2933","#A68A64"], dark:true, vars:{ ...DARK_MEANING,
     "--bg":"#171E26","--bg-card":"#1F2933","--bg-warm":"#2B3745","--bg-inset":"#232D39","--ink":"#F7F7F2","--ink-2":"#E2E3DE","--ink-3":"#B3B8BF","--ink-4":"#A0A7AF","--ink-5":"#3A4756",
@@ -869,11 +878,11 @@ const THEMES={
     "--bg":"#1A120E","--bg-card":"#261A13","--bg-warm":"#3A2418","--bg-inset":"#2E1F16","--ink":"#F2E8DA","--ink-2":"#D5C4AE","--ink-3":"#B9A58B","--ink-4":"#A8947B","--ink-5":"#4A3426",
     "--rule":"#3A2A1F","--rule-2":"#5A4130","--accent":"#C9A882","--accent-light":"#3A2A1C","--accent-mid":"#D5C4AE","--accent-text":"#C9A882","--accent-fill":"#A88462","--on-accent":"#1A120E" } },
 };
-const THEME_IDS=Object.keys(THEMES);
+export const THEME_IDS=Object.keys(THEMES);
 const themeId=(v)=>typeof v==="string" && Object.prototype.hasOwnProperty.call(THEMES,v) ? v : "sea";
-function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return "sea"; } }
-function writeTheme(id) { try { if (themeId(id)==="sea") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY,themeId(id)); return true; } catch { return false; } }
-function applyTheme(id) {   // sets (or clears) the colour variables on the page root; safe to call before the app renders
+export function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return "sea"; } }
+export function writeTheme(id) { try { if (themeId(id)==="sea") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY,themeId(id)); return true; } catch { return false; } }
+export function applyTheme(id) {   // sets (or clears) the colour variables on the page root; safe to call before the app renders
   if (typeof document==="undefined" || !document.documentElement) return;
   const th=THEMES[themeId(id)], root=document.documentElement, all=new Set(Object.values(THEMES).flatMap(x=>Object.keys(x.vars)));
   all.forEach(k=>root.style.removeProperty(k));
@@ -885,9 +894,9 @@ if (typeof document!=="undefined") applyTheme(readTheme());
 
 // Run 25: "Reduce effects" - a plain preference (own key). Turns off shadows and highlights; tone and hairline edges stay, so layers remain readable.
 const FX_KEY=KEY+"__fx";
-function readFxOff() { try { return localStorage.getItem(FX_KEY)==="off"; } catch { return false; } }
-function writeFxOff(off) { try { if (off) localStorage.setItem(FX_KEY,"off"); else localStorage.removeItem(FX_KEY); return true; } catch { return false; } }
-function applyFx(off) { if (typeof document==="undefined" || !document.documentElement) return; if (off) document.documentElement.setAttribute("data-fx","off"); else document.documentElement.removeAttribute("data-fx"); }
+export function readFxOff() { try { return localStorage.getItem(FX_KEY)==="off"; } catch { return false; } }
+export function writeFxOff(off) { try { if (off) localStorage.setItem(FX_KEY,"off"); else localStorage.removeItem(FX_KEY); return true; } catch { return false; } }
+export function applyFx(off) { if (typeof document==="undefined" || !document.documentElement) return; if (off) document.documentElement.setAttribute("data-fx","off"); else document.documentElement.removeAttribute("data-fx"); }
 if (typeof document!=="undefined") applyFx(readFxOff());
 const PRIVACY_KEY=`${KEY}__privacy`;
 function readPrivacy() { try { return localStorage.getItem(PRIVACY_KEY)==="1"; } catch { return false; } }
@@ -899,10 +908,10 @@ function writePrivacy(on) { try { if (on) localStorage.setItem(PRIVACY_KEY,"1");
 // only a salted PBKDF2-SHA-256 hash is, under its own key (expense_ledger_v5__lock), which a backup never contains and an import
 // never touches. Forgetting the PIN can be fixed on the lock screen (after a short wait) without deleting any record.
 const LOCK_KEY=`${KEY}__lock`;
-const LOCK_TIMEOUTS=[0,1,5,15];            // minutes; 0 = lock whenever the app is left or reopened
+export const LOCK_TIMEOUTS=[0,1,5,15];            // minutes; 0 = lock whenever the app is left or reopened
 const LOCK_ITER=150000;
-function validPin(p) { return typeof p==="string" && /^[0-9]{4,6}$/.test(p); }
-function lockSupported() { try { return typeof crypto!=="undefined" && !!crypto.subtle && typeof crypto.getRandomValues==="function"; } catch { return false; } }
+export function validPin(p) { return typeof p==="string" && /^[0-9]{4,6}$/.test(p); }
+export function lockSupported() { try { return typeof crypto!=="undefined" && !!crypto.subtle && typeof crypto.getRandomValues==="function"; } catch { return false; } }
 function toB64(buf) { let s=""; new Uint8Array(buf).forEach(b=>{ s+=String.fromCharCode(b); }); return btoa(s); }
 function fromB64(s) { const bin=atob(String(s)), out=new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; }
 async function pinHash(pin, saltB64, iter) {
@@ -911,7 +920,7 @@ async function pinHash(pin, saltB64, iter) {
 }
 function sameText(a, b) { a=String(a); b=String(b); let d=a.length^b.length; for (let i=0;i<Math.max(a.length,b.length);i++) d|=(a.charCodeAt(i)||0)^(b.charCodeAt(i)||0); return d===0; }
 // null = no lock; { ok:true, rec } = a lock; { ok:false } = the lock record exists but cannot be read (the lock screen then offers the reset only).
-function readLock() {
+export function readLock() {
   // Storage that cannot be read at all (blocked by the browser) holds no lock to enforce, and the ledger is unreadable too: the app already
   // shows its "saving is paused" notice. Treating that as a damaged lock would lock the user out of an app that otherwise works.
   let raw; try { raw=localStorage.getItem(LOCK_KEY); } catch { return null; }
@@ -923,32 +932,32 @@ function readLock() {
       bio:typeof r.bio==="string" && r.bio ? r.bio : null, len:Number.isInteger(r.len)&&r.len>=4&&r.len<=6?r.len:0, resetAt:Number.isFinite(r.resetAt)&&r.resetAt>0?r.resetAt:0, fails:Number.isInteger(r.fails)&&r.fails>0?r.fails:0, until:Number.isFinite(r.until)&&r.until>0?r.until:0 } };
   } catch { return { ok:false }; }
 }
-function writeLock(rec) { try { localStorage.setItem(LOCK_KEY,JSON.stringify(rec)); return true; } catch { return false; } }
-function removeLock() { try { localStorage.removeItem(LOCK_KEY); return true; } catch { return false; } }
-async function makeLockRecord(pin, timeout=0, bio=null) {
+export function writeLock(rec) { try { localStorage.setItem(LOCK_KEY,JSON.stringify(rec)); return true; } catch { return false; } }
+export function removeLock() { try { localStorage.removeItem(LOCK_KEY); return true; } catch { return false; } }
+export async function makeLockRecord(pin, timeout=0, bio=null) {
   if (!validPin(pin) || !lockSupported()) return null;
   const salt=toB64(crypto.getRandomValues(new Uint8Array(16)));
   return { v:1, salt, hash:await pinHash(pin,salt,LOCK_ITER), iter:LOCK_ITER, timeout:LOCK_TIMEOUTS.includes(timeout)?timeout:0, bio, len:pin.length, fails:0, until:0 };
 }
-async function verifyPin(rec, pin) { if (!rec || !validPin(pin) || !lockSupported()) return false; try { return sameText(await pinHash(pin,rec.salt,rec.iter),rec.hash); } catch { return false; } }
+export async function verifyPin(rec, pin) { if (!rec || !validPin(pin) || !lockSupported()) return false; try { return sameText(await pinHash(pin,rec.salt,rec.iter),rec.hash); } catch { return false; } }
 // Wrong PINs: the first four are free, then the wait doubles from 30 s up to 5 minutes. Stored, so closing the app does not reset it.
-function lockWaitMs(fails) { return fails<5 ? 0 : Math.min(300000, 30000*Math.pow(2,fails-5)); }
+export function lockWaitMs(fails) { return fails<5 ? 0 : Math.min(300000, 30000*Math.pow(2,fails-5)); }
 // When the app should lock. "away" = how long it was out of sight; "idle" = how long without a touch or key while open.
-function lockShouldEngage(timeoutMin, event, ms) {
+export function lockShouldEngage(timeoutMin, event, ms) {
   if (event==="away") return timeoutMin===0 ? true : ms>=timeoutMin*60000;
   if (event==="idle") return timeoutMin>0 && ms>=timeoutMin*60000;
   return false;
 }
 // Fingerprint through the phone's own prompt (WebAuthn "platform" authenticator, user verification required). The app has no server
 // to check the result against, so this is a convenience in front of the PIN, never a replacement for it.
-async function bioAvailable() { try { return typeof PublicKeyCredential!=="undefined" && !!navigator.credentials && lockSupported() && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch { return false; } }
-async function bioRegister() {
+export async function bioAvailable() { try { return typeof PublicKeyCredential!=="undefined" && !!navigator.credentials && lockSupported() && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch { return false; } }
+export async function bioRegister() {
   const cred=await navigator.credentials.create({ publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), rp:{ name:"Expense Ledger" },
     user:{ id:crypto.getRandomValues(new Uint8Array(16)), name:"ledger", displayName:"Expense Ledger" }, pubKeyCredParams:[{ type:"public-key", alg:-7 },{ type:"public-key", alg:-257 }],
     authenticatorSelection:{ authenticatorAttachment:"platform", userVerification:"required", residentKey:"discouraged" }, timeout:60000 } });
   return cred ? toB64(cred.rawId) : null;
 }
-async function bioCheck(idB64) {
+export async function bioCheck(idB64) {
   const r=await navigator.credentials.get({ publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[{ type:"public-key", id:fromB64(idB64) }], userVerification:"required", timeout:30000 } });
   return !!r;
 }
@@ -1151,8 +1160,8 @@ function buildState(transactions=[], settings=null) {
 
 // Run 17: the optional name used in the Home greeting. Plain text only: control characters removed, spaces collapsed, 30 characters at most.
 // It lives in the app's own saved state and is NOT part of backups or exports (it is not financial data and a backup may be shared).
-const PROFILE_NAME_MAX=30;
-function cleanProfileName(v) {
+export const PROFILE_NAME_MAX=30;
+export function cleanProfileName(v) {
   if (typeof v!=="string") return "";
   return Array.from(v.replace(/[\u0000-\u001f\u007f]/g," ").replace(/\s+/g," ").trim()).slice(0,PROFILE_NAME_MAX).join("").trim();
 }
@@ -1214,7 +1223,7 @@ async function storageProtection(ask, nav=(typeof navigator!=="undefined"?naviga
 // window.__ledgerNativeShare(filename, text, mime) -> "shared" | "cancelled" (or rejects). The web app uses it when it exists
 // and counts only an explicit "shared" as success: anything else is "cancelled" or "failed" and is never reported as saved.
 // No hook (the PWA) = the behaviour below, unchanged.
-const nativeShareHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeShare==="function") ? window.__ledgerNativeShare : null;
+export const nativeShareHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeShare==="function") ? window.__ledgerNativeShare : null;
 async function shareViaNative(native, filename, text, mime) {
   try { const r=await native(filename, text, mime); return r==="shared" ? "shared" : r==="cancelled" ? "cancelled" : "failed"; }
   catch { return "failed"; }
@@ -1239,7 +1248,7 @@ async function checkForUpdate(currentVersion, fetchHtml) {
   catch { return "unknown"; }
 }
 
-function downloadFile(content, mime, filename) {
+export function downloadFile(content, mime, filename) {
   const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const a=document.createElement("a"); a.href=url; a.download=filename;
   document.body.appendChild(a); a.click(); a.remove();
@@ -1493,7 +1502,7 @@ function buildCsv(transactions) {
 // ─── Merchant memory ──────────────────────────────────────────────────────────
 // Memory is keyed by type + merchant, so a merchant used as both income and expense
 // keeps a separate category/subcategory for each. The most recent choice per type wins.
-function memKey(type, merchant) { return `${type==="income"?"income":"expense"}|${String(merchant).trim().toLowerCase()}`; }
+export function memKey(type, merchant) { return `${type==="income"?"income":"expense"}|${String(merchant).trim().toLowerCase()}`; }
 
 function buildMerchantMemory(transactions) {
   const mem={};
@@ -1540,7 +1549,7 @@ function detectRecurrence(txns) {
   return { isRecurring: confidence > 0.7, recurringFreq: freq, recurringConfidence: confidence, avgDaysBetween: Math.round(avgGap) };
 }
 
-function calcMerchantProfile(merchant, transactions) {
+export function calcMerchantProfile(merchant, transactions) {
   if (!merchant) return null;
   const ml = merchant.toLowerCase();
   const txns = transactions
@@ -1639,13 +1648,13 @@ function calcMerchantProfile(merchant, transactions) {
 
 // ─── Shared financial calculation layer ──────────────────────────────────────
 // Shared label so every screen agrees: positive=Surplus, zero=Break-even, negative=Deficit
-function surplusLabel(inc, exp) { return inc>exp ? "Surplus" : inc<exp ? "Deficit" : "Break-even"; }
+export function surplusLabel(inc, exp) { return inc>exp ? "Surplus" : inc<exp ? "Deficit" : "Break-even"; }
 
-function surplusColor(inc, exp) { return inc>exp ? "var(--pos)" : inc<exp ? "var(--neg)" : "var(--ink)"; }
+export function surplusColor(inc, exp) { return inc>exp ? "var(--pos)" : inc<exp ? "var(--neg)" : "var(--ink)"; }
 
 // "Has this entry happened?" for month figures: a past month counts whole, the current month up to and including today,
 // a future month nothing. Entries dated later are PLANNED: shown separately, never as money already spent or received.
-function happenedIn(mon, now=new Date()) {
+export function happenedIn(mon, now=new Date()) {
   const p=monthProgress(mon,now), todayStr=localDateStr(now);
   return (t)=>t.date.startsWith(mon) && (p.state==="past" || (p.state==="current" && t.date<=todayStr));
 }
@@ -1666,9 +1675,9 @@ function comparisonWindow(mon, prv, now=new Date()) {
 // Run 22 (formula audit): the sum of entry amounts in whole cents. Adding 0.1 ten times in floating point gives 0.9999999999999999, which
 // would sit just under an exact budget of 1.00; rounding each amount to cents first makes the total exact.
 // Run 24: reducer that keeps a running total exact to the cent (0.1 + 0.2 stays 0.3), for the plain sums that used to add raw decimals.
-const addAmt=(s,t)=>Math.round((s+(Number(t&&t.amount)||0))*100)/100;
+export const addAmt=(s,t)=>Math.round((s+(Number(t&&t.amount)||0))*100)/100;
 function sumCents(list) { return (list||[]).reduce((s,t)=>s+Math.round((Number(t.amount)||0)*100),0)/100; }
-function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
+export function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
   const isExp=t=>t.type==="expense", isInc=t=>t.type==="income", inMon=t=>t.date.startsWith(mon);
   const cw=comparisonWindow(mon,prv,now);
   const done=happenedIn(mon,now), donePrv=cw.inPrev, sum=sumCents;   // Run 22 audit: whole cents, so ten entries of 0.10 are exactly 1.00
@@ -1686,7 +1695,7 @@ function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Dat
   return { curExp,curInc,plannedExp,plannedInc,totalExp,totalInc,prevExp,prevInc,prevFullExp,momDiff,surplusRate,cmpKind:cw.kind,cmpDays:cw.days };
 }
 
-function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
+export function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
   const out={}, done=happenedIn(mon,now);
   transactions.filter(t=>t.type==="expense"&&done(t))
     .forEach(t=>{ out[t.category]=(out[t.category]||0)+Math.round((Number(t.amount)||0)*100); });
@@ -1696,7 +1705,7 @@ function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
 
 // Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
 // Whole cents, so 0.1 + 0.2 is exactly 0.30. "none" = entries without a wallet. "used" = at least one entry has a wallet.
-function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
+export function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
   const done=happenedIn(mon,now), cents={}; let totalC=0, used=false;
   (transactions||[]).filter(t=>t.type==="expense"&&done(t)).forEach(t=>{
     const w=walletId(t.wallet)||"none"; if (w!=="none") used=true;
@@ -1708,7 +1717,7 @@ function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
 
 // Where a month sits relative to today. "daysLeft" counts the days AFTER today; "daysRemaining" counts today as well,
 // because today's spending is still open. Every screen that shows "days left" or a per-day figure uses daysRemaining.
-function daysBetween(a, b) {   // calendar days from a to b, ignoring time of day and DST
+export function daysBetween(a, b) {   // calendar days from a to b, ignoring time of day and DST
   return Math.round((Date.UTC(b.getFullYear(),b.getMonth(),b.getDate())-Date.UTC(a.getFullYear(),a.getMonth(),a.getDate()))/86400000);
 }
 function monthProgress(mon, now=new Date()) {
@@ -1718,13 +1727,13 @@ function monthProgress(mon, now=new Date()) {
   return           { state:"future", totalDays, daysPassed:0, daysLeft:totalDays, daysRemaining:totalDays };
 }
 // Spending that has actually happened by today (entries dated later this month are planned, not yet spent).
-function calcSpentToDate(transactions, mon=curMon(), now=new Date()) {
+export function calcSpentToDate(transactions, mon=curMon(), now=new Date()) {
   const p=monthProgress(mon,now); if (p.state==="future") return 0;
   const todayStr=localDateStr(now);
   return transactions.filter(t=>t.type==="expense"&&t.date.startsWith(mon)&&(p.state==="past"||t.date<=todayStr)).reduce((s,t)=>s+Math.round((Number(t.amount)||0)*100),0)/100;   // Run 22 audit: whole cents
 }
 
-function calcSpendingPace(spent, mon=curMon(), budgetTotal=0, now=new Date()) {
+export function calcSpendingPace(spent, mon=curMon(), budgetTotal=0, now=new Date()) {
   const p=monthProgress(mon,now);
   const dailyAvg=p.daysPassed>0 ? spent/p.daysPassed : 0;
   const projected=p.state==="current" ? dailyAvg*p.totalDays : spent;
@@ -1780,7 +1789,7 @@ function forecastCore(transactions, bills, now) {
   return { available:true, spentSoFar:cents(spentSoFar), plannedLater:cents(plannedLater), commitments:cents(commitments), usualDaily:cents(mean), daysLeft:p.daysLeft,
     point:cents(point), low:cents(Math.max(base,point-half)), high:cents(point+half) };
 }
-function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
+export function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
   const f=forecastCore(transactions,bills,now);
   if (!f.available) return { ...f, rangeShown:false, backtest:{ months:0, hits:0 } };
   let months=0, hits=0;
@@ -1797,8 +1806,8 @@ function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
 // Run 24: split one entry (a shopping receipt, say) into 2–6 entries in different categories. No new data shape: the original is
 // replaced by ordinary entries with the same date, merchant, note, wallet and tag, and their amounts add up to the original to the
 // cent. Entries that belong to a bill, a repeating schedule or a debt repayment are not split, so those links never break.
-const SPLIT_MAX=6;
-function splitTransaction(txn, parts, mkId=()=>Date.now()+Math.random()) {
+export const SPLIT_MAX=6;
+export function splitTransaction(txn, parts, mkId=()=>Date.now()+Math.random()) {
   if (!txn || !(Number(txn.amount)>0)) return { ok:false, reason:"invalid" };
   if (txn.recurring || txn.billId || txn.debtLink) return { ok:false, reason:"linked" };
   if (!Array.isArray(parts) || parts.length<2 || parts.length>SPLIT_MAX) return { ok:false, reason:"count" };
@@ -1827,7 +1836,7 @@ function budgetCrossing(before, after, budgets, txn, now=new Date()) {
   return null;
 }
 
-function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
+export function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
   const p=monthProgress(mon,now);
   const pacePct=p.totalDays ? Math.round((p.daysPassed/p.totalDays)*100) : 0;
   return Object.entries(budgets).filter(([,v])=>v>0).map(([catId,limit])=>{
@@ -1839,7 +1848,7 @@ function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
   });
 }
 
-function calcTxnStats(transactions, mon=curMon(), now=new Date()) {
+export function calcTxnStats(transactions, mon=curMon(), now=new Date()) {
   const done=happenedIn(mon,now);
   const amts=transactions.filter(t=>t.type==="expense"&&done(t)).map(t=>t.amount);
   const isWkend=d=>[0,6].includes(parseLocalDate(d).getDay());
@@ -1851,7 +1860,7 @@ function calcTxnStats(transactions, mon=curMon(), now=new Date()) {
 // Weekend vs weekday spending PER DAY for one month, counting only days that have passed (today included) and only
 // expenses dated on those days. A month has ~2.5× more weekdays than weekend days, so raw totals are never compared.
 // heavier: "weekend" | "weekday" | "same" (equal to the cent) | null (no spending, or a group has no elapsed day yet).
-function calcWeekdayWeekend(transactions, mon=curMon(), now=new Date()) {
+export function calcWeekdayWeekend(transactions, mon=curMon(), now=new Date()) {
   const p=monthProgress(mon,now);
   const [y,m]=mon.split("-").map(Number);
   let weDays=0, wdDays=0;
@@ -1871,7 +1880,7 @@ function calcWeekdayWeekend(transactions, mon=curMon(), now=new Date()) {
 }
 
 // S3: What Changed — category + merchant-level explanation + recurring/one-off flag
-function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
+export function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
   // The previous month is taken over the same comparison window as the totals (Run 7, V9).
   const donePrv=comparisonWindow(mon,prv,now).inPrev, doneMon=happenedIn(mon,now);
   const catSpendMon=calcCategorySpend(transactions,mon,now);
@@ -1930,7 +1939,7 @@ function scheduleKey(t) {
 // and the date it is first due (the due day comes from that date, never from guessing). A payment points to its bill with
 // billId. Payments with no (known) bill keep the earlier inferred grouping below, so data from before bills, or not yet
 // converted, behaves exactly as it always did.
-function validateBill(b) {
+export function validateBill(b) {
   if (!isPlainObject(b)) return null;
   const id=isBillId(b.id) ? b.id.trim() : null;
   const name=typeof b.name==="string" ? b.name.trim() : "";
@@ -1986,7 +1995,7 @@ function syncBillsMirror(bills, transactions) {
   return writeRaw(BILLS_MIRROR_KEY, buildBillsMirror(bills, transactions));
 }
 
-function buildSchedules(transactions, bills=[]) {
+export function buildSchedules(transactions, bills=[]) {
   const known=new Map((bills||[]).map(b=>[b.id,b]));
   const billed=(t)=>!!(t.billId && known.has(t.billId));
   const byDate=(a,b)=>a.date.localeCompare(b.date)||String(a.createdAt).localeCompare(String(b.createdAt));
@@ -2041,7 +2050,7 @@ function assignToBill(transactions, bills=[], txnId, target, now=new Date()) {
   if (!bill) return { transactions, bills, billId:null };
   return { transactions:transactions.map(t=>t===txn ? { ...t, billId:bill.id, recurring:true, recurFreq:bill.freq, isActive:true } : t), bills:list, billId:bill.id };
 }
-const scheduleMonthly = (s) => toMonthlyAmountHelper({ amount:s.amount, recurFreq:s.freq });   // an ESTIMATE of a typical month
+export const scheduleMonthly = (s) => toMonthlyAmountHelper({ amount:s.amount, recurFreq:s.freq });   // an ESTIMATE of a typical month
 
 // The day of the month a monthly/yearly schedule is due on. It is the latest payment's day — except when that payment fell
 // on the last day of a short month (28 Feb, 30 Apr), which is only where a later due day was clamped to: then the run of
@@ -2090,7 +2099,7 @@ function scheduleOccurrences(s, mon) {
 
 // Which expected occurrences in `mon` have no recorded payment yet. Monthly/yearly: any payment of the schedule in that month
 // settles it. Weekly/biweekly: each payment settles at most one expected date within ±3 / ±6 days.
-function scheduleMonthStatus(s, transactions, mon, now=new Date()) {
+export function scheduleMonthStatus(s, transactions, mon, now=new Date()) {
   const todayStr=localDateStr(now);
   const expected=scheduleOccurrences(s,mon).map(localDateStr);
   // A bill's payments are the entries linked to it; an inferred schedule's are the unlinked recurring entries with its key.
@@ -2110,7 +2119,7 @@ function scheduleMonthStatus(s, transactions, mon, now=new Date()) {
 }
 
 // Next date (today or later) with no payment recorded yet, or null.
-function scheduleNextDue(s, transactions, now=new Date()) {
+export function scheduleNextDue(s, transactions, now=new Date()) {
   const todayStr=localDateStr(now);
   for (let i=0;i<14;i++) {
     const mon=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i));
@@ -2124,7 +2133,7 @@ function scheduleNextDue(s, transactions, now=new Date()) {
 // date; nothing leaves the device and the ledger is not touched. Text is escaped and lines folded per RFC 5545.
 function icsEscape(s) { return String(s==null?"":s).replace(/\\/g,"\\\\").replace(/\r?\n/g,"\\n").replace(/;/g,"\\;").replace(/,/g,"\\,"); }
 function icsFold(line) { const out=[]; let rest=line; while (rest.length>73) { out.push(rest.slice(0,73)); rest=" "+rest.slice(73); } out.push(rest); return out.join("\r\n"); }
-function billsToIcs(schedules, transactions, now=new Date(), opts={}) {
+export function billsToIcs(schedules, transactions, now=new Date(), opts={}) {
   const months=opts.months||12, label=opts.label||((x)=>x.merchant||x.note||x.category), amountText=opts.amountText||((x)=>String(x.amount));
   const todayStr=localDateStr(now), stamp=now.toISOString().replace(/[-:]/g,"").replace(/\.\d+Z$/,"Z");
   const ev=[]; let n=0;
@@ -2142,7 +2151,7 @@ function billsToIcs(schedules, transactions, now=new Date(), opts={}) {
 }
 
 // Run 18: how many payments of a bill with an end date are still to come (today or later, none recorded for them yet). null = no end date.
-function billPaymentsLeft(s, transactions, now=new Date()) {
+export function billPaymentsLeft(s, transactions, now=new Date()) {
   const end=s && s.bill && s.bill.endDate; if (!end) return null;
   const todayStr=localDateStr(now), endMon=end.slice(0,7);
   let n=0;
@@ -2161,7 +2170,7 @@ function billPaymentsLeft(s, transactions, now=new Date()) {
 // "Commitments still to come" = every expected payment of an active schedule this month that has no matching recorded payment:
 // both upcoming ones and earlier ones that were never recorded (counted so the figure is never optimistic).
 // Recurring monthly estimates (recurringMonthly) are informational and are NOT part of this month's subtraction.
-function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bills=[]) {
+export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bills=[]) {
   const { savingsTarget=0 }=safeConfig||{};
   const mon=localMonthStr(now), todayStr=localDateStr(now);
   // Every expense recorded for this month, including ones dated later: money entered ahead of time is already committed.
@@ -2203,7 +2212,7 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bil
 }
 
 // S1: Goals — full funding plan with target date and what-if
-function calcGoalProgress(goal, now=new Date()) {
+export function calcGoalProgress(goal, now=new Date()) {
   const num=(v)=>Number.isFinite(Number(v)) && Number(v)>0 ? Number(v) : 0;      // malformed values become 0, never NaN
   const target=num(goal.target), saved=num(goal.saved), monthlyTarget=num(goal.monthlyTarget);
   const pct=target>0 ? Math.min((saved/target)*100,100) : 0;
@@ -2238,7 +2247,7 @@ function goalPeriods(td, now) {    // td: a valid deadline on or after today
   const months=(td.getFullYear()*12+td.getMonth())-(now.getFullYear()*12+now.getMonth());
   return { periods:Math.max(1,months), thisMonth:months<1 };
 }
-function goalRequiredMonthly(goal, now=new Date()) {
+export function goalRequiredMonthly(goal, now=new Date()) {
   const targetC=goalCents(goal&&goal.target), savedC=goalCents(goal&&goal.saved);
   const remainingC=Math.max(targetC-savedC,0), remaining=remainingC/100;
   const base={ remaining, periods:null, perMonth:null, thisMonth:false };
@@ -2252,7 +2261,7 @@ function goalRequiredMonthly(goal, now=new Date()) {
   return { ...base, state:"active", periods, thisMonth, perMonth:Math.floor((remainingC+periods-1)/periods)/100 };
 }
 // The optional what-if: "if I save this much each month, when do I finish and does that meet the deadline?" Same periods, same cents.
-function goalScenario(goal, amount, now=new Date()) {
+export function goalScenario(goal, amount, now=new Date()) {
   const req=goalRequiredMonthly(goal,now);
   if (req.state==="invalid" || req.state==="complete") return { valid:false, reason:req.state };
   const amtC=goalCents(amount);
@@ -2274,12 +2283,12 @@ function toMonthlyAmountHelper(t) {
 }
 
 // Run 20: a short heading for each kind of pattern line (the sentence itself says what was found and from how many entries)
-const PATTERN_BASIS_KEY={ month:"pat.basisMonth", weeks:"pat.basisWeeks", two:"pat.basisTwo", six:"pat.basisSix" };
-const PATTERN_TITLE_KEY={ weekend:"pat.weekend", catconc:"pat.catconc", merchant:"pat.merchant", avgtxn:"pat.avgtxn", dayofweek:"pat.dayofweek", trend:"pat.trend", anomaly:"pat.anomaly" };
+export const PATTERN_BASIS_KEY={ month:"pat.basisMonth", weeks:"pat.basisWeeks", two:"pat.basisTwo", six:"pat.basisSix" };
+export const PATTERN_TITLE_KEY={ weekend:"pat.weekend", catconc:"pat.catconc", merchant:"pat.merchant", avgtxn:"pat.avgtxn", dayofweek:"pat.dayofweek", trend:"pat.trend", anomaly:"pat.anomaly" };
 // S5: Full financial patterns engine — deterministic, data-only
 // Returns { insights, anomalies, dayOfWeek, categoryTrends, correlations }
 
-function calcPatterns(transactions, currency="₼", now=new Date()) {
+export function calcPatterns(transactions, currency="₼", now=new Date()) {
   const expenses=transactions.filter(t=>t.type==="expense");
   const monBack=(k)=>localMonthStr(new Date(now.getFullYear(),now.getMonth()-k,1));
   const mon=monBack(0), prv=monBack(1), todayStr=localDateStr(now);
@@ -2400,18 +2409,18 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
 // Privacy mode (Run 9): a display-only switch for this session. While it is on, every formatted amount, percentage and
 // personal name on screen (and in accessible names) is replaced by dots. It never touches stored data, imports, exports or
 // calculations, and it is not security: the data is still in the browser's storage, readable by anyone with the phone unlocked.
-let PRIVACY=false;
+export let PRIVACY=false;
 const MASK="••••";
 function setPrivacyMode(on) { PRIVACY=!!on; }
-function maskText(s) { return PRIVACY && s ? "•••••" : s; }
-function fmtPct(n) { return PRIVACY ? "••%" : `${n}%`; }
-function fmt(n, sym="₼") {
+export function maskText(s) { return PRIVACY && s ? "•••••" : s; }
+export function fmtPct(n) { return PRIVACY ? "••%" : `${n}%`; }
+export function fmt(n, sym="₼") {
   if (PRIVACY) return `${MASK} ${sym}`;
   return `${Math.abs(n||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})} ${sym}`;
 }
 // The three small Home tiles. Exact below 10,000 (1,050.00 used to show as "1.1k", which reads as 1,100 — Run 7, V4);
 // above that the short form is marked "≈" so it is never taken for an exact figure.
-function fmtShort(n, sym="₼") {
+export function fmtShort(n, sym="₼") {
   if (PRIVACY) return fmt(n,sym);
   const a=Math.abs(n||0);
   return a>=1e6?`≈${(a/1e6).toFixed(1)}M ${sym}`:a>=10000?`≈${(a/1000).toFixed(1)}k ${sym}`:fmt(a,sym);
@@ -2420,7 +2429,7 @@ function fmtShort(n, sym="₼") {
 // rather than toLocaleDateString, because Chrome ships without Azerbaijani date data and would show "2026 M10".
 // Amounts keep the "1,234.56" form in every language for now, because amounts are typed with a decimal point (see
 // MONEY_TEXT_RE); showing "1 234,56" while requiring "1234.56" would mislead.
-function fmtDate(d) {
+export function fmtDate(d) {
   if (!d) return "";
   const td=today();
   if (d===td) return t("date.today");
@@ -2430,11 +2439,11 @@ function fmtDate(d) {
   return t("date.dayMonth",{ d:dt.getDate(), m:t("monShort."+(dt.getMonth()+1)) });
 }
 // Full date in the interface language (e.g. "13 October 2026"), used wherever a long date is shown.
-function fmtLongDate(v) { const dt=v instanceof Date ? v : new Date(v); return t("date.long",{ d:dt.getDate(), m:t("monGen."+(dt.getMonth()+1)), y:dt.getFullYear() }); }
-function monthName(ym) { const [y,m]=ym.split("-").map(Number); return t("date.monthYear",{ m:t("mon."+m), y }); }
-function monthShort(ym) { return t("monShort."+Number(ym.split("-")[1])); }
+export function fmtLongDate(v) { const dt=v instanceof Date ? v : new Date(v); return t("date.long",{ d:dt.getDate(), m:t("monGen."+(dt.getMonth()+1)), y:dt.getFullYear() }); }
+export function monthName(ym) { const [y,m]=ym.split("-").map(Number); return t("date.monthYear",{ m:t("mon."+m), y }); }
+export function monthShort(ym) { return t("monShort."+Number(ym.split("-")[1])); }
 function daysInMonth(ym) { const [y,m]=ym.split("-").map(Number); return new Date(y,m,0).getDate(); }
-function median(arr) {
+export function median(arr) {
   if (!arr.length) return 0;
   const s=[...arr].sort((a,b)=>a-b),m=Math.floor(s.length/2);
   return s.length%2?s[m]:(s[m-1]+s[m])/2;
@@ -2453,7 +2462,7 @@ function pctShares(amounts) {
   return out;
 }
 // The month's spending by category for the Home ring: the five largest, the rest (if any) combined as "Other".
-function donutSlices(catSpend, max=5) {
+export function donutSlices(catSpend, max=5) {
   const rows=Object.entries(catSpend).filter(([,a])=>a>0).sort((a,b)=>b[1]-a[1]);
   const top=rows.slice(0,max).map(([id,amt])=>({ id, amt, color:CAT(id)?.color||"#98A5B7", name:catName(id) }));
   const rest=rows.slice(max).reduce((s,[,a])=>s+a,0);
@@ -2463,7 +2472,7 @@ function donutSlices(catSpend, max=5) {
 }
 // Running total of a month's expenses, day by day: element d-1 is everything spent on days 1…d. Only what has happened
 // counts (days after today are null in the current month; a future month is all null), matching the month's "Spent" figure.
-function cumulativeByDay(transactions, mon, now=new Date()) {
+export function cumulativeByDay(transactions, mon, now=new Date()) {
   const n=daysInMonth(mon), p=monthProgress(mon,now), last=p.state==="future"?0:p.state==="past"?n:p.daysPassed;
   const perDay=new Array(n).fill(0);
   transactions.forEach(x=>{ if (x.type==="expense" && x.date.startsWith(mon)) { const d=Number(x.date.slice(8,10)); if (d>=1 && d<=last) perDay[d-1]+=x.amount; } });
@@ -2540,13 +2549,13 @@ const TABS = [{id:"home",icon:"home"},{id:"ledger",icon:"list"},{id:"monthly",ic
 const TAB_ORDER = TABS.map(x=>x.id);
 const SUBPAGE_PARENT = { recurring:"more", io:"more", debts:"more" };
 
-function Icon({ name, size=16, color="currentColor", style={} }) {
+export function Icon({ name, size=16, color="currentColor", style={} }) {
   return (
     <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:size,height:size,flexShrink:0,color,...style}}
       dangerouslySetInnerHTML={{__html:ICONS[name]||ICONS.other}} aria-hidden="true"/>
   );
 }
-function CatIcon({ catId, size=16, color }) {
+export function CatIcon({ catId, size=16, color }) {
   const cat=CAT(catId);
   return <Icon name={catId} size={size} color={color||cat?.color||"#98A5B7"}/>;
 }
@@ -2667,232 +2676,8 @@ function appendCrashLog(err) {
 }
 // ─── App lock screens (Run 19) ───────────────────────────────────────────────
 // The lock sits OUTSIDE the app: while locked the app stays mounted (nothing typed is lost) but is hidden, and the lock screen covers it.
-function lockLang() { try { const r=JSON.parse(localStorage.getItem(KEY)||"null"); return r && LANGS.includes(r.language) ? r.language : "en"; } catch { return "en"; } }
-const LOCK_AFTER_KEY={ 0:"lock.after0", 1:"lock.after1", 5:"lock.after5", 15:"lock.after15" };
-function LockGate({ children }) {
-  const [lock,setLock]=useState(()=>readLock());
-  const [locked,setLocked]=useState(()=>readLock()!==null);
-  const lockRef=useRef(lock), lockedRef=useRef(locked), seen=useRef({ hidden:0, active:Date.now() });
-  lockRef.current=lock; lockedRef.current=locked;
-  useEffect(()=>{
-    const arm=()=>{ const l=lockRef.current; return !!(l&&l.ok)&&!lockedRef.current; };
-    const onVis=()=>{
-      if (document.visibilityState==="hidden") { seen.current.hidden=Date.now(); return; }
-      const l=lockRef.current;
-      if (seen.current.hidden && arm() && lockShouldEngage(l.rec.timeout,"away",Date.now()-seen.current.hidden)) setLocked(true);
-      seen.current.hidden=0; seen.current.active=Date.now();
-    };
-    const touch=()=>{ seen.current.active=Date.now(); };
-    const tick=setInterval(()=>{ if (arm() && lockShouldEngage(lockRef.current.rec.timeout,"idle",Date.now()-seen.current.active)) setLocked(true); },5000);
-    const onChanged=()=>{ const l=readLock(); setLock(l); if (!l) setLocked(false); };
-    const onNow=()=>{ const l=readLock(); setLock(l); if (l) setLocked(true); };
-    document.addEventListener("visibilitychange",onVis);
-    ["pointerdown","keydown","touchstart","scroll"].forEach(e=>window.addEventListener(e,touch,{ passive:true, capture:true }));
-    window.addEventListener("ledger-lock-changed",onChanged); window.addEventListener("ledger-lock-now",onNow);
-    return ()=>{ clearInterval(tick); document.removeEventListener("visibilitychange",onVis);
-      ["pointerdown","keydown","touchstart","scroll"].forEach(e=>window.removeEventListener(e,touch,{ capture:true }));
-      window.removeEventListener("ledger-lock-changed",onChanged); window.removeEventListener("ledger-lock-now",onNow); };
-  },[]);
-  if (locked) setLang(lockLang());
-  return (
-    <>
-      <div style={{ display:locked?"none":"contents" }} aria-hidden={locked||undefined}>{children}</div>
-      {locked&&<LockScreen lock={lock} onUnlock={()=>{ seen.current.active=Date.now(); setLock(readLock()); setLocked(false); }} onRemoved={()=>{ setLock(null); setLocked(false); }}/>}
-    </>
-  );
-}
-function LockScreen({ lock, onUnlock, onRemoved }) {
-  const damaged=!lock||!lock.ok;
-  const [cur,setCur]=useState(()=>damaged?null:lock.rec);
-  const [pin,setPin]=useState(""), [msg,setMsg]=useState(""), [busy,setBusy]=useState(false);
-  const bioWait=useRef(false);
-  const [forgot,setForgot]=useState(damaged), [forgotAt,setForgotAt]=useState(()=>Date.now()), [now,setNow]=useState(()=>Date.now());
-  useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),500); return ()=>clearInterval(i); },[]);
-  const waitS=cur&&cur.until>now ? Math.ceil((cur.until-now)/1000) : 0;
-  const forgotS=Math.max(0,10-Math.floor((now-forgotAt)/1000));
-  const press=(d)=>{ if (busy) return; setMsg(""); setPin(p=>p.length<6?p+d:p); };
-  const back=()=>{ if (!busy) { setMsg(""); setPin(p=>p.slice(0,-1)); } };
-  const submit=async()=>{
-    if (busy||waitS>0||!cur||!validPin(pin)) return;
-    setBusy(true);
-    const good=await verifyPin(cur,pin);
-    if (good) { if (cur.fails||cur.until||!cur.len||cur.resetAt) writeLock({ ...cur, fails:0, until:0, resetAt:0, len:cur.len||pin.length }); onUnlock(); return; }
-    const fails=cur.fails+1, w=lockWaitMs(fails), next={ ...cur, fails, until:w?Date.now()+w:0 };
-    writeLock(next); setCur(next); setPin(""); setMsg(t("lock.wrong")); setNow(Date.now()); setBusy(false);
-  };
-  const bio=async()=>{
-    // The phone's prompt may stay open or never answer; the PIN keys must keep working meanwhile, so this does not use "busy".
-    if (bioWait.current||busy||!cur||!cur.bio) return;
-    bioWait.current=true; let good=false; try { good=await bioCheck(cur.bio); } catch { good=false; }
-    bioWait.current=false;
-    if (good) { onUnlock(); return; }
-    setMsg(t("lock.bioFail"));
-  };
-  useEffect(()=>{
-    const onKey=(e)=>{ if (forgot) return; if (/^[0-9]$/.test(e.key)) press(e.key); else if (e.key==="Backspace") back(); else if (e.key==="Enter") submit(); };
-    window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey);
-  });
-  // Opens by itself: the phone's fingerprint prompt appears as the lock screen does (it mounts on every lock), and a PIN of the saved length
-  // is checked the moment its last digit is typed. Locks saved before the length was stored still use the button until their first unlock.
-  useEffect(()=>{ if (cur&&cur.bio&&!forgot) bio(); },[]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(()=>{ if (cur&&cur.len&&pin.length===cur.len&&!forgot) submit(); },[pin]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Forgot PIN is not a quick bypass any more: with a fingerprint set up it needs that fingerprint; without one the lock can be removed only 24 h
-  // after the request (stored with the lock, so closing the app does not restart or skip it; the right PIN cancels it). A damaged lock record
-  // protects nothing, so it keeps the short wait. This is still a screen lock, not encryption.
-  const FORGOT_DELAY_MS=24*3600*1000;
-  const delayLeft=cur&&!cur.bio ? Math.max(0,(cur.resetAt||now)+FORGOT_DELAY_MS-now) : 0;
-  const askForgot=()=>{ setForgot(true); setForgotAt(Date.now()); setMsg(""); if (cur&&!cur.bio&&!cur.resetAt) { const n={ ...cur, resetAt:Date.now() }; if (writeLock(n)) setCur(n); } };
-  const removeBio=async()=>{
-    if (bioWait.current||!cur||!cur.bio) return;
-    bioWait.current=true; let good=false; try { good=await bioCheck(cur.bio); } catch { good=false; }
-    bioWait.current=false;
-    if (good) { removeLock(); onRemoved(); } else setMsg(t("lock.bioFail"));
-  };
-  const removeDelay=()=>{ if (delayLeft>0) return; removeLock(); onRemoved(); };
-  const remove=()=>{ if (forgotS>0) return; removeLock(); onRemoved(); };
-  return (
-    <div className="lock-screen" role="dialog" aria-modal="true" aria-label={t("lock.screenTitle")} data-section="lock-screen">
-      <span className="more-mark" aria-hidden="true"><Icon name="safe" size={26} color="var(--accent)"/></span>
-      {forgot ? (
-        <div className="lock-card" data-section="lock-forgot">
-          <h1 className="lock-title">{t("lock.forgot")}</h1>
-          <p className="lock-sub" style={{lineHeight:1.55}}>{damaged?t("lock.damaged"):cur.bio?t("lock.forgotBioBody"):t("lock.forgotDelayBody")}</p>
-          <div className="lock-msg" role="alert" data-section="lock-msg">{msg}</div>
-          {damaged
-            ? <button className="btn btn-primary btn-full" data-section="lock-remove" disabled={forgotS>0} onClick={remove}>{forgotS>0?t("lock.forgotWait",{s:forgotS}):t("lock.forgotGo")}</button>
-            : cur.bio
-              ? <button className="btn btn-primary btn-full" data-section="lock-remove" onClick={removeBio}>{t("lock.forgotBioGo")}</button>
-              : <button className="btn btn-primary btn-full" data-section="lock-remove" disabled={delayLeft>0} onClick={removeDelay}>{delayLeft>0?t("lock.forgotDelayWait",{h:Math.floor(Math.ceil(delayLeft/60000)/60),m:Math.ceil(delayLeft/60000)%60}):t("lock.forgotGo")}</button>}
-          {!damaged&&<button className="btn btn-full" style={{marginTop:8}} onClick={()=>setForgot(false)}>{t("lock.back")}</button>}
-        </div>
-      ) : (
-        <div className="lock-card">
-          <h1 className="lock-title">{t("lock.screenTitle")}</h1>
-          <p className="lock-sub">{t("lock.screenSub")}</p>
-          <div className="lock-dots" role="img" aria-label={t("lock.entered",{n:pin.length})} data-section="lock-dots">
-            {Array.from({length:Math.max((cur&&cur.len)||4,pin.length)},(_,i)=><span key={i} className={`lock-dot${i<pin.length?" on":""}`}/>)}
-          </div>
-          <div className="lock-msg" role="alert" data-section="lock-msg">{waitS>0?t("lock.wait",{s:waitS}):msg}</div>
-          <div className="lock-pad">
-            {["1","2","3","4","5","6","7","8","9"].map(d=><button key={d} type="button" className="numpad-key" onClick={()=>press(d)} disabled={waitS>0}>{d}</button>)}
-            {cur&&cur.bio ? <button type="button" className="numpad-key lock-bio" data-section="lock-bio" onClick={bio} aria-label={t("lock.useBio")} title={t("lock.useBio")}><Icon name="safe" size={22}/></button> : <span/>}
-            <button type="button" className="numpad-key" onClick={()=>press("0")} disabled={waitS>0}>0</button>
-            <button type="button" className="numpad-key" onClick={back} aria-label={t("lock.del")} title={t("lock.del")}><Icon name="close" size={18}/></button>
-          </div>
-          {!(cur&&cur.len)&&<button className="btn btn-primary btn-full" data-section="lock-go" style={{marginTop:12}} disabled={waitS>0||!validPin(pin)||busy} onClick={submit}>{t("lock.screenTitle")}</button>}
-          <button className="btn btn-full" data-section="lock-forgot-btn" style={{marginTop:8}} onClick={askForgot}>{t("lock.forgot")}</button>
-        </div>
-      )}
-    </div>
-  );
-}
-function LockSheet({ onClose, showToast }) {
-  const [lock,setLock]=useState(()=>readLock());
-  const rec=lock&&lock.ok?lock.rec:null;
-  const [a,setA]=useState(""), [b,setB]=useState(""), [c,setC]=useState(""), [err,setErr]=useState(""), [mode,setMode]=useState("main"), [bioOk,setBioOk]=useState(false);
-  useEffect(()=>{ let alive=true; bioAvailable().then(v=>{ if (alive) setBioOk(v); }); return ()=>{ alive=false; }; },[]);
-  const announce=()=>{ window.dispatchEvent(new Event("ledger-lock-changed")); setLock(readLock()); };
-  const digits=(s)=>s.replace(/[^0-9]/g,"").slice(0,6);
-  const reset=()=>{ setA(""); setB(""); setC(""); setErr(""); setMode("main"); };
-  const save=async(timeout,bio)=>{ const next=await makeLockRecord(a,timeout,bio); if (!next) { setErr(t("lock.unsupported")); return false; }
-    if (!writeLock(next)) { setErr(t("lock.saveFail")); return false; } return true; };
-  const doSet=async()=>{
-    if (!validPin(a)) return setErr(t("lock.badPin"));
-    if (a!==b) return setErr(t("lock.mismatch"));
-    if (!(await save(0,null))) return;
-    announce(); reset(); showToast(t("lock.saved"));
-  };
-  const doChange=async()=>{
-    if (!(await verifyPin(rec,c))) return setErr(t("lock.currentWrong"));
-    if (!validPin(a)) return setErr(t("lock.badPin"));
-    if (a!==b) return setErr(t("lock.mismatch"));
-    if (!(await save(rec.timeout,rec.bio))) return;
-    announce(); reset(); showToast(t("lock.changed"));
-  };
-  const doOff=async()=>{
-    if (!(await verifyPin(rec,c))) return setErr(t("lock.currentWrong"));
-    if (!removeLock()) return setErr(t("lock.saveFail"));
-    announce(); reset(); showToast(t("lock.offDone"));
-  };
-  const setTimeoutMin=(m)=>{ if (!rec) return; if (writeLock({ ...rec, timeout:m })) announce(); else setErr(t("lock.saveFail")); };
-  const toggleBio=async()=>{
-    if (!rec) return; setErr("");
-    if (rec.bio) { if (writeLock({ ...rec, bio:null })) announce(); return; }
-    try { const id=await bioRegister(); if (!id) throw new Error("none"); if (writeLock({ ...rec, bio:id })) announce(); else setErr(t("lock.saveFail")); }
-    catch { setErr(t("lock.bioSetupFail")); }
-  };
-  const field=(label,val,set,id)=>(
-    <div style={{marginBottom:10}}>
-      <label className="field-lbl" htmlFor={id}>{label}</label>
-      <input id={id} className="field-input" type="password" inputMode="numeric" autoComplete="off" maxLength={6} value={val} onChange={e=>{ set(digits(e.target.value)); setErr(""); }}/>
-    </div>
-  );
-  return (
-    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("lock.title")} data-section="lock-sheet">
-        <div className="sheet-grip"><div className="sheet-handle"/></div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:10}}>
-          <div className="card-title" style={{fontSize:17}}>{t("lock.title")}</div>
-          <button data-closer="1" onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
-        </div>
-        <div className="list-sub" style={{lineHeight:1.55,marginBottom:12}} data-section="lock-notenc">{t("lock.notEnc")}</div>
-        {!lockSupported()&&<div className="field-error" role="alert">{t("lock.unsupported")}</div>}
-        {lock&&!lock.ok&&<div className="field-error" role="alert">{t("lock.damaged")}</div>}
-        {!lock&&lockSupported()&&(
-          <div data-section="lock-setup">
-            {field(t("lock.pin"),a,setA,"lock-pin-a")}
-            {field(t("lock.pin2"),b,setB,"lock-pin-b")}
-            {err&&<div className="field-error" role="alert">{err}</div>}
-            <button className="btn btn-primary btn-full" data-section="lock-save" onClick={doSet}>{t("lock.set")}</button>
-          </div>
-        )}
-        {rec&&mode==="main"&&(
-          <div data-section="lock-manage">
-            <div className="list-title" style={{marginBottom:6}}>{t("lock.on")}</div>
-            <div className="settings-section-lbl" id="lock-when-lbl" style={{marginTop:8}}>{t("lock.when")}</div>
-            <fieldset className="lang-switch" aria-labelledby="lock-when-lbl">
-              {LOCK_TIMEOUTS.map(m=>(
-                <label key={m} className={`lang-pill${rec.timeout===m?" sel":""}`}>
-                  <input type="radio" name="lock-after" value={m} checked={rec.timeout===m} onChange={()=>setTimeoutMin(m)}/>{t(LOCK_AFTER_KEY[m])}
-                </label>
-              ))}
-            </fieldset>
-            <div className="list-sub" style={{marginTop:6}}>{t("lock.whenSub")}</div>
-            <div className="settings-section-lbl" style={{marginTop:14}}>{t("lock.bio")}</div>
-            {bioOk
-              ? <button className="btn btn-full lock-bio-row" role="switch" aria-checked={!!rec.bio} data-section="lock-bio-toggle" onClick={toggleBio}><span>{t("lock.bio")}</span><span className="lock-switch" aria-hidden="true"/><span className="sr-only">{rec.bio?t("lock.on"):t("lock.off")}</span></button>
-              : <div className="list-sub" data-section="lock-bio-no">{t("lock.bioNo")}</div>}
-            <div className="list-sub" style={{marginTop:6}}>{t("lock.bioSub")}</div>
-            {err&&<div className="field-error" role="alert">{err}</div>}
-            <button className="btn btn-full" style={{marginTop:14}} data-section="lock-now" onClick={()=>{ onClose(); window.dispatchEvent(new Event("ledger-lock-now")); }}>{t("lock.now")}</button>
-            <button className="btn btn-full" style={{marginTop:8}} data-section="lock-change-go" onClick={()=>{ reset(); setMode("change"); }}>{t("lock.change")}</button>
-            <button className="btn btn-full" style={{marginTop:8}} data-section="lock-off-go" onClick={()=>{ reset(); setMode("off"); }}>{t("lock.turnOff")}</button>
-          </div>
-        )}
-        {rec&&mode==="change"&&(
-          <div data-section="lock-change">
-            {field(t("lock.current"),c,setC,"lock-pin-c")}
-            {field(t("lock.newPin"),a,setA,"lock-pin-a")}
-            {field(t("lock.pin2"),b,setB,"lock-pin-b")}
-            {err&&<div className="field-error" role="alert">{err}</div>}
-            <button className="btn btn-primary btn-full" data-section="lock-change-save" onClick={doChange}>{t("lock.change")}</button>
-            <button className="btn btn-full" style={{marginTop:8}} onClick={reset}>{t("common.cancel")}</button>
-          </div>
-        )}
-        {rec&&mode==="off"&&(
-          <div data-section="lock-off">
-            <div className="list-sub" style={{marginBottom:10}}>{t("lock.turnOffHint")}</div>
-            {field(t("lock.current"),c,setC,"lock-pin-c")}
-            {err&&<div className="field-error" role="alert">{err}</div>}
-            <button className="btn btn-primary btn-full" data-section="lock-off-save" onClick={doOff}>{t("lock.turnOff")}</button>
-            <button className="btn btn-full" style={{marginTop:8}} onClick={reset}>{t("common.cancel")}</button>
-          </div>
-        )}
-        {lock&&!lock.ok&&<button className="btn btn-full" style={{marginTop:10}} data-section="lock-reset-damaged" onClick={()=>{ removeLock(); announce(); }}>{t("lock.forgotGo")}</button>}
-      </div>
-    </div>
-  );
-}
+export function lockLang() { try { const r=JSON.parse(localStorage.getItem(KEY)||"null"); return r && LANGS.includes(r.language) ? r.language : "en"; } catch { return "en"; } }
+export const LOCK_AFTER_KEY={ 0:"lock.after0", 1:"lock.after1", 5:"lock.after5", 15:"lock.after15" };
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state={ failed:false }; }
   static getDerivedStateFromError() { return { failed:true }; }
@@ -3601,85 +3386,6 @@ function AppInner() {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FIRST LAUNCH — choose the interface language. Native radio buttons: nothing is preselected, arrow keys move between
-// the options, and Continue stays disabled until one is chosen. The three options look identical (no flags), and the
-// texts around them are shown in all three languages until a choice is made.
-// ─────────────────────────────────────────────────────────────────────────────
-function LanguageChooser({ onChoose }) {
-  const [sel,setSel]=useState(null);
-  const inEach=(key)=>LANGS.map(l=><span key={l} lang={l} className="lang-line">{tIn(l,key)}</span>);
-  return (
-    <div className="lang-screen">
-      <form className="lang-box" onSubmit={e=>{ e.preventDefault(); if (sel) onChoose(sel); }}>
-        <div className="wordmark lang-mark">Expense Ledger</div>
-        <fieldset className="lang-set">
-          <legend className="lang-title">{sel ? <span lang={sel}>{tIn(sel,"lang.title")}</span> : inEach("lang.title")}</legend>
-          {LANGS.map(l=>(
-            <label key={l} className={`lang-opt${sel===l?" sel":""}`} lang={l}>
-              <input type="radio" name="ui-language" value={l} checked={sel===l} onChange={()=>setSel(l)}/>
-              <span className="lang-name">{LANG_NAMES[l]}</span>
-              <span className="lang-mark-sel" aria-hidden="true"/>
-            </label>
-          ))}
-        </fieldset>
-        <button type="submit" className="btn btn-primary btn-full lang-continue" disabled={!sel} lang={sel||undefined}>
-          {sel ? tIn(sel,"lang.continue") : LANGS.map(l=>tIn(l,"lang.continue")).join(" · ")}
-        </button>
-        <p className="lang-hint">{sel ? <span lang={sel}>{tIn(sel,"lang.hint")}</span> : inEach("lang.hint")}</p>
-      </form>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// S2: HOME PAGE — Financial hierarchy
-// Level 1: Where am I? (position)
-// Level 2: Am I on track? (pace)
-// Level 3: What changed? (compact)
-// Level 4: What's coming? (recurring preview)
-// Level 5: What am I working toward? (goals)
-// Level 6: Raw data (recent activity)
-// ─────────────────────────────────────────────────────────────────────────────
-// Amounts dated later in the month: shown, but kept apart from what has been spent or received so far.
-function PlannedNote({ plannedExp, plannedInc, currency, style }) {
-  if (!(plannedExp>0) && !(plannedInc>0)) return null;
-  return (
-    <div className="planned-note" style={{fontSize:12,color:"var(--ink-3)",lineHeight:1.5,...style}}>
-      {plannedExp>0&&<div>{t("month.plannedExp",{amount:fmt(plannedExp,currency)})}</div>}
-      {plannedInc>0&&<div>{t("month.plannedInc",{amount:fmt(plannedInc,currency)})}</div>}
-    </div>
-  );
-}
-
-// Comparison sentences (Run 7, V1/V9). They name the window ("the same days last month" / "the previous month") instead of
-// slotting a short month name into a sentence, which read as a word in Azerbaijani ("sen ilə müqayisədə").
-function cmpText(diff, kind, currency) {
-  const key=diff<=0 ? (kind==="same"?"cmp.lessSame":"cmp.lessFull") : (kind==="same"?"cmp.moreSame":"cmp.moreFull");
-  return t(key,{ amount:fmt(Math.abs(diff),currency) });
-}
-const cmpTitle = (kind) => t(kind==="same" ? "cmp.titleSame" : "cmp.titleFull");
-const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevSame" : "cmp.prevFull", { amount:fmt(amount,currency) });
-
-// Run 25: the currency sign after a big figure is set smaller and lighter, so the number is the brand and the sign stays quiet.
-// The text is unchanged ("816.90 ₼"): the space and sign are the same characters, only wrapped.
-function MoneyText({ v }) { const i=typeof v==="string"?v.lastIndexOf(" "):-1; return i<0?v:<>{v.slice(0,i)}<span className="cur">{v.slice(i)}</span></>; }
-
-// Run 25: the empty-state picture - an open ledger page with ruled lines, a double rule and one accent mark. Drawn once, in the theme's own colours.
-function LedgerArt() {
-  const line=(y,w)=><line x1="26" y1={y} x2={26+w} y2={y} style={{stroke:"var(--rule-2)"}} strokeWidth="2" strokeLinecap="round"/>;
-  return (
-    <svg width="124" height="88" viewBox="0 0 124 88" fill="none" aria-hidden="true" focusable="false" style={{display:"block"}}>
-      <rect x="6" y="6" width="112" height="76" rx="12" style={{fill:"var(--bg-card)",stroke:"var(--rule-2)"}} strokeWidth="2"/>
-      <line x1="62" y1="12" x2="62" y2="76" style={{stroke:"var(--rule)"}} strokeWidth="2"/>
-      {line(26,24)}{line(40,32)}{line(54,20)}
-      <line x1="72" y1="62" x2="104" y2="62" style={{stroke:"var(--rule-2)"}} strokeWidth="1.5"/>
-      <line x1="72" y1="66" x2="104" y2="66" style={{stroke:"var(--rule-2)"}} strokeWidth="1.5"/>
-      <path d="M74 34l5 5 11-12" style={{stroke:"var(--accent)"}} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  );
-}
-
 // Run 26: the app's own confirm dialog (askConfirm lives with the helpers above; this part draws it).
 function ConfirmHost() {
   const [q,setQ]=useState(null);
@@ -3699,2857 +3405,12 @@ function ConfirmHost() {
     </div>
   );
 }
-// Run 26 (designed in Figma, frame "Home - Accounts strip"): balances of the person's own accounts as a row of cards, shown only when
-// at least one visible account exists. Balances are derived (opening + entries + transfers), the same numbers as in Settings.
-function HomeAccounts({ transactions, currency, onManage }) {
-  const data=readAccounts(), shown=data.accounts.filter(a=>!a.hidden);
-  if (!shown.length) return null;
-  const bal=accountBalances(data,transactions);
-  const kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
-  const kindIcon={ cash:"finance", card:"card", wallet:"wallet", bank:"safe", other:"list" };
-  const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
-  return (
-    <div className="section-enter section-enter-1" data-section="home-accounts" style={{marginBottom:14}}>
-      <div className="card-head" style={{padding:"0 2px",marginBottom:8}}><span className="card-title">{t("acc.homeTitle")}</span><button className="btn btn-sm" data-section="home-accounts-manage" onClick={onManage}>{t("acc.manage")}</button></div>
-      <div className="acc-strip">
-        {shown.map(a=>(
-          <button key={a.id} className="acc-card" data-acc-card={a.id} onClick={onManage} aria-label={a.name+", "+kindName[a.kind]+", "+fmt(bal[a.id]||0,currency)}>
-            <span className="acc-ico" aria-hidden="true"><Icon name={kindIcon[a.kind]||"list"} size={16} color="var(--accent)"/></span>
-            <span className="acc-name">{a.name}</span>
-            <span className="acc-bal"><MoneyText v={fmt(bal[a.id]||0,currency)}/></span>
-          </button>
-        ))}
-      </div>
-      {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</div>}
-    </div>
-  );
-}
-function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts }) {
-  const now=curMon(), prv=prevMon();
-  const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
-  const catSpend    =calcCategorySpend(transactions,now);
-  const budgetTotal =Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
-  const spentToDate =calcSpentToDate(transactions,now);
-  const paceInfo    =calcSpendingPace(spentToDate,now,budgetTotal);
-  const safeInfo   =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills);
-  const wc          =calcWhatChanged(transactions,now,prv);
-  const hasIncome   =curInc>0;
-
-  // Upcoming recurring (due within 7 days)
-  const upcomingSchedules=useMemo(()=>{
-    const nowD=new Date();
-    return buildSchedules(transactions,bills).filter(x=>x.isActive&&x.type==="expense")
-      .map(x=>({...x,nextDue:scheduleNextDue(x,transactions,nowD)}))
-      .filter(x=>x.nextDue&&daysBetween(nowD,x.nextDue)<=7)
-      .sort((a,b)=>a.nextDue-b.nextDue);
-  },[transactions,bills]);
-
-  return (
-    <div>
-      {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
-      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} currency={currency} now={now}/>
-      <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
-        <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
-        <div className="hero-amount"><MoneyText v={fmt(curExp,currency)}/></div>
-        <div className="hero-sub">
-          <span>{t("home.spentThisMonth")}</span>
-          {momDiff!==null&&(
-            <span className={`mom-badge ${momDiff<=0?"better":"worse"}`}>
-              <Icon name={momDiff<=0?"arrowDown":"arrowUp"} size={10}/>
-              {cmpText(momDiff,cmpKind,currency)}
-            </span>
-          )}
-        </div>
-        <div className="hero-stats">
-          <div className="hero-stat">
-            <div className={`hero-stat-val${curInc>0?" pos":""}`}>{fmtShort(curInc,currency)}</div>
-            <div className="hero-stat-lbl">{t("home.income")}</div>
-          </div>
-          <div className="hero-stat">
-            <div className="hero-stat-val neg">{fmtShort(curExp,currency)}</div>
-            <div className="hero-stat-lbl">{t("home.spent")}</div>
-          </div>
-          <div className="hero-stat">
-            {hasIncome?(
-              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":(surplusRate||0)<0?" neg":""}`}>{fmtPct(surplusRate??0)}</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curInc,curExp))}</div></>
-            ):(
-              <><div className={`hero-stat-val${curInc>curExp?" pos":curInc<curExp?" neg":""}`}>{curInc<curExp?"−":""}{fmtShort(Math.abs(curInc-curExp),currency)}</div><div className="hero-stat-lbl">{t("home.balance")}</div></>
-            )}
-          </div>
-        </div>
-        <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
-      </div>
-
-      <HomeAccounts transactions={accountTxns||transactions} currency={currency} onManage={onAccounts}/>
-
-      {/* Due within 7 days */}
-      {upcomingSchedules.length>0&&(
-        <div className="card section-enter section-enter-1" data-section="home-upcoming">
-          <div className="card-head"><span className="card-title">{t("home.dueWithin7")}</span></div>
-          {upcomingSchedules.slice(0,3).map(s=>{
-            const daysLeft=daysBetween(new Date(),s.nextDue); const cat=CAT(s.category);
-            return (
-              <div key={s.key} className="up-row">
-                <span className="cat-dot" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={s.category} size={16}/></span>
-                <div className="up-body">
-                  <div className="list-title">{maskText(s.merchant||s.note)||catName(s.category)}</div>
-                  <div className="list-sub">{fmtDate(localDateStr(s.nextDue))} · {catName(s.category)}</div>
-                </div>
-                <div style={{textAlign:"right",flexShrink:0}}>
-                  <div className="up-amt">{fmt(s.amount,currency)}</div>
-                  <div style={{fontSize:11,color:daysLeft<=1?"var(--warn)":"var(--ink-3)",fontWeight:600}}>{daysLeft===0?t("date.today"):daysLeft===1?t("date.tomorrow"):t("date.inDays",{n:daysLeft})}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Run 18: the five most recent entries (all of them, including loan and debt repayments), newest first */}
-      {latest.length>0&&(
-        <div className="card section-enter section-enter-2" data-section="home-latest">
-          <div className="card-head"><span className="card-title">{t("home.latest")}</span><button className="btn btn-sm" data-section="home-latest-all" onClick={onOpenLedger}>{t("home.seeAllTxns")}</button></div>
-          {latest.map(x=><TxnRow key={x.id} txn={x} currency={currency} onView={onView} compact/>)}
-        </div>
-      )}
-
-      {/* Run 25: the donut is long, so it follows the latest entries instead of pushing them off the first screen. */}
-      {curExp>0&&<div className="card section-enter section-enter-2" data-section="home-breakdown">
-        <div className="card-title" style={{marginBottom:8}}>{t("home.breakdown")}</div>
-        <SpendDonut catSpend={catSpend} total={curExp} currency={currency}/>
-      </div>}
-
-      {/* Smart Helper — deterministic advice cards */}
-      <div className="section-enter section-enter-2" data-section="home-coach">
-        <SmartHelper transactions={transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
-      </div>
-      {setup&&!setup.hidden&&(()=>{
-        // Run 17: first-run checklist. Each step ticks itself from what the person has actually done; nothing is stored except "hidden".
-        const steps=[
-          { id:"txn",    done:transactions.length>0,                                          label:t("setup.s1") },
-          { id:"income", done:transactions.some(x=>x.type==="income"),                       label:t("setup.s2") },
-          { id:"plan",   done:Object.values(budgets||{}).some(v=>v>0)||(goals||[]).length>0, label:t("setup.s3") },
-          { id:"backup", done:!!setup.backedUp,                                              label:t("setup.s4") },
-        ];
-        if (steps.every(x=>x.done)) return null;
-        return (
-          <div className="card section-enter section-enter-2" data-section="home-setup" role="group" aria-label={t("setup.title")}>
-            <div className="a-card-title">{t("setup.title")}</div>
-            <div className="list-sub" style={{marginBottom:6}}>{t("setup.sub")}</div>
-            {steps.map(x=>(
-              <button key={x.id} type="button" className="setup-step" data-step={x.id} data-done={x.done} disabled={x.done} onClick={()=>onSetupGo(x.id)}
-                aria-label={x.done?`${x.label} — ${t("setup.stepDone")}`:x.label}
-                style={{display:"flex",alignItems:"center",gap:10,width:"100%",textAlign:"left",background:"none",border:"none",borderTop:"1px solid var(--rule)",padding:"10px 2px",minHeight:44,fontSize:14,color:x.done?"var(--ink-3)":"var(--ink)",cursor:x.done?"default":"pointer"}}>
-                <span aria-hidden="true" style={{width:20,textAlign:"center",color:x.done?"var(--pos)":"var(--ink-3)"}}>{x.done?"✓":"○"}</span>
-                <span style={{flex:1,textDecoration:x.done?"line-through":"none"}}>{x.label}</span>
-              </button>
-            ))}
-            <button type="button" className="btn btn-ghost btn-sm setup-hide" style={{marginTop:6}} onClick={onSetupHide}>{t("setup.hide")}</button>
-          </div>
-        );
-      })()}
-      <HomeDetails hasTxns={transactions.length>0} onAdd={onAdd} onOpenLedger={onOpenLedger} onInfo={onInfo}/>
-    </div>
-  );
-}
-
-// The Safe to Spend card and its note (redesign: shown first on Home). A separate function only to keep HomePage readable.
-function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
-  // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
-  // summary and upcoming bills out of the first screen.
-  const [open,setOpen]=useState(false);
-  return (
-    <>
-      {safeToSpend?.enabled&&safeInfo.feasible&&(
-        <div className="safe-card section-enter section-enter-2" data-section="home-safe">
-          <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
-            <Icon name="safe" size={12} color="var(--ink-3)"/>{t("safe.title")}
-          </div>
-          <div className="safe-amount" style={{color:safeInfo.remaining>=0?"var(--ink)":"var(--neg)"}}>
-            <MoneyText v={fmt(safeInfo.remaining,currency)}/>
-          </div>
-          {safeInfo.daysRemaining>0&&(
-            <div className="safe-daily">
-              {safeInfo.remaining>0?t("safe.perDay",{amount:fmt(safeInfo.dailyAllowance,currency)}):""}
-              {tn("safe.daysLeft",safeInfo.daysRemaining,{month:monthShort(now)})}
-            </div>
-          )}
-          <button className="safe-toggle" aria-expanded={open} aria-controls="safe-breakdown" onClick={()=>setOpen(o=>!o)}>
-            {t(open?"safe.hideHow":"safe.showHow")}<Icon name={open?"chevDown":"chevRight"} size={14}/>
-          </button>
-          {open&&<div id="safe-breakdown">
-          {/* Four explicit lines — planning engine, not just a number */}
-          <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
-            <div className="safe-row">
-              <span className="safe-lbl">{t("safe.incomeReceived")}</span>
-              <span className="safe-val">{fmt(safeInfo.curInc,currency)}</span>
-            </div>
-            {safeInfo.expectedInc>0&&(
-              <div className="safe-row">
-                <span className="safe-lbl">{t("safe.expectedLater")}</span>
-                <span className="safe-val" style={{color:"var(--ink-4)"}}>{fmt(safeInfo.expectedInc,currency)}</span>
-              </div>
-            )}
-            {/* Fix 4: Show goal contributions if they exceed manual savings target */}
-            {safeInfo.goalContributionActive?(
-              <div className="safe-row">
-                <span className="safe-lbl">{t("safe.goalContributions")}</span>
-                <span className="safe-val" style={{color:"var(--ink-3)"}}>−{fmt(safeInfo.goalContributions,currency)}</span>
-              </div>
-            ):safeInfo.effectiveSavingsTarget>0&&(
-              <div className="safe-row">
-                <span className="safe-lbl">{t("safe.savingsTarget")}</span>
-                <span className="safe-val" style={{color:"var(--ink-3)"}}>−{fmt(safeInfo.effectiveSavingsTarget,currency)}</span>
-              </div>
-            )}
-            <div className="safe-row">
-              <span className="safe-lbl">{t("safe.recordedSpend")}</span>
-              <span className="safe-val" style={{color:"var(--neg)"}}>−{fmt(safeInfo.curExp,currency)}</span>
-            </div>
-            {/* Part of the row above, not a further deduction: expenses entered for later this month are set aside, not spent. */}
-            {safeInfo.laterExp>0&&(
-              <div className="safe-row">
-                <span className="safe-lbl">{t("safe.laterExpenses")}</span>
-                <span className="safe-val" style={{color:"var(--ink-4)"}}>{fmt(safeInfo.laterExp,currency)}</span>
-              </div>
-            )}
-            {/* De-emphasised by colour (still ≥ 4.5:1), not by opacity: at 40% opacity this row was 1.8:1 and hard to read. */}
-            <div className="safe-row">
-              <span className="safe-lbl" style={safeInfo.futureCommitments>0?undefined:{color:"var(--ink-4)"}}>{t("safe.upcoming")}</span>
-              <span className="safe-val" style={{color:safeInfo.futureCommitments>0?"var(--warn)":"var(--ink-4)"}}>
-                {safeInfo.futureCommitments>0?`−${fmt(safeInfo.futureCommitments,currency)}`:t("safe.noneThisMonth")}
-              </span>
-            </div>
-            <div className="safe-row" style={{borderBottom:"none",paddingTop:8,marginTop:2,borderTop:"3px double var(--rule-2)"}}>
-              <span className="safe-lbl" style={{fontWeight:700,color:"var(--ink)"}}>{t("safe.discretionary")}</span>
-              <span className="safe-val" style={{color:safeInfo.remaining>=0?"var(--pos)":"var(--neg)",fontSize:13}}>
-                {safeInfo.remaining>=0?"+":""}{fmt(safeInfo.remaining,currency)}
-              </span>
-            </div>
-            {/* Explain which is driving the deduction */}
-            {safeInfo.goalContributionActive&&safeInfo.savingsTarget>0&&(
-              <div style={{fontSize:10,color:"var(--ink-4)",marginTop:4,fontStyle:"italic"}}>
-                {t("safe.goalsExceedFloor",{ goals:fmt(safeInfo.goalContributions,currency), floor:fmt(safeInfo.savingsTarget,currency) })}
-              </div>
-            )}
-          </div>
-          <div className="safe-note">
-            {t("safe.noteIncome")}{" "}
-            {safeInfo.scheduleCount>0&&t("safe.noteSchedules",{ up:safeInfo.upcomingCount, un:safeInfo.unrecordedCount, s:safeInfo.scheduleCount, payments:tn("unit.payments",safeInfo.upcomingCount+safeInfo.unrecordedCount), schedules:tn("unit.schedules",safeInfo.scheduleCount) })}
-          </div>
-          </div>}
-          {/* Always visible, open or not: without recurring bills the number is optimistic, and the user must not have to tap to learn that. */}
-          {safeInfo.scheduleCount===0&&<div className="safe-note safe-caveat" role="note">{t("safe.noteNoRecurring")}</div>}
-        </div>
-      )}
-
-      {/* Safe to Spend is on but no income has arrived yet this month: say so instead of showing nothing. */}
-      {safeToSpend?.enabled&&!safeInfo.feasible&&(
-        <div className="safe-card section-enter section-enter-2" role="status" data-section="home-safe">
-          <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
-            <Icon name="safe" size={12} color="var(--ink-3)"/>{t("safe.title")}
-          </div>
-          <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.5}}>
-            {t("safe.waiting")}{safeInfo.expectedInc>0?" "+t("safe.waitingExpected",{ amount:fmt(safeInfo.expectedInc,currency) }):""}
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
-// The rest of Home. Run 15: Home is the quick answer, not a second ledger. The full Goals and Budgets lists and the long
-// recent-transactions list were removed from here: each lives in its own tab (Goals, Transactions), and the coach cards above
-// still raise a goal or budget only when it needs attention. With entries, one route leads to the full list; without, the empty state.
-function HomeDetails({ hasTxns, onAdd, onOpenLedger, onInfo }) {
-  return hasTxns?(
-    <div className="section-enter section-enter-8" data-section="home-see-all">
-      <button className="btn btn-ghost btn-full" onClick={onOpenLedger}>{t("home.seeAll")}<Icon name="chevRight" size={14}/></button>
-    </div>
-  ):(
-    <div className="empty section-enter section-enter-8" data-section="home-empty">
-      <div className="empty-icon"><LedgerArt/></div>
-      <div className="empty-title">{t("home.emptyTitle")}</div>
-      <div className="empty-body">{t("home.emptyBody")}</div>
-      <button className="btn btn-primary btn-full" style={{maxWidth:220,marginTop:4}} onClick={onAdd}>{t("home.emptyBtn")}</button>
-      <button className="btn btn-ghost btn-full" data-section="home-how" style={{maxWidth:220,marginTop:8}} onClick={()=>onInfo&&onInfo("how")}>{t("home.howBtn")}</button>
-    </div>
-  );
-}
-
-// ─── Shared transaction components ───────────────────────────────────────────
-function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPress, compact }) {
-  const groups=useMemo(()=>{
-    const g={}; txns.forEach(t=>{ (g[t.date]=g[t.date]||[]).push(t); });
-    return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));
-  },[txns]);
-  return (
-    <>
-      {groups.map(([date,rows])=>{
-        const dayTotal=rows.filter(t=>t.type==="expense").reduce(addAmt,0);
-        return (
-          <div key={date} className="txn-group">
-            <div className="txn-date-hdr">
-              <span className="txn-date-lbl">{fmtDate(date)}</span>
-              {dayTotal>0&&<span className="txn-date-total">{fmt(dayTotal,currency)}</span>}
-            </div>
-            <div className="txn-list">
-              {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact/>)}
-            </div>
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-let freshTxnId=null;   // id of the entry saved a moment ago; its row plays the settle tint once
-function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, compact }) {
-  const cat=CAT(txn.category);
-  // Press and hold a row (about half a second) to start selecting several; the tap that follows the hold is ignored.
-  const hold=useRef({ timer:0, x:0, y:0, fired:false });
-  const holdStart=(e)=>{ if (!onLongPress || (e.pointerType==="mouse" && e.button!==0)) return; const h=hold.current; h.fired=false; h.x=e.clientX; h.y=e.clientY; clearTimeout(h.timer); h.timer=setTimeout(()=>{ h.fired=true; try { navigator.vibrate&&navigator.vibrate(12); } catch { /* no vibration here */ } onLongPress(txn); },480); };
-  const holdMove=(e)=>{ const h=hold.current; if (h.timer && (Math.abs(e.clientX-h.x)>10 || Math.abs(e.clientY-h.y)>10)) { clearTimeout(h.timer); h.timer=0; } };
-  const holdEnd=()=>{ const h=hold.current; clearTimeout(h.timer); h.timer=0; };
-  const isInc=txn.type==="income";
-  const displayName=maskText(txn.merchant||txn.note)||catName(txn.category);
-  const displaySub=[
-    txn.merchant&&txn.note?maskText(txn.note):null,
-    catName(txn.category),
-    subName(txn.subcategory)||null,
-    txn.wallet?walletName(txn.wallet):null,
-    tripName(txn.trip)||null,
-    !compact?fmtDate(txn.date):null,
-  ].filter(Boolean).join(" · ");
-  return (
-    <div className={"txn-row"+(txn.id===freshTxnId?" txn-fresh":"")} onClick={()=>{ if (hold.current.fired) { hold.current.fired=false; return; } onView?.(txn); }} onPointerDown={holdStart} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerCancel={holdEnd} onPointerLeave={holdEnd} onContextMenu={onLongPress?e=>e.preventDefault():undefined} {...(onView ? { role:"button", tabIndex:0, onKeyDown:activateKey(()=>onView(txn)) } : {})}>
-      <div className="txn-ico" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={txn.category} size={16} color={cat?.color}/></div>
-      <div className="txn-body">
-        <div className="txn-name">{displayName}</div>
-        <div className="txn-sub">
-          <span>{displaySub}</span>
-          {txn.recurring&&<span className="rec-pill"><Icon name="repeat" size={9}/>{txn.recurFreq?t("freq."+txn.recurFreq):""}</span>}
-          {accountName(txn.account)&&<span className="acc-pill" data-acc-pill="1">{accountName(txn.account)}</span>}
-        </div>
-      </div>
-      <div className="txn-right">
-        <div className={`txn-amt ${isInc?"inc":"exp"}`}>{isInc?"+":"−"}{fmt(txn.amount,currency)}</div>
-        {(onEdit||onDelete)&&!onView&&(
-          <div className="txn-actions">
-            {onEdit&&<button className="txn-act" onClick={e=>{e.stopPropagation();onEdit(txn);}} aria-label={t("common.edit")}><Icon name="edit" size={13}/></button>}
-            {onDelete&&<button className="txn-act del" onClick={e=>{e.stopPropagation();onDelete(txn.id);}} aria-label={t("common.delete")}><Icon name="trash" size={13}/></button>}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Ledger Page ──────────────────────────────────────────────────────────────
-function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onEdit, onView, onAdd }) {
-  const [selMode, setSelMode] = useState(false);          // Run 24: select several entries, then delete them together (undo stays available)
-  const [picked,  setPicked]  = useState(()=>new Set());
-  const [search,     setSearch]     = useState("");
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [catFilter,  setCatFilter]  = useState("all");
-  const [tripFilter, setTripFilter] = useState("all");   // Run 22: "all" or a trip name (compared without case)
-  const [walletFilter, setWalletFilter] = useState("all");   // Run 16: "all", a wallet id, or "none" (entries without one)
-  const [dateFrom,   setDateFrom]   = useState("");
-  const [dateTo,     setDateTo]     = useState("");
-  const [showDates,  setShowDates]  = useState(false);
-  const [showCatSheet, setShowCatSheet] = useState(false);
-
-  const filtered=useMemo(()=>{
-    let list=[...transactions];                       // not "t": that name is the translation function used below
-    if (search) {
-      const q=search.toLowerCase().trim(),asNum=parseFloat(q);
-      list=list.filter(x=>{
-        if ((x.note||"").toLowerCase().includes(q)) return true;
-        if ((x.merchant||"").toLowerCase().includes(q)) return true;
-        if (x.category.toLowerCase().includes(q)) return true;
-        if ((x.subcategory||"").toLowerCase().includes(q)) return true;
-        if (!isNaN(asNum)&&Math.abs(x.amount-asNum)<0.01) return true;
-        if (x.date.includes(q)) return true;
-        if (CAT(x.category)?.name.toLowerCase().includes(q)) return true;
-        if (catName(x.category).toLowerCase().includes(q)) return true;                 // name in the interface language too
-        if (subName(x.subcategory||"").toLowerCase().includes(q)) return true;
-        const mn=parseLocalDate(x.date).toLocaleDateString("en-GB",{month:"long"}).toLowerCase();
-        if (mn.includes(q)) return true;
-        const mi=parseLocalDate(x.date).getMonth()+1;                                  // month names in the interface language
-        if (t("mon."+mi).toLowerCase().includes(q) || t("monGen."+mi).toLowerCase().includes(q)) return true;
-        return false;
-      });
-    }
-    if (typeFilter!=="all") list=list.filter(x=>x.type===typeFilter);
-    if (catFilter!=="all")  list=list.filter(x=>x.category===catFilter);
-    if (walletFilter!=="all") list=list.filter(x=>(walletId(x.wallet)||"none")===walletFilter);
-    if (tripFilter!=="all") list=list.filter(x=>tripName(x.trip).toLowerCase()===tripFilter.toLowerCase());
-    if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
-    if (dateTo)             list=list.filter(x=>x.date<=dateTo);
-    return list;
-  },[transactions,search,typeFilter,catFilter,walletFilter,tripFilter,dateFrom,dateTo,locale()]);
-  // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
-  const trips=useMemo(()=>tripTotals(transactions),[transactions]);
-  const catSel=useMemo(()=>catFilter==="all" ? null : catTotals(transactions,catFilter),[transactions,catFilter]);   // Run 24
-  const tripSel=tripFilter==="all" ? null : trips.find(x=>x.name.toLowerCase()===tripFilter.toLowerCase()) || null;
-  // Run 16: the wallet filter is offered only when at least one entry has a wallet, and lists only the wallets in use.
-  const usedWallets=useMemo(()=>[...new Set(transactions.map(x=>walletId(x.wallet)).filter(Boolean))],[transactions]);
-  const hasUnsetWallet=useMemo(()=>transactions.some(x=>!walletId(x.wallet)),[transactions]);
-
-  // The category list offers only categories used by the chosen type (Expenses / Income), and changing the type drops a
-  // category filter that type has no transactions in, instead of leaving an empty list.
-  const catsFor=(ty)=>[...new Set(transactions.filter(x=>ty==="all"||x.type===ty).map(x=>x.category))];
-  const usedCats=useMemo(()=>catsFor(typeFilter).map(id=>CAT(id)).filter(Boolean),[transactions,typeFilter]);
-  const chooseType=(ty)=>{ setTypeFilter(ty); if (catFilter!=="all" && !catsFor(ty).includes(catFilter)) setCatFilter("all"); };
-  const hasCatFilter=catFilter!=="all",hasDateFilter=dateFrom||dateTo;
-  const selectedCat=CAT(catFilter);
-
-  if (transactions.length===0) return (
-    <div className="empty">
-      <div className="empty-icon"><LedgerArt/></div>
-      <div className="empty-title">{t("ledger.emptyTitle")}</div>
-      <div className="empty-body">{t("ledger.emptyBody")}</div>
-      <button className="btn btn-primary btn-full" style={{maxWidth:220,marginTop:4}} onClick={onAdd}>{t("ledger.emptyBtn")}</button>
-    </div>
-  );
-
-  return (
-    <div>
-      <div className="search-wrap">
-        <span className="search-ico"><Icon name="search" size={14}/></span>
-        <input className="search-input" placeholder={t("ledger.searchPh")} value={search} onChange={e=>setSearch(e.target.value)} aria-label={t("ledger.search")}/>
-      </div>
-      <div className="filter-bar">
-        {["all","expense","income"].map(ty=>(
-          <button key={ty} className={`chip${typeFilter===ty?" on":""}`} aria-pressed={typeFilter===ty} onClick={()=>chooseType(ty)}>{t("ledger.type."+ty)}</button>
-        ))}
-        <button className={`cat-filter-btn${hasCatFilter?" active":""}`} onClick={()=>setShowCatSheet(true)}>
-          {hasCatFilter?<><CatIcon catId={catFilter} size={12}/>{catName(catFilter)}</>:<><Icon name="filter" size={12}/>{t("ledger.category")}</>}
-          <Icon name="chevDown" size={11}/>
-        </button>
-        <button className={`chip${(showDates||hasDateFilter)?" on":""}`} aria-pressed={!!(showDates||hasDateFilter)} onClick={()=>setShowDates(s=>!s)}>
-          <Icon name="calendar" size={11}/> {t("ledger.date")}
-        </button>
-        {(hasCatFilter||hasDateFilter||typeFilter!=="all"||walletFilter!=="all"||tripFilter!=="all")&&(
-          <button className="chip on" style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)"}}
-            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");setTripFilter("all");}}>{t("ledger.clear")} ×</button>
-        )}
-      </div>
-      {trips.length>0&&(
-        <div className="filter-bar" role="group" aria-label={t("trip.filterLabel")} data-section="tx-trip-filter">
-          {["all",...trips.map(x=>x.name)].map(n=>(
-            <button key={n} className={`chip${tripFilter===n?" on":""}`} aria-pressed={tripFilter===n} onClick={()=>setTripFilter(n)}>{n==="all"?t("trip.filterAll"):n}</button>
-          ))}
-        </div>
-      )}
-      {catSel&&catSel.n>0&&(
-        <div className="list-sub" data-section="tx-cat-totals" style={{margin:"2px 2px 8px"}}>
-          <div style={{fontWeight:600}}>{t("cat.allTime",{total:fmt(catSel.total),n:catSel.n})}</div>
-          {catSel.months.slice(0,12).map(m=><div key={m.month} data-month={m.month}>{t("cat.month",{month:monthName(m.month),total:fmt(m.total)})}</div>)}
-        </div>
-      )}
-      {tripSel&&<div className="list-sub" data-section="tx-trip-total" style={{margin:"2px 2px 8px"}}>{t("trip.total",{name:tripSel.name,total:fmt(tripSel.total),n:tripSel.n})}</div>}
-      {usedWallets.length>0&&(
-        <div className="filter-bar" role="group" aria-label={t("wallet.filterLabel")} data-section="tx-wallet-filter">
-          {["all",...usedWallets,...(hasUnsetWallet?["none"]:[])].map(w=>(
-            <button key={w} className={`chip${walletFilter===w?" on":""}`} aria-pressed={walletFilter===w} onClick={()=>setWalletFilter(w)}>{w==="all"?t("wallet.filterAll"):w==="none"?t("wallet.none"):walletName(w)}</button>
-          ))}
-        </div>
-      )}
-      {showDates&&(
-        <div className="date-inputs">
-          <label className="date-input-wrap"><span className="date-lbl">{t("ledger.from")}</span><input type="date" lang={locale()} className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
-          <label className="date-input-wrap"><span className="date-lbl">{t("ledger.to")}</span><input type="date" lang={locale()} className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
-        </div>
-      )}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,margin:"2px 2px 12px"}}>
-        <div className="list-sub">{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</div>
-        <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
-      </div>
-      {filtered.length===0?(
-        <div className="empty" style={{padding:"36px 0"}}>
-          <div className="empty-icon"><Icon name="search" size={28}/></div>
-          <div className="empty-title">{t("ledger.noResults")}</div>
-          <div className="empty-body">{t("ledger.noResultsBody")}</div>
-        </div>
-      ):selMode?(()=>{
-        const shown=filtered.filter(x=>picked.has(String(x.id))), allOn=shown.length===filtered.length;
-        return (
-          <div data-section="tx-select">
-            <div className="filter-bar" style={{position:"sticky",top:0,zIndex:2,background:"var(--bg)",paddingBottom:6}}>
-              <button className="chip" data-section="tx-select-all" onClick={()=>setPicked(allOn?new Set():new Set(filtered.map(x=>String(x.id))))}>{t(allOn?"ledger.selectNone":"ledger.selectAll",{n:filtered.length})}</button>
-              <button className="chip on" data-section="tx-select-delete" disabled={!shown.length} style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)",opacity:shown.length?1:0.5}}
-                onClick={()=>{ onDeleteMany(shown.map(x=>x.id)); setPicked(new Set()); setSelMode(false); }}>{t("ledger.deleteSel",{n:shown.length})}</button>
-            </div>
-            <div className="txn-list">
-              {filtered.map(x=>{ const on=picked.has(String(x.id)); return (
-                <button key={x.id} className="list-row" role="checkbox" aria-checked={on} data-picked={on?"1":"0"} style={{width:"100%",textAlign:"left",font:"inherit",display:"flex",alignItems:"center",gap:10,background:on?"var(--accent-bg, rgba(0,0,0,0.05))":"none",border:"none",borderBottom:"1px solid var(--rule)",padding:"10px 4px",cursor:"pointer"}}
-                  onClick={()=>setPicked(p=>{ const n=new Set(p); const k=String(x.id); n.has(k)?n.delete(k):n.add(k); return n; })}>
-                  <span aria-hidden="true" style={{width:20,height:20,borderRadius:6,border:"2px solid var(--ink-3)",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"none"}}>{on?<Icon name="check" size={13}/>:null}</span>
-                  <span style={{flex:1,minWidth:0}}><span style={{display:"block",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(x.merchant||x.note)||catName(x.category)}</span><span className="list-sub">{fmtDate(x.date)}</span></span>
-                  <span style={{fontWeight:600}}>{x.type==="income"?"+":"−"}{fmt(x.amount,currency)}</span>
-                </button>); })}
-            </div>
-          </div>
-        );
-      })():(
-        <GroupedTxns txns={filtered} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={x=>{ setSelMode(true); setPicked(new Set([String(x.id)])); }}/>
-      )}
-      {showCatSheet&&(
-        <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setShowCatSheet(false)}>
-          <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("ledger.filterTitle")}>
-            <div className="sheet-grip"><div className="sheet-handle"/></div>
-            <div className="sheet-title">{t("ledger.filterTitle")}</div>
-            {[{id:"all",color:"#98A5B7"},...usedCats].map(cat=>(
-              <button key={cat.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",background:"none",border:"none",borderBottom:"1px solid var(--rule)",cursor:"pointer",width:"100%",textAlign:"left",font:"inherit"}}
-                onClick={()=>{setCatFilter(cat.id==="all"?"all":cat.id);setShowCatSheet(false);}}>
-                <div style={{width:34,height:34,borderRadius:8,background:(cat.color||"#98A5B7")+"26",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <CatIcon catId={cat.id} size={16} color={cat.color}/>
-                </div>
-                <span style={{fontSize:14,fontWeight:catFilter===cat.id?700:500,color:"var(--ink)",flex:1}}>{cat.id==="all"?t("ledger.allCategories"):catName(cat.id)}</span>
-                {catFilter===cat.id&&<span style={{color:"var(--accent)",fontWeight:700,fontSize:12}} aria-label={t("common.selected")}>✓</span>}
-              </button>
-            ))}
-            <button className="btn btn-ghost btn-full" style={{marginTop:14}} onClick={()=>setShowCatSheet(false)}>{t("common.close")}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Recurring Hub ────────────────────────────────────────────────────────────
-// Run 12: the bill form — add a bill, or edit / pause / delete one. The due date is the user's: the bill is expected on it
-// and then every week / two weeks / month / year (a day past a month's end falls on that month's last day).
-// Deleting a bill keeps all its payments; they just stop pointing to it.
-function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast }) {
-  const isNew=!bill;
-  const [name,setName]=useState(bill?.name||""), [type,setType]=useState(bill?.type||"expense"), [amount,setAmount]=useState(bill?String(bill.amount):"");
-  const [category,setCategory]=useState(bill?.category||"housing"), [freq,setFreq]=useState(bill?.freq||"monthly");
-  const [anchor,setAnchor]=useState(bill?.anchorDate||today()), [active,setActive]=useState(bill?bill.active!==false:true);
-  const [endDate,setEndDate]=useState(bill?.endDate||"");
-  const cats=CATEGORIES.filter(c=>type==="income"?c.income:!c.income);
-  const save=()=>{
-    const b=validateBill({ id:bill?.id||"tmp", name, type, category:cats.some(c=>c.id===category)?category:cats[0].id, subcategory:bill?.subcategory||"",
-      amount:formMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), endDate, active, createdAt:bill?.createdAt||new Date().toISOString() });
-    if (!b) { showToast(t(endDate && endDate<anchor ? "bill.endDateBad" : "bill.invalid"),3500); return; }
-    onSave(isNew ? { ...b, id:null } : b);
-  };
-  return (
-    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="sheet bill-sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t(isNew?"bill.add":"bill.edit")}>
-        <div className="sheet-grip"><div className="sheet-handle"/></div>
-        <div className="sheet-title">{t(isNew?"bill.add":"bill.edit")}</div>
-        <div className="type-toggle">
-          {["expense","income"].map(ty=><button key={ty} className={`type-btn${type===ty?" active":""}`} aria-pressed={type===ty} onClick={()=>setType(ty)}>{t(ty==="income"?"add.income":"add.expense")}</button>)}
-        </div>
-        <div className="field"><label className="field-lbl" htmlFor="bill-name">{t("bill.name")}</label><input id="bill-name" className="field-input" value={name} maxLength={80} placeholder={t("bill.namePh")} onChange={e=>setName(e.target.value)}/></div>
-        <div className="field-row">
-          <div className="field"><label className="field-lbl" htmlFor="bill-amount">{t("add.amount")} ({currency})</label><input id="bill-amount" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={amount} onChange={e=>setAmount(cleanMoneyText(e.target.value))}/></div>
-          <div className="field"><label className="field-lbl" htmlFor="bill-freq">{t("add.frequency")}</label>
-            <select id="bill-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)}>{["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}</select></div>
-        </div>
-        <div className="field-row">
-          <div className="field"><label className="field-lbl" htmlFor="bill-cat">{t("add.category")}</label>
-            <select id="bill-cat" className="field-input field-select" value={cats.some(c=>c.id===category)?category:cats[0].id} onChange={e=>setCategory(e.target.value)}>{cats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</select></div>
-          <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><input id="bill-date" className="field-input" type="date" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/>
-            {isValidDateStr(anchor)&&<div className="list-sub" style={{marginTop:4}}>{fmtLongDate(parseLocalDate(anchor))}</div>}</div>
-        </div>
-        <div className="field"><label className="field-lbl" htmlFor="bill-end">{t("bill.endDate")}</label><input id="bill-end" className="field-input" type="date" lang={locale()} value={endDate} min={isValidDateStr(anchor)?anchor:undefined} onChange={e=>setEndDate(e.target.value)}/>
-          <div className="list-sub" style={{marginTop:4}}>{t("bill.endDateSub")}</div></div>
-        {!isNew&&(
-          <div className="settings-row">
-            <div><div className="settings-row-title">{t("bill.active")}</div><div className="settings-row-sub">{t("bill.activeSub")}</div></div>
-            <div className={`toggle-track${active?" on":""}`} role="switch" aria-checked={active} aria-label={t("bill.active")} tabIndex={0} onClick={()=>setActive(a=>!a)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setActive(a=>!a); } }}><div className="toggle-knob"/></div>
-          </div>
-        )}
-        <button className="btn btn-primary btn-full bill-save" onClick={save}>{t("common.save")}</button>
-        {!isNew&&<button className="btn btn-ghost btn-full bill-delete" style={{color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>onDelete(bill.id)}>{t("bill.delete")}</button>}
-        <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose}>{t("common.cancel")}</button>
-      </div>
-    </div>
-  );
-}
-
-function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedule, onRecordPayment, onConvert, onEditBill, onToggleBill }) {
-  const schedules=useMemo(()=>{
-    const nowD=new Date();
-    return buildSchedules(transactions,bills).map(x=>{
-      const st=x.isActive ? scheduleMonthStatus(x,transactions,localMonthStr(nowD),nowD) : null;
-      return { ...x, nextDue:scheduleNextDue(x,transactions,nowD), monthly:scheduleMonthly(x), left:billPaymentsLeft(x,transactions,nowD), unrecordedThisMonth:st?st.overdue.length:0 };
-    }).sort((a,b)=>{ if (a.isActive!==b.isActive) return a.isActive?-1:1; return (a.nextDue?a.nextDue.getTime():Infinity)-(b.nextDue?b.nextDue.getTime():Infinity); });
-  },[transactions,bills]);
-  const inferred=schedules.filter(x=>!x.billId).length;
-  const active=schedules.filter(x=>x.isActive), paused=schedules.filter(x=>!x.isActive);
-  const outgoing=active.filter(x=>x.type==="expense");
-  const monthlyOut=outgoing.reduce((a,x)=>a+x.monthly,0);
-  const monthlyIn=active.filter(x=>x.type==="income").reduce((a,x)=>a+x.monthly,0);
-  const nowD=new Date();
-  const upcoming=outgoing.filter(x=>x.nextDue&&daysBetween(nowD,x.nextDue)<=7);
-
-  if (schedules.length===0) return (
-    <div className="empty">
-      <div className="empty-icon"><Icon name="repeat" size={30}/></div>
-      <div className="empty-title">{t("rec.emptyTitle")}</div>
-      <div className="empty-body">{t("rec.emptyBody")}</div>
-    </div>
-  );
-
-  const ics=billsToIcs(outgoing,transactions,nowD,{ label:x=>maskText(x.merchant||x.note)||catName(x.category), amountText:x=>fmt(x.amount,currency) });   // Run 24
-  const dueText=(x)=>{ if (!x.nextDue) return t("rec.noDate"); const d=daysBetween(nowD,x.nextDue); return d===0?t("rec.dueToday"):d===1?t("rec.dueTomorrow"):d<=60?tn("rec.dueInDays",d):t("rec.dueOn",{date:fmtDate(localDateStr(x.nextDue))}); };
-  const Row=({x})=>{
-    const cat=CAT(x.category)||{id:"other",color:"#98A5B7"};
-    const isInc=x.type==="income";
-    const near=x.nextDue && daysBetween(nowD,x.nextDue)<=3;
-    return (
-      // A paused schedule is marked by its "Paused" text and a faded icon; its text keeps full contrast (fading the whole row
-      // made it 2.2–3.9:1, including the Reactivate button the user needs).
-      <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)"}}>
-        <div aria-hidden="true" onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{width:38,height:38,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:x.isActive?1:0.5}}>
-          <CatIcon catId={cat.id} size={16} color={cat.color}/>
-        </div>
-        <div className={x.billId?"bill-row":undefined} role="button" tabIndex={0} onKeyDown={activateKey(()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest))} onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
-          <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{maskText(x.merchant||x.note)||catName(x.category)}</div>
-          <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,lineHeight:1.4}}>
-            {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""} · {t("freq."+x.freq)} · {tn("rec.paymentsRecorded",x.occurrences.length)}
-          </div>
-          <div style={{fontSize:11,marginTop:1,color:near&&x.isActive?"var(--warn)":"var(--ink-4)",fontWeight:near&&x.isActive?700:400}}>
-            {x.isActive?dueText(x):t("rec.paused")}{x.left!=null&&x.isActive&&<span> · {x.left>0?tn("bill.paymentsLeft",x.left):t("bill.endedOn",{date:fmtDate(x.bill.endDate)})}</span>} · {x.occurrences.length?t("rec.last",{date:fmtDate(x.occurrences[x.occurrences.length-1])}):t("bill.noPayments")}
-            {x.unrecordedThisMonth>0&&<span style={{color:"var(--warn)",fontWeight:700}}> · {tn("rec.notRecorded",x.unrecordedThisMonth)}</span>}
-          </div>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
-          <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(x.amount,currency)}</div>
-          {x.freq!=="monthly"&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}}>{t("rec.perMonthApprox",{amount:fmt(x.monthly,currency)})}</div>}
-          {/* Run 6 (D20): a payment only settles a bill when it is recorded as that bill (same details, Recurring on).
-              This opens the Add form filled in exactly that way, dated today; the user can still change anything. */}
-          {x.isActive&&onRecordPayment&&(
-            <button className="rec-record" onClick={e=>{e.stopPropagation();onRecordPayment(x);}} style={{fontSize:11,fontWeight:700,color:"var(--ink)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"var(--font)",textDecoration:"underline",textUnderlineOffset:2}}>
-              {t(isInc?"rec.recordIncome":"rec.recordPayment")}
-            </button>
-          )}
-          <button onClick={e=>{e.stopPropagation(); if (x.billId) onToggleBill(x.billId,!x.isActive); else onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"var(--font)",textDecoration:"underline",textUnderlineOffset:2}}>
-            {x.isActive?t("rec.pause"):t("rec.reactivate")}
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div>
-      <div style={{fontSize:11,color:"var(--ink-4)",fontStyle:"italic",marginBottom:14,lineHeight:1.5}}>{t("rec.intro")}</div>
-      {inferred>0&&onConvert&&(
-        <div className="card bill-convert">
-          <div className="card-title" style={{marginBottom:6}}>{t("bill.legacyTitle")}</div>
-          <div className="list-sub" style={{lineHeight:1.5}}>{tn("bill.legacyText",inferred)}</div>
-          <button className="btn btn-primary btn-full rec-convert" onClick={onConvert} style={{marginTop:12}}>{t("bill.convertBtn")}</button>
-        </div>
-      )}
-      <div className="stat-row">
-        <div className="stat-cell"><div className="stat-val" style={{color:"var(--neg)"}}>{fmt(monthlyOut,currency)}</div><div className="stat-lbl">{t("rec.monthlyOut")}</div></div>
-        <div className="stat-cell"><div className="stat-val">{fmt(monthlyOut*12,currency)}</div><div className="stat-lbl">{t("rec.yearly")}</div></div>
-        {monthlyIn>0&&<div className="stat-cell"><div className="stat-val" style={{color:"var(--pos)"}}>{fmt(monthlyIn,currency)}</div><div className="stat-lbl">{t("rec.monthlyIn")}</div></div>}
-        <div className="stat-cell"><div className="stat-val">{active.length}</div><div className="stat-lbl">{t("rec.activeSchedules")}</div></div>
-      </div>
-      {upcoming.length>0&&(
-        <div className="card">
-          <div className="card-head"><span className="card-title">{t("home.dueWithin7")}</span></div>
-          {upcoming.map(x=>{ const c=CAT(x.category); return (
-            <div key={x.key} className="up-row">
-              <span className="cat-dot" style={{background:(c?.color||"#98A5B7")+"26"}}><CatIcon catId={x.category} size={16}/></span>
-              <div className="up-body"><div className="list-title">{maskText(x.merchant||x.note)||catName(x.category)}</div><div className="list-sub">{catName(x.category)}</div></div>
-              <div style={{textAlign:"right",flexShrink:0}}>
-                <div className="up-amt">{fmt(x.amount,currency)}</div>
-                <div style={{fontSize:11,color:"var(--warn)",fontWeight:600}}>{dueText(x)}</div>
-              </div>
-            </div>
-          ); })}
-        </div>
-      )}
-      {active.length>0&&(<>
-        <div className="label-sm" style={{marginBottom:8}}>{t("rec.active")}</div>
-        <div className="rec-hint" style={{fontSize:12,color:"var(--ink-3)",lineHeight:1.5,margin:"-2px 2px 10px"}}>{t("rec.recordHint")}</div>
-        <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>{active.map(x=><Row key={x.key} x={x}/>)}</div>
-      </>)}
-      {paused.length>0&&(<>
-        <div className="label-sm" style={{marginBottom:8}}>{t("rec.paused")}</div>
-        <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>{paused.map(x=><Row key={x.key} x={x}/>)}</div>
-      </>)}
-      {outgoing.length>0&&(
-        <>
-          <button className="btn btn-ghost btn-full" data-section="bills-ics" disabled={!ics.count} style={{marginBottom:ics.count?14:4}} onClick={()=>downloadFile(ics.text,"text/calendar;charset=utf-8","expense-ledger-bills.ics")}>{t("bill.icsBtn")}</button>
-          {!ics.count&&<div className="list-sub" style={{marginBottom:14}}>{t("bill.icsNone")}</div>}
-        </>
-      )}
-      {monthlyOut>0&&(
-        <div className="a-card" style={{marginTop:4}}>
-          <div className="a-card-title">{t("rec.yearlyByCat")}</div>
-          {(()=>{
-            const ct={}; outgoing.forEach(x=>{ ct[x.category]=(ct[x.category]||0)+x.monthly; });
-            const sorted=Object.entries(ct).sort((a,b)=>b[1]-a[1]); const maxV=sorted[0]?.[1]||1;
-            return sorted.map(([catId,mo])=>{
-              const cat=CAT(catId)||{id:"other",color:"#98A5B7"};
-              return (<div key={catId} className="cat-bar"><div className="cat-bar-name"><CatIcon catId={cat.id} size={12} color={cat.color}/>{catName(catId)}</div><div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(mo/maxV)*100}%`,background:cat.color}}/></div><div className="cat-bar-amt">{fmt(mo*12,currency)}</div></div>);
-            });
-          })()}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Run 25 (owner decision): the in-app number pad is gone; the amount box opens the phone's own number keyboard (no space lost to a pad).
-function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose, onOtherKind, onRenameSub }) {
-  // Run 12: which bill a recurring entry pays. Offered only when every recurring payment is already linked to a bill
-  // (nothing inferred the old way); otherwise the entry is grouped as before, so it can't start a second copy of a bill
-  // that is still inferred. "new" makes a bill from this entry; an id links to that bill.
-  const hasInferred=useMemo(()=>buildSchedules(transactions,bills).some(s=>!s.billId),[transactions,bills]);
-  const [billChoice, setBillChoice] = useState(prefill?.billId||(hasInferred?"auto":"new"));
-  const [askBill, setAskBill] = useState(null);   // a same-name bill exists: ask before making another one
-  const isEditing=!!editId;
-  const [type,     setType]     = useState(prefill?.type||"expense");
-  const [amount,   setAmount]   = useState(prefill?.amount?String(prefill.amount):"");
-  const [catId,    setCatId]    = useState(prefill?.category||"food");
-  const [subcat,   setSubcat]   = useState(prefill?.subcategory||"");
-  const [merchant, setMerchant] = useState(prefill?.merchant||"");
-  const [note,     setNote]     = useState(prefill?.note||"");
-  const [date,     setDate]     = useState(prefill?.date||today());
-  const [recur,    setRecur]    = useState(prefill?.recurring||false);
-  const [freq,     setFreq]     = useState(prefill?.recurFreq||"monthly");
-  // Run 16: how it was paid. A new entry starts with the wallet used last (one tap fewer); editing keeps the entry's own.
-  const [wallet,   setWallet]   = useState(isEditing ? walletId(prefill?.wallet) : (prefill && "wallet" in prefill ? walletId(prefill.wallet) : ""));   // Run 25: a new entry never starts with a wallet chosen for you (it used to repeat the last one, unseen under "More details")
-  // Run 22: optional trip / group name (free text; earlier names are suggested). Editing keeps the entry's own.
-  const [trip, setTrip] = useState(tripName(prefill?.trip));
-  const accData=useMemo(()=>readAccounts(),[]);   // Run 24: optional account (card, cash...) the entry belongs to
-  const [account, setAccount] = useState(accId(prefill?.account));
-  const knownTrips=useMemo(()=>tripTotals(transactions).map(x=>x.name),[transactions]);
-  // Run 16: the user's own subcategory suggestions (separate storage key; entries keep the text itself).
-  const [mySubs, setMySubs] = useState(()=>readSubcats());
-  const [newSub, setNewSub] = useState(null);   // null = closed; otherwise the text being typed
-  const [subMsg, setSubMsg] = useState("");
-  const saveMySubs=(m)=>{ setMySubs(m); if (!writeSubcats(m)) setSubMsg(t("subcat.saveFailed")); };
-  const [renSub, setRenSub] = useState(null);   // { from, text } while one of the user's own subcategories is being renamed
-  const renameMySub=()=>{
-    const r=renameUserSubcat(mySubs,catId,renSub.from,renSub.text);
-    if (!r.edited) { setSubMsg(t("subcat.err."+(r.reason==="missing"?"empty":r.reason))); return; }
-    if (!writeSubcats(r.map)) { setSubMsg(t("subcat.saveFailed")); return; }
-    setMySubs(r.map); if (subKey(subcat)===subKey(renSub.from)) setSubcat(r.name);
-    if (onRenameSub) onRenameSub(catId,renSub.from,r.name);
-    setRenSub(null); setSubMsg("");
-  };
-  const addMySub=()=>{
-    const r=addUserSubcat(mySubs,catId,newSub||"");
-    if (!r.added) { setSubMsg(t("subcat.err."+r.reason)); return; }
-    saveMySubs(r.map); setSubcat(newSub.trim().replace(/\s+/g," ")); setNewSub(null); setSubMsg("");
-  };
-  // Run 17: details (merchant, note, date, wallet, repeat) are folded away unless editing or already filled; the pad is open until a text field needs the room.
-  const [more, setMore] = useState(!!(editId || prefill?.recurring || prefill?.billId || prefill?.merchant || prefill?.note));
-  const [err,      setErr]      = useState("");
-  const [showMerchantSugs, setShowMerchantSugs] = useState(false);
-  const amtRef=useRef();
-
-  // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
-  // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
-  // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
-  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account }).current;
-  const [askDiscard, setAskDiscard] = useState(false);
-  const defaultCat=type===initial.type ? initial.catId : (type==="income"?"salary":"food");
-  const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
-    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account;
-  const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
-
-  const expCats=CATEGORIES.filter(c=>!c.income);
-  const incCats=CATEGORIES.filter(c=>c.income);
-  const displayCats=type==="income"?incCats:expCats;
-  const selectedCat=CAT(catId);
-  const moreSummary=[merchant.trim(), note.trim(), wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
-
-  useEffect(()=>{ setTimeout(()=>amtRef.current?.focus(),60); },[]);
-  useEffect(()=>{ if(!prefill) setCatId(type==="income"?"salary":"food"); },[type]);
-
-  const merchantMatches=useMemo(()=>{
-    if (!merchant.trim()) return [];
-    const q=merchant.toLowerCase();
-    // Only suggest what the user previously recorded as this same transaction type
-    const wantType=type==="income"?"income":"expense";
-    return Object.values(merchantMemory)
-      .filter(m=>m.type===wantType&&m.merchant.toLowerCase().startsWith(q))
-      .slice(0,4);
-  },[merchant,merchantMemory,type]);
-
-  const applySuggestion=(sug)=>{
-    setMerchant(sug.merchant);
-    setCatId(sug.category||catId);
-    setSubcat(sug.subcategory||"");
-    setShowMerchantSugs(false);
-  };
-
-  // S0: Duplicate detection uses createdAt, not date
-  const isDupe=useMemo(()=>{
-    const amt=formMoney(amount,{positive:true});
-    if (isEditing||amt===null) return false;
-    const tenMinAgo=Date.now()-10*60*1000;
-    return transactions.some(t=>
-      t.category===catId &&
-      Math.abs(t.amount-amt)<0.01 &&
-      (t.note||"").trim()===(note||"").trim() &&
-      t.createdAt &&
-      new Date(t.createdAt).getTime()>tenMinAgo
-    );
-  },[amount,catId,note,transactions,isEditing]);
-
-  const submit=(override)=>{
-    const amt=formMoney(amount,{positive:true});
-    if (amt===null) { setErr(t("add.errAmount")); return; }
-    if (!isValidDateStr(String(date||""))) { setErr(t("add.errDate")); return; }
-    // S0: Preserve isActive when editing — never silently reactivate a paused recurring
-    const isActive=isEditing?(prefill?.isActive!==undefined?prefill.isActive:true):true;
-    // A bill that exists always links (also while old-style groups remain); only "a new bill" is held back until none remain.
-    const choice=typeof override==="string" ? override : billChoice;
-    const chosenBill=recur ? bills.find(b=>b.id===choice&&b.type===type) : null;
-    if (recur && !chosenBill && !hasInferred && override===undefined) {
-      const who=norm(merchant.trim()||note.trim());
-      const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
-      if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
-    }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,
-      billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
-  };
-
-  const relevantTpls=!isEditing?templates.filter(tp=>!CATEGORIES.find(c=>c.id===tp.catId)?.income&&type==="expense"):[];
-  const optional=<span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"var(--ink-4)"}}>({t("add.optional")})</span>;
-  const title=isEditing?t("add.titleEdit"):t("add.titleNew");
-
-  return (
-    <div className={leaving?"add-overlay leaving":"add-overlay"} role="dialog" aria-modal="true" aria-label={title}>
-      <div className="add-bar">
-        <span className="add-title">{title}</span>
-        <button className="add-close" onClick={requestClose} aria-label={t("common.close")}><Icon name="close" size={14}/></button>
-      </div>
-      <div className="add-body">
-        {/* Run 25: the first choice is WHAT you are recording (expense, income, loan, debt), as four equal tiles; editing an entry offers only expense/income */}
-        <div className={`type-picker${!editId&&onOtherKind?"":" two"}`} role="group" aria-label={t("add.kindPrompt")} data-section="add-type-picker">
-          <button type="button" className={`type-pick type-btn${type==="expense"?" active":""}`} aria-pressed={type==="expense"} onClick={()=>setType("expense")}><span className="type-dot" style={{background:"var(--neg)"}} aria-hidden="true"/>{t("add.expense")}</button>
-          <button type="button" className={`type-pick type-btn${type==="income"?" active":""}`} aria-pressed={type==="income"} onClick={()=>setType("income")}><span className="type-dot" style={{background:"var(--pos)"}} aria-hidden="true"/>{t("add.income")}</button>
-          {!editId&&onOtherKind&&["loans","debts"].map(k=><button key={k} type="button" className="type-pick" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}><span className="type-dot" style={{background:k==="loans"?"var(--info)":"var(--warn)"}} aria-hidden="true"/>{t(k==="loans"?"add.loan":"add.debt")}</button>)}
-        </div>
-        <div className="amount-zone" onClick={()=>amtRef.current?.focus()}>
-          <div className="amount-line">
-            <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off" autoFocus={!editId}
-              placeholder="0.00" value={amount} onChange={e=>{setAmount(cleanMoneyText(e.target.value));setErr("");}}
-              min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}
-              style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
-            <span className="amount-cur">{currency}</span>
-          </div>
-        </div>
-        {err&&<div role="alert" style={{color:"var(--neg)",fontSize:12,textAlign:"center",marginBottom:10,fontWeight:600}}>{err}</div>}
-        {isDupe&&<div className="dupe-warn" role="status"><Icon name="other" size={13}/>{t("add.dupe")}</div>}
-
-        {relevantTpls.length>0&&(
-          <div style={{marginBottom:12}}>
-            <div className="field-lbl">{t("add.quickFill")}</div>
-            <div className="tpl-strip" style={{marginBottom:0}}>
-              {relevantTpls.map(tpl=>(
-                <button key={tpl.id} className="tpl-card" onClick={()=>{setAmount(String(tpl.amount));setCatId(tpl.catId);setSubcat(tpl.subcat||"");setMerchant(tpl.merchant||"");setNote(tpl.note||tpl.name);}}>
-                  <CatIcon catId={tpl.catId} size={12}/><span className="tpl-name">{tpl.name}</span><span className="tpl-amt">{fmt(tpl.amount,currency)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="field" role="group" aria-labelledby="txn-cat-lbl">
-          <div className="field-lbl" id="txn-cat-lbl">{t("add.category")} <span style={{fontWeight:600,color:"var(--ink-2)",letterSpacing:0.4}}>· {catName(catId)}</span></div>
-          <div className="cat-scroll">
-            {displayCats.map(cat=>(
-              <button key={cat.id} className={`cat-tile${catId===cat.id?" sel":""}`} aria-pressed={catId===cat.id} aria-label={catName(cat.id)} onClick={()=>{setCatId(cat.id);setSubcat("");}}>
-                <CatIcon catId={cat.id} size={18} color={catId===cat.id?cat.color:undefined}/>
-                <span className="cat-tile-name">{catTile(cat.id)}</span>
-              </button>
-            ))}
-          </div>
-          {(selectedCat?.subs?.length>0 || (mySubs[catId]||[]).length>0 || selectedCat)&&(
-            <div data-section="add-subcat">
-              <div className="field-lbl" style={{marginBottom:5,marginTop:4}}>{t("add.subcategory")} {optional}</div>
-              <div className="sub-strip">
-                {/* "+ My own" comes first, then the user's own, then the built-in ones: the strip scrolls sideways, so the button must not hide at its far end */}
-                {newSub===null&&<button type="button" className="sub-chip" data-section="add-subcat-new" onClick={()=>{ setNewSub(""); setSubMsg(""); }}>+ {t("subcat.mine")}</button>}
-                {(mySubs[catId]||[]).map(s=>(
-                  <span key={"my-"+s} className="sub-chip-wrap" style={{display:"inline-flex",alignItems:"center",gap:2}}>
-                    <button className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{s}</button>
-                    <button type="button" className="sub-chip-ren" data-section="add-subcat-rename" aria-label={t("subcat.rename",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>{ setRenSub({ from:s, text:s }); setNewSub(null); setSubMsg(""); }}>✎</button>
-                    <button type="button" className="sub-chip-x" aria-label={t("subcat.remove",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>saveMySubs(removeUserSubcat(mySubs,catId,s))}>×</button>
-                  </span>
-                ))}
-                {(selectedCat?.subs||[]).map(s=>(
-                  <button key={s} className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{subName(s)}</button>
-                ))}
-              </div>
-              {renSub&&(
-                <div style={{display:"flex",gap:7,marginTop:8}} data-section="add-subcat-rename-form">
-                  <input className="field-input" ref={revealFocus} aria-label={t("subcat.rename",{name:renSub.from})} maxLength={SUBCAT_LEN} value={renSub.text} onChange={e=>{ setRenSub({...renSub,text:e.target.value}); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); renameMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-                  <button type="button" className="btn btn-sm btn-sm-primary" data-section="add-subcat-rename-save" onClick={renameMySub}>{t("common.save")}</button>
-                  <button type="button" className="btn btn-sm" onClick={()=>{ setRenSub(null); setSubMsg(""); }} aria-label={t("common.cancel")}>✕</button>
-                </div>
-              )}
-              {newSub!==null&&(
-                <div style={{display:"flex",gap:7,marginTop:8}}>
-                  <input className="field-input" ref={revealFocus} aria-label={t("subcat.mine")} placeholder={t("subcat.ph")} maxLength={SUBCAT_LEN} value={newSub} onChange={e=>{ setNewSub(e.target.value); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); addMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-                  <button type="button" className="btn btn-sm btn-sm-primary" onClick={addMySub}>{t("common.save")}</button>
-                  <button type="button" className="btn btn-sm" onClick={()=>{ setNewSub(null); setSubMsg(""); }} aria-label={t("common.cancel")}>✕</button>
-                </div>
-              )}
-              {subMsg&&<div role="alert" className="list-sub" style={{marginTop:6,color:"var(--neg)"}}>{subMsg}</div>}
-            </div>
-          )}
-        </div>
-
-        {/* Run 17: the form shows what most entries need; the rest sits under one toggle (open when editing). */}
-        <button type="button" className="more-toggle" data-section="add-more-toggle" aria-expanded={more} aria-controls="add-more-body" onClick={()=>setMore(m=>!m)}>
-          <span className="more-toggle-main">{t(more?"add.lessDetails":"add.moreDetails")}</span>
-          <span className="more-toggle-sub">{moreSummary||t("add.moreHint")}</span>
-          <Icon name={more?"chevUp":"chevDown"} size={16}/>
-        </button>
-        <div id="add-more-body" data-section="add-more" style={more?undefined:{display:"none"}}>        <div className="field merchant-wrap">
-          <label className="field-lbl" htmlFor="txn-merchant">{t("add.merchant")} {optional}</label>
-          <input id="txn-merchant" className="field-input" placeholder={t("add.merchantPh")} autoComplete="off"
-            value={merchant}
-            onChange={e=>{setMerchant(e.target.value);setShowMerchantSugs(true);}}
-            onBlur={()=>setTimeout(()=>setShowMerchantSugs(false),150)}
-            onFocus={()=>setShowMerchantSugs(true)}/>
-          {/* Merchant intelligence hint — shown when merchant is recognised */}
-          {merchant.trim()&&!showMerchantSugs&&(()=>{
-            const ml=merchant.trim().toLowerCase();
-            const match=merchantMemory[memKey(type,ml)];
-            if (!match||match.count<2) return null;
-            const profile=calcMerchantProfile(merchant.trim(),transactions);
-            if (!profile) return null;
-            const hints=[];
-            if (profile.avg>0) hints.push(t("add.hintUsually",{amount:fmt(profile.avg,currency)}));
-            if (profile.typicalDay&&profile.count>=3) hints.push(t("add.hintDay",{day:t("dow."+profile.typicalDay)}));
-            if (profile.estimatedNextVisit) hints.push(t("add.hintNext",{date:fmtDate(profile.estimatedNextVisit)}));
-            if (!hints.length) return null;
-            return (
-              <div style={{fontSize:11,color:"var(--ink-4)",marginTop:4,display:"flex",alignItems:"center",gap:5,fontStyle:"italic"}}>
-                <Icon name="merchant" size={11} color="var(--ink-4)"/>
-                {hints.join(" · ")}
-              </div>
-            );
-          })()}
-          {showMerchantSugs&&merchantMatches.length>0&&(
-            <div className="merchant-suggestions">
-              {merchantMatches.map((m,i)=>(
-                <div key={i} className="merchant-sug-item" onMouseDown={()=>applySuggestion(m)}>
-                  <div>{m.merchant}</div>
-                  <div className="merchant-sug-sub">{catName(m.category)}{m.subcategory?` / ${subName(m.subcategory)}`:""} · {t("add.usedTimes",{n:m.count})}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Run 16: how it was paid (cash, bank card, mobile wallet, other). One tap; tapping the chosen one again clears it. */}
-        <div className="field" role="radiogroup" aria-labelledby="txn-wal-lbl" data-section="add-wallet">
-          <div className="field-lbl" id="txn-wal-lbl">{t(type==="income"?"wallet.labelIn":"wallet.label")} {optional}</div>
-          <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
-            {WALLET_IDS.map(id=>(
-              <button key={id} type="button" role="radio" aria-checked={wallet===id} className={`sub-chip${wallet===id?" sel":""}`} onClick={()=>setWallet(wallet===id?"":id)}>{t("wallet."+id)}</button>
-            ))}
-            {wallet&&!WALLET_IDS.includes(wallet)&&(
-              <button type="button" role="radio" aria-checked="true" className="sub-chip sel" onClick={()=>setWallet("")}>{walletName(wallet)}</button>
-            )}
-          </div>
-        </div>
-
-        {/* Run 22: optional trip / group, e.g. "Baku trip". Suggestions are the names already used. */}
-        <div className="field" data-section="add-trip">
-          <label className="field-lbl" htmlFor="txn-trip">{t("trip.label")} {optional}</label>
-          <input id="txn-trip" className="field-input" list="txn-trip-list" value={trip} maxLength={40} autoComplete="off" placeholder={t("trip.placeholder")} onChange={e=>setTrip(e.target.value)}/>
-          <datalist id="txn-trip-list">{knownTrips.map(n=><option key={n} value={n}/>)}</datalist>
-        </div>
-        {accData.accounts.length>0&&(<div className="field" data-section="add-account">
-          <label className="field-lbl" htmlFor="txn-account">{t("acc.field")} {optional}</label>
-          <select id="txn-account" className="field-input" value={account} onChange={e=>setAccount(e.target.value)}>
-            <option value="">{t("acc.none")}</option>
-            {accData.accounts.filter(a=>!a.hidden||a.id===account).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </div>)}
-
-        <div className="field">
-          <label className="field-lbl" htmlFor="txn-note">{t("add.note")} {optional}</label>
-          <input id="txn-note" className="field-input" placeholder={t("add.notePh")}
-            value={note} onChange={e=>setNote(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
-        </div>
-
-        <div className="field-row" style={{marginBottom:14}}>
-          <div className="field" style={{marginBottom:0}}>
-            <label className="field-lbl" htmlFor="txn-date">{t("add.date")}</label>
-            <input id="txn-date" className="field-input" lang={locale()} type="date" value={date} onChange={e=>setDate(e.target.value)}/>
-            {/* Run 7, V3: the date box is the phone's own control and follows the phone's language, not the app's (Chrome on
-                Android ignores lang), so it can read 10/27/2026 in the Azerbaijani interface. The chosen date is repeated
-                here in the interface language. Display only: the stored value stays YYYY-MM-DD. */}
-            {isValidDateStr(date)&&<div className="date-readout" style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmtLongDate(parseLocalDate(date))}</div>}
-          </div>
-          <div className="field" style={{marginBottom:0}}>
-            <div className="field-lbl" id="txn-rec-lbl">{t("add.recurring")}</div>
-            <div style={{display:"flex",alignItems:"center",gap:9,marginTop:9}}>
-              <div className={`toggle-track${recur?" on":""}`} onClick={()=>setRecur(r=>!r)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setRecur(r=>!r); } }} role="switch" aria-checked={recur} aria-label={t("add.recurring")} tabIndex={0}>
-                <div className="toggle-knob"/>
-              </div>
-              {recur&&!bills.some(b=>b.id===billChoice&&b.type===type)&&(
-                <select className="field-select" value={freq} onChange={e=>setFreq(e.target.value)} aria-label={t("add.frequency")}
-                  style={{fontSize:12,color:"var(--ink)",background:"transparent",border:"none",outline:"none",cursor:"pointer"}}>
-                  {["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}
-                </select>
-              )}
-            </div>
-            {recur&&(!hasInferred||bills.some(b=>b.type===type))&&(
-              <div className="field" style={{marginTop:10,marginBottom:0}}>
-                <label className="field-lbl" htmlFor="txn-bill">{t("bill.which")}</label>
-                <select id="txn-bill" className="field-input field-select bill-choice" value={bills.some(b=>b.id===billChoice&&b.type===type)?billChoice:(hasInferred?"auto":"new")} onChange={e=>setBillChoice(e.target.value)}>
-                  {hasInferred ? <option value="auto">{t("bill.autoGroup")}</option> : <option value="new">{t("bill.newFromEntry")}</option>}
-                  {bills.filter(b=>b.type===type).map(b=><option key={b.id} value={b.id}>{maskText(b.name)} · {fmt(b.amount,currency)} · {t("freq."+b.freq)}</option>)}
-                </select>
-              </div>
-            )}
-            {recur&&hasInferred&&<div className="list-sub" style={{marginTop:8,lineHeight:1.45}}>{t("bill.convertFirst")}</div>}
-            {askBill&&(
-              <div className="card bill-ask" role="alert" style={{marginTop:10,marginBottom:0}}>
-                <div className="list-title" style={{marginBottom:4}}>{t("bill.askTitle",{name:maskText(askBill.name)})}</div>
-                <div className="list-sub" style={{lineHeight:1.5,marginBottom:10}}>{t("bill.askText",{amount:fmt(askBill.amount,currency),freq:t("freq."+askBill.freq)})}</div>
-                <button className="btn btn-primary btn-full bill-ask-pay" style={{marginTop:0}} onClick={()=>submit(askBill.id)}>{t("bill.askPay",{name:maskText(askBill.name)})}</button>
-                <button className="btn btn-ghost btn-full bill-ask-new" onClick={()=>submit("new")}>{t("bill.askNew")}</button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        </div>
-        <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
-      </div>
-      <div className="add-foot">
-        <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>submit()}>
-          {isEditing?t("add.saveChanges"):t(type==="income"?"add.recordIncome":"add.recordExpense")}
-        </button>
-      </div>      {askDiscard&&(
-        <div className="sheet-overlay discard-overlay" onClick={e=>e.target===e.currentTarget&&setAskDiscard(false)}>
-          <div className="sheet" role="alertdialog" aria-modal="true" tabIndex={-1} aria-labelledby="discard-title" aria-describedby="discard-body">
-            <div className="sheet-grip"><div className="sheet-handle"/></div>
-            <div className="sheet-title" id="discard-title">{t("add.discardTitle")}</div>
-            <p id="discard-body" style={{fontSize:14,color:"var(--ink-3)",margin:"0 0 16px",lineHeight:1.5}}>{t("add.discardBody")}</p>
-            <button className="btn btn-primary btn-full discard-keep" onClick={()=>setAskDiscard(false)}>{t("add.keepEditing")}</button>
-            <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)"}} onClick={onClose}>{t("add.discard")}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── S6: Transaction Detail Sheet with Merchant Intelligence ─────────────────
-// Run 24: the split form inside the entry's detail sheet: pick a category and an amount per part; Save is enabled only when the parts add up exactly.
-function SplitPanel({ txn, currency, onSplit }) {
-  const sameKind=CATEGORIES.filter(c=>c.income===(txn.type==="income"));
-  const other=(sameKind.find(c=>c.id!==txn.category)||sameKind[0]).id;
-  const [open,setOpen]=useState(false);
-  const [parts,setParts]=useState([{ category:txn.category, amount:"" },{ category:other, amount:"" }]);
-  const parsed=parts.map(p=>({ category:p.category, amount:parseMoney(p.amount)||0 }));
-  const check=splitTransaction(txn,parsed,()=>0);
-  const left=Math.round(txn.amount*100)-parsed.reduce((s,p)=>s+Math.round(p.amount*100),0);
-  const set=(i,k,v)=>setParts(ps=>ps.map((p,j)=>j===i?{...p,[k]:v}:p));
-  return (
-    <div style={{marginBottom:8}} data-section="split">
-      <button className="btn btn-ghost btn-full" data-section="split-open" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>{t("split.btn")}</button>
-      {open&&(
-        <div style={{marginTop:8}}>
-          <div className="list-sub" style={{marginBottom:8}}>{t("split.sub",{ total:fmt(txn.amount,currency) })}</div>
-          {parts.map((p,i)=>(
-            <div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
-              <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("split.partCat",{ n:i+1 })} value={p.category} onChange={e=>set(i,"category",e.target.value)}>
-                {sameKind.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}
-              </select>
-              <input className="field-input" style={{width:110}} inputMode="decimal" aria-label={t("split.partAmt",{ n:i+1 })} placeholder="0.00" value={p.amount} onChange={e=>set(i,"amount",e.target.value)}/>
-            </div>
-          ))}
-          <div className="list-sub" data-section="split-left" style={{marginBottom:8,fontWeight:600,color:left===0?"var(--pos)":"var(--ink-2)"}}>{t("split.left",{ amount:fmt(left/100,currency) })}</div>
-          <div style={{display:"flex",gap:8}}>
-            {parts.length<SPLIT_MAX&&<button className="btn btn-ghost" style={{flex:1}} data-section="split-add" onClick={()=>setParts(ps=>[...ps,{ category:other, amount:"" }])}>{t("split.add")}</button>}
-            <button className="btn btn-primary" style={{flex:1}} data-section="split-save" disabled={!check.ok} onClick={()=>onSplit(parsed)}>{t("split.save")}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClose, onEdit, onDuplicate, onSplit, onDelete, onLinkBill, onAssignBill }) {
-  // Run 9: an ordinary (non-recurring) entry can be marked as the payment of an existing bill — only when the user picks the
-  // bill. Same merchant and amount are never enough to link anything automatically.
-  // Run 12: once every recurring payment has a bill ("explicit"), any entry can be linked to a bill, moved to another bill,
-  // or made into a new bill; before that, the Run 9 behaviour (inferred schedules, ordinary entries only) is kept.
-  const [showLink,setShowLink]=useState(false);
-  const all=useMemo(()=>buildSchedules(transactions,billList),[transactions,billList]);
-  const explicit=!!onAssignBill && !all.some(s=>!s.billId);
-  const bills=useMemo(()=>explicit ? all.filter(x=>x.billId && x.type===txn.type && x.billId!==txn.billId)
-    : (txn.recurring?[]:all.filter(x=>x.isActive&&x.type===txn.type)),[all,explicit,txn]);
-  const myBill=txn.billId ? billList.find(b=>b.id===txn.billId) : null;
-  const cat=CAT(txn.category)||{id:"other",name:txn.category,color:"#98A5B7"};
-  const isInc=txn.type==="income";
-  const profile=useMemo(()=>txn.merchant?calcMerchantProfile(txn.merchant,transactions):null,[txn.merchant,transactions]);
-
-  return (
-    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={maskText(txn.merchant||txn.note)||catName(txn.category)}>
-        <div className="sheet-grip"><div className="sheet-handle"/></div>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-          <div style={{width:44,height:44,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <CatIcon catId={cat.id} size={22} color={cat.color}/>
-          </div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700,marginBottom:2,lineHeight:1.25,overflowWrap:"anywhere"}}>{maskText(txn.merchant||txn.note)||catName(txn.category)}</div>
-            <div style={{fontSize:12,color:"var(--ink-3)"}}>{catName(txn.category)}{txn.subcategory?` / ${subName(txn.subcategory)}`:""} · {fmtDate(txn.date)}</div>
-          </div>
-          <button data-closer="1" onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
-        </div>
-
-        {/* Amount */}
-        <div style={{textAlign:"center",padding:"14px 0 16px",borderTop:"1px solid var(--rule)",borderBottom:"1px solid var(--rule)",marginBottom:16}}>
-          <div style={{fontFamily:"var(--font)",fontSize:"clamp(32px,11vw,42px)",fontWeight:700,letterSpacing:-1,overflowWrap:"anywhere",color:isInc?"var(--pos)":"var(--ink)",fontVariantNumeric:"tabular-nums"}}>{isInc?"+":"−"}{fmt(txn.amount,currency)}</div>
-          <div style={{fontSize:12,color:"var(--ink-3)",marginTop:3}}>{t(txn.type==="income"?"add.income":"add.expense")}</div>
-        </div>
-
-        {/* Meta */}
-        <div className="detail-meta" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-          {[
-            [t("add.date"),      fmtDate(txn.date)],
-            [t("add.merchant"),  maskText(txn.merchant)||"—"],
-            [t("add.category"),  catName(txn.category)+(txn.subcategory?` / ${subName(txn.subcategory)}`:"")],
-            [t("add.recurring"), txn.recurring?(txn.recurFreq?t("freqCap."+txn.recurFreq):t("common.yes")):t("common.no")],
-            ...(txn.wallet?[[t(txn.type==="income"?"wallet.labelIn":"wallet.label"), walletName(txn.wallet)]]:[]),
-          ].map(([lbl,val])=>(
-            <div key={lbl} style={{background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px"}}>
-              <div style={{fontSize:12,fontWeight:500,color:"var(--ink-3)",marginBottom:3}}>{lbl}</div>
-              <div style={{fontSize:14,fontWeight:600,color:"var(--ink)",lineHeight:1.3,overflowWrap:"anywhere"}}>{val}</div>
-            </div>
-          ))}
-        </div>
-
-        {txn.note&&<div style={{fontSize:14,color:"var(--ink-2)",background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px",marginBottom:16}}>{maskText(txn.note)}</div>}
-
-        {/* S6: Merchant profile — frequency, timing, category stability */}
-        {profile&&profile.count>1&&(
-          <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"13px 14px",marginBottom:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-              <div className="label-sm">{t("mp.title")}</div>
-              {profile.hasRecurring&&(
-                <span style={{fontSize:10,fontWeight:700,color:"var(--warn)",background:"var(--warn-bg)",padding:"2px 7px",borderRadius:4}}>{t("add.recurring")}</span>
-              )}
-            </div>
-            {/* Stats grid */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{profile.count}</div>
-                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.visits")}</div>
-              </div>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{fmt(profile.avg,currency)}</div>
-                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.avgSpend")}</div>
-              </div>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{fmt(profile.total,currency)}</div>
-                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.total")}</div>
-              </div>
-            </div>
-            {/* Behaviour rows */}
-            <div style={{borderTop:"1px solid var(--rule)",paddingTop:10,display:"flex",flexDirection:"column",gap:5}}>
-              {profile.avgDaysBetween&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.frequency")}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{t("mp.everyDays",{n:profile.avgDaysBetween})}</span>
-                </div>
-              )}
-              {profile.typicalDay&&profile.count>=3&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.typicalDay")}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{t("dow."+profile.typicalDay)}</span>
-                </div>
-              )}
-              {profile.usualSub&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.usuallyFor")}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{subName(profile.usualSub)}</span>
-                </div>
-              )}
-              {profile.amountStable&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("add.amount")}</span>
-                  <span style={{fontWeight:600,color:"var(--pos)"}}>{t("mp.consistent")}</span>
-                </div>
-              )}
-              {profile.spendingTrend&&profile.spendingTrend!=="stable"&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.trend")}</span>
-                  <span style={{fontWeight:600,color:profile.spendingTrend==="increasing"?"var(--neg)":"var(--pos)"}}>
-                    {profile.spendingTrend==="increasing"?t("mp.increasing"):t("mp.decreasing")}
-                  </span>
-                </div>
-              )}
-              {profile.estimatedNextVisit&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.nextVisit")}</span>
-                  <span style={{fontStyle:"italic",color:"var(--ink-3)"}}>
-                    ~{fmtDate(profile.estimatedNextVisit)}
-                    {profile.estimatedNextSpend&&<span style={{marginLeft:6}}>· ~{fmt(profile.estimatedNextSpend,currency)}</span>}
-                  </span>
-                </div>
-              )}
-              {profile.isRecurring&&profile.recurringFreq&&profile.recurringFreq!=="irregular"&&(
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.pattern")}</span>
-                  <span style={{fontWeight:600,color:"var(--warn)"}}>{t("freqCap."+profile.recurringFreq)}</span>
-                </div>
-              )}
-              {profile.last30>0&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.last30")}</span>
-                  <span style={{fontWeight:600,color:profile.diff30<=0?"var(--pos)":"var(--neg)",textAlign:"right"}}>
-                    {fmt(profile.last30,currency)}
-                    {profile.prev30total>0&&profile.diff30!==0&&<span style={{fontSize:10,marginLeft:4,fontWeight:400}}>{profile.diff30>0?"↑":"↓"}{t("mp.vsPrev",{amount:fmt(Math.abs(profile.diff30),currency)})}</span>}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div style={{display:"flex",gap:8,marginBottom:8}}>
-          <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onEdit}><Icon name="edit" size={14}/>{t("common.edit")}</button>
-          <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onDuplicate}><Icon name="repeat" size={14}/>{t("detail.duplicate")}</button>
-        </div>
-        {onSplit&&!txn.recurring&&!txn.billId&&!txn.debtLink&&txn.amount>0&&<SplitPanel key={txn.id} txn={txn} currency={currency} onSplit={onSplit}/>}
-        {myBill&&<div className="list-sub bill-of" style={{margin:"0 2px 8px"}}>{t("bill.paymentOf",{name:maskText(myBill.name)})}</div>}
-        {((explicit&&onAssignBill)||(onLinkBill&&bills.length>0))&&(
-          <div style={{marginBottom:8}}>
-            <button className="btn btn-ghost btn-full link-bill" style={{marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} aria-expanded={showLink} onClick={()=>setShowLink(s=>!s)}>
-              <Icon name="repeat" size={14}/>{t(myBill?"bill.change":txn.type==="income"?"detail.linkIncome":"detail.linkBill")}
-            </button>
-            {showLink&&(
-              <div className="card" style={{marginTop:8,padding:"8px 14px"}}>
-                <div className="list-sub" style={{margin:"4px 0 6px",lineHeight:1.5}}>{t(explicit?"bill.linkHint":"detail.linkHint")}</div>
-                {bills.map(x=>(
-                  <button key={x.key} className="list-row link-bill-option" onClick={()=>x.billId&&onAssignBill?onAssignBill(x.billId):onLinkBill(x)}>
-                    <span className="cat-dot" style={{background:(CAT(x.category)?.color||"#98A5B7")+"26",width:32,height:32}}><CatIcon catId={x.category} size={14}/></span>
-                    <span className="list-body"><span className="list-title">{maskText(x.merchant||x.note)||catName(x.category)}</span>
-                      <span className="list-sub">{fmt(x.amount,currency)} · {t("freq."+x.freq)} · {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""}</span></span>
-                  </button>
-                ))}
-                {explicit&&<button className="list-row link-bill-option link-bill-new" onClick={()=>onAssignBill("new")}>
-                  <span className="cat-dot" style={{background:"var(--accent-light)",width:32,height:32}}><Icon name="add" size={14} color="var(--accent)"/></span>
-                  <span className="list-body"><span className="list-title">{t("bill.newFromThis")}</span><span className="list-sub">{fmt(txn.amount,currency)} · {t("freq."+(txn.recurFreq||"monthly"))}</span></span>
-                </button>}
-              </div>
-            )}
-          </div>
-        )}
-        <button className="btn btn-ghost btn-full" style={{color:"var(--neg)",borderColor:"var(--neg-bg)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:0}} onClick={onDelete}><Icon name="trash" size={14}/>{t("common.delete")}</button>
-        <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose} style={{marginTop:6}}>{t("common.close")}</button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Preferences sheet ────────────────────────────────────────────────────────
-// Run 17: language and the profile name live on the Settings page itself, the all-time overview is on Analytics, and the savings floor
-// and the quick-add templates are on Goals. What remains here: the currency and the Safe to Spend on/off switch.
-// Run 24: the user's own categories — add (name, expense or income, colour) and remove one that no entry or budget uses.
-function MyCategories({ state, onChanged, showToast }) {
-  const [list,setList]=useState(()=>readCustomCats());
-  const [name,setName]=useState(""), [income,setIncome]=useState(false), [color,setColor]=useState(CCAT_COLORS[5]), [editing,setEditing]=useState(null);
-  const commit=(next)=>{ if (!writeCustomCats(next)) { showToast(t("mycat.saveFailed"),5000); return false; } applyCustomCats(next); setList(readCustomCats()); onChanged(); return true; };
-  const add=()=>{
-    const r=addCustomCat(list,name,income,color);
-    if (!r.added) { showToast({ empty:t("mycat.err.empty"), long:t("mycat.err.long"), dup:t("mycat.err.dup"), full:t("mycat.err.full") }[r.reason],4000); return; }
-    if (commit(r.list)) { setName(""); showToast(t("mycat.added")); }
-  };
-  const saveEdit=()=>{
-    const r=editCustomCat(list,editing.id,editing.name,editing.color);
-    if (!r.edited) { showToast({ empty:t("mycat.err.empty"), long:t("mycat.err.long"), dup:t("mycat.err.dup"), missing:t("mycat.err.empty") }[r.reason],4000); return; }
-    if (commit(r.list)) { setEditing(null); showToast(t("acc.edited")); }
-  };
-  const remove=(c)=>{
-    if (customCatInUse(c.id,state.transactions,state.budgets)) { showToast(t("mycat.inUse"),5000); return; }
-    if (commit(list.filter(x=>x.id!==c.id))) showToast(t("mycat.removed"));
-  };
-  return (
-    <div className="card prefs-card" data-section="my-categories">
-      <div className="settings-section-lbl" style={{marginTop:14}}>{t("mycat.title")}</div>
-      <div className="list-sub" style={{marginBottom:8}}>{t("mycat.sub")}</div>
-      {list.map(c=>editing&&editing.id===c.id ? (
-        <div key={c.id} data-cat-edit={c.id} style={{padding:"8px 0"}}>
-          <div className="field"><label className="field-lbl" htmlFor="mycat-edit-name">{t("mycat.name")}</label>
-            <input id="mycat-edit-name" className="field-input" value={editing.name} maxLength={CCAT_LEN} onChange={e=>setEditing({...editing,name:e.target.value})}/></div>
-          <div className="filter-bar" role="group" aria-label={t("mycat.color")}>
-            {CCAT_COLORS.map(col=>(<button key={col} aria-label={col} aria-pressed={editing.color===col} onClick={()=>setEditing({...editing,color:col})} style={{width:44,minWidth:44,height:44,flex:"none",background:"none",border:"none",padding:0,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><span aria-hidden="true" style={{width:28,height:28,borderRadius:99,background:col,border:editing.color===col?"3px solid var(--ink)":"2px solid transparent",boxSizing:"border-box"}}/></button>))}
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setEditing(null)}>{t("common.cancel")}</button>
-            <button className="btn btn-primary" style={{flex:1}} data-section="mycat-edit-save" disabled={!editing.name.trim()} onClick={saveEdit}>{t("common.save")}</button>
-          </div>
-        </div>
-      ) : (
-        <div key={c.id} className="settings-row" data-cat={c.id}>
-          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-            <span aria-hidden="true" style={{width:14,height:14,borderRadius:99,background:c.color,flex:"none"}}/>
-            <div style={{minWidth:0}}><div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{c.name}</div><div className="settings-row-sub">{t(c.income?"add.income":"add.expense")}</div></div>
-          </div>
-          <div style={{display:"flex",gap:6,flexShrink:0}}>
-            <button className="chip" aria-label={t("mycat.remove",{name:c.name})} onClick={()=>remove(c)}>{t("mycat.removeBtn")}</button>
-            <button className="chip" data-section="mycat-edit" aria-label={t("common.edit")+": "+c.name} onClick={()=>setEditing({ id:c.id, name:c.name, color:c.color })}>{t("common.edit")}</button>
-          </div>
-        </div>
-      ))}
-      <div className="field"><label className="field-lbl" htmlFor="mycat-name">{t("mycat.name")}</label>
-        <input id="mycat-name" className="field-input" value={name} maxLength={CCAT_LEN} onChange={e=>setName(e.target.value)} onKeyDown={e=>{ if (e.key==="Enter") add(); }}/></div>
-      <div className="filter-bar" role="group" aria-label={t("mycat.type")}>
-        {[false,true].map(v=>(<button key={String(v)} className={`chip${income===v?" on":""}`} aria-pressed={income===v} onClick={()=>setIncome(v)}>{t(v?"add.income":"add.expense")}</button>))}
-      </div>
-      <div className="filter-bar" role="group" aria-label={t("mycat.color")}>
-        {CCAT_COLORS.map(c=>(<button key={c} aria-label={c} aria-pressed={color===c} onClick={()=>setColor(c)} style={{width:44,minWidth:44,height:44,flex:"none",background:"none",border:"none",padding:0,display:"inline-flex",alignItems:"center",justifyContent:"center"}}><span aria-hidden="true" style={{width:28,height:28,borderRadius:99,background:c,border:color===c?"3px solid var(--ink)":"2px solid transparent",boxSizing:"border-box"}}/></button>))}
-      </div>
-      <button className="btn btn-ghost btn-full" data-section="mycat-add" disabled={!name.trim()} onClick={add} style={{marginTop:6}}>{t("mycat.add")}</button>
-    </div>
-  );
-}
-
-// Run 24: accounts with derived balances, and transfers between them (a transfer is never income or spending).
-function MyAccounts({ state, currency, showToast }) {
-  const [data,setData]=useState(()=>readAccounts());
-  const [name,setName]=useState(""), [kind,setKind]=useState("card"), [opening,setOpening]=useState("");
-  const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState(""), [editing,setEditing]=useState(null);
-  const bal=useMemo(()=>accountBalances(data,state.transactions),[data,state.transactions]);
-  const shown=data.accounts.filter(a=>!a.hidden), kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
-  const presetName={ cash:t("acc.preset.cash"), card:t("acc.preset.card"), wallet:t("acc.preset.wallet"), savings:t("acc.preset.savings") };
-  const PRESETS=[["cash","cash"],["card","card"],["wallet","wallet"],["savings","bank"]].filter(([k])=>!data.accounts.some(a=>a.name.toLowerCase()===presetName[k].toLowerCase()));
-  const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
-  const errs=()=>({ empty:t("acc.err.empty"), long:t("acc.err.long"), full:t("acc.err.full"), dup:t("acc.err.dup"), amount:t("acc.err.amount"), same:t("acc.err.same"), account:t("acc.err.account"), date:t("acc.err.date") });
-  const commit=(next)=>{ if (!writeAccounts(next)) { showToast(t("acc.saveFailed"),5000); return false; } setData(readAccounts()); return true; };
-  const add=()=>{
-    const op=opening.trim()==="" ? 0 : parseMoney(opening);
-    if (op===null) { showToast(t("acc.err.amount"),4000); return; }
-    const r=addAccount(data,name,kind,op,op?today():"");
-    if (!r.added) { showToast(errs()[r.reason],4000); return; }
-    if (commit(r.data)) { setName(""); setOpening(""); showToast(t("acc.added")); }
-  };
-  // The box shows the balance as it is now; the opening amount is moved by the difference, so entries and transfers stay counted.
-  const saveEdit=()=>{
-    const v=editing.bal.trim()==="" ? 0 : parseMoney(editing.bal);
-    if (v===null) { showToast(t("acc.err.amount"),4000); return; }
-    const a=data.accounts.find(x=>x.id===editing.id); if (!a) { setEditing(null); return; }
-    const open=(Math.round(v*100)-Math.round((bal[a.id]||0)*100)+Math.round(a.opening.amount*100))/100;
-    const r=editAccount(data,a.id,editing.name,open,today());
-    if (!r.edited) { showToast(errs()[r.reason],4000); return; }
-    if (commit(r.data)) { setEditing(null); showToast(t("acc.edited")); }
-  };
-  const toggleHidden=(a)=>commit({ accounts:data.accounts.map(x=>x.id===a.id?{...x,hidden:!x.hidden}:x), transfers:data.transfers });
-  const remove=(a)=>{
-    if (accountInUse(data,a.id,state.transactions)) { showToast(t("acc.inUse"),5000); return; }
-    if (commit({ accounts:data.accounts.filter(x=>x.id!==a.id), transfers:data.transfers })) showToast(t("acc.removed"));
-  };
-  const transfer=()=>{
-    const v=parseMoney(amt);
-    const r=addTransfer(data,from||shown[0]?.id,to||shown[1]?.id,v===null?0:v,today());
-    if (!r.added) { showToast(errs()[r.reason],4000); return; }
-    if (commit(r.data)) { setAmt(""); showToast(t("acc.transferDone")); }
-  };
-  const nameOf=(id)=>(data.accounts.find(a=>a.id===id)||{}).name||"?";
-  return (
-    <div className="card prefs-card" data-section="my-accounts" style={{marginTop:14}}>
-      <div className="settings-section-lbl" style={{marginTop:14}}>{t("acc.title")}</div>
-      <div className="list-sub" style={{marginBottom:8}}>{t("acc.sub")}</div>
-      {data.accounts.map(a=>editing&&editing.id===a.id ? (
-        <div key={a.id} className="reveal" data-account-edit={a.id} style={{padding:"8px 0"}}>
-          <div className="field"><label className="field-lbl" htmlFor="acc-edit-name">{t("acc.name")}</label>
-            <input id="acc-edit-name" className="field-input" value={editing.name} maxLength={40} onChange={e=>setEditing({...editing,name:e.target.value})}/></div>
-          <div className="field"><label className="field-lbl" htmlFor="acc-edit-bal">{t("acc.opening")}</label>
-            <input id="acc-edit-bal" className="field-input" inputMode="decimal" value={editing.bal} onChange={e=>setEditing({...editing,bal:cleanMoneyText(e.target.value)})}/></div>
-          <div style={{display:"flex",gap:8}}>
-            <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setEditing(null)}>{t("common.cancel")}</button>
-            <button className="btn btn-primary" style={{flex:1}} data-section="acc-edit-save" disabled={!editing.name.trim()} onClick={saveEdit}>{t("common.save")}</button>
-          </div>
-        </div>
-      ) : (
-        <div key={a.id} className="settings-row" data-account={a.id} style={{flexDirection:"column",alignItems:"stretch",gap:10,padding:"14px 0",...(a.hidden?{opacity:0.7}:null)}}>
-          <div style={{minWidth:0}}>
-            <div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{a.name}{a.hidden?" · "+t("acc.hidden"):""}</div>
-            <div className="settings-row-sub">{kindName[a.kind]} · <strong data-balance={a.id}>{fmt(bal[a.id]||0,currency)}</strong></div>
-          </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <button className="chip" onClick={()=>toggleHidden(a)}>{t(a.hidden?"acc.show":"acc.hide")}</button>
-            <button className="chip" aria-label={t("acc.remove",{name:a.name})} onClick={()=>remove(a)}>{t("mycat.removeBtn")}</button>
-            <button className="chip" data-section="acc-edit" aria-label={t("acc.edit")+": "+a.name} onClick={()=>setEditing({ id:a.id, name:a.name, bal:String(bal[a.id]||0) })}>{t("acc.edit")}</button>
-          </div>
-        </div>
-      ))}
-      {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
-      {PRESETS.length>0&&(<div data-section="acc-presets"><div className="list-sub" style={{margin:"6px 2px"}}>{t("acc.presetHint")}</div>
-        <div className="filter-bar" role="group" aria-label={t("acc.presetHint")}>
-          {PRESETS.map(([k,kd])=>(<button key={k} className="chip" data-preset={k} onClick={()=>{ setName(presetName[k]); setKind(kd); }}>{presetName[k]}</button>))}
-        </div></div>)}
-      <div className="field"><label className="field-lbl" htmlFor="acc-name">{t("acc.name")}</label>
-        <input id="acc-name" className="field-input" value={name} maxLength={40} onChange={e=>setName(e.target.value)}/></div>
-      <div className="filter-bar" role="group" aria-label={t("acc.kind")}>
-        {ACC_KINDS.map(k=>(<button key={k} className={`chip${kind===k?" on":""}`} aria-pressed={kind===k} onClick={()=>setKind(k)}>{kindName[k]}</button>))}
-      </div>
-      <div className="field"><label className="field-lbl" htmlFor="acc-open">{t("acc.opening")}</label>
-        <input id="acc-open" className="field-input" inputMode="decimal" placeholder="0.00" value={opening} onChange={e=>setOpening(cleanMoneyText(e.target.value))}/></div>
-      <button className="btn btn-ghost btn-full" data-section="acc-add" disabled={!name.trim()} onClick={add}>{t("acc.add")}</button>
-      {shown.length>1&&(
-        <div data-section="acc-transfer" style={{marginTop:14}}>
-          <div className="settings-section-lbl">{t("acc.transferTitle")}</div>
-          <div className="list-sub" style={{marginBottom:8}}>{t("acc.transferSub")}</div>
-          <div style={{display:"flex",gap:8,marginBottom:8}}>
-            <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("acc.from")} value={from||shown[0].id} onChange={e=>setFrom(e.target.value)}>{shown.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
-            <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("acc.to")} value={to||shown[1].id} onChange={e=>setTo(e.target.value)}>{shown.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            <input className="field-input" style={{flex:1}} inputMode="decimal" aria-label={t("acc.amount")} placeholder="0.00" value={amt} onChange={e=>setAmt(cleanMoneyText(e.target.value))}/>
-            <button className="btn btn-primary" data-section="acc-transfer-go" disabled={!amt.trim()} onClick={transfer}>{t("acc.transferGo")}</button>
-          </div>
-        </div>
-      )}
-      {data.transfers.slice(0,5).map(x=>(
-        <div key={x.id} className="settings-row" data-transfer={x.id}>
-          <div style={{minWidth:0}}><div className="settings-row-title">{fmt(x.amount,currency)}</div><div className="settings-row-sub">{nameOf(x.from)} → {nameOf(x.to)} · {fmtDate(x.date)}</div></div>
-          <button className="chip" aria-label={t("acc.removeTransfer")} onClick={()=>{ if (commit({ accounts:data.accounts, transfers:data.transfers.filter(y=>y.id!==x.id) })) showToast(t("acc.transferRemoved")); }}>{t("mycat.removeBtn")}</button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SettingsSheet({ focus="", state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
-  const { currency,safeToSpend={} }=state;
-  // Opened from the Accounts row: after the sheet has risen, glide down to the Accounts section (never a jump).
-  useEffect(()=>{
-    if (focus!=="accounts") return;
-    const id=setTimeout(()=>{ const el=document.querySelector('[data-section="my-accounts"]'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:"smooth", block:"start" }); },340);
-    return ()=>clearTimeout(id);
-  },[focus]);
-  const [curSym,      setCurSym]      = useState(currency);
-  const [theme,       setTheme]       = useState(()=>readTheme());
-  const [fxOff,       setFxOff]       = useState(()=>readFxOff());
-  const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
-
-  return (
-    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("set.preferences")}>
-        <div className="sheet-grip"><div className="sheet-handle"/></div>
-        <div className="sheet-title">{t("set.preferences")}</div>
-
-        {/* Safe to Spend: the switch only. The monthly savings floor is on Goals. */}
-        <div className="settings-section-lbl" style={{marginTop:6}}>{t("safe.title")}</div>
-        <div className="settings-row">
-          <div><div className="settings-row-title" id="set-safe-lbl">{t("set.safeEnable")}</div><div className="settings-row-sub">{t("set.safeEnableSub")}</div></div>
-          <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-label={t("safe.title")} tabIndex={0}><div className="toggle-knob"/></div>
-        </div>
-
-        <MyAccounts state={state} currency={state.currency} showToast={showToast}/>
-        <MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/>
-
-        {/* Colour theme (Run 25): palettes supplied by the owner; a plain preference, separate from the ledger */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("theme.title")}</div>
-        <div className="filter-bar" role="radiogroup" aria-label={t("theme.title")} data-section="theme-chips" style={{flexWrap:"wrap"}}>
-          {THEME_IDS.map(id=>(
-            <button key={id} role="radio" aria-checked={theme===id} data-theme-id={id} className={`chip${theme===id?" on":""}`} style={{display:"inline-flex",alignItems:"center",gap:7}}
-              onClick={()=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; } applyTheme(id); setTheme(id); showToast(t("theme.changed")); }}>
-              <span aria-hidden="true" style={{display:"inline-block",width:16,height:16,borderRadius:"50%",background:`linear-gradient(135deg,${THEMES[id].swatch[0]} 50%,${THEMES[id].swatch[1]} 50%)`,border:"1px solid var(--rule-2)"}}/>
-              {t("theme."+id)}
-            </button>
-          ))}
-        </div>
-
-        {/* Run 25: Reduce effects - shadows and highlights off; layers stay readable through tone and edges */}
-        <div className="settings-row" style={{marginTop:6}}>
-          <div><div className="settings-row-title" id="set-fx-lbl">{t("fx.title")}</div><div className="settings-row-sub">{t("fx.sub")}</div></div>
-          <div className={`toggle-track${fxOff?" on":""}`} data-section="fx-toggle" onClick={toggleFx} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); toggleFx(); } }} role="switch" aria-checked={fxOff} aria-labelledby="set-fx-lbl" tabIndex={0}><div className="toggle-knob"/></div>
-        </div>
-
-        {/* Currency */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
-        {/* Run 24: common currencies are one tap, so nobody has to find the symbol on the keyboard; the box below still takes any other symbol. */}
-        <div className="filter-bar" role="group" aria-label={t("set.currencyPick")} data-section="currency-chips">
-          {["₼","$","€","₽","£","₺","¥","₸","₴"].map(c=>(
-            <button key={c} className={`chip${currency===c?" on":""}`} aria-pressed={currency===c} onClick={()=>{ setCurSym(c); onCurrencyChange(c); showToast(t("set.currencyUpdated")); }}>{c}</button>
-          ))}
-        </div>
-        <div className="settings-row">
-          <div><div className="settings-row-title" id="set-cur-lbl">{t("set.currency")}</div><div className="settings-row-sub">{t("set.currencySub",{currency})}</div></div>
-          <div style={{display:"flex",gap:7,alignItems:"center"}}>
-            <input className="field-input" value={curSym} onChange={e=>setCurSym(e.target.value)} maxLength={3} aria-labelledby="set-cur-lbl" style={{width:52,minHeight:38,textAlign:"center",padding:"7px 8px"}}/>
-            <button className="btn btn-sm btn-sm-primary" onClick={()=>{if(!curSym.trim()){showToast(t("set.currencyEmpty"));return;} onCurrencyChange(curSym.trim());showToast(t("set.currencyUpdated"));}}>{t("common.save")}</button>
-          </div>
-        </div>
-
-        <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose} style={{marginTop:18}}>{t("common.close")}</button>
-      </div>
-    </div>
-  );
-}
-
-// Goals: the monthly savings floor used by Safe to Spend. Shown only while Safe to Spend is switched on.
-function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToast }) {
-  const [savingsT,setSavingsT]=useState(String(safeToSpend.savingsTarget||0));
-  if (!safeToSpend.enabled) return null;
-  return (
-    <div className="card" data-section="gl-floor">
-      <div className="settings-row-title" id="set-floor-lbl">{t("set.floor")}</div>
-      <div className="settings-row-sub" style={{marginBottom:8}}>{t("set.floorSub")}</div>
-      <div style={{display:"flex",gap:8,width:"100%"}}>
-        <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={savingsT} onChange={e=>setSavingsT(cleanMoneyText(e.target.value))} aria-labelledby="set-floor-lbl" style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-        <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=savingsT.trim()===""?0:formMoney(savingsT); if(v===null){showToast(t("set.zeroOrMore"));return;} onSafeToSpendChange({savingsTarget:v});showToast(t("set.saved"));}}>{t("common.save")}</button>
-      </div>
-    </div>
-  );
-}
-
-// Goals: quick-add templates (the buttons on Home). A template can carry a subcategory.
-function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate, onUpdateTemplate, showToast }) {
-  const [showNewTpl,  setShowNewTpl]  = useState(false);
-  const [editTplId,   setEditTplId]   = useState(null);
-  const [tplName,     setTplName]     = useState("");
-  const [tplAmt,      setTplAmt]      = useState("");
-  const [tplCatId,    setTplCatId]    = useState("food");
-  const [tplSubcat,   setTplSubcat]   = useState("");
-  const [tplMerchant, setTplMerchant] = useState("");
-  const [tplNote,     setTplNote]     = useState("");
-  const expCats=CATEGORIES.filter(c=>!c.income);
-  const myOwn=useMemo(()=>showNewTpl?((readSubcats()[tplCatId])||[]):[],[showNewTpl,tplCatId]);
-  const builtIn=(CATEGORIES.find(c=>c.id===tplCatId)||{}).subs||[];
-  const saveTpl=()=>{
-    const tAmt=formMoney(tplAmt,{positive:true});
-    if (!tplName.trim()||tAmt===null) { showToast(t("set.tplInvalid")); return; }
-    const data={name:tplName.trim(),amount:tAmt,catId:tplCatId,subcat:tplSubcat,merchant:tplMerchant.trim(),note:tplNote.trim()};
-    if (editTplId) onUpdateTemplate(editTplId,data); else onAddTemplate(data);
-    setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);setEditTplId(null);
-  };
-  const startEdit=(tpl)=>{ setEditTplId(tpl.id); setTplName(tpl.name||""); setTplAmt(String(tpl.amount)); setTplCatId(tpl.catId||"food"); setTplSubcat(tpl.subcat||""); setTplMerchant(tpl.merchant||""); setTplNote(tpl.note||""); setShowNewTpl(true); };
-  const tplForm=(inList)=>(
-        <div className={"reveal"+(inList?"":" card")} ref={revealFocus} data-section="tpl-form" style={inList?{padding:"12px 14px",borderBottom:"1px solid var(--rule)"}:undefined}>
-          <div className="field-row" style={{marginBottom:10}}>
-            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-name">{t("set.name")}</label><input id="tpl-name" className="field-input" placeholder={t("set.tplNamePh")} value={tplName} onChange={e=>setTplName(e.target.value)}/></div>
-            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-amt">{t("add.amount")}</label><input id="tpl-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={tplAmt} onChange={e=>setTplAmt(cleanMoneyText(e.target.value))}/></div>
-          </div>
-          <div className="field-row" style={{marginBottom:10}}>
-            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-cat">{t("add.category")}</label><select id="tpl-cat" className="field-input field-select" value={tplCatId} onChange={e=>{ setTplCatId(e.target.value); setTplSubcat(""); }}>{expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</select></div>
-            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-subcat">{t("add.subcategory")}</label>
-              <select id="tpl-subcat" className="field-input field-select" value={tplSubcat} onChange={e=>setTplSubcat(e.target.value)}>
-                <option value="">{t("set.noSubcat")}</option>
-                {myOwn.map(s=><option key={"my-"+s} value={s}>{s}</option>)}
-                {builtIn.map(s=><option key={s} value={s}>{subName(s)}</option>)}
-              </select></div>
-          </div>
-          <div className="field-row" style={{marginBottom:10}}>
-            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-merchant">{t("add.merchant")}</label><input id="tpl-merchant" className="field-input" placeholder={t("set.optionalPh")} value={tplMerchant} onChange={e=>setTplMerchant(e.target.value)}/></div>
-            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-note">{t("set.noteOptional")}</label><input id="tpl-note" className="field-input" placeholder={t("set.tplNotePh")} value={tplNote} onChange={e=>setTplNote(e.target.value)}/></div>
-          </div>
-          <button className="btn btn-primary btn-full" style={{marginTop:0,padding:"10px"}} onClick={saveTpl}>{t("set.saveTemplate")}</button>
-        </div>
-  );
-  return (
-    <div data-section="gl-templates">
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"14px 2px 10px"}}>
-        <span className="section-title" style={{margin:0}}>{t("set.templates")}</span>
-        <button className="btn btn-sm" onClick={()=>{ if (showNewTpl) { setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); } setShowNewTpl(s=>!s); }}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
-      </div>
-      {showNewTpl&&!editTplId&&tplForm(false)}
-      {templates.length===0&&!showNewTpl&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noTemplates")}</div>}
-      {templates.length>0&&(
-        <div className="card list-card">
-          {templates.map((tpl,ti)=>showNewTpl&&editTplId===tpl.id ? <Fragment key={tpl.id}>{tplForm(true)}</Fragment> : (
-            <div key={tpl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:ti<templates.length-1?"1px solid var(--rule)":"none"}}>
-              <CatIcon catId={tpl.catId} size={14}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{tpl.name}</div>
-                <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(tpl.amount,currency)}{tpl.merchant?` · ${tpl.merchant}`:""} · {catName(tpl.catId)}{tpl.subcat?` › ${subName(tpl.subcat)}`:""}</div>
-              </div>
-              <button className="chip" data-section="tpl-edit" aria-label={t("common.edit")+": "+tpl.name} onClick={()=>startEdit(tpl)}>{t("common.edit")}</button>
-              <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteTemplate(tpl.id)} aria-label={t("set.deleteTemplate",{name:tpl.name})}><Icon name="trash" size={14}/></button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Redesign pages (2026-10-27) ─────────────────────────────────────────────────────────────────────────────────────
-
-function SpendDonut({ catSpend, total, currency }) {
-  // Run 17: tap a slice (or its legend row) to focus it: the ring grows, that slice thickens, the rest fade and the centre names it;
-  // tap it again to go back. One selection at a time.
-  const [sel,setSel]=useState(null);
-  const slices=donutSlices(catSpend);
-  if (!slices.length) return null;
-  const cur=slices.find(s=>s.id===sel)||null;
-  const toggle=(id)=>setSel(s=>s===id?null:id);
-  const R=46, C=2*Math.PI*R; let off=0;
-  return (
-    <div className="donut-wrap">
-      <div className={`donut${cur?" has-sel":""}`} role="img" aria-label={t("home.breakdown")+": "+slices.map(s=>`${s.name} ${fmtPct(s.pct)}`).join(", ")}>
-        <svg viewBox="0 0 120 120" width="100%" height="100%" aria-hidden="true">
-          <circle cx="60" cy="60" r={R} fill="none" stroke="var(--bg-inset)" strokeWidth="14"/>
-          {slices.map(s=>{ const len=C*s.amt/total, gap=slices.length>1?Math.min(2,len/3):0; const on=cur&&cur.id===s.id; const el=(
-            <circle key={s.id} className="donut-slice" data-id={s.id} cx="60" cy="60" r={R} fill="none" stroke={s.color} strokeWidth={on?20:14} strokeDasharray={`${Math.max(len-gap,0.01)} ${C}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"
-              style={{opacity:cur&&!on?0.35:1,cursor:"pointer"}} onClick={()=>toggle(s.id)}/>
-          ); off+=len; return el; })}
-        </svg>
-        {cur
-          ? <div className="donut-center donut-center-sel"><span className="dc-name">{cur.name}</span><span className="dc-amt">{fmt(cur.amt,currency)}</span><span className="dc-pct">{fmtPct(cur.pct)}</span></div>
-          : <div className="donut-center">{fmtShort(total,currency)}</div>}
-      </div>
-      <ul className="donut-legend">
-        {slices.map(s=>(
-          <li key={s.id}><button type="button" className="donut-row" data-id={s.id} aria-pressed={!!cur&&cur.id===s.id} onClick={()=>toggle(s.id)} style={{opacity:cur&&cur.id!==s.id?0.55:1}}>
-            <span className="dot" style={{background:s.color}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{fmtPct(s.pct)}</span></button></li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-// A row in an inset list (More page, Import / Export): icon, title, optional subtitle, chevron.
-function ListRow({ icon, title, sub, onClick, color="var(--accent-text)", className="", id }) {
-  return (
-    <button className={`list-row ${className}`} data-more={id} onClick={onClick}>
-      <span className="list-ico" style={{color}}><Icon name={icon} size={20}/></span>
-      <span className="list-body"><span className="list-title">{title}</span>{sub&&<span className="list-sub">{sub}</span>}</span>
-      <Icon name="chevRight" size={16} color="var(--ink-4)"/>
-    </button>
-  );
-}
-
-// More: the pages that do not have a tab of their own. There is no account, profile, dark-mode switch or help centre in
-// this app, so none is shown; the card at the top says where the data lives, which is true and useful.
-// Run 16: "How it works" (four short steps) and the privacy notice, one simple sheet each. The notice describes what the app does
-// today (no account, no analytics, nothing sent); it is not legal advice and must be kept true if the app ever changes.
-function InfoSheet({ kind, onClose }) {
-  const n=kind==="how"?4:kind==="safe"?6:8;
-  return (
-    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("info."+kind+".title")} data-section={"info-"+kind}>
-        <div className="sheet-grip"><div className="sheet-handle"/></div>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:14}}>
-          <div className="card-title" style={{fontSize:17}}>{t("info."+kind+".title")}</div>
-          <button data-closer="1" onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
-        </div>
-        {Array.from({length:n},(_,i)=>i+1).map(i=>(
-          <div key={i} style={{marginBottom:14}}>
-            <div className="list-title">{t("info."+kind+"."+i+".h")}</div>
-            <div className="list-sub" style={{lineHeight:1.55,marginTop:2}}>{t("info."+kind+"."+i+".b")}</div>
-          </div>
-        ))}
-        <button className="btn btn-primary btn-full" style={{marginTop:4}} data-closer="1" onClick={onClose}>{t("common.close")}</button>
-      </div>
-    </div>
-  );
-}
-
-// ─── Debts & loans page (Run 17) ──────────────────────────────────────────────
-// Settings → Debts & loans. Debts are person-to-person (no interest); loans have a rate and a schedule (an ESTIMATE from the typed terms).
-// Money is stored as whole qapik under its own key (see cleanDebtData). Marking a loan payment adds ONE ordinary expense to Transactions
-// (category Finance, merchant = the lender) and remembers its id; deleting the payment record removes that entry too.
-const LOAN_KIND_KEY={ cash:"loan.kind.cash", card:"loan.kind.card", taksit:"loan.kind.taksit", other:"loan.kind.other" };
-const LOAN_RT_KEY={ annuity:"loan.rt.annuity", equal:"loan.rt.equal", flat:"loan.rt.flat", none:"loan.rt.none" };
-function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackbar, initialSeg="debts" }) {
-  const [data,setData]=useState(()=>readDebts());
-  const [seg,setSeg]=useState(initialSeg==="loans"?"loans":"debts");
-  const [showDebt,setShowDebt]=useState(false), [showLoan,setShowLoan]=useState(false);
-  const [dForm,setDForm]=useState({ dir:"owe", name:"", amt:"", due:"" }), [dMsg,setDMsg]=useState("");
-  const [lForm,setLForm]=useState({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }), [lMsg,setLMsg]=useState("");
-  const [pay,setPay]=useState({}), [payMsg,setPayMsg]=useState({}), [intr,setIntr]=useState({}), [ext,setExt]=useState({});
-  const uid=(p)=>`${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
-  const q=(v)=>fmt(v/100,currency);
-  const [health,setHealth]=useState(()=>debtsHealth());
-  const blocked=health.status==="corrupt"||health.status==="unreadable";
-  // Nothing is shown as saved unless it was really written; a refused write leaves the screen and the stored data as they were.
-  const save=(next)=>{ if (writeDebts(next)) { setData(next); setHealth(debtsHealth()); return true; } setHealth(debtsHealth()); showToast(t(blocked?"debt.blockedToast":"banner.saveFailed")); return false; };
-  const [ask,setAsk]=useState(null);   // Run 18: { id, amt } while the "also record in transactions?" question is open
-  const toQ=(text,opts)=>{ const v=formMoney(text,opts); return v===null ? null : Math.round(v*100); };
-
-  const addDebt=()=>{
-    const principal=toQ(dForm.amt,{positive:true}), name=dForm.name.trim();
-    if (!name || principal===null || !isQapik(principal)) { setDMsg(t("debt.invalid")); return; }
-    if (save({ ...data, debts:[...data.debts,{ id:uid("d"), direction:dForm.dir, name, principal, dueDate:dForm.due, note:"", payments:[] }] })) showToast(t("debt.addedToast"));
-    setDForm({ dir:"owe", name:"", amt:"", due:"" }); setDMsg(""); setShowDebt(false);
-  };
-  // Run 18 (owner decision "ask each time"): a repayment always reduces the debt; the user chooses whether it ALSO becomes a cash-flow entry
-  // (money paid out when you repay, received when you are repaid). The entry is the principal only; it is not spending or income.
-  const addPayment=(d)=>{
-    const amt=toQ(pay[d.id]||"",{positive:true});
-    if (amt===null || !debtCanPay(d,amt)) { setPayMsg(m=>({...m,[d.id]:t("debt.tooMuch",{left:q(debtRemaining(d))})})); return; }
-    setPayMsg(m=>({...m,[d.id]:""})); setAsk({ id:d.id, amt });
-  };
-  const entryFor=(d,pid,amt,date)=>({ type:d.direction==="owe"?"expense":"income", amount:amt/100, category:d.direction==="owe"?"finance":"income", subcategory:"", merchant:d.name, note:t(d.direction==="owe"?"debt.entryNoteOwe":"debt.entryNoteOwed"), date, recurring:false, recurFreq:null, isActive:true, debtLink:{ debtId:d.id, paymentId:pid } });
-  const recordPayment=(d,link)=>{
-    if (!ask || ask.id!==d.id) return;
-    const amt=ask.amt, pid=uid("p"), date=today();
-    if (!debtCanPay(d,amt)) { setAsk(null); return; }
-    const txnId=link ? onAddEntry(entryFor(d,pid,amt,date)) : undefined;
-    const row={ id:pid, date, amount:amt, ...(txnId!==undefined?{ txnId }:{}) };
-    if (!save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,payments:[...x.payments,row]}:x) })) { if (txnId!==undefined) onRemoveEntry(txnId); return; }
-    setAsk(null); setPay(p=>({...p,[d.id]:""}));
-    showSnackbar(t("debt.recorded"),()=>{   // Undo removes the repayment AND its linked entry together
-      const cur=readDebts(), cd=cur.debts.find(x=>x.id===d.id), cp=cd&&cd.payments.find(x=>x.id===pid);
-      if (!cp) return;
-      if (writeDebts({ ...cur, debts:cur.debts.map(x=>x.id===d.id?{...x,payments:x.payments.filter(y=>y.id!==pid)}:x) })) { if (txnId!==undefined) onRemoveEntry(txnId); setData(readDebts()); }
-    },6000,"debtpay");
-  };
-  const delPayment=(d,pid)=>{
-    const p=d.payments.find(x=>x.id===pid); if (!p) return;
-    if (!save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,payments:x.payments.filter(y=>y.id!==pid)}:x) })) return;
-    if (p.txnId!==undefined) { onRemoveEntry(p.txnId);
-      showSnackbar(t("debt.payRemoved"),()=>{   // Undo puts the repayment back with a fresh linked entry (same amount and date)
-        const cur=readDebts(), cd=cur.debts.find(x=>x.id===d.id); if (!cd || cd.payments.some(x=>x.id===pid) || !debtCanPay(cd,p.amount)) return;
-        const e=entryFor(d,pid,p.amount,p.date), newId=onAddEntry(e);
-        if (writeDebts({ ...cur, debts:cur.debts.map(x=>x.id===d.id?{...x,payments:[...x.payments,{ ...p, txnId:newId }]}:x) })) setData(readDebts()); else onRemoveEntry(newId);
-      },6000,"debtpay");
-    }
-  };
-  // Edit a debt's name, amount and due date. The amount can never drop below what has already been repaid.
-  const [dEdit,setDEdit]=useState(null), [lEdit,setLEdit]=useState(null);
-  const saveDebtEdit=()=>{
-    const d=data.debts.find(x=>x.id===dEdit.id); if (!d) { setDEdit(null); return; }
-    const principal=toQ(dEdit.amt,{positive:true}), name=dEdit.name.trim(), paid=d.principal-debtRemaining(d);
-    if (!name || principal===null || !isQapik(principal) || principal<paid || (dEdit.due && !isValidDateStr(dEdit.due))) { showToast(t("debt.invalid")); return; }
-    if (save({ ...data, debts:data.debts.map(x=>x.id===d.id?{...x,name,principal,dueDate:dEdit.due||""}:x) })) { setDEdit(null); showToast(t("acc.edited")); }
-  };
-  const saveLoanEdit=()=>{
-    // Terms (amount, yearly rate, number of payments) can be changed too, but the new loan must still produce a valid schedule and
-    // cannot have fewer payments than were already marked paid. Recorded payments keep the amounts they were recorded with.
-    const old=data.loans.find(x=>x.id===lEdit.id); if (!old) { setLEdit(null); return; }
-    const lender=lEdit.lender.trim(), principal=toQ(lEdit.amt,{positive:true}), months=Number(lEdit.months);
-    const ratePct=old.rateType==="none" ? 0 : Number(String(lEdit.rate).replace(",","."));
-    const next={ ...old, lender, principal, months, ratePct };
-    if (!lender || principal===null || !isQapik(principal) || !Number.isInteger(months) || months<old.payments.length || (old.rateType!=="none" && (String(lEdit.rate).trim()==="" || !Number.isFinite(ratePct))) || loanSchedule(next)===null) { showToast(t("loan.invalid")); return; }
-    if (save({ ...data, loans:data.loans.map(x=>x.id===old.id?next:x) })) { setLEdit(null); showToast(t("acc.edited")); }
-  };
-  const delDebt=(d)=>{
-    const linked=d.payments.filter(p=>p.txnId!==undefined);
-    askConfirm(t(linked.length?"debt.confirmDeleteLinked":"debt.confirmDelete")).then(yes=>{ if (!yes) return;
-      if (save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) })) { linked.forEach(p=>onRemoveEntry(p.txnId)); showToast(t("debt.removedToast")); } });
-  };
-
-  const addLoan=()=>{
-    const principal=toQ(lForm.amt,{positive:true}), months=Number(lForm.months), bank=lForm.bank.trim()===""?null:toQ(lForm.bank,{positive:true});
-    const rate=lForm.type==="none" ? 0 : Number(String(lForm.rate).replace(",","."));
-    const loan={ id:uid("l"), lender:lForm.lender.trim(), kind:lForm.kind, principal, ratePct:rate, rateType:lForm.type, months, firstPayment:lForm.first, bankPayment:bank, payments:[] };
-    if (!loan.lender || principal===null || (lForm.type!=="none" && lForm.rate.trim()==="") || (lForm.bank.trim()!=="" && bank===null) || loanSchedule(loan)===null) { setLMsg(t("loan.invalid")); return; }
-    if (save({ ...data, loans:[...data.loans,loan] })) showToast(t("loan.addedToast"));
-    setLForm({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }); setLMsg(""); setShowLoan(false);
-  };
-  const markPaid=(l,sched)=>{
-    const k=l.payments.length; if (k>=sched.payments.length) return;
-    const row=sched.payments[k], date=today();
-    // The interest part defaults to the schedule's estimate and can be edited; empty means "I do not know the split" (nothing is invented).
-    const text=(intr[l.id]!==undefined ? intr[l.id] : (row.interest/100).toFixed(2)).trim();
-    const iv=text==="" ? null : formMoney(text);
-    if (text!=="" && (iv===null || Math.round(iv*100)>row.payment)) { showToast(t("loan.interestInvalid")); return; }
-    const txnId=onAddEntry({ type:"expense", amount:row.payment/100, loan:{ interest:iv },  category:"finance", subcategory:"", merchant:l.lender, note:t("loan.entryNote"), date, recurring:false, recurFreq:null, isActive:true });
-    save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:[...x.payments,{ id:uid("p"), date, amount:row.payment, txnId }]}:x) });
-    showToast(t("loan.paidToast"));
-  };
-  const delLoanPayment=(l,p)=>{
-    askConfirm(t("loan.confirmDeletePay")).then(yes=>{ if (!yes) return;
-      if (p.txnId!==undefined) onRemoveEntry(p.txnId);
-      if (save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:x.payments.filter(y=>y.id!==p.id)}:x) })) showToast(t("loan.payRemovedToast")); });
-  };
-  const delLoan=(l)=>{ askConfirm(t("debt.confirmDelete")).then(yes=>{ if (yes && save({ ...data, loans:data.loans.filter(x=>x.id!==l.id) })) showToast(t("loan.removedToast")); }); };
-
-  const owe=data.debts.filter(d=>d.direction==="owe").reduce((s,d)=>s+debtRemaining(d),0), owed=data.debts.filter(d=>d.direction==="owed").reduce((s,d)=>s+debtRemaining(d),0);
-  const loanLeft=data.loans.reduce((s,l)=>{ const sc=loanSchedule(l), k=l.payments.length; return s+(sc ? (k===0 ? l.principal : k>=sc.payments.length ? 0 : sc.payments[k-1].balance) : 0); },0);
-  const upd=(setter)=>(e)=>{ const k=e.target.name; const v=e.target.value; setter(f=>({...f,[k]:v})); };
-
-  return (
-    <div className="goals-page" data-section="debts-page">
-      {blocked&&(<div className="card" role="alert" data-section="debts-blocked" style={{borderColor:"var(--neg)",background:"var(--neg-bg)"}}><strong>{t(health.status==="corrupt"?"debt.corrupt":"debt.unreadable")}</strong></div>)}
-      {health.status==="partial"&&(<div className="card" role="status" data-section="debts-partial">{t("debt.partial",{n:health.dropped})}</div>)}
-      <div className="card" data-section="debts-summary">
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,textAlign:"center"}}>
-          {[[t("debt.totalOwe"),q(owe)],[t("debt.totalOwed"),q(owed)],[t("debt.totalLoans"),q(loanLeft)]].map(([lbl,val])=>(
-            <div key={lbl}><div className="list-sub">{lbl}</div><div style={{fontSize:14,fontWeight:700,color:"var(--ink)"}}>{val}</div></div>
-          ))}
-        </div>
-      </div>
-      <div className="seg" role="tablist" aria-label={t("debt.title")}>
-        {[["debts",t("debt.segDebts")],["loans",t("debt.segLoans")]].map(([id,lbl])=>(
-          <button key={id} role="tab" aria-selected={seg===id} className={`seg-btn${seg===id?" on":""}`} onClick={()=>setSeg(id)}>{lbl}</button>
-        ))}
-      </div>
-
-      {seg==="debts"&&(<>
-        <div style={{display:"flex",justifyContent:"flex-end",margin:"4px 2px 10px"}}>
-          <button className="btn btn-sm" data-section="debt-add-btn" onClick={()=>setShowDebt(s=>!s)}>{showDebt?t("common.cancel"):t("set.add")}</button>
-        </div>
-        {showDebt&&(
-          <div className="card" data-section="debt-form">
-            <fieldset className="lang-switch" style={{marginBottom:10}} aria-label={t("debt.dirLabel")}>
-              {[["owe",t("debt.dirOwe")],["owed",t("debt.dirOwed")]].map(([v,lbl])=>(
-                <label key={v} className={`lang-pill${dForm.dir===v?" sel":""}`}><input type="radio" name="debt-dir" value={v} checked={dForm.dir===v} onChange={()=>setDForm(f=>({...f,dir:v}))}/>{lbl}</label>
-              ))}
-            </fieldset>
-            <div className="field-row" style={{marginBottom:10}}>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-name">{t("debt.person")}</label><input id="debt-name" name="name" className="field-input" value={dForm.name} maxLength={60} onChange={upd(setDForm)}/></div>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-amt">{t("debt.amount")}</label><input id="debt-amt" name="amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={dForm.amt} onChange={e=>setDForm(f=>({...f,amt:cleanMoneyText(e.target.value)}))}/></div>
-            </div>
-            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-due">{t("debt.due")}</label><input id="debt-due" name="due" className="field-input" lang={locale()} type="date" value={dForm.due} onChange={upd(setDForm)}/></div>
-            {dMsg&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginBottom:8}}>{dMsg}</div>}
-            <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="debt-save" onClick={addDebt}>{t("common.save")}</button>
-          </div>
-        )}
-        {data.debts.length===0&&!showDebt&&<div className="empty" style={{padding:"28px 0"}} data-section="debts-empty"><div className="empty-icon"><LedgerArt/></div><div className="empty-body">{t("debt.none")}</div></div>}
-        {data.debts.map(d=>{ const left=debtRemaining(d); return (
-          <div key={d.id} className="card" data-section="debt-card" data-id={d.id}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-              <div style={{minWidth:0}}>
-                <div className="goal-name">{maskText(d.name)}</div>
-                <div className="list-sub">{t(d.direction==="owe"?"debt.badgeOwe":"debt.badgeOwed")}{d.dueDate?` · ${t("debt.dueOn",{date:fmtDate(d.dueDate)})}`:""}</div>
-              </div>
-              <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
-                <button className="btn btn-sm" data-section="debt-edit" aria-label={t("common.edit")+": "+maskText(d.name)} onClick={()=>setDEdit({ id:d.id, name:d.name, amt:(d.principal/100).toFixed(2), due:d.dueDate||"" })}>{t("common.edit")}</button>
-                <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delDebt(d)} aria-label={t("debt.delete",{name:maskText(d.name)})}><Icon name="trash" size={15}/></button>
-              </div>
-            </div>
-            {dEdit&&dEdit.id===d.id&&(
-              <div data-section="debt-edit-form" style={{marginTop:10}}>
-                <div className="field-row" style={{marginBottom:10}}>
-                  <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-name">{t("debt.person")}</label><input id="debt-edit-name" className="field-input" value={dEdit.name} maxLength={60} onChange={e=>setDEdit({...dEdit,name:e.target.value})}/></div>
-                  <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-amt">{t("debt.amount")}</label><input id="debt-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={dEdit.amt} onChange={e=>setDEdit({...dEdit,amt:cleanMoneyText(e.target.value)})}/></div>
-                </div>
-                <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-edit-due">{t("debt.due")}</label><input id="debt-edit-due" className="field-input" lang={locale()} type="date" value={dEdit.due} onChange={e=>setDEdit({...dEdit,due:e.target.value})}/></div>
-                <div style={{display:"flex",gap:8}}>
-                  <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setDEdit(null)}>{t("common.cancel")}</button>
-                  <button className="btn btn-primary" style={{flex:1}} data-section="debt-edit-save" onClick={saveDebtEdit}>{t("common.save")}</button>
-                </div>
-              </div>
-            )}
-            <div style={{marginTop:8}}>
-              <div className="list-sub">{t("debt.remaining")}</div>
-              {left>0 ? <div className="big-num debt-remaining">{q(left)} <span className="list-sub">{t("debt.of",{total:q(d.principal)})}</span></div> : <div className="big-num debt-remaining" style={{color:"var(--pos)"}}>{t("debt.settled")}</div>}
-              <div className="bar" style={{marginTop:6}}><div className="bar-fill" style={{width:`${Math.min(100,(d.principal-left)/d.principal*100)}%`,background:"var(--accent)"}}/></div>
-            </div>
-            {left>0&&(
-              <div style={{display:"flex",gap:8,marginTop:10}}>
-                <input className="field-input debt-pay-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" aria-label={t("debt.payAmount")} value={pay[d.id]||""} onChange={e=>setPay(p=>({...p,[d.id]:cleanMoneyText(e.target.value)}))} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-                <button className="btn btn-sm btn-sm-primary debt-pay-btn" onClick={()=>addPayment(d)}>{t("debt.pay")}</button>
-              </div>
-            )}
-            {ask&&ask.id===d.id&&(
-              <div className="card debt-ask" role="group" aria-label={t("debt.askTitle")} data-section="debt-ask" style={{marginTop:8}}>
-                <div style={{fontSize:13,fontWeight:600}}>{t(d.direction==="owe"?"debt.askOwe":"debt.askOwed",{amount:q(ask.amt)})}</div>
-                <div className="list-sub" style={{margin:"4px 0 8px"}}>{t("debt.askHint")}</div>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  <button className="btn btn-sm btn-sm-primary debt-ask-yes" onClick={()=>recordPayment(d,true)}>{t("debt.askYes")}</button>
-                  <button className="btn btn-sm debt-ask-no" onClick={()=>recordPayment(d,false)}>{t("debt.askNo")}</button>
-                  <button className="btn btn-sm debt-ask-cancel" onClick={()=>setAsk(null)}>{t("common.cancel")}</button>
-                </div>
-              </div>
-            )}
-            {payMsg[d.id]&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginTop:6}}>{payMsg[d.id]}</div>}
-            {d.payments.map(p=>(
-              <div key={p.id} className="debt-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
-                <span className="list-sub">{fmtDate(p.date)}{p.txnId!==undefined?` · ${t("debt.linkedTag")}`:""}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
-                <button className="topbar-btn debt-pay-del" style={{color:"var(--ink-4)"}} onClick={()=>delPayment(d,p.id)} aria-label={t("debt.deletePay",{amount:q(p.amount)})}><Icon name="trash" size={14}/></button>
-              </div>
-            ))}
-          </div>
-        ); })}
-      </>)}
-
-      {seg==="loans"&&(<>
-        <div style={{display:"flex",justifyContent:"flex-end",margin:"4px 2px 10px"}}>
-          <button className="btn btn-sm" data-section="loan-add-btn" onClick={()=>setShowLoan(s=>!s)}>{showLoan?t("common.cancel"):t("set.add")}</button>
-        </div>
-        {showLoan&&(
-          <div className="card" data-section="loan-form">
-            <div className="field-row" style={{marginBottom:10}}>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-lender">{t("loan.lender")}</label><input id="loan-lender" name="lender" className="field-input" value={lForm.lender} maxLength={60} onChange={upd(setLForm)}/></div>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-kind">{t("loan.kind")}</label><select id="loan-kind" name="kind" className="field-input field-select" value={lForm.kind} onChange={upd(setLForm)}>{LOAN_KINDS.map(k=><option key={k} value={k}>{t(LOAN_KIND_KEY[k])}</option>)}</select></div>
-            </div>
-            <div className="field-row" style={{marginBottom:10}}>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-amt">{t("loan.amount")}</label><input id="loan-amt" name="amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={lForm.amt} onChange={e=>setLForm(f=>({...f,amt:cleanMoneyText(e.target.value)}))}/></div>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-months">{t("loan.months")}</label><input id="loan-months" name="months" className="field-input" type="text" inputMode="numeric" autoComplete="off" value={lForm.months} onChange={e=>setLForm(f=>({...f,months:e.target.value.replace(/[^0-9]/g,"")}))}/></div>
-            </div>
-            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-type">{t("loan.rateType")}</label><select id="loan-type" name="type" className="field-input field-select" value={lForm.type} onChange={upd(setLForm)}>{LOAN_RATE_TYPES.map(k=><option key={k} value={k}>{t(LOAN_RT_KEY[k])}</option>)}</select></div>
-            <div className="field-row" style={{marginBottom:10}}>
-              {lForm.type!=="none"&&<div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-rate">{t("loan.rate")}</label><input id="loan-rate" name="rate" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={lForm.rate} onChange={e=>setLForm(f=>({...f,rate:cleanMoneyText(e.target.value)}))}/></div>}
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-first">{t("loan.first")}</label><input id="loan-first" name="first" className="field-input" lang={locale()} type="date" value={lForm.first} onChange={upd(setLForm)}/></div>
-            </div>
-            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-bank">{t("loan.bank")}</label><input id="loan-bank" name="bank" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={lForm.bank} onChange={e=>setLForm(f=>({...f,bank:cleanMoneyText(e.target.value)}))}/><div className="list-sub" style={{marginTop:4}}>{t("loan.bankHint")}</div></div>
-            {lMsg&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginBottom:8}}>{lMsg}</div>}
-            <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="loan-save" onClick={addLoan}>{t("common.save")}</button>
-          </div>
-        )}
-        {data.loans.length===0&&!showLoan&&<div className="empty" style={{padding:"28px 0"}} data-section="loans-empty"><div className="empty-icon"><LedgerArt/></div><div className="empty-body">{t("loan.none")}</div></div>}
-        {data.loans.map(l=>{
-          const sc=loanSchedule(l); if (!sc) return null;
-          const k=l.payments.length, done=k>=sc.payments.length, next=done?null:sc.payments[k], balance=k===0?l.principal:done?0:sc.payments[k-1].balance;
-          const implied=l.rateType==="flat" ? impliedNominalPct(l.principal,l.months,sc.payments[0].payment) : null;
-          return (
-            <div key={l.id} className="card" data-section="loan-card" data-id={l.id}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                <div style={{minWidth:0}}><div className="goal-name">{maskText(l.lender)}</div><div className="list-sub">{t(LOAN_KIND_KEY[l.kind])} · {q(l.principal)}</div></div>
-                <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
-                  <button className="btn btn-sm" data-section="loan-edit" aria-label={t("common.edit")+": "+maskText(l.lender)} onClick={()=>setLEdit({ id:l.id, lender:l.lender, amt:(l.principal/100).toFixed(2), months:String(l.months), rate:String(l.ratePct) })}>{t("common.edit")}</button>
-                  <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delLoan(l)} aria-label={t("debt.delete",{name:maskText(l.lender)})}><Icon name="trash" size={15}/></button>
-                </div>
-              </div>
-              {lEdit&&lEdit.id===l.id&&(
-                <div data-section="loan-edit-form" style={{marginTop:10}}>
-                  <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-lender">{t("loan.lender")}</label><input id="loan-edit-lender" className="field-input" value={lEdit.lender} maxLength={60} onChange={e=>setLEdit({...lEdit,lender:e.target.value})}/></div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                    <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-edit-amt">{t("loan.amount")}</label><input id="loan-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={lEdit.amt} onChange={e=>setLEdit({...lEdit,amt:cleanMoneyText(e.target.value)})}/></div>
-                    <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-edit-months">{t("loan.months")}</label><input id="loan-edit-months" className="field-input" type="text" inputMode="numeric" autoComplete="off" value={lEdit.months} onChange={e=>setLEdit({...lEdit,months:e.target.value.replace(/[^0-9]/g,"")})}/></div>
-                  </div>
-                  {l.rateType!=="none"&&<div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-rate">{t("loan.rate")}</label><input id="loan-edit-rate" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={lEdit.rate} onChange={e=>setLEdit({...lEdit,rate:cleanMoneyText(e.target.value)})}/></div>}
-                  <div style={{display:"flex",gap:8}}>
-                    <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setLEdit(null)}>{t("common.cancel")}</button>
-                    <button className="btn btn-primary" style={{flex:1}} data-section="loan-edit-save" onClick={saveLoanEdit}>{t("common.save")}</button>
-                  </div>
-                </div>
-              )}
-              <div style={{marginTop:8}}>
-                <div className="list-sub">{t("loan.monthly")}</div>
-                <div className="big-num loan-monthly">{q(sc.payments[0].payment)}</div>
-                <div className="list-sub loan-next" style={{marginTop:2}}>{done ? t("loan.allPaid") : t("loan.next",{amount:q(next.payment),date:fmtDate(next.date)})}</div>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
-                <div><div className="list-sub">{t("loan.balance")}</div><div className="loan-balance" style={{fontSize:14,fontWeight:700}}>{q(balance)}</div></div>
-                <div><div className="list-sub">{t("loan.totalInterest")}</div><div className="loan-interest" style={{fontSize:14,fontWeight:700}}>{q(sc.totalInterest)}</div></div>
-              </div>
-              {implied!==null&&<div className="list-sub" style={{marginTop:8}}>{t("loan.flatReal",{pct:fmtPct(Math.round(implied*10)/10)})}</div>}
-              <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t("loan.estimate")}</div>
-              {!done&&(
-                <div className="field" style={{marginTop:10,marginBottom:0}}>
-                  <label className="field-lbl" htmlFor={"loan-int-"+l.id}>{t("loan.interestPart")}</label>
-                  <input id={"loan-int-"+l.id} className="field-input loan-interest-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00"
-                    value={intr[l.id]!==undefined ? intr[l.id] : (next.interest/100).toFixed(2)} onChange={e=>setIntr(m=>({...m,[l.id]:cleanMoneyText(e.target.value)}))}/>
-                  <div className="list-sub" style={{marginTop:4,lineHeight:1.5}}>{t("loan.interestHint")}</div>
-                </div>
-              )}
-              {!done&&l.rateType==="annuity"&&(()=>{
-                const txt=(ext[l.id]||"").trim(), v=txt===""?null:formMoney(txt), cents=v===null?0:Math.round(v*100), eff=cents>0?loanExtraEffect(l,cents):null;
-                const msg=cents<=0 ? "" : eff===null ? (cents>=balance?t("loan.extraClears"):"")
-                  : eff.monthsSaved>0 ? t("loan.extraResult",{ amount:q(cents), months:tn("loan.extraMonths",eff.monthsSaved), interest:q(eff.interestSaved) })
-                  : eff.interestSaved>0 ? t("loan.extraNoMonths",{ amount:q(cents), interest:q(eff.interestSaved) }) : t("loan.extraNone",{ amount:q(cents) });
-                return (
-                  <div className="field loan-extra" style={{marginTop:10,marginBottom:0}} data-section="loan-extra">
-                    <label className="field-lbl" htmlFor={"loan-ext-"+l.id}>{t("loan.extra")}</label>
-                    <input id={"loan-ext-"+l.id} className="field-input loan-extra-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00"
-                      value={ext[l.id]||""} onChange={e=>setExt(m=>({...m,[l.id]:cleanMoneyText(e.target.value)}))}/>
-                    {msg&&<div className="list-sub loan-extra-result" role="status" style={{marginTop:4,lineHeight:1.5,color:"var(--ink)"}}>{msg}</div>}
-                    <div className="list-sub" style={{marginTop:4,lineHeight:1.5}}>{t("loan.extraHint")}</div>
-                  </div>
-                );
-              })()}
-              {!done&&<button className="btn btn-primary btn-full loan-paid-btn" style={{marginTop:10}} onClick={()=>markPaid(l,sc)}>{t("loan.markPaid")}</button>}
-              {l.payments.length>0&&<div className="list-sub" style={{marginTop:12}}>{t("loan.paymentsTitle")}</div>}
-              {l.payments.map(p=>(
-                <div key={p.id} className="loan-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
-                  <span className="list-sub">{fmtDate(p.date)}{p.txnId!==undefined?` · ${t("debt.linkedTag")}`:""}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
-                  <button className="topbar-btn loan-pay-del" style={{color:"var(--ink-4)"}} onClick={()=>delLoanPayment(l,p)} aria-label={t("loan.deletePay",{amount:q(p.amount)})}><Icon name="trash" size={14}/></button>
-                </div>
-              ))}
-            </div>
-          );
-        })}
-      </>)}
-    </div>
-  );
-}
-
-function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onSettings, onInfo, onLock, version }) {
-  const [name,setName]=useState(profileName);
-  return (
-    <div className="more-page">
-      {/* Run 17: this tab is Settings. Profile name (used in the Home greeting) and the interface language are set here. */}
-      <div className="card st-card" data-section="st-profile" role="group" aria-label={t("st.profile")}>
-        <label className="field-lbl" htmlFor="profile-name">{t("st.profileName")}</label>
-        <div style={{display:"flex",gap:8}}>
-          <input id="profile-name" className="field-input" autoComplete="off" maxLength={PROFILE_NAME_MAX*2} placeholder={t("st.profilePh")} value={name} onChange={e=>setName(e.target.value)} style={{flex:1}}/>
-          <button className="btn btn-sm btn-sm-primary" data-section="st-name-save" disabled={cleanProfileName(name)===cleanProfileName(profileName)} onClick={()=>{ onProfileName(name); setName(cleanProfileName(name)); }}>{t("common.save")}</button>
-        </div>
-        <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
-      </div>
-      <div className="card st-card" data-section="st-language">
-        <div className="settings-section-lbl" id="set-lang-lbl" style={{marginTop:0}}>{t("lang.setting")}</div>
-        <fieldset className="lang-switch" aria-labelledby="set-lang-lbl">
-          {LANGS.map(l=>(
-            <label key={l} className={`lang-pill${language===l?" sel":""}`} lang={l}>
-              <input type="radio" name="settings-language" value={l} checked={language===l} onChange={()=>onLanguageChange(l)}/>
-              {LANG_NAMES[l]}
-            </label>
-          ))}
-        </fieldset>
-        <div className="list-sub" style={{marginTop:6}}>{t("lang.settingSub")}</div>
-      </div>
-      <div className="card more-id">
-        <span className="more-mark" aria-hidden="true"><span style={{fontSize:24,fontWeight:700,color:"var(--accent)",lineHeight:1}}>₼</span></span>
-        <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
-      </div>
-      <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
-      <div className="card list-card" data-section="more-money">
-        {/* Run 26: the list is grouped (Money / Data and safety / App) and every row has a name for tests and links; order inside the old flat list no longer matters */}
-        <ListRow id="accounts" icon="wallet" title={t("acc.title")} sub={t("more.accountsSub")} onClick={()=>onSettings("accounts")}/>
-        <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
-        <ListRow id="debts" icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
-      </div>
-      <div className="settings-section-lbl more-group-lbl">{t("st.groupData")}</div>
-      <div className="card list-card" data-section="more-data">
-        <ListRow id="io" icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
-        <ListRow id="lock" icon="safe" title={t("lock.title")} sub={t("lock.rowSub")} onClick={onLock}/>
-        <ListRow id="safe" icon="safe" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
-        <ListRow id="privacy" icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
-      </div>
-      <div className="settings-section-lbl more-group-lbl">{t("st.groupApp")}</div>
-      <div className="card list-card" data-section="more-app">
-        <ListRow id="prefs" icon="settings" title={t("set.preferences")} sub={t("more.settingsSub")} onClick={()=>onSettings()}/>
-        <ListRow id="how" icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
-      </div>
-      {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}
-    </div>
-  );
-}
-
-// Import / Export: the same import, export and backup functions Settings used to hold, on a page of their own.
-// There is no import history in the data, so no "recent imports" list is shown.
-function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup, onShareBackup, protection, onProtect, onInstall }) {
-  const fileRef=useRef();
-  const { transactions, lastBackup, backupConfirmedAt }=state;
-  const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
-  // Can this device hand a file to the share menu? (Android and iPhone: yes; many desktop browsers: no.)
-  const canShareFiles=useMemo(()=>{ try { if (nativeShareHook()) return true; return typeof navigator.canShare==="function" && typeof File!=="undefined" && navigator.canShare({files:[new File(["{}"],"x.json",{type:"application/json"})]}); } catch { return false; } },[]);
-  const standalone=typeof window!=="undefined" && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone===true);
-  return (
-    <div className="io-page">
-      {/* Run 10: how safe the data is on this phone, and what makes it safer */}
-      <div className="section-title" style={{marginTop:0}}>{t("io.safety")}</div>
-      <div className="card io-safety">
-        <div className="io-backup">
-          <div style={{minWidth:0}}>
-            <div className="list-title">{t("io.protectTitle")}</div>
-            <div className="list-sub" style={{lineHeight:1.5}}>{t(protection==="on"?"io.protectOn":protection==="off"?"io.protectOff":"io.protectUnsupported")}</div>
-          </div>
-          <span className={`io-status${protection==="on"?" ok":""}`}>{protection==="on"?<><Icon name="check" size={12}/>{t("io.on")}</>:protection==="off"?t("io.off"):"—"}</span>
-        </div>
-        {protection==="off"&&<button className="btn btn-ghost btn-full io-protect" onClick={onProtect}>{t("io.protectBtn")}</button>}
-        {!standalone&&(
-          <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
-            <div className="list-title">{t("io.installTitle")}</div>
-            <div className="list-sub" style={{lineHeight:1.5}}>{t("io.installHow")}</div>
-            {onInstall&&<button className="btn btn-ghost btn-full io-install" onClick={onInstall}>{t("io.installBtn")}</button>}
-          </div>
-        )}
-      </div>
-      <div className="io-grid">
-        <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}}>
-          <input ref={fileRef} type="file" accept=".json,.csv" aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
-          <span className="io-ico" style={{color:"var(--accent-text)"}}><Icon name="upload" size={24}/></span>
-          <div className="list-title">{t("io.import")}</div>
-          <div className="list-sub">{t("io.importSub")}</div>
-        </div>
-        <div className="card io-card">
-          <span className="io-ico" style={{color:"var(--violet)"}}><Icon name="download" size={24}/></span>
-          <div className="list-title">{t("io.export")}</div>
-          <div className="list-sub">{t("set.exportCsvSub")}</div>
-          <button className="btn btn-sm" onClick={onExportCSV} style={{marginTop:10}}><Icon name="download" size={12}/>{t("io.exportCsv")}</button>
-        </div>
-      </div>
-      <div className="section-title">{t("io.backups")}</div>
-      <div className="card">
-        {lastBackup?(
-          <div className="io-backup">
-            <div style={{minWidth:0}}>
-              <div className="list-sub">{t("set.lastBackup")}</div>
-              <div className="list-title">{fmtLongDate(lastBackup)}</div>
-            </div>
-            <span className={`io-status${confirmed?" ok":""}`}>{confirmed?<><Icon name="check" size={12}/>{t("io.confirmed")}</>:t("io.unconfirmed")}</span>
-          </div>
-        ):(
-          <div className="list-title" style={{color:"var(--neg)"}}>{t("set.noBackup")}</div>
-        )}
-        <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>
-          {lastBackup && (confirmed ? t("set.confirmedOn",{date:fmtLongDate(backupConfirmedAt)}) : t("set.notConfirmed"))}{lastBackup?" ":""}{t("set.cantTell")}
-        </div>
-        {canShareFiles&&onShareBackup&&<>
-          <button className="btn btn-primary btn-full io-share" onClick={onShareBackup} style={{marginTop:12}}><Icon name="upload" size={16}/>{t("io.shareBackup")}</button>
-          <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("io.shareHint")}</div>
-        </>}
-        <button className={`btn ${canShareFiles&&onShareBackup?"btn-ghost":"btn-primary"} btn-full`} onClick={onExportJSON} style={{marginTop:canShareFiles&&onShareBackup?8:12}}><Icon name="backup" size={16}/>{t("io.createBackup")}</button>
-        {lastBackup && !confirmed && <button className="btn btn-ghost btn-full" onClick={onConfirmBackup}>{t("banner.haveFile")}</button>}
-        <div className="list-sub" style={{marginTop:8}}>{tn("set.jsonBackupSub",transactions.length)}</div>
-      </div>
-    </div>
-  );
-}
-
-// Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
-function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange }) {
-  const { transactions, budgets={}, goals=[], currency, templates=[], safeToSpend={} }=state;
-  const setSeg=onSeg;
-  const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
-  const [showNewGoal,setShowNewGoal]=useState(false);
-  const UNB_SHOW=4, [unbAll,setUnbAll]=useState(false);   // Run 26: the long "without a budget" list shows four, the rest one tap away
-  const [updGoal,setUpdGoal]=useState(null);   // Run 26: the saved amount is changed inline (null = closed; otherwise { id, val }), not in the browser's own pop-up
-  // "New budget" form opened by the title bar's "+" on the Budgets half: pick a category without a limit, type the limit.
-  const [newBudget,setNewBudget]=useState(null);   // null = closed; otherwise { catId, val }
-  const seenSignal=useRef(addSignal);
-  useEffect(()=>{
-    if (addSignal===seenSignal.current) return; seenSignal.current=addSignal;
-    if (seg==="goals") setShowNewGoal(true);
-    else { const free=CATEGORIES.filter(c=>!c.income && !(budgets[c.id]>0)); setNewBudget({ catId:(free[0]||CATEGORIES[0]).id, val:"" }); }
-    window.scrollTo({ top:0, behavior:"smooth" });   // Run 26: a glide, not a jump (reduced motion turns it off in CSS)
-  },[addSignal]);
-  const [goalName,setGoalName]=useState(""), [goalTarget,setGoalTarget]=useState(""), [goalSaved,setGoalSaved]=useState("");
-  const [goalMonthly,setGoalMonthly]=useState(""), [goalDate,setGoalDate]=useState(""), [editGoalId,setEditGoalId]=useState(null);
-  const now=curMon();
-  const catSpend=calcCategorySpend(transactions,now);
-  const items=calcBudgetStatus(budgets,catSpend,now);
-  const byCat=Object.fromEntries(items.map(x=>[x.catId,x]));
-  const limitTotal=items.reduce((s,x)=>s+x.limit,0), spentTotal=items.reduce((s,x)=>s+x.spent,0);
-  const expCats=CATEGORIES.filter(c=>!c.income);
-  const budgeted=expCats.filter(c=>byCat[c.id]), unbudgeted=expCats.filter(c=>!byCat[c.id]);
-
-  const saveGoal=()=>{
-    const gTarget=formMoney(goalTarget,{positive:true});
-    const gSaved=goalSaved.trim()===""?0:formMoney(goalSaved);
-    const gMonthly=goalMonthly.trim()===""?0:formMoney(goalMonthly);
-    if (!goalName.trim()||gTarget===null) { showToast(t("set.goalInvalidTarget")); return; }
-    if (gSaved===null||gMonthly===null) { showToast(t("set.goalInvalidAmounts")); return; }
-    if (goalDate && !isValidDateStr(goalDate)) { showToast(t("set.goalInvalidDate")); return; }
-    const g={name:goalName.trim(),target:gTarget,saved:gSaved,monthlyTarget:gMonthly,targetDate:goalDate||null};
-    if (editGoalId) onUpdateGoal(editGoalId,g); else onAddGoal(g);
-    setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);setEditGoalId(null);
-  };
-  const startEditGoal=(g)=>{ setEditGoalId(g.id); setGoalName(g.name||""); setGoalTarget(String(g.target||"")); setGoalSaved(String(g.saved||"")); setGoalMonthly(g.monthlyTarget?String(g.monthlyTarget):""); setGoalDate(g.targetDate||""); setShowNewGoal(true); };   // Run 26: the form opens in the goal's own place and eases in; no jump to the top
-  // The form eases in, then the view glides to it and the first box is focused without a jump.
-  const formShown=revealFocus;
-  const renderGoalForm=()=>(
-    <div className="card reveal" ref={formShown} data-section="goal-form">
-      <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="goal-name">{t("set.goalName")}</label><input id="goal-name" className="field-input" placeholder={t("set.goalNamePh")} value={goalName} onChange={e=>setGoalName(e.target.value)}/></div>
-      <div className="field-row" style={{marginBottom:10}}>
-        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-target">{t("set.target",{currency})}</label><input id="goal-target" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={goalTarget} onChange={e=>setGoalTarget(cleanMoneyText(e.target.value))}/></div>
-        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-saved">{t("set.savedSoFar")}</label><input id="goal-saved" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={goalSaved} onChange={e=>setGoalSaved(cleanMoneyText(e.target.value))}/></div>
-      </div>
-      <div className="field-row" style={{marginBottom:10}}>
-        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-monthly">{t("set.monthlyContribution")}</label><input id="goal-monthly" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.optionalPh")} value={goalMonthly} onChange={e=>setGoalMonthly(cleanMoneyText(e.target.value))}/></div>
-        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-date">{t("set.targetDate")}</label><input id="goal-date" className="field-input" lang={locale()} type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
-      </div>
-      <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={saveGoal}>{t("set.saveGoal")}</button>
-    </div>
-  );
-  const editRow=(cat,limit)=>editBudget===cat.id&&(
-    <div className="reveal" style={{display:"flex",gap:7,marginTop:9}}>
-      <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} ref={revealFocus} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-      <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
-      <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
-    </div>
-  );
-  const editBtn=(cat,limit)=>(
-    <button className="btn btn-sm" onClick={()=>{setEditBudget(cat.id);setBudgetVal(limit>0?String(limit):"");}} aria-label={`${limit>0?t("common.edit"):t("set.set")}: ${catName(cat.id)}`}>{limit>0?t("common.edit"):t("set.set")}</button>
-  );
-
-  return (
-    <div className="goals-page">
-      <div className="seg" role="tablist" aria-label={t("goals.pageTitle")}>
-        {[["budgets",t("budgets.title")],["goals",t("goals.title")]].map(([id,lbl])=>(
-          <button key={id} role="tab" aria-selected={seg===id} className={`seg-btn${seg===id?" on":""}`} onClick={()=>setSeg(id)}>{lbl}</button>
-        ))}
-      </div>
-
-      {seg==="budgets"&&(<>
-        {newBudget&&(
-          <div className="card new-budget reveal" ref={revealFocus}>
-            <div className="card-title" style={{marginBottom:10}}>{t("goals.addBudget")}</div>
-            <div className="field-row" style={{marginBottom:10}}>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-cat">{t("add.category")}</label>
-                <select id="nb-cat" className="field-input field-select" value={newBudget.catId} onChange={e=>setNewBudget(b=>({...b,catId:e.target.value}))}>
-                  {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}{budgets[c.id]>0?` (${fmt(budgets[c.id],currency)})`:""}</option>)}
-                </select></div>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-val">{t("set.monthlyLimit")}</label>
-                <input id="nb-val" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={newBudget.val} onChange={e=>setNewBudget(b=>({...b,val:cleanMoneyText(e.target.value)}))}/></div>
-            </div>
-            <div style={{display:"flex",gap:8}}>
-              <button className="btn btn-primary" style={{flex:1,marginTop:0}} onClick={()=>{ const v=newBudget.val.trim()===""?null:formMoney(newBudget.val,{positive:true}); if(v===null){showToast(t("add.errAmount"));return;} onSetBudget(newBudget.catId,v); setNewBudget(null); showToast(t("set.budgetSaved")); }}>{t("common.save")}</button>
-              <button className="btn btn-ghost" style={{flex:1,marginTop:0}} onClick={()=>setNewBudget(null)}>{t("common.cancel")}</button>
-            </div>
-          </div>
-        )}
-        {limitTotal>0&&(
-          <div className="card" data-section="bg-total">
-            <div className="list-sub">{t("budgets.monthTotal",{month:monthName(now)})}</div>
-            <div className="big-num">{fmt(limitTotal,currency)}</div>
-            <div className="bar"><div className="bar-fill" style={{width:`${Math.min(spentTotal/limitTotal*100,100)}%`,background:spentTotal>limitTotal?"var(--neg)":spentTotal>=0.8*limitTotal?"var(--warn)":"var(--pos)"}}/></div>
-            <div className="list-sub" style={{marginTop:8}}>{t("budgets.spentOf",{spent:fmt(spentTotal,currency),limit:fmt(limitTotal,currency)})}</div>
-            <div style={{fontSize:13,fontWeight:600,marginTop:6,color:spentTotal>limitTotal?"var(--neg)":"var(--pos)"}}>
-              {spentTotal>limitTotal?t("budgets.over",{amount:fmt(spentTotal-limitTotal,currency)}):t("budgets.remaining",{amount:fmt(limitTotal-spentTotal,currency)})}
-            </div>
-          </div>
-        )}
-        <div className="section-title">{t("budgets.byCategory")}</div>
-        {budgeted.length===0&&<div className="list-sub" style={{margin:"0 2px 12px"}}>{t("budgets.none")}</div>}
-        {budgeted.length>0&&(
-          <div className="card list-card">
-            {budgeted.map(cat=>{ const x=byCat[cat.id]; const pct=Math.round(x.spent/x.limit*100); return (
-              <div key={cat.id} className="bud-row">
-                <div className="bud-top">
-                  <span className="cat-dot" style={{background:cat.color+"26"}}><CatIcon catId={cat.id} size={16}/></span>
-                  <span className="bud-name">{catName(cat.id)}</span>
-                  <span className="bud-nums">{fmt(x.spent,currency)} / {fmt(x.limit,currency)}</span>
-                </div>
-                <div className="bud-bar-row">
-                  <div className="bar"><div className="bar-fill" style={{width:`${x.pct}%`,background:x.over?"var(--neg)":x.warn?"var(--warn)":"var(--pos)"}}/></div>
-                  <span className="bud-pct" style={{color:x.over?"var(--neg)":"var(--ink-3)"}}>{fmtPct(pct)}</span>
-                  {editBtn(cat,x.limit)}
-                </div>
-                {editRow(cat,x.limit)}
-              </div>
-            ); })}
-          </div>
-        )}
-        <div className="section-title">{t("budgets.notSet")}</div>
-        <div className="card list-card" data-section="bg-unbudgeted">
-          {(unbAll||unbudgeted.length<=UNB_SHOW?unbudgeted:unbudgeted.filter((cat,i)=>i<UNB_SHOW||cat.id===editBudget)).map(cat=>(
-            <div key={cat.id} className="bud-row">
-              <div className="bud-top">
-                <span className="cat-dot" style={{background:cat.color+"26"}}><CatIcon catId={cat.id} size={16}/></span>
-                <span className="bud-name">{catName(cat.id)}</span>
-                {editBtn(cat,0)}
-              </div>
-              {editRow(cat,0)}
-            </div>
-          ))}
-          {unbudgeted.length>UNB_SHOW&&(<button className="list-row" data-section="bg-unb-toggle" aria-expanded={unbAll} onClick={()=>setUnbAll(v=>!v)} style={{justifyContent:"center",color:"var(--accent-text)",fontWeight:600,fontSize:13,minHeight:48}}>{unbAll?t("budgets.showFewer"):t("budgets.showAll",{n:unbudgeted.length})}</button>)}
-        </div>
-      </>)}
-
-      {seg==="goals"&&(<>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"4px 2px 10px"}}>
-          <span className="section-title" style={{margin:0}}>{t("set.financialGoals")}</span>
-          <button className="btn btn-sm" onClick={()=>{ if (showNewGoal) { setEditGoalId(null); setGoalName(""); setGoalTarget(""); setGoalSaved(""); setGoalMonthly(""); setGoalDate(""); } setShowNewGoal(s=>!s); }}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
-        </div>
-        {showNewGoal&&!editGoalId&&renderGoalForm()}
-        {goals.length===0&&!showNewGoal&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noGoals")}</div>}
-        {goals.map(goal=>{
-          const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion}=gp; const req=goalRequiredMonthly(goal);
-          if (showNewGoal && editGoalId===goal.id) return <Fragment key={goal.id}>{renderGoalForm()}</Fragment>;
-          return (
-            <div key={goal.id} className="card goal-card" data-section="goal-card">
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                <div style={{display:"flex",gap:10,alignItems:"center",minWidth:0,flex:"1 1 150px"}}>
-                  <span className="cat-dot" style={{background:"var(--pos-bg)"}}><Icon name="goal" size={16} color="var(--pos)"/></span>
-                  <div style={{minWidth:0}}>
-                    <div className="goal-name">{maskText(goal.name)}</div>
-                    <div className="list-sub">{t("goals.savedOf",{ saved:fmt(goal.saved||0,currency), target:fmt(goal.target||0,currency) })}</div>
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0,marginLeft:"auto"}}>
-                  <button className="btn btn-sm" data-section="goal-update" aria-expanded={updGoal&&updGoal.id===goal.id} onClick={()=>setUpdGoal(u=>u&&u.id===goal.id?null:{ id:goal.id, val:String(goal.saved||0) })}>{t("set.update")}</button>
-                  <button className="btn btn-sm" data-section="goal-edit" aria-label={t("common.edit")+": "+maskText(goal.name)} onClick={()=>startEditGoal(goal)}>{t("common.edit")}</button>
-                  <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>
-                </div>
-              </div>
-              {updGoal&&updGoal.id===goal.id&&(
-                <div className="reveal" data-section="goal-update-row" style={{display:"flex",gap:7,marginTop:10}}>
-                  <input className="field-input" type="text" inputMode="decimal" autoComplete="off" data-section="goal-update-input" aria-label={t("set.updatePrompt",{name:maskText(goal.name)})} value={updGoal.val} ref={revealFocus} onChange={e=>setUpdGoal({...updGoal,val:cleanMoneyText(e.target.value)})}
-                    onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); const v=formMoney(updGoal.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } } else if (e.key==="Escape") setUpdGoal(null); }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-                  <button className="btn btn-sm btn-sm-primary" data-section="goal-update-save" onClick={()=>{ const v=formMoney(updGoal.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } }}>{t("common.save")}</button>
-                  <button className="btn btn-sm" onClick={()=>setUpdGoal(null)} aria-label={t("common.cancel")}>✕</button>
-                </div>
-              )}
-              <div className="bud-bar-row" style={{marginTop:12}}>
-                <div className="bar"><div className="bar-fill" style={{width:`${pct}%`,background:"var(--accent)"}}/></div>
-                <span className="bud-pct">{fmtPct(Math.round(pct))}</span>
-              </div>
-              {/* Run 15: the answer to "how much must I save each month?" comes first; the what-if below is optional. */}
-              {(req.state==="active"||req.state==="noDate"||req.state==="overdue")&&(
-                <div className={`goal-need${req.state==="active"?"":" goal-need-muted"}`} data-section="goal-need" role="note">
-                  {req.state==="active"&&<>
-                    <div className="goal-need-main">{req.thisMonth?t("goals.needThisMonth",{amount:fmt(req.perMonth,currency),date:fmtDate(goal.targetDate)}):t("goals.needMain",{amount:fmt(req.perMonth,currency)})}</div>
-                    {!req.thisMonth&&<div className="list-sub">{tn("goals.needSub",req.periods,{date:fmtDate(goal.targetDate)})}</div>}
-                    <div className="list-sub goal-need-note">{t("goals.needNote")}</div>
-                  </>}
-                  {req.state==="noDate"&&<div>{t("goals.needNoDate")}</div>}
-                  {req.state==="overdue"&&<div>{t("goals.needOverdue",{amount:fmt(req.remaining,currency)})}</div>}
-                </div>
-              )}
-              <div className="list-sub" style={{marginTop:6,color:gp.behindSchedule||gp.overdue?"var(--neg)":gp.onTrack||gp.complete?"var(--pos)":"var(--ink-3)"}}>
-                {gp.complete?t("goals.completed")
-                  :goal.targetDate&&gp.daysToTarget!==null?<>{gp.overdue?tn("goals.overdueDays",-gp.daysToTarget):gp.daysToTarget===0?t("set.targetToday"):tn("set.daysToTarget",gp.daysToTarget)}{gp.behindSchedule?t("set.projectedAfter"):gp.onTrack?t("set.onTrackSuffix"):""}</>
-                  :remaining>0?t("goals.toGo",{amount:fmt(remaining,currency)}):""}
-              </div>
-              {estCompletion&&<div className="list-sub" style={{marginTop:4}}>{t("set.atRate",{amount:fmt(goal.monthlyTarget||0,currency),date:estCompletion})}</div>}
-              {!gp.complete&&<GoalScenario goal={goal} currency={currency}/>}
-            </div>
-          );
-        })}
-        <SavingsFloorCard safeToSpend={safeToSpend} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>
-        <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} onUpdateTemplate={onUpdateTemplate} showToast={showToast}/>
-      </>)}
-    </div>
-  );
-}
-
-// Run 15: the optional what-if, replacing the fixed 60% / 100% / 140% rows. The user types an amount; the answer uses the same
-// month-start rule and cents as the required monthly amount, says whether it meets the deadline, and says it is an estimate.
-function GoalScenario({ goal, currency }) {
-  const [val,setVal]=useState("");
-  const amt=val.trim()===""?null:formMoney(val,{positive:true});
-  const s=amt!==null ? goalScenario(goal,amt) : null;
-  const id="gs-"+String(goal.id).replace(/[^a-zA-Z0-9_-]/g,"");
-  return (
-    <details className="goal-scenario" data-section="goal-scenario">
-      <summary>{t("goals.scenarioTitle")}</summary>
-      <label className="field-lbl" htmlFor={id}>{t("goals.scenarioLabel")}</label>
-      <input id={id} className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={val} onChange={e=>setVal(cleanMoneyText(e.target.value))}/>
-      {val.trim()!==""&&amt===null&&<div className="list-sub" role="status">{t("add.errAmount")}</div>}
-      {s&&s.valid&&(
-        <div className="goal-scenario-out" role="status" aria-live="polite">
-          <div>{t("goals.scenarioResult",{amount:fmt(amt,currency),months:tn("set.months",s.months),date:s.completion})}</div>
-          {s.meetsDeadline!==null&&<div className="list-sub" style={{color:s.meetsDeadline?"var(--pos)":"var(--neg)",fontWeight:600}}>{t(s.meetsDeadline?"goals.scenarioMeets":"goals.scenarioMisses")}</div>}
-          <div className="list-sub">{t("goals.scenarioEstimate")}</div>
-        </div>
-      )}
-    </details>
-  );
-}
-
-// Analytics "Spending trend": this month's running total, with the previous month's as a faint line for comparison.
-function SpendingTrend({ transactions, mon, prv, currency }) {
-  const cur=cumulativeByDay(transactions,mon), prev=cumulativeByDay(transactions,prv);
-  const curLast=[...cur].reverse().find(v=>v!==null)??0, prevLast=prev[prev.length-1]??0;
-  if (!(curLast>0) && !(prevLast>0)) return null;
-  const W=320, H=120, n=Math.max(cur.length,prev.length), max=Math.max(curLast,prevLast,1);
-  const x=i=>(i/(n-1))*W, y=v=>H-(v/max)*(H-8);
-  const path=arr=>arr.map((v,i)=>v===null?null:`${x(i).toFixed(1)},${y(v).toFixed(1)}`).filter(Boolean);
-  const cp=path(cur), pp=path(prev);
-  const ticks=[1,8,15,22,n];
-  return (
-    <div className="card trend-card">
-      <div className="card-head"><span className="card-title">{t("an.trendTitle")}</span></div>
-      <div className="big-num" style={{marginBottom:2}}>{fmt(curLast,currency)}</div>
-      <div className="list-sub" style={{marginBottom:10}}>{t("an.trendSub",{month:monthName(prv)})}</div>
-      <svg viewBox={`0 0 ${W} ${H+18}`} width="100%" role="img" aria-label={t("an.trendAria",{amount:fmt(curLast,currency),prev:fmt(prevLast,currency)})}>
-        {[0.5,1].map(f=><line key={f} x1="0" x2={W} y1={y(max*f)} y2={y(max*f)} stroke="var(--rule)" strokeWidth="1"/>)}
-        <line x1="0" x2={W} y1={H} y2={H} stroke="var(--rule-2)" strokeWidth="1"/>
-        {pp.length>1&&<polyline points={pp.join(" ")} fill="none" stroke="var(--ink-4)" strokeWidth="1.5" strokeDasharray="4 4"/>}
-        {cp.length>1&&<>
-          <polygon points={`0,${H} ${cp.join(" ")} ${cp[cp.length-1].split(",")[0]},${H}`} fill="var(--accent)" opacity="0.18"/>
-          <polyline points={cp.join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round"/>
-        </>}
-        {ticks.map(d=><text key={d} x={Math.min(Math.max(x(d-1),8),W-8)} y={H+15} textAnchor="middle" fontSize="11" fill="var(--ink-3)">{d}</text>)}
-      </svg>
-      <div className="trend-legend"><span><i style={{background:"var(--accent)"}}/>{monthName(mon)}</span><span><i className="dash"/>{monthName(prv)}</span></div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MONTHLY VIEW — browse any month, see full breakdown
-// ─────────────────────────────────────────────────────────────────────────────
-// ─── Monthly (Run 7: Monthly and Analytics merged into one month-aware screen) ──────────────────────────────────────
-// One selected month drives every month figure on the page: summary and comparison, what changed, statistics, budgets,
-// categories, merchants, top expenses and the transaction list. The "Trends" section below them covers recent months up
-// to today and says so; it does not change with the selected month. Every calendar month from the first entry to today
-// (or to the last month with planned entries) can be selected, including months with no entries.
-function monthsBetween(from, to) {   // "YYYY-MM" inclusive, newest first
-  const out=[]; let [y,m]=to.split("-").map(Number); const [fy,fm]=from.split("-").map(Number);
-  while (y>fy || (y===fy && m>=fm)) { out.push(`${y}-${String(m).padStart(2,"0")}`); m--; if (m===0) { m=12; y--; } }
-  return out;
-}
-function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[], onView }) {
-  const [selectedMon, setSelectedMon] = useState(curMon());
-  const [activeBar,  setActiveBar]  = useState(null);
-  const [calDay, setCalDay] = useState(null);
-  const lc=locale();
-  const patternsData=useMemo(()=>calcPatterns(transactions,currency),[transactions,currency,lc]);   // insight text follows the language
-
-  const allMonths = useMemo(() => {
-    const ms=transactions.map(t=>t.date.slice(0,7)).sort(), cur=curMon();
-    const first=ms.length && ms[0]<cur ? ms[0] : cur, last=ms.length && ms[ms.length-1]>cur ? ms[ms.length-1] : cur;
-    return monthsBetween(first,last);
-  }, [transactions]);
-  const idx=allMonths.indexOf(selectedMon);
-  const prevM = () => { if (idx < allMonths.length - 1) setSelectedMon(allMonths[idx + 1]); };
-  const nextM = () => { if (idx > 0) setSelectedMon(allMonths[idx - 1]); };
-  const prv = useMemo(() => { const [y,m]=selectedMon.split("-").map(Number); return localMonthStr(new Date(y,m-2,1)); }, [selectedMon]);
-
-  const { curExp, curInc, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
-  const catSpend    = calcCategorySpend(transactions, selectedMon);
-  const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
-  const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
-  const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
-  const debtCash    = useMemo(()=>debtCashFlow(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 18
-  const loanCash    = useMemo(()=>loanCashOut(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 17
-  // Run 18g: the user can hide a coach tip they do not want (stored only on this device; due-date warnings cannot be hidden).
-  const COACH_MUTE_KEY=`${KEY}__coachmute`, COACH_ACTIONS=["loanDue","loanOverdue","owedLate"];
-  const [muted,setMuted]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(COACH_MUTE_KEY)||"[]"); return Array.isArray(v)?v.filter(x=>typeof x==="string"):[]; } catch { return []; } });
-  const setMute=(next)=>{ setMuted(next); try { if (next.length) localStorage.setItem(COACH_MUTE_KEY,JSON.stringify(next)); else localStorage.removeItem(COACH_MUTE_KEY); } catch {} };
-  // Run 20: Patterns lines can be hidden one by one and brought back, like the coach cards (own key, ledger untouched).
-  const PAT_MUTE_KEY=`${KEY}__patmute`;
-  const [patMuted,setPatMuted]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(PAT_MUTE_KEY)||"[]"); return Array.isArray(v)?v.filter(x=>typeof x==="string"):[]; } catch { return []; } });
-  const setPatMute=(next)=>{ setPatMuted(next); try { if (next.length) localStorage.setItem(PAT_MUTE_KEY,JSON.stringify(next)); else localStorage.removeItem(PAT_MUTE_KEY); } catch {} };
-  const coach       = useMemo(()=>calcCoach(transactions,readDebts(),new Date(),bills),[transactions,bills]);             // Run 17: Debts-page data is read when the ledger changes
-  const txnStats    = calcTxnStats(transactions,selectedMon);
-  const perDay      = calcWeekdayWeekend(transactions,selectedMon);
-  const wc          = calcWhatChanged(transactions,selectedMon,prv);
-  const expenses    = transactions.filter(t => t.type === "expense");
-  const done        = happenedIn(selectedMon);
-  const isCurrentMon = selectedMon === curMon();
-
-  const catData = Object.entries(catSpend).map(([id, amt]) => ({ ...CAT(id) || { id, name: id, color:"#98A5B7" }, amt })).sort((a,b) => b.amt - a.amt);
-  const maxCat = catData[0]?.amt || 1;
-  const merchantTotals = {};
-  expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
-  const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  const monTxns = transactions.filter(t => t.date.startsWith(selectedMon));
-  const walletSpend = calcWalletSpend(transactions, selectedMon);   // Run 16
-  const recurringCount = transactions.filter(x=>x.recurring&&x.date.startsWith(selectedMon)).length;
-
-  // Trends: recent months up to today, independent of the selected month.
-  const WEEKDAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-  const wdName=(i,style)=>t(style==="long"?"dow."+WEEKDAYS[i]:style==="short"?"wdShort."+WEEKDAYS[i]:"wdNarrow."+WEEKDAYS[i]);
-  const { insights:patterns, anomalies, dayOfWeek, correlations } = patternsData;
-  const now=curMon();
-  const months6=Array.from({length:6},(_,i)=>nMon(5-i));
-  // Run 18g: each month shows what was spent AND what came in, so a month is read as a pair, not just a cost.
-  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce(addAmt,0),inc:transactions.filter(t=>t.type==="income"&&happenedIn(m)(t)).reduce(addAmt,0),isCur:m===now,ym:m}));
-  const maxMonth=Math.max(...monthlyData.map(m=>Math.max(m.exp,m.inc)),1);
-  const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
-  const DAY_LBLS=WEEKDAYS.map((_,i)=>wdName(i,"narrow"));
-  // Run 17: month calendar for the selected month (replaces the 8-week heatmap): spending per day, Monday first.
-  const [cy,cm]=selectedMon.split("-").map(Number);
-  const calDim=new Date(cy,cm,0).getDate(), calLead=(new Date(cy,cm-1,1).getDay()+6)%7;
-  const calDays=Array.from({length:calDim},(_,i)=>{ const ds=`${selectedMon}-${String(i+1).padStart(2,"0")}`;
-    const items=expenses.filter(x=>x.date===ds&&done(x));
-    return { date:ds, day:i+1, amt:items.reduce(addAmt,0), cats:items.map(x=>catName(x.category)).filter((v,j,arr)=>arr.indexOf(v)===j).join(", "), future:ds>today(), isToday:ds===today() }; });
-  const maxDay=Math.max(...calDays.map(c=>c.amt),1);  const hasTrends = expenses.length>0;
-
-  return (
-    <div onClick={()=>{setActiveBar(null);setCalDay(null);}}>
-      {/* Run 18: the all-time overview is the first thing on Analytics (it moved here from the bottom) */}
-        {transactions.length>0&&(()=>{
-          const totalInc=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
-          return (
-            <div className="a-card" data-section="an-overview">
-              <div className="a-card-title">{t("set.overview")}</div>
-              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
-                <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
-                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
-                  <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-
-      {/* Month selector — the one month setting for everything above the Trends section */}
-      <div className="month-selector" data-section="an-month">
-        <button className="month-nav-btn" onClick={prevM} disabled={idx===allMonths.length-1} aria-label={t("month.prev")} style={{opacity:idx===allMonths.length-1?0.3:1}}>‹</button>
-        <div style={{textAlign:"center"}}>
-          <h1 className="month-name" style={{margin:0}}>{monthName(selectedMon)}</h1>
-          {isCurrentMon && <div style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.5px",marginTop:2,textTransform:"uppercase"}}>{t("month.current")}</div>}
-        </div>
-        <button className="month-nav-btn" onClick={nextM} disabled={idx===0} aria-label={t("month.next")} style={{opacity:idx===0?0.3:1}}>›</button>
-      </div>
-
-      {/* Summary stats */}
-      <div className="month-stats" data-section="an-summary" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-        <div className="month-stat">
-          <div className="month-stat-val" style={{color:"var(--neg)"}}><MoneyText v={fmt(curExp,currency)}/></div>
-          <div className="month-stat-lbl">{t("home.spent")}</div>
-          {momDiff!==null&&<div className="month-cmp" style={{fontSize:11,color:momDiff<=0?"var(--pos)":"var(--neg)",fontWeight:600,marginTop:4}}>
-            {momDiff<=0?"↓":"↑"} {cmpText(momDiff,cmpKind,currency)}
-          </div>}
-        </div>
-        <div className="month-stat">
-          <div className="month-stat-val" style={{color:"var(--pos)"}}><MoneyText v={fmt(curInc,currency)}/></div>
-          <div className="month-stat-lbl">{t("home.income")}</div>
-          {curInc>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
-            {fmtPct(Math.round(((curInc-curExp)/curInc)*100))} {t("surplus."+surplusLabel(curInc,curExp)).toLowerCase()}
-          </div>}
-        </div>
-        <div className="month-stat" style={{gridColumn:"1 / -1"}}>
-          <div className="month-stat-val" style={{color:surplusColor(curInc,curExp)}}><MoneyText v={fmt(Math.abs(curInc-curExp),currency)}/></div>
-          <div className="month-stat-lbl">{t("month.net."+(curInc>curExp?"Net surplus":curInc<curExp?"Net deficit":"Break-even"))}</div>
-          {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
-          {momDiff!==null&&cmpKind==="same"&&<div className="cmp-window" style={{fontSize:11,color:"var(--ink-3)",marginTop:2}}>{t("cmp.window",{d:cmpDays})}</div>}
-        </div>
-      </div>
-      <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
-      {debtCash.n>0&&(
-        <div className="list-sub" data-section="an-debtcash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
-          {t("an.debtCash",{out:fmt(debtCash.out,currency),inn:fmt(debtCash.in,currency)})}
-        </div>
-      )}
-      {loanCash.n>0&&(
-        <div className="list-sub" data-section="an-loancash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
-          {t("an.loanCash",{paid:fmt(loanCash.paid,currency),interest:fmt(loanCash.interest,currency)})}
-          {loanCash.unknown>0&&<> {t("an.loanCashUnknown",{n:loanCash.unknown})}</>}
-        </div>
-      )}
-      <div data-section="an-trend"><SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/></div>
-      {isCurrentMon&&(
-        <div className="a-card" data-section="an-forecast">
-          <div className="a-card-title">{t("an.forecast")}</div>
-          {forecast.available?(<>
-            <div className="big-num" style={{marginBottom:2}}>{fmt(forecast.point,currency)}</div>
-            {forecast.rangeShown
-              ? <div style={{fontSize:12,color:"var(--ink-2)",fontWeight:600}}>{t("an.forecastRange",{low:fmt(forecast.low,currency),high:fmt(forecast.high,currency)})}</div>
-              : <div className="list-sub">{t("an.forecastSingle")}</div>}
-            <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("an.forecastHow",{daily:fmt(forecast.usualDaily,currency)})}</div>
-          </>):<div className="list-sub">{t("an.forecastNeed")}</div>}
-        </div>
-      )}
-
-      {isCurrentMon&&coach.length>0&&(
-        <div className="a-card" data-section="an-coach">
-          <div className="a-card-title">{t("coach.title")}</div>
-          {coach.filter(c=>COACH_ACTIONS.includes(c.id)||!muted.includes(c.id)).map((c,i)=>{
-            const num=(n)=>PRIVACY?"••":n, amt=(q)=>fmt(q/100,currency);
-            const line = c.id==="incomplete" ? t("coach.incomplete",{days:c.days})
-              : c.id==="noIncome" ? t("coach.noIncome")
-              : c.id==="spent" ? t("coach.spent",{pct:num(c.pct),kept:num(c.kept)})
-              : c.id==="over" ? t("coach.over",{pct:num(c.pct)})
-              : c.id==="future" ? t("coach.future",{n:c.n})
-              : c.id==="welcome" ? t("coach.welcome")
-              : c.id==="incomeDip" ? t("coach.incomeDip",{have:c.have,of:c.of,pct:num(c.pct)})
-              : c.id==="loanShare" ? t("coach.loanShare",{pct:num(c.pct)})
-              : c.id==="loanShareHigh" ? t("coach.loanShareHigh",{pct:num(c.pct)})
-              : c.id==="billsShare" ? t("coach.billsShare",{pct:num(c.pct)})
-              : c.id==="catUp" ? t("coach.catUp",{cat:catName(c.cat),pct:num(c.pct)})
-              : c.id==="loanInterest" ? t("coach.loanInterest",{lender:maskText(c.lender),amount:amt(c.amount)})
-              : c.id==="noCover" ? t("coach.noCover",{lender:maskText(c.lender)})
-              : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
-              : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
-              : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
-            return (
-              <div key={i} className="coach-line" data-coach={c.id} style={{fontSize:13,lineHeight:1.5,padding:"8px 0",borderTop:i?"1px solid var(--rule)":"none",color:"var(--ink)"}}>
-                {line}
-                {!COACH_ACTIONS.includes(c.id)&&<div><button className="btn btn-sm coach-hide" style={{marginTop:4}} onClick={()=>setMute([...muted,c.id])}>{t("coach.hide")}</button></div>}
-              </div>
-            );
-          })}
-          <div className="list-sub" style={{marginTop:6}}>{t("coach.window")}</div>
-          {muted.length>0&&<button className="btn btn-sm coach-unhide" style={{marginTop:6}} onClick={()=>setMute([])}>{t("coach.showHidden",{n:muted.length})}</button>}
-        </div>
-      )}
-
-      {/* What changed — same comparison window as the summary */}
-      {(wc.totalDiff!==0||wc.catChanges.length>0)&&prevExp>0&&momDiff!==null&&(
-        <div className="a-card" data-section="an-changes">
-          <div className="a-card-title">{cmpTitle(wc.cmpKind)}</div>
-          <div className="wc-row" style={{paddingTop:0}}>
-            <span className="wc-name" style={{fontWeight:700}}>{t("an.totalSpending")}</span>
-            <div style={{textAlign:"right"}}>
-              <div className={`wc-diff ${wc.totalDiff<=0?"pos":"neg"}`}>{wc.totalDiff>0?"+":""}{fmt(wc.totalDiff,currency)}</div>
-              <div style={{fontSize:10,color:"var(--ink-3)"}}>{t("an.vs",{a:fmt(wc.curExp,currency),b:fmt(wc.prevExp,currency)})}</div>
-            </div>
-          </div>
-          {wc.catChanges.slice(0,5).map(({catId,cur,prev,diff,merchantDiffs})=>{
-            const cat=CAT(catId);
-            return (
-              <div key={catId}>
-                <div className="wc-row">
-                  <div className="wc-name"><CatIcon catId={catId} size={13} color={cat?.color}/>{catName(catId)}</div>
-                  <div style={{textAlign:"right"}}>
-                    <div className={`wc-diff ${diff<=0?"pos":"neg"}`}>{diff>0?"+":""}{fmt(diff,currency)}</div>
-                    <div style={{fontSize:10,color:"var(--ink-3)"}}>{t("an.vs",{a:fmt(cur,currency),b:fmt(prev,currency)})}</div>
-                  </div>
-                </div>
-                {merchantDiffs.length>0&&(
-                  <div className="wc-merchants">
-                    {merchantDiffs.map(m=>(
-                      <div key={m.merchant} className="wc-m-row">
-                        <span style={{display:"flex",alignItems:"center",gap:4}}>
-                          <Icon name="merchant" size={10} color="var(--ink-4)"/>
-                          {maskText(m.merchant)}
-                          <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,background:m.isRecurring?"var(--warn-bg)":"var(--bg-inset)",color:m.isRecurring?"var(--warn)":"var(--ink-4)"}}>
-                            {m.isRecurring?t("wc.recurring"):t("wc.oneOff")}
-                          </span>
-                        </span>
-                        <span style={{color:m.diff<=0?"var(--pos)":"var(--neg)",fontWeight:600}}>{m.diff>0?"+":""}{fmt(m.diff,currency)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {wc.catChanges.slice(0,5).some(c=>c.merchantDiffs.length>0)&&<div className="list-sub" data-section="an-changes-tags" style={{marginTop:10}}>{t("wc.tagHelp")}</div>}
-        </div>
-      )}
-
-      {/* Transaction stats for the month */}
-      {txnStats.count>0&&(
-        <div className="stat-row">
-          <div className="stat-cell"><div className="stat-val">{txnStats.count}</div><div className="stat-lbl">{t("an.transactions")}</div></div>
-          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.avgTxn,currency)}</div><div className="stat-lbl">{t("an.avgPerTxn")}</div></div>
-          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.medTxn,currency)}</div><div className="stat-lbl">{t("an.median")}</div></div>
-          <div className="stat-cell" title={t("an.perDayTitle")}>
-            <div className="stat-val">{perDay.heavier===null?"—":fmt(perDay.heavier==="weekday"?perDay.wdAvg:perDay.weAvg,currency)}</div>
-            <div className="stat-lbl">{t(perDay.heavier===null?"an.perDay.null":"an.perDay."+perDay.heavier)}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Budget status for the month */}
-      {budgetItems.length>0&&(
-        <div className="a-card" data-section="an-budget">
-          <div className="a-card-title">{t("an.budgetStatus",{month:monthName(selectedMon)})}</div>
-          {budgetItems.map(({catId,limit,spent,pct,over,warn,aheadOfPace,daysLeft,state})=>{
-            const cat=CAT(catId);
-            return (
-              <div key={catId} style={{marginBottom:13,paddingBottom:13,borderBottom:"1px solid var(--rule)"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
-                  <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6,minWidth:0}}><CatIcon catId={catId} size={13}/>{catName(catId)}</div>
-                  <div style={{fontSize:11,color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:600,flexShrink:0}}>{t("an.pctUsed",{pct:PRIVACY?"••":Math.round(pct)})}</div>
-                </div>
-                <div style={{height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden",marginBottom:4}}>
-                  <div style={{height:"100%",width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)"),borderRadius:99}}/>
-                </div>
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:over||warn?600:400}}>
-                    {over?t("budgets.over",{amount:fmt(spent-limit,currency)}):t("budgets.remaining",{amount:fmt(limit-spent,currency)})}
-                  </span>
-                  {state==="current"&&<span style={{color:"var(--ink-4)",flexShrink:0}}>{over?t("an.exceeded"):t("an.daysLeft",{n:daysLeft})}</span>}
-                </div>
-                {aheadOfPace&&!over&&<div style={{fontSize:10,color:"var(--warn)",fontWeight:600,marginTop:2}}>{t("an.aheadOfPace")}</div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Category breakdown */}
-      {catData.length>0&&(
-        <div className="a-card" data-section="an-category">
-          <div className="a-card-title">{t("an.byCategory")}</div>
-          {catData.map((cat,i)=>(
-            <div key={i} className="cat-bar">
-              <div className="cat-bar-name"><CatIcon catId={cat.id} size={13} color={cat.color}/>{catName(cat.id)}</div>
-              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(cat.amt/maxCat)*100}%`,background:cat.color}}/></div>
-              <div className="cat-bar-amt">{fmt(cat.amt,currency)}</div>
-              <div className="cat-bar-pct">{fmtPct(curExp>0?Math.round((cat.amt/curExp)*100):0)}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Run 16: spending by wallet for the selected month; shown only when at least one entry has a wallet */}
-      {walletSpend.used&&walletSpend.total>0&&(
-        <div className="a-card" data-section="an-wallet">
-          <div className="a-card-title">{t("wallet.analyticsTitle")}</div>
-          {Object.entries(walletSpend.byWallet).sort((a,b)=>b[1]-a[1]).map(([w,amt])=>(
-            <div key={w} className="cat-bar">
-              <div className="cat-bar-name">{w==="none"?t("wallet.none"):walletName(w)}</div>
-              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(amt/walletSpend.total)*100}%`,background:"var(--accent)"}}/></div>
-              <div className="cat-bar-amt">{fmt(amt,currency)}</div>
-              <div className="cat-bar-pct">{fmtPct(Math.round((amt/walletSpend.total)*100))}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Merchant breakdown */}
-      {topMerchants.length>0&&(
-        <div className="a-card" data-section="an-merchant">
-          <div className="a-card-title">{t("month.byMerchant")}</div>
-          {topMerchants.map(([merchant,amt],i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:i<topMerchants.length-1?"1px solid var(--rule)":"none"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
-                <div style={{width:28,height:28,borderRadius:6,background:"var(--bg-inset)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <Icon name="merchant" size={13} color="var(--ink-3)"/>
-                </div>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(merchant)}</span>
-              </div>
-              <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:700}}>−{fmt(amt,currency)}</div>
-                {curExp>0&&<div style={{fontSize:10,color:"var(--ink-4)"}}>{fmtPct(Math.round((amt/curExp)*100))}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Run 15: the "Top expenses" and "All transactions" lists were removed from Analytics. They repeated rows of the Transactions
-          tab (which can be searched by month name and filtered by date). Analytics keeps what Transactions cannot show: totals,
-          comparisons, categories, merchants and trends. */}
-      {recurringCount>0&&(
-        <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"var(--ink-3)"}}>
-          <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",recurringCount)}
-        </div>
-      )}
-
-      {/* A month without entries says so (the list of entries lives in Transactions) */}
-      {monTxns.length===0&&(
-        <div className="empty" style={{padding:"32px 0"}} data-section="an-empty">
-          <div className="empty-icon"><LedgerArt/></div>
-          <div className="empty-title">{t("month.emptyTitle")}</div>
-          <div className="empty-body">{t("month.emptyBody",{month:monthName(selectedMon)})}</div>
-        </div>
-      )}
-
-      {/* Trends — recent months up to today; not affected by the month selected above */}
-      {hasTrends&&(<>
-        <div className="trends-head" data-section="an-trends" style={{marginTop:22,marginBottom:10}}>
-          <div className="label-sm">{t("month.trendsTitle")}</div>
-          <div style={{fontSize:11,color:"var(--ink-3)",lineHeight:1.5,marginTop:4}}>{t("month.trendsSub")}</div>
-        </div>
-
-        <div className="a-card">
-          <div className="a-card-title">{t("an.sixMonth")}</div>
-          {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>{t("an.sixMonthAvg")} <strong style={{fontFamily:"var(--font)",color:"var(--ink)"}}>{fmt(monthAvg,currency)}</strong></div>}
-          {activeBar!==null&&monthlyData[activeBar]&&(
-            <div data-section="an-sixmonth-detail" style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-              <span>{monthName(monthlyData[activeBar].ym)}</span>
-              <span style={{fontFamily:"var(--font)",fontSize:13}}>{t("an.sixSpent")} {fmt(monthlyData[activeBar].exp,currency)} · {t("an.sixIncome")} {fmt(monthlyData[activeBar].inc,currency)} · {t("an.sixNet")} {monthlyData[activeBar].inc-monthlyData[activeBar].exp<0?"−":""}{fmt(Math.abs(monthlyData[activeBar].inc-monthlyData[activeBar].exp),currency)}</span>
-            </div>
-          )}
-          <div className="month-bars">
-            {monthlyData.map((m,i)=>(
-              <div key={i} className="m-col" role="button" tabIndex={0} aria-pressed={activeBar===i} aria-label={`${monthName(m.ym)}: ${fmt(m.exp,currency)}`}
-                onKeyDown={activateKey(()=>{setActiveBar(activeBar===i?null:i);})}
-                onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);}}>
-                <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end",gap:2}}>
-                  <div className="m-bar" style={{height:m.exp>0?`${Math.max(5,(m.exp/maxMonth)*100)}%`:"3px",background:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",width:"100%",outline:activeBar===i?"2px solid var(--accent)":"none",outlineOffset:"1px"}}/>
-                  <div className="m-bar m-bar-inc" style={{height:m.inc>0?`${Math.max(5,(m.inc/maxMonth)*100)}%`:"3px",background:"var(--pos)",opacity:0.75,width:"100%"}}/>
-                </div>
-                <div className="m-lbl" style={{color:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",fontWeight:m.isCur||activeBar===i?700:600}}>{m.label}</div>
-              </div>
-            ))}
-          </div>
-          <div className="trend-legend" data-section="an-sixmonth-legend"><span><i style={{background:"var(--ink-4)"}}/>{t("an.sixSpent")}</span><span><i style={{background:"var(--pos)",opacity:0.75}}/>{t("an.sixIncome")}</span></div>
-        </div>
-
-        {patterns.length>0&&(
-          <div className="a-card">
-            <div className="a-card-title">{t("an.patterns")}</div>
-            {patterns.filter(p=>!patMuted.includes(p.id)).map(p=>{
-              const titleKey=PATTERN_TITLE_KEY[p.id.startsWith("trend-")?"trend":p.id];
-              return (
-                <div key={p.id} className="pattern-item" data-section="pattern-item" data-id={p.id}>
-                  <Icon name="pattern" size={14} color="var(--ink-3)"/>
-                  <div style={{flex:1,minWidth:0}}>
-                    {titleKey&&<div style={{fontWeight:700,color:"var(--ink)",marginBottom:2}}>{t(titleKey)}</div>}
-                    <span>{PRIVACY?t("privacy.hiddenText"):p.text}</span>{p.basis&&<div className="list-sub pattern-basis" style={{marginTop:4}}>{tn(PATTERN_BASIS_KEY[p.basis.per],p.basis.n)}</div>}
-                    <div><button className="btn btn-sm pattern-hide" style={{marginTop:6}} onClick={()=>setPatMute([...patMuted,p.id])}>{t("coach.hide")}</button></div>
-                  </div>
-                </div>
-              );
-            })}
-            {patMuted.length>0&&<button className="btn btn-sm pattern-unhide" style={{marginTop:2}} onClick={()=>setPatMute([])}>{t("coach.showHidden",{n:patMuted.length})}</button>}
-          </div>
-        )}
-
-        {Object.values(dayOfWeek).some(d=>d.count>0)&&(
-          <div className="a-card">
-            <div className="a-card-title">{t("an.byDay",{month:monthName(now)})}</div>
-            <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.byDaySub")}</div>
-            {WEEKDAYS.map((day,di)=>{
-              const d=dayOfWeek[day];
-              if (!d||d.count===0) return null;
-              // the typical (median) transaction, as in the insight: one unusual purchase must not make a day's bar tower over the rest
-              const maxMed=Math.max(...Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.median),1);
-              return (
-                <div key={day} className="dow-row" style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
-                  <div style={{minWidth:28,fontSize:11,color:"var(--ink-3)",fontWeight:600,flexShrink:0}} title={wdName(di,"long")}>{wdName(di,"short")}</div>
-                  <div style={{flex:1,height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${(d.median/maxMed)*100}%`,background:"var(--accent)",borderRadius:99}}/>
-                  </div>
-                  <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"var(--font)",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.median,currency)}</div>
-                  <div style={{width:24,textAlign:"right",fontSize:10,color:"var(--ink-4)",flexShrink:0}}>{d.count}×</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {anomalies.length>0&&(
-          <div className="a-card">
-            <div className="a-card-title">{t("an.unusual")}</div>
-            {anomalies.slice(0,5).map((a,i)=>{
-              const cat=CAT(a.category)||{color:"#98A5B7"};
-              return (
-                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<Math.min(anomalies.length,5)-1?"1px solid var(--rule)":"none"}}>
-                  <div style={{width:30,height:30,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <CatIcon catId={a.category} size={14} color={cat.color}/>
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{maskText(a.merchant)||catName(a.category)}</div>
-                    <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(a.date)} · {PRIVACY?t("privacy.hiddenText"):a.reason}</div>
-                  </div>
-                  <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:700,color:"var(--neg)",flexShrink:0}}>−{fmt(a.amount,currency)}</div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {correlations.length>0&&(
-          <div className="a-card">
-            <div className="a-card-title">{t("an.together")}</div>
-            <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.togetherSub")}</div>
-            {correlations.map((c,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"8px 0",borderBottom:i<correlations.length-1?"1px solid var(--rule)":"none"}}>
-                <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:6,fontSize:12,fontWeight:600,color:"var(--ink)",minWidth:0}}>
-                  <CatIcon catId={c.category1} size={13}/>
-                  {catName(c.category1)}
-                  <span style={{color:"var(--ink-4)",fontWeight:400}}>+</span>
-                  <CatIcon catId={c.category2} size={13}/>
-                  {catName(c.category2)}
-                </div>
-                <div style={{fontSize:11,color:"var(--ink-3)",flexShrink:0}}>{t("an.ofDays",{pct:PRIVACY?"••":Math.round(c.correlation*100)})}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="a-card" data-section="an-calendar">
-          <div className="a-card-title">{t("an.calendar")}</div>
-          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.calendarHint")}</div>
-          <div className="cal" onClick={e=>e.stopPropagation()}>
-            {DAY_LBLS.map((d,i)=><div key={i} className="cal-dow">{d}</div>)}
-            {Array.from({length:calLead},(_,i)=><div key={"b"+i} className="cal-blank"/>)}
-            {calDays.map(c=>{
-              const on=calDay===c.date, intensity=c.amt>0?Math.max(0.15,(c.amt/maxDay)*0.85):0;
-              return <button key={c.date} type="button" data-date={c.date} className={`cal-day${c.amt>0?" has-spend":""}${c.future?" future":""}${c.isToday?" today":""}${on?" sel":""}`}
-                aria-current={c.isToday?"date":undefined} aria-pressed={on} aria-label={`${fmtDate(c.date)}: ${c.amt>0?fmt(c.amt,currency):t("an.noSpending")}`}
-                style={c.amt>0?{background:`rgba(76,201,196,${intensity})`,...(intensity>=0.4?{color:"#06201e"}:null)}:undefined}
-                onClick={e=>{ e.stopPropagation(); setCalDay(on?null:c.date); setActiveBar(null); }}>{c.day}</button>;
-            })}
-          </div>
-          {calDay&&(()=>{ const c=calDays.find(x=>x.date===calDay); if(!c) return null; return (
-            <div data-section="an-calendar-detail" role="status" style={{background:"var(--bg-inset)",borderRadius:10,padding:"10px 12px",marginTop:10,fontSize:12,fontWeight:600}}>
-              <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span>{fmtDate(c.date)}</span><span style={{fontFamily:"var(--font)",fontSize:14}}>{c.amt>0?fmt(c.amt,currency):t("an.noSpending")}</span></div>
-              {c.cats&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:3,fontWeight:500}}>{c.cats}</div>}
-            </div>); })()}
-          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,justifyContent:"flex-end"}}>
-            <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
-            {[0.15,0.35,0.6,0.85].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(76,201,196,${o})`}}/>)}
-            <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
-          </div>
-        </div>      </>)}
-    </div>
-  );
-}
-
+export let freshTxnId=null;   // id of the entry saved a moment ago; its row plays the settle tint once
 // ─────────────────────────────────────────────────────────────────────────────
 // SMART HELPER — deterministic advice cards based on real data
 // Not AI. Not guessing. Every card has a clear data source and impact.
 // ─────────────────────────────────────────────────────────────────────────────
-function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills=[]) {
+export function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills=[]) {
   const cards = [];
   const mon = curMon();
   const { curExp, curInc } = calcMonthSummary(transactions, mon);
@@ -6652,33 +3513,4 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bi
   // Limit to 4 most impactful cards
   return cards.slice(0, 4);
 }
-
-function SmartHelper({ transactions, bills=[], budgets, goals, safeToSpend, currency }) {
-  const lc = locale();
-  const cards = useMemo(
-    () => calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills),
-    [transactions, bills, budgets, goals, safeToSpend, currency, lc]   // card text follows the interface language
-  );
-
-  if (cards.length === 0) return null;
-
-  const ICON_COLOR = { warn:"var(--warn)", neg:"var(--neg)", pos:"var(--pos)", info:"var(--ink-3)" };
-
-  return (
-    <div style={{marginBottom:18}}>
-      <div className="label-sm" style={{marginBottom:10}}>{t("help.title")}</div>
-      {cards.map(card=>(
-        <div key={card.id} className={`helper-card ${card.type}`}>
-          <div className="helper-icon">
-            <Icon name={card.icon} size={16} color={ICON_COLOR[card.type]}/>
-          </div>
-          <div className="helper-body">
-            <div className="helper-title">{card.title}</div>
-            <div className="helper-text">{PRIVACY?t("privacy.hiddenText"):card.text}</div>
-            <div className="helper-impact" style={{color:ICON_COLOR[card.type]}}>{PRIVACY?"":card.impact}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+

@@ -461,3 +461,8 @@ gate62 on 3fd4e2c: logic 1200/1200, browser 78 files 1237/1237, az audit 0, buil
 Then: tests/browser/e2e_run26_walk.mjs visits all main tabs in en/az/ru plus every Settings sheet, Add, transaction details, Debts and Loans (129 checks pass): no sideways overflow, >=12px edge margin, no raw keys, no JS errors, no browser pop-ups.
 Fixes: ruled page background removed; list-row separator no longer curves; FAB hide-on-scroll now listens to any scroll container; accounts buttons in one row; odd stat card spans row; Debts/Loans empty states with illustration; Import/Export status pill; goal header wraps in az/ru; 44px tap areas on month arrows/close/chips.
 Figma: 10 captured frames (nodes 11:2..20:2) + notes page 21:2. Pending: gate63 on the new commit; real-phone check; native az/ru review.
+
+### Run 27 (2026-11-05): App.jsx split
+Step 1 (live at 8f64920, gate65 clean): stylesheet moved to styles.js, identical text.
+Step 2: 41 UI components moved into screens/*.jsx (lock, home, ledger, add, recurring, settings, debts, goals, analytics); App.jsx now 3343 lines and keeps the financial logic above the '// --- SVG icon system' marker, AppInner, ErrorBoundary, Icon helpers. Moved files import shared helpers from ../App.jsx (declarations got 'export'; import cycle is safe because everything is used at render time). Tests adapted: tests/source.mjs (App.jsx + screens/*.jsx as one text) used by logic lib (SRC) and az-audit; harness strips 'export'; browser build copies screens/.
+Evidence before gate: logic 1200/1200 (unchanged), vite build ok, walker 129, e2e 27, confirm 6, motion 18, lock 55, debts 22, edits 10, az audit exit 0. Full gate: see gate66.

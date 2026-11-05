@@ -8,12 +8,12 @@
 //      to agree with a value the text cannot see (the "sen ilə müqayisədə" problem)
 //   C. short month names (monShort.*) passed into any t() call other than chart labels
 // Usage: node tests/az-audit.mjs <i18n.js> <App.jsx> <outDir>        Exit 1 if A or C finds anything.
-import fs from "fs"; import path from "path"; import { pathToFileURL } from "url";
+import fs from "fs"; import path from "path"; import { pathToFileURL } from "url"; import { readSource } from "./source.mjs";
 const [i18nPath, appPath, outDir] = process.argv.slice(2);
 if (!i18nPath || !appPath || !outDir) { console.error("usage: node tests/az-audit.mjs <i18n.js> <App.jsx> <outDir>"); process.exit(2); }
 const tmp = path.join(outDir, "_i18n_audit_copy.mjs"); fs.mkdirSync(outDir, { recursive: true }); fs.copyFileSync(i18nPath, tmp);
 const { MESSAGES, t, tn, setLang } = await import(pathToFileURL(tmp).href); fs.unlinkSync(tmp);
-const app = fs.readFileSync(appPath, "utf8");
+const app = readSource(appPath);   // Run 27: App.jsx plus screens/*.jsx
 const forms = (v) => typeof v === "string" ? { "": v } : v;
 const EX = { amount: "1,050.00 ₼", a: "560.35 ₼", b: "1,054.54 ₼", n: 3, d: 27, month: "oktyabr 2026", m: "oktyabr", y: 2026, date: "27 oktyabr 2026",
   name: "Netflix", merchant: "Bravo", names: "Bravo, Araz", category: "Ərzaq", pct: 47, days: 30, v: 9, why: " (2 yanlış tarix)", summary: "2 yanlış tarix",

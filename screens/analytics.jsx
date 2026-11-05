@@ -1,0 +1,590 @@
+// Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
+import { useMemo, useState } from "react";
+import { locale, t, tn } from "../i18n.js";
+import { CAT, CatIcon, Icon, KEY, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
+import { LedgerArt, MoneyText, PlannedNote, cmpPrev, cmpText, cmpTitle } from "./home.jsx";
+
+// ─── Redesign pages (2026-10-27) ─────────────────────────────────────────────────────────────────────────────────────
+
+export function SpendDonut({ catSpend, total, currency }) {
+  // Run 17: tap a slice (or its legend row) to focus it: the ring grows, that slice thickens, the rest fade and the centre names it;
+  // tap it again to go back. One selection at a time.
+  const [sel,setSel]=useState(null);
+  const slices=donutSlices(catSpend);
+  if (!slices.length) return null;
+  const cur=slices.find(s=>s.id===sel)||null;
+  const toggle=(id)=>setSel(s=>s===id?null:id);
+  const R=46, C=2*Math.PI*R; let off=0;
+  return (
+    <div className="donut-wrap">
+      <div className={`donut${cur?" has-sel":""}`} role="img" aria-label={t("home.breakdown")+": "+slices.map(s=>`${s.name} ${fmtPct(s.pct)}`).join(", ")}>
+        <svg viewBox="0 0 120 120" width="100%" height="100%" aria-hidden="true">
+          <circle cx="60" cy="60" r={R} fill="none" stroke="var(--bg-inset)" strokeWidth="14"/>
+          {slices.map(s=>{ const len=C*s.amt/total, gap=slices.length>1?Math.min(2,len/3):0; const on=cur&&cur.id===s.id; const el=(
+            <circle key={s.id} className="donut-slice" data-id={s.id} cx="60" cy="60" r={R} fill="none" stroke={s.color} strokeWidth={on?20:14} strokeDasharray={`${Math.max(len-gap,0.01)} ${C}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"
+              style={{opacity:cur&&!on?0.35:1,cursor:"pointer"}} onClick={()=>toggle(s.id)}/>
+          ); off+=len; return el; })}
+        </svg>
+        {cur
+          ? <div className="donut-center donut-center-sel"><span className="dc-name">{cur.name}</span><span className="dc-amt">{fmt(cur.amt,currency)}</span><span className="dc-pct">{fmtPct(cur.pct)}</span></div>
+          : <div className="donut-center">{fmtShort(total,currency)}</div>}
+      </div>
+      <ul className="donut-legend">
+        {slices.map(s=>(
+          <li key={s.id}><button type="button" className="donut-row" data-id={s.id} aria-pressed={!!cur&&cur.id===s.id} onClick={()=>toggle(s.id)} style={{opacity:cur&&cur.id!==s.id?0.55:1}}>
+            <span className="dot" style={{background:s.color}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{fmtPct(s.pct)}</span></button></li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Analytics "Spending trend": this month's running total, with the previous month's as a faint line for comparison.
+export function SpendingTrend({ transactions, mon, prv, currency }) {
+  const cur=cumulativeByDay(transactions,mon), prev=cumulativeByDay(transactions,prv);
+  const curLast=[...cur].reverse().find(v=>v!==null)??0, prevLast=prev[prev.length-1]??0;
+  if (!(curLast>0) && !(prevLast>0)) return null;
+  const W=320, H=120, n=Math.max(cur.length,prev.length), max=Math.max(curLast,prevLast,1);
+  const x=i=>(i/(n-1))*W, y=v=>H-(v/max)*(H-8);
+  const path=arr=>arr.map((v,i)=>v===null?null:`${x(i).toFixed(1)},${y(v).toFixed(1)}`).filter(Boolean);
+  const cp=path(cur), pp=path(prev);
+  const ticks=[1,8,15,22,n];
+  return (
+    <div className="card trend-card">
+      <div className="card-head"><span className="card-title">{t("an.trendTitle")}</span></div>
+      <div className="big-num" style={{marginBottom:2}}>{fmt(curLast,currency)}</div>
+      <div className="list-sub" style={{marginBottom:10}}>{t("an.trendSub",{month:monthName(prv)})}</div>
+      <svg viewBox={`0 0 ${W} ${H+18}`} width="100%" role="img" aria-label={t("an.trendAria",{amount:fmt(curLast,currency),prev:fmt(prevLast,currency)})}>
+        {[0.5,1].map(f=><line key={f} x1="0" x2={W} y1={y(max*f)} y2={y(max*f)} stroke="var(--rule)" strokeWidth="1"/>)}
+        <line x1="0" x2={W} y1={H} y2={H} stroke="var(--rule-2)" strokeWidth="1"/>
+        {pp.length>1&&<polyline points={pp.join(" ")} fill="none" stroke="var(--ink-4)" strokeWidth="1.5" strokeDasharray="4 4"/>}
+        {cp.length>1&&<>
+          <polygon points={`0,${H} ${cp.join(" ")} ${cp[cp.length-1].split(",")[0]},${H}`} fill="var(--accent)" opacity="0.18"/>
+          <polyline points={cp.join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round"/>
+        </>}
+        {ticks.map(d=><text key={d} x={Math.min(Math.max(x(d-1),8),W-8)} y={H+15} textAnchor="middle" fontSize="11" fill="var(--ink-3)">{d}</text>)}
+      </svg>
+      <div className="trend-legend"><span><i style={{background:"var(--accent)"}}/>{monthName(mon)}</span><span><i className="dash"/>{monthName(prv)}</span></div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MONTHLY VIEW — browse any month, see full breakdown
+// ─────────────────────────────────────────────────────────────────────────────
+// ─── Monthly (Run 7: Monthly and Analytics merged into one month-aware screen) ──────────────────────────────────────
+// One selected month drives every month figure on the page: summary and comparison, what changed, statistics, budgets,
+// categories, merchants, top expenses and the transaction list. The "Trends" section below them covers recent months up
+// to today and says so; it does not change with the selected month. Every calendar month from the first entry to today
+// (or to the last month with planned entries) can be selected, including months with no entries.
+export function monthsBetween(from, to) {   // "YYYY-MM" inclusive, newest first
+  const out=[]; let [y,m]=to.split("-").map(Number); const [fy,fm]=from.split("-").map(Number);
+  while (y>fy || (y===fy && m>=fm)) { out.push(`${y}-${String(m).padStart(2,"0")}`); m--; if (m===0) { m=12; y--; } }
+  return out;
+}
+export function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[], onView }) {
+  const [selectedMon, setSelectedMon] = useState(curMon());
+  const [activeBar,  setActiveBar]  = useState(null);
+  const [calDay, setCalDay] = useState(null);
+  const lc=locale();
+  const patternsData=useMemo(()=>calcPatterns(transactions,currency),[transactions,currency,lc]);   // insight text follows the language
+
+  const allMonths = useMemo(() => {
+    const ms=transactions.map(t=>t.date.slice(0,7)).sort(), cur=curMon();
+    const first=ms.length && ms[0]<cur ? ms[0] : cur, last=ms.length && ms[ms.length-1]>cur ? ms[ms.length-1] : cur;
+    return monthsBetween(first,last);
+  }, [transactions]);
+  const idx=allMonths.indexOf(selectedMon);
+  const prevM = () => { if (idx < allMonths.length - 1) setSelectedMon(allMonths[idx + 1]); };
+  const nextM = () => { if (idx > 0) setSelectedMon(allMonths[idx - 1]); };
+  const prv = useMemo(() => { const [y,m]=selectedMon.split("-").map(Number); return localMonthStr(new Date(y,m-2,1)); }, [selectedMon]);
+
+  const { curExp, curInc, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
+  const catSpend    = calcCategorySpend(transactions, selectedMon);
+  const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
+  const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
+  const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
+  const debtCash    = useMemo(()=>debtCashFlow(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 18
+  const loanCash    = useMemo(()=>loanCashOut(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 17
+  // Run 18g: the user can hide a coach tip they do not want (stored only on this device; due-date warnings cannot be hidden).
+  const COACH_MUTE_KEY=`${KEY}__coachmute`, COACH_ACTIONS=["loanDue","loanOverdue","owedLate"];
+  const [muted,setMuted]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(COACH_MUTE_KEY)||"[]"); return Array.isArray(v)?v.filter(x=>typeof x==="string"):[]; } catch { return []; } });
+  const setMute=(next)=>{ setMuted(next); try { if (next.length) localStorage.setItem(COACH_MUTE_KEY,JSON.stringify(next)); else localStorage.removeItem(COACH_MUTE_KEY); } catch {} };
+  // Run 20: Patterns lines can be hidden one by one and brought back, like the coach cards (own key, ledger untouched).
+  const PAT_MUTE_KEY=`${KEY}__patmute`;
+  const [patMuted,setPatMuted]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(PAT_MUTE_KEY)||"[]"); return Array.isArray(v)?v.filter(x=>typeof x==="string"):[]; } catch { return []; } });
+  const setPatMute=(next)=>{ setPatMuted(next); try { if (next.length) localStorage.setItem(PAT_MUTE_KEY,JSON.stringify(next)); else localStorage.removeItem(PAT_MUTE_KEY); } catch {} };
+  const coach       = useMemo(()=>calcCoach(transactions,readDebts(),new Date(),bills),[transactions,bills]);             // Run 17: Debts-page data is read when the ledger changes
+  const txnStats    = calcTxnStats(transactions,selectedMon);
+  const perDay      = calcWeekdayWeekend(transactions,selectedMon);
+  const wc          = calcWhatChanged(transactions,selectedMon,prv);
+  const expenses    = transactions.filter(t => t.type === "expense");
+  const done        = happenedIn(selectedMon);
+  const isCurrentMon = selectedMon === curMon();
+
+  const catData = Object.entries(catSpend).map(([id, amt]) => ({ ...CAT(id) || { id, name: id, color:"#98A5B7" }, amt })).sort((a,b) => b.amt - a.amt);
+  const maxCat = catData[0]?.amt || 1;
+  const merchantTotals = {};
+  expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
+  const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const monTxns = transactions.filter(t => t.date.startsWith(selectedMon));
+  const walletSpend = calcWalletSpend(transactions, selectedMon);   // Run 16
+  const recurringCount = transactions.filter(x=>x.recurring&&x.date.startsWith(selectedMon)).length;
+
+  // Trends: recent months up to today, independent of the selected month.
+  const WEEKDAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+  const wdName=(i,style)=>t(style==="long"?"dow."+WEEKDAYS[i]:style==="short"?"wdShort."+WEEKDAYS[i]:"wdNarrow."+WEEKDAYS[i]);
+  const { insights:patterns, anomalies, dayOfWeek, correlations } = patternsData;
+  const now=curMon();
+  const months6=Array.from({length:6},(_,i)=>nMon(5-i));
+  // Run 18g: each month shows what was spent AND what came in, so a month is read as a pair, not just a cost.
+  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce(addAmt,0),inc:transactions.filter(t=>t.type==="income"&&happenedIn(m)(t)).reduce(addAmt,0),isCur:m===now,ym:m}));
+  const maxMonth=Math.max(...monthlyData.map(m=>Math.max(m.exp,m.inc)),1);
+  const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
+  const DAY_LBLS=WEEKDAYS.map((_,i)=>wdName(i,"narrow"));
+  // Run 17: month calendar for the selected month (replaces the 8-week heatmap): spending per day, Monday first.
+  const [cy,cm]=selectedMon.split("-").map(Number);
+  const calDim=new Date(cy,cm,0).getDate(), calLead=(new Date(cy,cm-1,1).getDay()+6)%7;
+  const calDays=Array.from({length:calDim},(_,i)=>{ const ds=`${selectedMon}-${String(i+1).padStart(2,"0")}`;
+    const items=expenses.filter(x=>x.date===ds&&done(x));
+    return { date:ds, day:i+1, amt:items.reduce(addAmt,0), cats:items.map(x=>catName(x.category)).filter((v,j,arr)=>arr.indexOf(v)===j).join(", "), future:ds>today(), isToday:ds===today() }; });
+  const maxDay=Math.max(...calDays.map(c=>c.amt),1);  const hasTrends = expenses.length>0;
+
+  return (
+    <div onClick={()=>{setActiveBar(null);setCalDay(null);}}>
+      {/* Run 18: the all-time overview is the first thing on Analytics (it moved here from the bottom) */}
+        {transactions.length>0&&(()=>{
+          const totalInc=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
+          return (
+            <div className="a-card" data-section="an-overview">
+              <div className="a-card-title">{t("set.overview")}</div>
+              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
+                <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
+                  <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+      {/* Month selector — the one month setting for everything above the Trends section */}
+      <div className="month-selector" data-section="an-month">
+        <button className="month-nav-btn" onClick={prevM} disabled={idx===allMonths.length-1} aria-label={t("month.prev")} style={{opacity:idx===allMonths.length-1?0.3:1}}>‹</button>
+        <div style={{textAlign:"center"}}>
+          <h1 className="month-name" style={{margin:0}}>{monthName(selectedMon)}</h1>
+          {isCurrentMon && <div style={{fontSize:10,color:"var(--accent)",fontWeight:700,letterSpacing:"0.5px",marginTop:2,textTransform:"uppercase"}}>{t("month.current")}</div>}
+        </div>
+        <button className="month-nav-btn" onClick={nextM} disabled={idx===0} aria-label={t("month.next")} style={{opacity:idx===0?0.3:1}}>›</button>
+      </div>
+
+      {/* Summary stats */}
+      <div className="month-stats" data-section="an-summary" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+        <div className="month-stat">
+          <div className="month-stat-val" style={{color:"var(--neg)"}}><MoneyText v={fmt(curExp,currency)}/></div>
+          <div className="month-stat-lbl">{t("home.spent")}</div>
+          {momDiff!==null&&<div className="month-cmp" style={{fontSize:11,color:momDiff<=0?"var(--pos)":"var(--neg)",fontWeight:600,marginTop:4}}>
+            {momDiff<=0?"↓":"↑"} {cmpText(momDiff,cmpKind,currency)}
+          </div>}
+        </div>
+        <div className="month-stat">
+          <div className="month-stat-val" style={{color:"var(--pos)"}}><MoneyText v={fmt(curInc,currency)}/></div>
+          <div className="month-stat-lbl">{t("home.income")}</div>
+          {curInc>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
+            {fmtPct(Math.round(((curInc-curExp)/curInc)*100))} {t("surplus."+surplusLabel(curInc,curExp)).toLowerCase()}
+          </div>}
+        </div>
+        <div className="month-stat" style={{gridColumn:"1 / -1"}}>
+          <div className="month-stat-val" style={{color:surplusColor(curInc,curExp)}}><MoneyText v={fmt(Math.abs(curInc-curExp),currency)}/></div>
+          <div className="month-stat-lbl">{t("month.net."+(curInc>curExp?"Net surplus":curInc<curExp?"Net deficit":"Break-even"))}</div>
+          {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
+          {momDiff!==null&&cmpKind==="same"&&<div className="cmp-window" style={{fontSize:11,color:"var(--ink-3)",marginTop:2}}>{t("cmp.window",{d:cmpDays})}</div>}
+        </div>
+      </div>
+      <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
+      {debtCash.n>0&&(
+        <div className="list-sub" data-section="an-debtcash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
+          {t("an.debtCash",{out:fmt(debtCash.out,currency),inn:fmt(debtCash.in,currency)})}
+        </div>
+      )}
+      {loanCash.n>0&&(
+        <div className="list-sub" data-section="an-loancash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
+          {t("an.loanCash",{paid:fmt(loanCash.paid,currency),interest:fmt(loanCash.interest,currency)})}
+          {loanCash.unknown>0&&<> {t("an.loanCashUnknown",{n:loanCash.unknown})}</>}
+        </div>
+      )}
+      <div data-section="an-trend"><SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/></div>
+      {isCurrentMon&&(
+        <div className="a-card" data-section="an-forecast">
+          <div className="a-card-title">{t("an.forecast")}</div>
+          {forecast.available?(<>
+            <div className="big-num" style={{marginBottom:2}}>{fmt(forecast.point,currency)}</div>
+            {forecast.rangeShown
+              ? <div style={{fontSize:12,color:"var(--ink-2)",fontWeight:600}}>{t("an.forecastRange",{low:fmt(forecast.low,currency),high:fmt(forecast.high,currency)})}</div>
+              : <div className="list-sub">{t("an.forecastSingle")}</div>}
+            <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("an.forecastHow",{daily:fmt(forecast.usualDaily,currency)})}</div>
+          </>):<div className="list-sub">{t("an.forecastNeed")}</div>}
+        </div>
+      )}
+
+      {isCurrentMon&&coach.length>0&&(
+        <div className="a-card" data-section="an-coach">
+          <div className="a-card-title">{t("coach.title")}</div>
+          {coach.filter(c=>COACH_ACTIONS.includes(c.id)||!muted.includes(c.id)).map((c,i)=>{
+            const num=(n)=>PRIVACY?"••":n, amt=(q)=>fmt(q/100,currency);
+            const line = c.id==="incomplete" ? t("coach.incomplete",{days:c.days})
+              : c.id==="noIncome" ? t("coach.noIncome")
+              : c.id==="spent" ? t("coach.spent",{pct:num(c.pct),kept:num(c.kept)})
+              : c.id==="over" ? t("coach.over",{pct:num(c.pct)})
+              : c.id==="future" ? t("coach.future",{n:c.n})
+              : c.id==="welcome" ? t("coach.welcome")
+              : c.id==="incomeDip" ? t("coach.incomeDip",{have:c.have,of:c.of,pct:num(c.pct)})
+              : c.id==="loanShare" ? t("coach.loanShare",{pct:num(c.pct)})
+              : c.id==="loanShareHigh" ? t("coach.loanShareHigh",{pct:num(c.pct)})
+              : c.id==="billsShare" ? t("coach.billsShare",{pct:num(c.pct)})
+              : c.id==="catUp" ? t("coach.catUp",{cat:catName(c.cat),pct:num(c.pct)})
+              : c.id==="loanInterest" ? t("coach.loanInterest",{lender:maskText(c.lender),amount:amt(c.amount)})
+              : c.id==="noCover" ? t("coach.noCover",{lender:maskText(c.lender)})
+              : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
+              : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
+              : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
+            return (
+              <div key={i} className="coach-line" data-coach={c.id} style={{fontSize:13,lineHeight:1.5,padding:"8px 0",borderTop:i?"1px solid var(--rule)":"none",color:"var(--ink)"}}>
+                {line}
+                {!COACH_ACTIONS.includes(c.id)&&<div><button className="btn btn-sm coach-hide" style={{marginTop:4}} onClick={()=>setMute([...muted,c.id])}>{t("coach.hide")}</button></div>}
+              </div>
+            );
+          })}
+          <div className="list-sub" style={{marginTop:6}}>{t("coach.window")}</div>
+          {muted.length>0&&<button className="btn btn-sm coach-unhide" style={{marginTop:6}} onClick={()=>setMute([])}>{t("coach.showHidden",{n:muted.length})}</button>}
+        </div>
+      )}
+
+      {/* What changed — same comparison window as the summary */}
+      {(wc.totalDiff!==0||wc.catChanges.length>0)&&prevExp>0&&momDiff!==null&&(
+        <div className="a-card" data-section="an-changes">
+          <div className="a-card-title">{cmpTitle(wc.cmpKind)}</div>
+          <div className="wc-row" style={{paddingTop:0}}>
+            <span className="wc-name" style={{fontWeight:700}}>{t("an.totalSpending")}</span>
+            <div style={{textAlign:"right"}}>
+              <div className={`wc-diff ${wc.totalDiff<=0?"pos":"neg"}`}>{wc.totalDiff>0?"+":""}{fmt(wc.totalDiff,currency)}</div>
+              <div style={{fontSize:10,color:"var(--ink-3)"}}>{t("an.vs",{a:fmt(wc.curExp,currency),b:fmt(wc.prevExp,currency)})}</div>
+            </div>
+          </div>
+          {wc.catChanges.slice(0,5).map(({catId,cur,prev,diff,merchantDiffs})=>{
+            const cat=CAT(catId);
+            return (
+              <div key={catId}>
+                <div className="wc-row">
+                  <div className="wc-name"><CatIcon catId={catId} size={13} color={cat?.color}/>{catName(catId)}</div>
+                  <div style={{textAlign:"right"}}>
+                    <div className={`wc-diff ${diff<=0?"pos":"neg"}`}>{diff>0?"+":""}{fmt(diff,currency)}</div>
+                    <div style={{fontSize:10,color:"var(--ink-3)"}}>{t("an.vs",{a:fmt(cur,currency),b:fmt(prev,currency)})}</div>
+                  </div>
+                </div>
+                {merchantDiffs.length>0&&(
+                  <div className="wc-merchants">
+                    {merchantDiffs.map(m=>(
+                      <div key={m.merchant} className="wc-m-row">
+                        <span style={{display:"flex",alignItems:"center",gap:4}}>
+                          <Icon name="merchant" size={10} color="var(--ink-4)"/>
+                          {maskText(m.merchant)}
+                          <span style={{fontSize:9,fontWeight:700,padding:"1px 5px",borderRadius:3,background:m.isRecurring?"var(--warn-bg)":"var(--bg-inset)",color:m.isRecurring?"var(--warn)":"var(--ink-4)"}}>
+                            {m.isRecurring?t("wc.recurring"):t("wc.oneOff")}
+                          </span>
+                        </span>
+                        <span style={{color:m.diff<=0?"var(--pos)":"var(--neg)",fontWeight:600}}>{m.diff>0?"+":""}{fmt(m.diff,currency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {wc.catChanges.slice(0,5).some(c=>c.merchantDiffs.length>0)&&<div className="list-sub" data-section="an-changes-tags" style={{marginTop:10}}>{t("wc.tagHelp")}</div>}
+        </div>
+      )}
+
+      {/* Transaction stats for the month */}
+      {txnStats.count>0&&(
+        <div className="stat-row">
+          <div className="stat-cell"><div className="stat-val">{txnStats.count}</div><div className="stat-lbl">{t("an.transactions")}</div></div>
+          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.avgTxn,currency)}</div><div className="stat-lbl">{t("an.avgPerTxn")}</div></div>
+          <div className="stat-cell"><div className="stat-val">{fmt(txnStats.medTxn,currency)}</div><div className="stat-lbl">{t("an.median")}</div></div>
+          <div className="stat-cell" title={t("an.perDayTitle")}>
+            <div className="stat-val">{perDay.heavier===null?"—":fmt(perDay.heavier==="weekday"?perDay.wdAvg:perDay.weAvg,currency)}</div>
+            <div className="stat-lbl">{t(perDay.heavier===null?"an.perDay.null":"an.perDay."+perDay.heavier)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Budget status for the month */}
+      {budgetItems.length>0&&(
+        <div className="a-card" data-section="an-budget">
+          <div className="a-card-title">{t("an.budgetStatus",{month:monthName(selectedMon)})}</div>
+          {budgetItems.map(({catId,limit,spent,pct,over,warn,aheadOfPace,daysLeft,state})=>{
+            const cat=CAT(catId);
+            return (
+              <div key={catId} style={{marginBottom:13,paddingBottom:13,borderBottom:"1px solid var(--rule)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,marginBottom:4}}>
+                  <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6,minWidth:0}}><CatIcon catId={catId} size={13}/>{catName(catId)}</div>
+                  <div style={{fontSize:11,color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:600,flexShrink:0}}>{t("an.pctUsed",{pct:PRIVACY?"••":Math.round(pct)})}</div>
+                </div>
+                <div style={{height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden",marginBottom:4}}>
+                  <div style={{height:"100%",width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)"),borderRadius:99}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
+                  <span style={{color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:over||warn?600:400}}>
+                    {over?t("budgets.over",{amount:fmt(spent-limit,currency)}):t("budgets.remaining",{amount:fmt(limit-spent,currency)})}
+                  </span>
+                  {state==="current"&&<span style={{color:"var(--ink-4)",flexShrink:0}}>{over?t("an.exceeded"):t("an.daysLeft",{n:daysLeft})}</span>}
+                </div>
+                {aheadOfPace&&!over&&<div style={{fontSize:10,color:"var(--warn)",fontWeight:600,marginTop:2}}>{t("an.aheadOfPace")}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Category breakdown */}
+      {catData.length>0&&(
+        <div className="a-card" data-section="an-category">
+          <div className="a-card-title">{t("an.byCategory")}</div>
+          {catData.map((cat,i)=>(
+            <div key={i} className="cat-bar">
+              <div className="cat-bar-name"><CatIcon catId={cat.id} size={13} color={cat.color}/>{catName(cat.id)}</div>
+              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(cat.amt/maxCat)*100}%`,background:cat.color}}/></div>
+              <div className="cat-bar-amt">{fmt(cat.amt,currency)}</div>
+              <div className="cat-bar-pct">{fmtPct(curExp>0?Math.round((cat.amt/curExp)*100):0)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Run 16: spending by wallet for the selected month; shown only when at least one entry has a wallet */}
+      {walletSpend.used&&walletSpend.total>0&&(
+        <div className="a-card" data-section="an-wallet">
+          <div className="a-card-title">{t("wallet.analyticsTitle")}</div>
+          {Object.entries(walletSpend.byWallet).sort((a,b)=>b[1]-a[1]).map(([w,amt])=>(
+            <div key={w} className="cat-bar">
+              <div className="cat-bar-name">{w==="none"?t("wallet.none"):walletName(w)}</div>
+              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(amt/walletSpend.total)*100}%`,background:"var(--accent)"}}/></div>
+              <div className="cat-bar-amt">{fmt(amt,currency)}</div>
+              <div className="cat-bar-pct">{fmtPct(Math.round((amt/walletSpend.total)*100))}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Merchant breakdown */}
+      {topMerchants.length>0&&(
+        <div className="a-card" data-section="an-merchant">
+          <div className="a-card-title">{t("month.byMerchant")}</div>
+          {topMerchants.map(([merchant,amt],i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:i<topMerchants.length-1?"1px solid var(--rule)":"none"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flex:1,minWidth:0}}>
+                <div style={{width:28,height:28,borderRadius:6,background:"var(--bg-inset)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Icon name="merchant" size={13} color="var(--ink-3)"/>
+                </div>
+                <span style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(merchant)}</span>
+              </div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:700}}>−{fmt(amt,currency)}</div>
+                {curExp>0&&<div style={{fontSize:10,color:"var(--ink-4)"}}>{fmtPct(Math.round((amt/curExp)*100))}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Run 15: the "Top expenses" and "All transactions" lists were removed from Analytics. They repeated rows of the Transactions
+          tab (which can be searched by month name and filtered by date). Analytics keeps what Transactions cannot show: totals,
+          comparisons, categories, merchants and trends. */}
+      {recurringCount>0&&(
+        <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"var(--ink-3)"}}>
+          <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",recurringCount)}
+        </div>
+      )}
+
+      {/* A month without entries says so (the list of entries lives in Transactions) */}
+      {monTxns.length===0&&(
+        <div className="empty" style={{padding:"32px 0"}} data-section="an-empty">
+          <div className="empty-icon"><LedgerArt/></div>
+          <div className="empty-title">{t("month.emptyTitle")}</div>
+          <div className="empty-body">{t("month.emptyBody",{month:monthName(selectedMon)})}</div>
+        </div>
+      )}
+
+      {/* Trends — recent months up to today; not affected by the month selected above */}
+      {hasTrends&&(<>
+        <div className="trends-head" data-section="an-trends" style={{marginTop:22,marginBottom:10}}>
+          <div className="label-sm">{t("month.trendsTitle")}</div>
+          <div style={{fontSize:11,color:"var(--ink-3)",lineHeight:1.5,marginTop:4}}>{t("month.trendsSub")}</div>
+        </div>
+
+        <div className="a-card">
+          <div className="a-card-title">{t("an.sixMonth")}</div>
+          {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>{t("an.sixMonthAvg")} <strong style={{fontFamily:"var(--font)",color:"var(--ink)"}}>{fmt(monthAvg,currency)}</strong></div>}
+          {activeBar!==null&&monthlyData[activeBar]&&(
+            <div data-section="an-sixmonth-detail" style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+              <span>{monthName(monthlyData[activeBar].ym)}</span>
+              <span style={{fontFamily:"var(--font)",fontSize:13}}>{t("an.sixSpent")} {fmt(monthlyData[activeBar].exp,currency)} · {t("an.sixIncome")} {fmt(monthlyData[activeBar].inc,currency)} · {t("an.sixNet")} {monthlyData[activeBar].inc-monthlyData[activeBar].exp<0?"−":""}{fmt(Math.abs(monthlyData[activeBar].inc-monthlyData[activeBar].exp),currency)}</span>
+            </div>
+          )}
+          <div className="month-bars">
+            {monthlyData.map((m,i)=>(
+              <div key={i} className="m-col" role="button" tabIndex={0} aria-pressed={activeBar===i} aria-label={`${monthName(m.ym)}: ${fmt(m.exp,currency)}`}
+                onKeyDown={activateKey(()=>{setActiveBar(activeBar===i?null:i);})}
+                onClick={e=>{e.stopPropagation();setActiveBar(activeBar===i?null:i);}}>
+                <div style={{flex:1,width:"100%",display:"flex",alignItems:"flex-end",gap:2}}>
+                  <div className="m-bar" style={{height:m.exp>0?`${Math.max(5,(m.exp/maxMonth)*100)}%`:"3px",background:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",width:"100%",outline:activeBar===i?"2px solid var(--accent)":"none",outlineOffset:"1px"}}/>
+                  <div className="m-bar m-bar-inc" style={{height:m.inc>0?`${Math.max(5,(m.inc/maxMonth)*100)}%`:"3px",background:"var(--pos)",opacity:0.75,width:"100%"}}/>
+                </div>
+                <div className="m-lbl" style={{color:activeBar===i?"var(--accent-mid)":m.isCur?"var(--accent)":"var(--ink-4)",fontWeight:m.isCur||activeBar===i?700:600}}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="trend-legend" data-section="an-sixmonth-legend"><span><i style={{background:"var(--ink-4)"}}/>{t("an.sixSpent")}</span><span><i style={{background:"var(--pos)",opacity:0.75}}/>{t("an.sixIncome")}</span></div>
+        </div>
+
+        {patterns.length>0&&(
+          <div className="a-card">
+            <div className="a-card-title">{t("an.patterns")}</div>
+            {patterns.filter(p=>!patMuted.includes(p.id)).map(p=>{
+              const titleKey=PATTERN_TITLE_KEY[p.id.startsWith("trend-")?"trend":p.id];
+              return (
+                <div key={p.id} className="pattern-item" data-section="pattern-item" data-id={p.id}>
+                  <Icon name="pattern" size={14} color="var(--ink-3)"/>
+                  <div style={{flex:1,minWidth:0}}>
+                    {titleKey&&<div style={{fontWeight:700,color:"var(--ink)",marginBottom:2}}>{t(titleKey)}</div>}
+                    <span>{PRIVACY?t("privacy.hiddenText"):p.text}</span>{p.basis&&<div className="list-sub pattern-basis" style={{marginTop:4}}>{tn(PATTERN_BASIS_KEY[p.basis.per],p.basis.n)}</div>}
+                    <div><button className="btn btn-sm pattern-hide" style={{marginTop:6}} onClick={()=>setPatMute([...patMuted,p.id])}>{t("coach.hide")}</button></div>
+                  </div>
+                </div>
+              );
+            })}
+            {patMuted.length>0&&<button className="btn btn-sm pattern-unhide" style={{marginTop:2}} onClick={()=>setPatMute([])}>{t("coach.showHidden",{n:patMuted.length})}</button>}
+          </div>
+        )}
+
+        {Object.values(dayOfWeek).some(d=>d.count>0)&&(
+          <div className="a-card">
+            <div className="a-card-title">{t("an.byDay",{month:monthName(now)})}</div>
+            <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.byDaySub")}</div>
+            {WEEKDAYS.map((day,di)=>{
+              const d=dayOfWeek[day];
+              if (!d||d.count===0) return null;
+              // the typical (median) transaction, as in the insight: one unusual purchase must not make a day's bar tower over the rest
+              const maxMed=Math.max(...Object.values(dayOfWeek).filter(x=>x.count>0).map(x=>x.median),1);
+              return (
+                <div key={day} className="dow-row" style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
+                  <div style={{minWidth:28,fontSize:11,color:"var(--ink-3)",fontWeight:600,flexShrink:0}} title={wdName(di,"long")}>{wdName(di,"short")}</div>
+                  <div style={{flex:1,height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${(d.median/maxMed)*100}%`,background:"var(--accent)",borderRadius:99}}/>
+                  </div>
+                  <div style={{minWidth:60,textAlign:"right",fontSize:11,fontFamily:"var(--font)",fontWeight:600,color:"var(--ink)",flexShrink:0,whiteSpace:"nowrap"}}>{fmt(d.median,currency)}</div>
+                  <div style={{width:24,textAlign:"right",fontSize:10,color:"var(--ink-4)",flexShrink:0}}>{d.count}×</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {anomalies.length>0&&(
+          <div className="a-card">
+            <div className="a-card-title">{t("an.unusual")}</div>
+            {anomalies.slice(0,5).map((a,i)=>{
+              const cat=CAT(a.category)||{color:"#98A5B7"};
+              return (
+                <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<Math.min(anomalies.length,5)-1?"1px solid var(--rule)":"none"}}>
+                  <div style={{width:30,height:30,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <CatIcon catId={a.category} size={14} color={cat.color}/>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:600,color:"var(--ink)"}}>{maskText(a.merchant)||catName(a.category)}</div>
+                    <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmtDate(a.date)} · {PRIVACY?t("privacy.hiddenText"):a.reason}</div>
+                  </div>
+                  <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:700,color:"var(--neg)",flexShrink:0}}>−{fmt(a.amount,currency)}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {correlations.length>0&&(
+          <div className="a-card">
+            <div className="a-card-title">{t("an.together")}</div>
+            <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.togetherSub")}</div>
+            {correlations.map((c,i)=>(
+              <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"8px 0",borderBottom:i<correlations.length-1?"1px solid var(--rule)":"none"}}>
+                <div style={{display:"flex",alignItems:"center",flexWrap:"wrap",gap:6,fontSize:12,fontWeight:600,color:"var(--ink)",minWidth:0}}>
+                  <CatIcon catId={c.category1} size={13}/>
+                  {catName(c.category1)}
+                  <span style={{color:"var(--ink-4)",fontWeight:400}}>+</span>
+                  <CatIcon catId={c.category2} size={13}/>
+                  {catName(c.category2)}
+                </div>
+                <div style={{fontSize:11,color:"var(--ink-3)",flexShrink:0}}>{t("an.ofDays",{pct:PRIVACY?"••":Math.round(c.correlation*100)})}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="a-card" data-section="an-calendar">
+          <div className="a-card-title">{t("an.calendar")}</div>
+          <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.calendarHint")}</div>
+          <div className="cal" onClick={e=>e.stopPropagation()}>
+            {DAY_LBLS.map((d,i)=><div key={i} className="cal-dow">{d}</div>)}
+            {Array.from({length:calLead},(_,i)=><div key={"b"+i} className="cal-blank"/>)}
+            {calDays.map(c=>{
+              const on=calDay===c.date, intensity=c.amt>0?Math.max(0.15,(c.amt/maxDay)*0.85):0;
+              return <button key={c.date} type="button" data-date={c.date} className={`cal-day${c.amt>0?" has-spend":""}${c.future?" future":""}${c.isToday?" today":""}${on?" sel":""}`}
+                aria-current={c.isToday?"date":undefined} aria-pressed={on} aria-label={`${fmtDate(c.date)}: ${c.amt>0?fmt(c.amt,currency):t("an.noSpending")}`}
+                style={c.amt>0?{background:`rgba(76,201,196,${intensity})`,...(intensity>=0.4?{color:"#06201e"}:null)}:undefined}
+                onClick={e=>{ e.stopPropagation(); setCalDay(on?null:c.date); setActiveBar(null); }}>{c.day}</button>;
+            })}
+          </div>
+          {calDay&&(()=>{ const c=calDays.find(x=>x.date===calDay); if(!c) return null; return (
+            <div data-section="an-calendar-detail" role="status" style={{background:"var(--bg-inset)",borderRadius:10,padding:"10px 12px",marginTop:10,fontSize:12,fontWeight:600}}>
+              <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span>{fmtDate(c.date)}</span><span style={{fontFamily:"var(--font)",fontSize:14}}>{c.amt>0?fmt(c.amt,currency):t("an.noSpending")}</span></div>
+              {c.cats&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:3,fontWeight:500}}>{c.cats}</div>}
+            </div>); })()}
+          <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,justifyContent:"flex-end"}}>
+            <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
+            {[0.15,0.35,0.6,0.85].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(76,201,196,${o})`}}/>)}
+            <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
+          </div>
+        </div>      </>)}
+    </div>
+  );
+}
+
+export function SmartHelper({ transactions, bills=[], budgets, goals, safeToSpend, currency }) {
+  const lc = locale();
+  const cards = useMemo(
+    () => calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills),
+    [transactions, bills, budgets, goals, safeToSpend, currency, lc]   // card text follows the interface language
+  );
+
+  if (cards.length === 0) return null;
+
+  const ICON_COLOR = { warn:"var(--warn)", neg:"var(--neg)", pos:"var(--pos)", info:"var(--ink-3)" };
+
+  return (
+    <div style={{marginBottom:18}}>
+      <div className="label-sm" style={{marginBottom:10}}>{t("help.title")}</div>
+      {cards.map(card=>(
+        <div key={card.id} className={`helper-card ${card.type}`}>
+          <div className="helper-icon">
+            <Icon name={card.icon} size={16} color={ICON_COLOR[card.type]}/>
+          </div>
+          <div className="helper-body">
+            <div className="helper-title">{card.title}</div>
+            <div className="helper-text">{PRIVACY?t("privacy.hiddenText"):card.text}</div>
+            <div className="helper-impact" style={{color:ICON_COLOR[card.type]}}>{PRIVACY?"":card.impact}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
