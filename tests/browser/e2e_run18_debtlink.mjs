@@ -12,7 +12,7 @@ const start = async (dir) => {
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [tx({ id: "base1", amount: 7, merchant: "Shop", date: new Date().toISOString().slice(0, 10) })] }) }); await settle(page);
   await page.evaluate((k, v) => localStorage.setItem(k, v), DKEY, JSON.stringify(debt(dir)));
   await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150);
-  await page.evaluate(() => document.querySelectorAll(".more-page .list-row")[5].click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250);
+  await page.evaluate(() => document.querySelector('.more-page [data-more="debts"]').click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250);
   return page;
 };
 const pay = async (page, amt) => { await setVal(page, ".debt-pay-input", amt); await click(page, ".debt-pay-btn"); };

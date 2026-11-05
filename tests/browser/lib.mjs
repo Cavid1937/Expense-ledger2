@@ -43,6 +43,9 @@ export async function openPage(browser, { width = 390, height = 844, seed = base
   await page.setRequestInterception(true); page.on("request", (r) => { const u = r.url(); (u.startsWith("http") ? r.abort() : r.continue()); });
   await page.evaluateOnNewDocument((k, d, raw, fr) => { if (!sessionStorage.getItem("__seeded")) { sessionStorage.setItem("__seeded", "1"); if (fr) localStorage.clear(); if (raw !== null) localStorage.setItem(k, raw); else if (d) localStorage.setItem(k, JSON.stringify(d)); } }, KEY, seed, seedRaw, fresh);
   if (pre) await page.evaluateOnNewDocument(pre);
+  // Run 26: the app asks "Delete?" in its own dialog instead of the browser's confirm box. Older tests relied on the browser dialog being
+  // accepted automatically, so the dialog's confirm button is pressed for them (set window.__noAutoConfirm = true to answer it by hand).
+  await page.evaluateOnNewDocument(() => { new MutationObserver(() => { if (window.__noAutoConfirm) return; const b = document.querySelector('[data-section="confirm-ok"]'); if (b) b.click(); }).observe(document, { childList: true, subtree: true }); });
   page.errors = []; page.on("pageerror", (e) => page.errors.push(String(e)));
   page.dialogAnswer = ""; page.on("dialog", async (d) => { await d.accept(page.dialogAnswer ?? ""); });
   await page.goto(url || PAGE); await page.waitForSelector(".tabbar, .lang-screen");
@@ -74,11 +77,11 @@ export async function clickIn(page, finder) { await page.evaluate((src) => { con
 // Redesign (2026-10-27): the tabs are Home · Transactions · Analytics · Goals · More, and Recurring / Import–Export are pages
 // under More. Tests keep their original names; this maps them (Ledger → 1st… by position, so it works in every language).
 const TAB_POS = { Home: 0, Ledger: 1, Transactions: 1, Monthly: 2, Analytics: 2, Goals: 3, More: 4 };
-const MORE_ROW = { Recurring: 0, ImportExport: 1 };
+const MORE_ROW = { Recurring: "recurring", ImportExport: "io" };   // Run 26: rows are found by name (the list is grouped now), not by position
 export async function tab(page, name) {
   if (name in MORE_ROW) {
     await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(200);
-    await page.evaluate((i) => document.querySelectorAll(".more-page .list-row")[i].click(), MORE_ROW[name]); await wait(200); return;
+    await page.evaluate((i) => document.querySelector(`.more-page [data-more="${i}"]`).click(), MORE_ROW[name]); await wait(200); return;
   }
   if (name in TAB_POS) { await page.evaluate((i) => document.querySelectorAll(".tab-btn")[i].click(), TAB_POS[name]); await wait(150); return; }
   return clickText(page, ".tab-btn", new RegExp(name));
@@ -94,7 +97,7 @@ export const openGoals = async (page, seg = "budgets") => { await tab(page, "Goa
 // Run 5: both also wait for the opening animation to finish, so a gesture never starts from a grip that is still rising.
 // Run 9: Settings has no title-bar shortcut any more; it opens from More → Settings (the third row). The screen behind
 // the sheet is therefore More; tests that need another screen afterwards go there with tab().
-export const openSettings = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150); await page.evaluate(() => document.querySelectorAll(".more-page .list-row")[2].click()); await page.waitForSelector(".sheet"); await wait(350); await settle(page); };
+export const openSettings = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150); await page.evaluate(() => document.querySelector('.more-page [data-more="prefs"]').click()); await page.waitForSelector(".sheet"); await wait(350); await settle(page); };
 // Run 9: "+" adds a transaction only on Home and Transactions (elsewhere it adds a budget, goal or bill, or is absent),
 // so the helper goes to Home first when the current screen is not one of those two.
 export const openAdd = async (page) => { await page.evaluate(() => { const tabs = [...document.querySelectorAll(".tab-btn")]; const i = tabs.findIndex((b) => b.getAttribute("aria-current") === "page"); if (i > 1 || i < 0) tabs[0].click(); }); await wait(200); await page.evaluate(() => document.querySelector(".fab-add").click()); await page.waitForSelector(".amount-input"); await wait(350); await settle(page); };

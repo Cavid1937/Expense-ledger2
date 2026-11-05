@@ -8,7 +8,7 @@ const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); retur
 const stored = (page) => page.evaluate((k) => JSON.parse(localStorage.getItem(k) || "null"), DKEY);
 const setVal = (page, sel, v) => page.$eval(sel, (el, v) => { const proto = el.tagName === "SELECT" ? HTMLSelectElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, "value").set.call(el, v); el.dispatchEvent(new Event(el.tagName === "SELECT" ? "change" : "input", { bubbles: true })); }, v);
 const click = async (page, sel) => { await page.evaluate((s) => document.querySelector(s).click(), sel); await wait(200); };
-const openDebts = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150); await page.evaluate(() => document.querySelectorAll(".more-page .list-row")[5].click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250); };
+const openDebts = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150); await page.evaluate(() => document.querySelector('.more-page [data-more="debts"]').click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250); };
 const seg = (page, i) => page.evaluate((i) => document.querySelectorAll('[data-section="debts-page"] .seg-btn')[i].click(), i);
 const text = (page, sel) => page.evaluate((s) => (document.querySelector(s) || {}).innerText || "", sel);
 

@@ -10,7 +10,7 @@ const open = async (lang, loans) => {
   await page.evaluate((k, v) => localStorage.setItem(k, v), DKEY, JSON.stringify({ version: 1, debts: [], loans }));
   await page.reload(); await page.waitForSelector(".tabbar"); await wait(500);
   await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150);
-  await page.evaluate(() => document.querySelectorAll(".more-page .list-row")[5].click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250);
+  await page.evaluate(() => document.querySelector('.more-page [data-more="debts"]').click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250);
   await page.evaluate(() => { const b = [...document.querySelectorAll(".seg-btn")]; b[b.length - 1].click(); }); await wait(300);
   return page;
 };

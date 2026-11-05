@@ -36,7 +36,7 @@ await page.close();
 section("S2. Sheets: dismissal, gestures, focus");
 page = await openPage(browser);
 // Run 9: Settings opens from More → Settings; a keyboard user focuses that row and presses Enter.
-await tab(page, "More"); const settingsRow = ".more-page .list-row:nth-child(3)";
+await tab(page, "More"); const settingsRow = '.more-page [data-more="prefs"]';
 await page.focus(settingsRow); await page.keyboard.press("Enter"); await page.waitForSelector(".sheet"); await wait(350); await settle(page);
 ok(await page.evaluate(() => document.activeElement && document.activeElement.classList.contains("sheet")), "opening a sheet moves focus into it");
 await page.keyboard.press("Escape"); await wait(300);

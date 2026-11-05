@@ -444,3 +444,14 @@ Added: bill calendar .ics export, bank-statement CSV layouts, custom categories,
 - Tests: logic 56 files / 1200 checks pass; new e2e_run26_motion.mjs (13 checks) pass; e2e_run16_info updated (nine rows). Full gate60 pending at time of writing.
 - Figma: file niJNGDYGUTcihmIXyracwn 'Motion spec' page holds the written motion spec. Live-page capture via Playwright hung (30 min) - screens NOT captured. Figma gives no 'opinion'; it is a design tool.
 - Still unverified: feel on a real phone.
+
+## Run 26c coverage matrix (whole-app motion + identity pass, 5 Nov 2026)
+Treatments: E=entry motion, P=press feedback, N=no-teleport edit/forms, L=layering, I=identity element, Y=empty state, R=reduced motion.
+Figma concept boards (AI, direction only, never shipped as assets): nodes 10:2 (identity), 10:3 (Transactions+Analytics), 10:4 (Settings grouped + account sheet) in file niJNGDYGUTcihmIXyracwn.
+Surfaces: Home(+checklist, coach, donut, accounts strip) | Transactions(search, filters, select) | Analytics | Goals(Budgets, Goals, Templates) | Settings tab | Recurring | Import/Export | Debts&loans | Add/Edit overlay | Txn detail | BillSheet | Preferences sheet | Info sheets | Lock sheet/screen | Import confirm | Discard dialog | language chooser | toasts/banner | tab bar/FAB.
+Status per surface is updated below as work lands (see later entries).
+
+### Run 26c status (2026-11-05)
+Done (IMPLEMENTED BUT UNVERIFIED on a real phone; browser tests pass): Settings tab regrouped into Money / Data and safety / App; account pill on rows; Analytics month stats as one card; ruled page background + section hairlines; Goals/Budgets/Templates forms open in place with smooth reveal and focus (no jump); "Without a budget" list collapses to 4; native confirm pop-ups replaced by the app's own animated dialog (debts, loan payments, loans).
+Tests: logic 56 files / 1200 checks pass; new tests/browser/e2e_run26_confirm.mjs (6 checks) passes; e2e_run16_info 15, run17_debts 22, run18_debtlink 13, run26_motion 18 pass. Full gate: see gate62 entry once run.
+DEFERRED WITH REASON: Recurring / search-no-results empty states keep their specific icons (already meaningful); Figma mobile captures of every screen + critique pass; walker test over every screen; native az/ru wording review of new strings; real-phone feel check.

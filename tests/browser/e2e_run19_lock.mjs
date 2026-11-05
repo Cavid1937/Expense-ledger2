@@ -11,7 +11,7 @@ const ledgerRaw = (page) => page.evaluate(() => localStorage.getItem("expense_le
 const isLocked = (page) => page.evaluate(() => { const s = document.querySelector(".lock-screen"); const t = document.querySelector(".tabbar"); return !!s && (!t || t.getClientRects().length === 0); });
 const isOpen = (page) => page.evaluate(() => !document.querySelector(".lock-screen") && !!document.querySelector(".tabbar") && document.querySelector(".tabbar").getClientRects().length > 0);
 const openLockSheet = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150);
-  await page.evaluate(() => { const r = document.querySelectorAll(".more-page .list-row"); r[r.length - 1].click(); }); await page.waitForSelector('[data-section="lock-sheet"]'); await wait(250); };
+  await page.evaluate(() => { document.querySelector('.more-page [data-more="lock"]').click(); }); await page.waitForSelector('[data-section="lock-sheet"]'); await wait(250); };
 const setField = (page, sel, v) => page.$eval(sel, (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); }, v);
 const end = async (page) => { await page.evaluate((k) => localStorage.removeItem(k), LK); await page.close(); };
 const typePin = async (page, pin) => { await page.keyboard.type(pin); await wait(120); };

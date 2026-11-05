@@ -79,6 +79,16 @@ function cleanMoneyText(raw) {
   const intPart=s.slice(0,at).replace(/[.,]/g,""), dec=s.slice(at+1).replace(/[.,]/g,"").slice(0,2);
   return (intPart===""?"0":intPart)+"."+dec;
 }// A form value that ends in the decimal mark ("145.") means 145; parseMoney itself stays strict for imports.
+// Run 26: an in-app question instead of the browser's own confirm box (same look as the rest, animated, translated). askConfirm(text) gives
+// a promise of true/false; the <ConfirmHost/> in the app shell shows it. Without a host (never in the app) it falls back to window.confirm.
+let confirmHost=null;
+function askConfirm(message) { return new Promise(res=>{ if (!confirmHost) { res(typeof window!=="undefined" && window.confirm ? window.confirm(message) : false); return; } confirmHost({ message, res }); }); }
+// Run 26: one shared way to open an inline form without a jump: the view glides to it (smooth scroll) and the first box is focused
+// with preventScroll (a plain autoFocus makes phones snap the page). Use as ref={revealFocus}; it only acts once per element.
+function revealFocus(el) {
+  if (!el || el.dataset.shown) return; el.dataset.shown="1";
+  requestAnimationFrame(()=>{ try { el.scrollIntoView({ behavior:"smooth", block:"center" }); const i=el.matches("input,select,textarea") ? el : el.querySelector("input,select,textarea"); if (i) i.focus({ preventScroll:true }); } catch {} });
+}
 function formMoney(v, opts) { return parseMoney(typeof v==="string" ? v.trim().replace(/\.$/,"") : v, opts); }
 
 function isPlainObject(x) { return x!==null && typeof x==="object" && !Array.isArray(x); }
@@ -557,6 +567,13 @@ function mergeAccountData(a, b) {   // by id: what is already here wins; transfe
 function readAccounts() { try { const r=localStorage.getItem(ACC_KEY); return r ? cleanAccountData(JSON.parse(r)) : { accounts:[], transfers:[] }; } catch { return { accounts:[], transfers:[] }; } }
 function writeAccounts(data) {
   try { const c=cleanAccountData(data); if (!c.accounts.length) localStorage.removeItem(ACC_KEY); else localStorage.setItem(ACC_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
+}
+// Run 26: the name of an account for a row label. Cached against the raw stored text, so listing many rows does not parse it again.
+let _accRaw=null, _accMap={};
+function accountName(id) {
+  if (!accId(id)) return "";
+  try { const raw=localStorage.getItem(ACC_KEY); if (raw!==_accRaw) { _accRaw=raw; _accMap={}; cleanAccountData(raw?JSON.parse(raw):null).accounts.forEach(a=>{ _accMap[a.id]=a.name; }); } } catch { return ""; }
+  return _accMap[id]||"";
 }
 // Balance per account id, in money (exact to the cent). Entries whose account is unknown here are not counted anywhere.
 function accountBalances(data, transactions) {
@@ -3187,6 +3204,20 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 /* Run 26: movement that explains itself. Scrolling glides instead of jumping; forms ease open where they belong; cards rise in once
    when a screen opens (CSS animations only run on insertion, never on a re-render); presses give a small, quick squeeze. */
 html,.page,.sheet{scroll-behavior:smooth}
+/* Run 26c: identity across every screen. A faint ruled-ledger page, rules that follow section titles, one ruled summary strip on Analytics
+   (net first, with a double rule), account labels on rows, grouped Settings. All of it is tone and line, no extra shadow or blur. */
+.acc-pill{margin-left:6px;padding:1px 7px;border:1px solid var(--rule-2);border-radius:99px;font-size:10px;font-weight:600;color:var(--ink-3);white-space:nowrap}
+.more-group-lbl{margin:18px 4px 8px}
+.page:not(.page-sub){background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,color-mix(in oklab,var(--rule) 40%,transparent) 31px,color-mix(in oklab,var(--rule) 40%,transparent) 32px);background-attachment:local}
+:root[data-fx="off"] .page{background-image:none}
+.section-title{display:flex;align-items:center;gap:10px}
+.section-title::after{content:"";flex:1;height:1px;background:var(--rule)}
+.month-stats{background:var(--bg-card);border:1px solid var(--rule);border-radius:var(--radius);box-shadow:var(--lit-edge),var(--shadow-card);overflow:hidden;gap:0 !important}
+.month-stats .month-stat{background:none;border:none;box-shadow:none;border-radius:0;padding:14px 16px}
+.month-stats .month-stat:nth-child(3){order:-1;grid-column:1 / -1;border-bottom:3px double var(--rule-2)}
+.month-stats .month-stat:nth-child(3) .month-stat-val{font-size:clamp(26px,8vw,34px)}
+.month-stats .month-stat:nth-child(2){border-left:1px solid var(--rule)}
+@media (max-width:360px){.month-stats .month-stat:nth-child(2){border-left:none;border-top:1px solid var(--rule)}}
 .acc-strip{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:2px 2px 4px;scrollbar-width:none}
 .acc-strip::-webkit-scrollbar{display:none}
 .acc-card{flex:0 0 150px;min-height:96px;scroll-snap-align:start;display:flex;flex-direction:column;align-items:flex-start;gap:5px;padding:14px;text-align:left;font:inherit;color:var(--ink);background:var(--surface-raised);border:1px solid var(--rule);border-radius:16px;cursor:pointer;transition:transform 90ms,background-color 120ms;-webkit-tap-highlight-color:transparent}
@@ -4177,6 +4208,7 @@ function AppInner() {
             onRenameSub={(cid,from,to)=>{ setState(s=>({...s,transactions:renameSubcatInEntries(s.transactions,cid,from,to)})); showToast(t("subcat.renamed")); }}
             onOtherKind={k=>{ setDebtsStart(k); closeAdd(); switchTab("debts"); }}/>
         )}
+        <ConfirmHost/>
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
         {showLock&&<LockSheet onClose={()=>setShowLock(false)} showToast={showToast}/>}
         {showSettings&&(
@@ -4346,6 +4378,25 @@ function LedgerArt() {
   );
 }
 
+// Run 26: the app's own confirm dialog (askConfirm lives with the helpers above; this part draws it).
+function ConfirmHost() {
+  const [q,setQ]=useState(null);
+  useEffect(()=>{ confirmHost=setQ; return ()=>{ confirmHost=null; }; },[]);
+  if (!q) return null;
+  const done=(v)=>{ q.res(v); setQ(null); };
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&done(false)} data-section="confirm-overlay">
+      <div className="sheet" role="alertdialog" aria-modal="true" tabIndex={-1} aria-label={q.message}>
+        <div className="sheet-grip"><div className="sheet-handle"/></div>
+        <div style={{fontSize:15,lineHeight:1.55,margin:"6px 2px 16px"}}>{q.message}</div>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-ghost" style={{flex:1}} data-section="confirm-cancel" onClick={()=>done(false)}>{t("common.cancel")}</button>
+          <button className="btn btn-primary" style={{flex:1}} data-section="confirm-ok" onClick={()=>done(true)}>{t("common.delete")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 // Run 26 (designed in Figma, frame "Home - Accounts strip"): balances of the person's own accounts as a row of cards, shown only when
 // at least one visible account exists. Balances are derived (opening + entries + transfers), the same numbers as in Settings.
 function HomeAccounts({ transactions, currency, onManage }) {
@@ -4676,6 +4727,7 @@ function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, compact 
         <div className="txn-sub">
           <span>{displaySub}</span>
           {txn.recurring&&<span className="rec-pill"><Icon name="repeat" size={9}/>{txn.recurFreq?t("freq."+txn.recurFreq):""}</span>}
+          {accountName(txn.account)&&<span className="acc-pill" data-acc-pill="1">{accountName(txn.account)}</span>}
         </div>
       </div>
       <div className="txn-right">
@@ -5234,14 +5286,14 @@ function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], 
               </div>
               {renSub&&(
                 <div style={{display:"flex",gap:7,marginTop:8}} data-section="add-subcat-rename-form">
-                  <input className="field-input" autoFocus aria-label={t("subcat.rename",{name:renSub.from})} maxLength={SUBCAT_LEN} value={renSub.text} onChange={e=>{ setRenSub({...renSub,text:e.target.value}); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); renameMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                  <input className="field-input" ref={revealFocus} aria-label={t("subcat.rename",{name:renSub.from})} maxLength={SUBCAT_LEN} value={renSub.text} onChange={e=>{ setRenSub({...renSub,text:e.target.value}); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); renameMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
                   <button type="button" className="btn btn-sm btn-sm-primary" data-section="add-subcat-rename-save" onClick={renameMySub}>{t("common.save")}</button>
                   <button type="button" className="btn btn-sm" onClick={()=>{ setRenSub(null); setSubMsg(""); }} aria-label={t("common.cancel")}>✕</button>
                 </div>
               )}
               {newSub!==null&&(
                 <div style={{display:"flex",gap:7,marginTop:8}}>
-                  <input className="field-input" autoFocus aria-label={t("subcat.mine")} placeholder={t("subcat.ph")} maxLength={SUBCAT_LEN} value={newSub} onChange={e=>{ setNewSub(e.target.value); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); addMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                  <input className="field-input" ref={revealFocus} aria-label={t("subcat.mine")} placeholder={t("subcat.ph")} maxLength={SUBCAT_LEN} value={newSub} onChange={e=>{ setNewSub(e.target.value); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); addMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
                   <button type="button" className="btn btn-sm btn-sm-primary" onClick={addMySub}>{t("common.save")}</button>
                   <button type="button" className="btn btn-sm" onClick={()=>{ setNewSub(null); setSubMsg(""); }} aria-label={t("common.cancel")}>✕</button>
                 </div>
@@ -5881,16 +5933,10 @@ function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate
     setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);setEditTplId(null);
   };
   const startEdit=(tpl)=>{ setEditTplId(tpl.id); setTplName(tpl.name||""); setTplAmt(String(tpl.amount)); setTplCatId(tpl.catId||"food"); setTplSubcat(tpl.subcat||""); setTplMerchant(tpl.merchant||""); setTplNote(tpl.note||""); setShowNewTpl(true); };
-  return (
-    <div data-section="gl-templates">
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"14px 2px 10px"}}>
-        <span className="section-title" style={{margin:0}}>{t("set.templates")}</span>
-        <button className="btn btn-sm" onClick={()=>{ if (showNewTpl) { setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); } setShowNewTpl(s=>!s); }}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
-      </div>
-      {showNewTpl&&(
-        <div className="card">
+  const tplForm=(inList)=>(
+        <div className={"reveal"+(inList?"":" card")} ref={revealFocus} data-section="tpl-form" style={inList?{padding:"12px 14px",borderBottom:"1px solid var(--rule)"}:undefined}>
           <div className="field-row" style={{marginBottom:10}}>
-            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-name">{t("set.name")}</label><input id="tpl-name" className="field-input" placeholder={t("set.tplNamePh")} value={tplName} onChange={e=>setTplName(e.target.value)} autoFocus/></div>
+            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-name">{t("set.name")}</label><input id="tpl-name" className="field-input" placeholder={t("set.tplNamePh")} value={tplName} onChange={e=>setTplName(e.target.value)}/></div>
             <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-amt">{t("add.amount")}</label><input id="tpl-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={tplAmt} onChange={e=>setTplAmt(cleanMoneyText(e.target.value))}/></div>
           </div>
           <div className="field-row" style={{marginBottom:10}}>
@@ -5908,11 +5954,18 @@ function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate
           </div>
           <button className="btn btn-primary btn-full" style={{marginTop:0,padding:"10px"}} onClick={saveTpl}>{t("set.saveTemplate")}</button>
         </div>
-      )}
+  );
+  return (
+    <div data-section="gl-templates">
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"14px 2px 10px"}}>
+        <span className="section-title" style={{margin:0}}>{t("set.templates")}</span>
+        <button className="btn btn-sm" onClick={()=>{ if (showNewTpl) { setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); } setShowNewTpl(s=>!s); }}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
+      </div>
+      {showNewTpl&&!editTplId&&tplForm(false)}
       {templates.length===0&&!showNewTpl&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noTemplates")}</div>}
       {templates.length>0&&(
         <div className="card list-card">
-          {templates.map(tpl=>(
+          {templates.map(tpl=>showNewTpl&&editTplId===tpl.id ? <Fragment key={tpl.id}>{tplForm(true)}</Fragment> : (
             <div key={tpl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid var(--rule)"}}>
               <CatIcon catId={tpl.catId} size={14}/>
               <div style={{flex:1,minWidth:0}}>
@@ -5965,9 +6018,9 @@ function SpendDonut({ catSpend, total, currency }) {
 }
 
 // A row in an inset list (More page, Import / Export): icon, title, optional subtitle, chevron.
-function ListRow({ icon, title, sub, onClick, color="var(--accent-text)", className="" }) {
+function ListRow({ icon, title, sub, onClick, color="var(--accent-text)", className="", id }) {
   return (
-    <button className={`list-row ${className}`} onClick={onClick}>
+    <button className={`list-row ${className}`} data-more={id} onClick={onClick}>
       <span className="list-ico" style={{color}}><Icon name={icon} size={20}/></span>
       <span className="list-body"><span className="list-title">{title}</span>{sub&&<span className="list-sub">{sub}</span>}</span>
       <Icon name="chevRight" size={16} color="var(--ink-4)"/>
@@ -6082,8 +6135,8 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
   };
   const delDebt=(d)=>{
     const linked=d.payments.filter(p=>p.txnId!==undefined);
-    if (!window.confirm(t(linked.length?"debt.confirmDeleteLinked":"debt.confirmDelete"))) return;
-    if (save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) })) { linked.forEach(p=>onRemoveEntry(p.txnId)); showToast(t("debt.removedToast")); }
+    askConfirm(t(linked.length?"debt.confirmDeleteLinked":"debt.confirmDelete")).then(yes=>{ if (!yes) return;
+      if (save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) })) { linked.forEach(p=>onRemoveEntry(p.txnId)); showToast(t("debt.removedToast")); } });
   };
 
   const addLoan=()=>{
@@ -6106,11 +6159,11 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
     showToast(t("loan.paidToast"));
   };
   const delLoanPayment=(l,p)=>{
-    if (!window.confirm(t("loan.confirmDeletePay"))) return;
-    if (p.txnId!==undefined) onRemoveEntry(p.txnId);
-    if (save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:x.payments.filter(y=>y.id!==p.id)}:x) })) showToast(t("loan.payRemovedToast"));
+    askConfirm(t("loan.confirmDeletePay")).then(yes=>{ if (!yes) return;
+      if (p.txnId!==undefined) onRemoveEntry(p.txnId);
+      if (save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:x.payments.filter(y=>y.id!==p.id)}:x) })) showToast(t("loan.payRemovedToast")); });
   };
-  const delLoan=(l)=>{ if (window.confirm(t("debt.confirmDelete")) && save({ ...data, loans:data.loans.filter(x=>x.id!==l.id) })) showToast(t("loan.removedToast")); };
+  const delLoan=(l)=>{ askConfirm(t("debt.confirmDelete")).then(yes=>{ if (yes && save({ ...data, loans:data.loans.filter(x=>x.id!==l.id) })) showToast(t("loan.removedToast")); }); };
 
   const owe=data.debts.filter(d=>d.direction==="owe").reduce((s,d)=>s+debtRemaining(d),0), owed=data.debts.filter(d=>d.direction==="owed").reduce((s,d)=>s+debtRemaining(d),0);
   const loanLeft=data.loans.reduce((s,l)=>{ const sc=loanSchedule(l), k=l.payments.length; return s+(sc ? (k===0 ? l.principal : k>=sc.payments.length ? 0 : sc.payments[k-1].balance) : 0); },0);
@@ -6343,21 +6396,24 @@ function MorePage({ language, profileName="", onLanguageChange, onProfileName, o
         <span className="more-mark" aria-hidden="true"><span style={{fontSize:24,fontWeight:700,color:"var(--accent)",lineHeight:1}}>₼</span></span>
         <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
       </div>
-      <div className="card list-card">
-        <ListRow icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
-        <ListRow icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
-        <ListRow icon="settings" title={t("set.preferences")} sub={t("more.settingsSub")} onClick={()=>onSettings()}/>
-        {/* Run 16: appended after the earlier rows, so the first three keep their places */}
-        <ListRow icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
-        <ListRow icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
-        {/* Run 17: appended, so the first five rows keep their places */}
-        <ListRow icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
-        {/* Run 26: accounts are one tap from Settings (they used to be found only by scrolling inside Preferences) */}
-        <ListRow icon="wallet" title={t("acc.title")} sub={t("more.accountsSub")} onClick={()=>onSettings("accounts")}/>
-        {/* Run 18: appended, so every earlier row keeps its place */}
-        <ListRow icon="safe" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
-        {/* Run 19: appended last */}
-        <ListRow icon="safe" title={t("lock.title")} sub={t("lock.rowSub")} onClick={onLock}/>
+      <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
+      <div className="card list-card" data-section="more-money">
+        {/* Run 26: the list is grouped (Money / Data and safety / App) and every row has a name for tests and links; order inside the old flat list no longer matters */}
+        <ListRow id="accounts" icon="wallet" title={t("acc.title")} sub={t("more.accountsSub")} onClick={()=>onSettings("accounts")}/>
+        <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
+        <ListRow id="debts" icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
+      </div>
+      <div className="settings-section-lbl more-group-lbl">{t("st.groupData")}</div>
+      <div className="card list-card" data-section="more-data">
+        <ListRow id="io" icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
+        <ListRow id="lock" icon="safe" title={t("lock.title")} sub={t("lock.rowSub")} onClick={onLock}/>
+        <ListRow id="safe" icon="safe" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
+        <ListRow id="privacy" icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
+      </div>
+      <div className="settings-section-lbl more-group-lbl">{t("st.groupApp")}</div>
+      <div className="card list-card" data-section="more-app">
+        <ListRow id="prefs" icon="settings" title={t("set.preferences")} sub={t("more.settingsSub")} onClick={()=>onSettings()}/>
+        <ListRow id="how" icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
       </div>
       {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}
     </div>
@@ -6442,6 +6498,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
   const setSeg=onSeg;
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
   const [showNewGoal,setShowNewGoal]=useState(false);
+  const UNB_SHOW=4, [unbAll,setUnbAll]=useState(false);   // Run 26: the long "without a budget" list shows four, the rest one tap away
   const [updGoal,setUpdGoal]=useState(null);   // Run 26: the saved amount is changed inline (null = closed; otherwise { id, val }), not in the browser's own pop-up
   // "New budget" form opened by the title bar's "+" on the Budgets half: pick a category without a limit, type the limit.
   const [newBudget,setNewBudget]=useState(null);   // null = closed; otherwise { catId, val }
@@ -6475,7 +6532,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
   };
   const startEditGoal=(g)=>{ setEditGoalId(g.id); setGoalName(g.name||""); setGoalTarget(String(g.target||"")); setGoalSaved(String(g.saved||"")); setGoalMonthly(g.monthlyTarget?String(g.monthlyTarget):""); setGoalDate(g.targetDate||""); setShowNewGoal(true); };   // Run 26: the form opens in the goal's own place and eases in; no jump to the top
   // The form eases in, then the view glides to it and the first box is focused without a jump.
-  const formShown=(el)=>{ if (!el || el.dataset.shown) return; el.dataset.shown="1"; requestAnimationFrame(()=>{ try { el.scrollIntoView({ behavior:"smooth", block:"center" }); const i=el.querySelector("input"); if (i) i.focus({ preventScroll:true }); } catch {} }); };
+  const formShown=revealFocus;
   const renderGoalForm=()=>(
     <div className="card reveal" ref={formShown} data-section="goal-form">
       <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="goal-name">{t("set.goalName")}</label><input id="goal-name" className="field-input" placeholder={t("set.goalNamePh")} value={goalName} onChange={e=>setGoalName(e.target.value)}/></div>
@@ -6492,7 +6549,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
   );
   const editRow=(cat,limit)=>editBudget===cat.id&&(
     <div className="reveal" style={{display:"flex",gap:7,marginTop:9}}>
-      <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} autoFocus style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+      <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} ref={revealFocus} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
       <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
       <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
     </div>
@@ -6511,7 +6568,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
 
       {seg==="budgets"&&(<>
         {newBudget&&(
-          <div className="card new-budget">
+          <div className="card new-budget reveal" ref={revealFocus}>
             <div className="card-title" style={{marginBottom:10}}>{t("goals.addBudget")}</div>
             <div className="field-row" style={{marginBottom:10}}>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-cat">{t("add.category")}</label>
@@ -6519,7 +6576,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
                   {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}{budgets[c.id]>0?` (${fmt(budgets[c.id],currency)})`:""}</option>)}
                 </select></div>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-val">{t("set.monthlyLimit")}</label>
-                <input id="nb-val" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={newBudget.val} onChange={e=>setNewBudget(b=>({...b,val:cleanMoneyText(e.target.value)}))} autoFocus/></div>
+                <input id="nb-val" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={newBudget.val} onChange={e=>setNewBudget(b=>({...b,val:cleanMoneyText(e.target.value)}))}/></div>
             </div>
             <div style={{display:"flex",gap:8}}>
               <button className="btn btn-primary" style={{flex:1,marginTop:0}} onClick={()=>{ const v=newBudget.val.trim()===""?null:formMoney(newBudget.val,{positive:true}); if(v===null){showToast(t("add.errAmount"));return;} onSetBudget(newBudget.catId,v); setNewBudget(null); showToast(t("set.budgetSaved")); }}>{t("common.save")}</button>
@@ -6560,8 +6617,8 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
           </div>
         )}
         <div className="section-title">{t("budgets.notSet")}</div>
-        <div className="card list-card">
-          {unbudgeted.map(cat=>(
+        <div className="card list-card" data-section="bg-unbudgeted">
+          {(unbAll||unbudgeted.length<=UNB_SHOW?unbudgeted:unbudgeted.filter((cat,i)=>i<UNB_SHOW||cat.id===editBudget)).map(cat=>(
             <div key={cat.id} className="bud-row">
               <div className="bud-top">
                 <span className="cat-dot" style={{background:cat.color+"26"}}><CatIcon catId={cat.id} size={16}/></span>
@@ -6571,6 +6628,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
               {editRow(cat,0)}
             </div>
           ))}
+          {unbudgeted.length>UNB_SHOW&&(<button className="list-row" data-section="bg-unb-toggle" aria-expanded={unbAll} onClick={()=>setUnbAll(v=>!v)} style={{justifyContent:"center",color:"var(--accent-text)",fontWeight:600,fontSize:13,minHeight:48}}>{unbAll?t("budgets.showFewer"):t("budgets.showAll",{n:unbudgeted.length})}</button>)}
         </div>
       </>)}
 
@@ -6602,7 +6660,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
               </div>
               {updGoal&&updGoal.id===goal.id&&(
                 <div className="reveal" data-section="goal-update-row" style={{display:"flex",gap:7,marginTop:10}}>
-                  <input className="field-input" type="text" inputMode="decimal" autoComplete="off" data-section="goal-update-input" aria-label={t("set.updatePrompt",{name:maskText(goal.name)})} value={updGoal.val} autoFocus onChange={e=>setUpdGoal({...updGoal,val:cleanMoneyText(e.target.value)})}
+                  <input className="field-input" type="text" inputMode="decimal" autoComplete="off" data-section="goal-update-input" aria-label={t("set.updatePrompt",{name:maskText(goal.name)})} value={updGoal.val} ref={revealFocus} onChange={e=>setUpdGoal({...updGoal,val:cleanMoneyText(e.target.value)})}
                     onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); const v=formMoney(updGoal.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } } else if (e.key==="Escape") setUpdGoal(null); }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
                   <button className="btn btn-sm btn-sm-primary" data-section="goal-update-save" onClick={()=>{ const v=formMoney(updGoal.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } }}>{t("common.save")}</button>
                   <button className="btn btn-sm" onClick={()=>setUpdGoal(null)} aria-label={t("common.cancel")}>✕</button>

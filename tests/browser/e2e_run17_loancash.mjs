@@ -11,7 +11,7 @@ const text = (page, sel) => page.evaluate((s) => (document.querySelector(s) || {
 const loanPage = async (page) => {
   await page.evaluate((k) => localStorage.removeItem(k), DKEY);
   await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150);
-  await page.evaluate(() => document.querySelectorAll(".more-page .list-row")[5].click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250);
+  await page.evaluate(() => document.querySelector('.more-page [data-more="debts"]').click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250);
   await page.evaluate(() => document.querySelectorAll('[data-section="debts-page"] .seg-btn')[1].click()); await wait(200);
   await click(page, '[data-section="loan-add-btn"]');
   await setVal(page, "#loan-lender", "Test Bank"); await setVal(page, "#loan-amt", "5000"); await setVal(page, "#loan-rate", "18"); await setVal(page, "#loan-months", "12"); await setVal(page, "#loan-first", tomorrow());

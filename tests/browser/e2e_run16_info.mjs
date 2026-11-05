@@ -2,24 +2,24 @@
 import { launch, openPage, tab, wait, ok, section, finish, baseSeed, settle } from "./lib.mjs";
 const browser = await launch();
 const rows = (page) => page.evaluate(() => [...document.querySelectorAll(".more-page .list-row")].map((r) => r.innerText.replace(/\s+/g, " ").trim()));
-const openRow = async (page, i) => { await page.evaluate((i) => document.querySelectorAll(".more-page .list-row")[i].click(), i); await wait(400); };
+const openRow = async (page, i) => { await page.evaluate((i) => document.querySelector(`.more-page [data-more="${i}"]`).click(), i); await wait(400); };
 const sheet = (page, kind) => page.evaluate((k) => { const e = document.querySelector(`[data-section="info-${k}"]`); return e ? { heads: [...e.querySelectorAll(".list-title")].map((x) => x.innerText.trim()), text: e.innerText } : null; }, kind);
 
 section("R16-I1. More lists the two new rows after the first three, and each opens a sheet (en)");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await tab(page, "More"); await settle(page);
-  const r = await rows(page); ok(r.length === 9 && /App lock/i.test(r[8]) && /Keep your data safe/i.test(r[7]) && /Accounts/i.test(r[6]) && /Recurring|payments/i.test(r[0]) && /Import/i.test(r[1]) && /Preferences/i.test(r[2]), "nine rows (Debts & loans sixth, Accounts seventh since Run 26, Keep your data safe eighth, App lock last since Run 19); Recurring, Import / Export and Preferences keep places 1 to 3", r);
-  await openRow(page, 3); const how = await sheet(page, "how");
+  const r = await rows(page); ok(r.length === 9 && /Accounts/i.test(r[0]) && /Recurring|payments/i.test(r[1]) && /Debts/i.test(r[2]) && /Import/i.test(r[3]) && /App lock/i.test(r[4]) && /Keep your data safe/i.test(r[5]) && /Privacy/i.test(r[6]) && /Preferences/i.test(r[7]) && /How Expense Ledger/i.test(r[8]), "nine rows in three groups (Run 26): Money (Accounts, Recurring, Debts), Data and safety (Import / Export, App lock, Keep your data safe, Privacy), App (Preferences, How it works)", r);
+  await openRow(page, "how"); const how = await sheet(page, "how");
   ok(!!how && how.heads.length === 4 && /Add what you spend/.test(how.heads[0]) && /Safe to Spend/.test(how.heads[1]), "How it works: four steps, the second explains Safe to Spend", how && how.heads);
   ok(/no account/i.test(how.text) && /backup/i.test(how.text), "it tells the user there is no account and to keep a backup file");
   await page.evaluate(() => document.querySelector('[data-section="info-how"] .btn-primary').click()); await wait(300); ok(!(await sheet(page, "how")), "Close closes it");
-  await openRow(page, 4); const pr = await sheet(page, "privacy");
+  await openRow(page, "privacy"); const pr = await sheet(page, "privacy");
   ok(!!pr && pr.heads.length === 8 && /no account and no ads, and no analytics of what you enter/i.test(pr.text) && /None of your entries or amounts is sent to us/i.test(pr.text) && /Vercel Web Analytics/.test(pr.text) && /Vercel/.test(pr.text), "Privacy: eight short sections; says no account, no ads, no analytics, nothing is sent, and names the website host", pr && pr.heads);
   await page.evaluate(() => document.querySelector('[data-section="info-privacy"] [aria-label="Close"]').click()); await wait(300); ok(!(await sheet(page, "privacy")), "the x button closes it");
-  await openRow(page, 7); const sf = await sheet(page, 'safe');
+  await openRow(page, "safe"); const sf = await sheet(page, 'safe');
   ok(!!sf && sf.heads.length === 6 && /Downloads/.test(sf.text) && /Add to Home Screen/.test(sf.text) && /Clearing the browser/.test(sf.text) && /backup/i.test(sf.text), 'Keep your data safe: six sections (Run 20 added where to find the backup file); names what erases data, backups, the Downloads folder and adding the app to the home screen', sf && sf.heads);
   await page.evaluate(() => document.querySelector('[data-section="info-safe"] .btn-primary').click()); await wait(300);
-  await openRow(page, 3); await page.evaluate(() => window.__ledgerNativeBack && window.__ledgerNativeBack()); await wait(300); ok(!(await sheet(page, "how")), "the phone's Back button closes the sheet first");
+  await openRow(page, "how"); await page.evaluate(() => window.__ledgerNativeBack && window.__ledgerNativeBack()); await wait(300); ok(!(await sheet(page, "how")), "the phone's Back button closes the sheet first");
   await page.close();
 }
 section("R16-I2. A brand-new ledger offers 'How it works' on Home");
@@ -32,7 +32,7 @@ section("R16-I2. A brand-new ledger offers 'How it works' on Home");
 section("R16-I3. az and ru show real text, nothing overflows, and the app asks for nothing from the network");
 for (const lang of ["az", "ru"]) {
   const page = await openPage(browser, { seed: baseSeed({ language: lang }) }); await tab(page, "More"); await settle(page);
-  await openRow(page, 4); const pr = await sheet(page, "privacy");
+  await openRow(page, "privacy"); const pr = await sheet(page, "privacy");
   ok(!!pr && pr.heads.length === 8 && pr.heads.every((h) => h.length > 3 && !/info\./.test(h)) && !/info\.privacy/.test(pr.text), `${lang}: six translated sections, no raw keys`, pr && pr.heads);
   const ov = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1); ok(!ov, `${lang}: no horizontal overflow`);
   await page.close();
