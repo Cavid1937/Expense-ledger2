@@ -3207,9 +3207,19 @@ html,.page,.sheet{scroll-behavior:smooth}
 /* Run 26c: identity across every screen. A faint ruled-ledger page, rules that follow section titles, one ruled summary strip on Analytics
    (net first, with a double rule), account labels on rows, grouped Settings. All of it is tone and line, no extra shadow or blur. */
 .acc-pill{margin-left:6px;padding:1px 7px;border:1px solid var(--rule-2);border-radius:99px;font-size:10px;font-weight:600;color:var(--ink-3);white-space:nowrap}
-.more-group-lbl{margin:18px 4px 8px}
-.page:not(.page-sub){background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,color-mix(in oklab,var(--rule) 40%,transparent) 31px,color-mix(in oklab,var(--rule) 40%,transparent) 32px);background-attachment:local}
-:root[data-fx="off"] .page{background-image:none}
+.more-group-lbl{margin:20px 0 8px;border-bottom:none}
+/* Run 26d: (1) the faint ruled page background was removed - the rules ran through headings and the gaps between cards and looked like a glitch.
+   (2) A list row's separator is a drawn line, not a border: with the rounded press shape a border curved up at the row's corners.
+   (3) Small round/square controls get a larger invisible tap area (44px) without changing how they look. */
+.list-row{border-bottom:none;background-image:linear-gradient(var(--rule),var(--rule));background-size:calc(100% - 28px) 1px;background-position:center bottom;background-repeat:no-repeat}
+.list-row:last-child{background-image:none}
+.stat-row .stat-cell:last-child:nth-child(odd){grid-column:1 / -1}   /* an odd number of figures: the last one spans the row instead of sitting half-width beside a gap */
+.io-backup{flex-direction:column;align-items:flex-start;gap:8px}   /* the status used to squeeze the text into a narrow column; it now sits above the text as a small pill */
+.io-backup .io-status{order:-1;padding:3px 10px;border:1px solid currentColor;border-radius:99px;font-size:11px}
+.io-backup>div{width:100%}
+.month-nav-btn,.add-close,.chip{position:relative}
+.month-nav-btn::after,.add-close::after{content:"";position:absolute;inset:-6px}
+.chip::after{content:"";position:absolute;inset:-6px -2px}
 .section-title{display:flex;align-items:center;gap:10px}
 .section-title::after{content:"";flex:1;height:1px;background:var(--rule)}
 .month-stats{background:var(--bg-card);border:1px solid var(--rule);border-radius:var(--radius);box-shadow:var(--lit-edge),var(--shadow-card);overflow:hidden;gap:0 !important}
@@ -3789,9 +3799,13 @@ function AppInner() {
   // Run 18: the round add button slides away while the list is scrolled DOWN (so it never hides an amount under it) and returns on scrolling up.
   const [fabHidden,setFabHidden]=useState(false);
   useEffect(()=>{
-    let last=window.scrollY||0;
-    const onScroll=()=>{ const y=window.scrollY||0; if (y>last+8 && y>80) setFabHidden(true); else if (y<last-8 || y<=80) setFabHidden(false); last=y; };
-    window.addEventListener("scroll",onScroll,{ passive:true }); return ()=>window.removeEventListener("scroll",onScroll);
+    // Run 26d: the screens scroll inside their own box (.page), and scroll events do not bubble to the window - listen in the capture phase
+    // so the button really does slide away while the list moves down (it used to stay on top of amounts and buttons).
+    let last=0, lastEl=null;
+    const onScroll=(e)=>{ const el=e.target; const y=el===document||el===window||el===document.documentElement?(window.scrollY||0):(el.scrollTop||0);
+      if (el!==lastEl) { lastEl=el; last=y; return; }
+      if (y>last+8 && y>80) setFabHidden(true); else if (y<last-8 || y<=80) setFabHidden(false); last=y; };
+    window.addEventListener("scroll",onScroll,{ passive:true, capture:true }); return ()=>window.removeEventListener("scroll",onScroll,{ capture:true });
   },[]);
   // Run 12: the add form may say which bill a recurring entry pays ("new" = make a bill from it, or a bill id). An entry
   // that is not recurring has no bill. billChoice null = grouped the earlier way (while old recurring payments exist).
@@ -5778,12 +5792,12 @@ function MyAccounts({ state, currency, showToast }) {
           </div>
         </div>
       ) : (
-        <div key={a.id} className="settings-row" data-account={a.id} style={a.hidden?{opacity:0.7}:undefined}>
+        <div key={a.id} className="settings-row" data-account={a.id} style={{flexDirection:"column",alignItems:"stretch",gap:10,padding:"14px 0",...(a.hidden?{opacity:0.7}:null)}}>
           <div style={{minWidth:0}}>
             <div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{a.name}{a.hidden?" · "+t("acc.hidden"):""}</div>
             <div className="settings-row-sub">{kindName[a.kind]} · <strong data-balance={a.id}>{fmt(bal[a.id]||0,currency)}</strong></div>
           </div>
-          <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"60%"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <button className="chip" onClick={()=>toggleHidden(a)}>{t(a.hidden?"acc.show":"acc.hide")}</button>
             <button className="chip" aria-label={t("acc.remove",{name:a.name})} onClick={()=>remove(a)}>{t("mycat.removeBtn")}</button>
             <button className="chip" data-section="acc-edit" aria-label={t("acc.edit")+": "+a.name} onClick={()=>setEditing({ id:a.id, name:a.name, bal:String(bal[a.id]||0) })}>{t("acc.edit")}</button>
@@ -5965,8 +5979,8 @@ function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate
       {templates.length===0&&!showNewTpl&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noTemplates")}</div>}
       {templates.length>0&&(
         <div className="card list-card">
-          {templates.map(tpl=>showNewTpl&&editTplId===tpl.id ? <Fragment key={tpl.id}>{tplForm(true)}</Fragment> : (
-            <div key={tpl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderBottom:"1px solid var(--rule)"}}>
+          {templates.map((tpl,ti)=>showNewTpl&&editTplId===tpl.id ? <Fragment key={tpl.id}>{tplForm(true)}</Fragment> : (
+            <div key={tpl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:ti<templates.length-1?"1px solid var(--rule)":"none"}}>
               <CatIcon catId={tpl.catId} size={14}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{tpl.name}</div>
@@ -6206,7 +6220,7 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
             <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="debt-save" onClick={addDebt}>{t("common.save")}</button>
           </div>
         )}
-        {data.debts.length===0&&!showDebt&&<div className="list-sub" style={{margin:"0 2px"}}>{t("debt.none")}</div>}
+        {data.debts.length===0&&!showDebt&&<div className="empty" style={{padding:"28px 0"}} data-section="debts-empty"><div className="empty-icon"><LedgerArt/></div><div className="empty-body">{t("debt.none")}</div></div>}
         {data.debts.map(d=>{ const left=debtRemaining(d); return (
           <div key={d.id} className="card" data-section="debt-card" data-id={d.id}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -6289,7 +6303,7 @@ function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackba
             <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="loan-save" onClick={addLoan}>{t("common.save")}</button>
           </div>
         )}
-        {data.loans.length===0&&!showLoan&&<div className="list-sub" style={{margin:"0 2px"}}>{t("loan.none")}</div>}
+        {data.loans.length===0&&!showLoan&&<div className="empty" style={{padding:"28px 0"}} data-section="loans-empty"><div className="empty-icon"><LedgerArt/></div><div className="empty-body">{t("loan.none")}</div></div>}
         {data.loans.map(l=>{
           const sc=loanSchedule(l); if (!sc) return null;
           const k=l.payments.length, done=k>=sc.payments.length, next=done?null:sc.payments[k], balance=k===0?l.principal:done?0:sc.payments[k-1].balance;
@@ -6644,15 +6658,15 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
           if (showNewGoal && editGoalId===goal.id) return <Fragment key={goal.id}>{renderGoalForm()}</Fragment>;
           return (
             <div key={goal.id} className="card goal-card" data-section="goal-card">
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                <div style={{display:"flex",gap:10,alignItems:"center",minWidth:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:10,alignItems:"center",minWidth:0,flex:"1 1 150px"}}>
                   <span className="cat-dot" style={{background:"var(--pos-bg)"}}><Icon name="goal" size={16} color="var(--pos)"/></span>
                   <div style={{minWidth:0}}>
                     <div className="goal-name">{maskText(goal.name)}</div>
                     <div className="list-sub">{t("goals.savedOf",{ saved:fmt(goal.saved||0,currency), target:fmt(goal.target||0,currency) })}</div>
                   </div>
                 </div>
-                <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:"55%"}}>
+                <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0,marginLeft:"auto"}}>
                   <button className="btn btn-sm" data-section="goal-update" aria-expanded={updGoal&&updGoal.id===goal.id} onClick={()=>setUpdGoal(u=>u&&u.id===goal.id?null:{ id:goal.id, val:String(goal.saved||0) })}>{t("set.update")}</button>
                   <button className="btn btn-sm" data-section="goal-edit" aria-label={t("common.edit")+": "+maskText(goal.name)} onClick={()=>startEditGoal(goal)}>{t("common.edit")}</button>
                   <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>

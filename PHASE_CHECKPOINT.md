@@ -455,3 +455,9 @@ Status per surface is updated below as work lands (see later entries).
 Done (IMPLEMENTED BUT UNVERIFIED on a real phone; browser tests pass): Settings tab regrouped into Money / Data and safety / App; account pill on rows; Analytics month stats as one card; ruled page background + section hairlines; Goals/Budgets/Templates forms open in place with smooth reveal and focus (no jump); "Without a budget" list collapses to 4; native confirm pop-ups replaced by the app's own animated dialog (debts, loan payments, loans).
 Tests: logic 56 files / 1200 checks pass; new tests/browser/e2e_run26_confirm.mjs (6 checks) passes; e2e_run16_info 15, run17_debts 22, run18_debtlink 13, run26_motion 18 pass. Full gate: see gate62 entry once run.
 DEFERRED WITH REASON: Recurring / search-no-results empty states keep their specific icons (already meaningful); Figma mobile captures of every screen + critique pass; walker test over every screen; native az/ru wording review of new strings; real-phone feel check.
+
+### Run 26d (2026-11-05): every-screen walk, spacing fixes, Figma critique
+gate62 on 3fd4e2c: logic 1200/1200, browser 78 files 1237/1237, az audit 0, build OK (VERIFIED for that commit).
+Then: tests/browser/e2e_run26_walk.mjs visits all main tabs in en/az/ru plus every Settings sheet, Add, transaction details, Debts and Loans (129 checks pass): no sideways overflow, >=12px edge margin, no raw keys, no JS errors, no browser pop-ups.
+Fixes: ruled page background removed; list-row separator no longer curves; FAB hide-on-scroll now listens to any scroll container; accounts buttons in one row; odd stat card spans row; Debts/Loans empty states with illustration; Import/Export status pill; goal header wraps in az/ru; 44px tap areas on month arrows/close/chips.
+Figma: 10 captured frames (nodes 11:2..20:2) + notes page 21:2. Pending: gate63 on the new commit; real-phone check; native az/ru review.
