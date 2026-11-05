@@ -98,9 +98,11 @@ export const openGoals = async (page, seg = "budgets") => { await tab(page, "Goa
 // Run 9: Settings has no title-bar shortcut any more; it opens from More → Settings (the third row). The screen behind
 // the sheet is therefore More; tests that need another screen afterwards go there with tab().
 // Run 27b: a generic bottom sheet for tests of sheet behaviour (Escape, focus return, swipe, trap): the "How it works" sheet.
+// Run 27c: Settings sections are closed until the user opens them; tests that need their contents open them all.
+export const openFolds = async (page) => { await page.evaluate(() => document.querySelectorAll('[data-fold-head][aria-expanded="false"]').forEach((b) => b.click())); await wait(300); };
 export const openHowSheet = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(250); await page.evaluate(() => document.querySelector('.more-page [data-more="how"]').click()); await page.waitForSelector(".sheet"); await wait(350); await settle(page); };
 // Run 27b: Preferences is no longer a sheet. "Opening settings" now means going to the Settings tab, where accounts, categories, currency, theme and effects are open.
-export const openSettings = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(400); await settle(page); };
+export const openSettings = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(400); await openFolds(page); await settle(page); };
 // Run 9: "+" adds a transaction only on Home and Transactions (elsewhere it adds a budget, goal or bill, or is absent),
 // so the helper goes to Home first when the current screen is not one of those two.
 export const openAdd = async (page) => { await page.evaluate(() => { const tabs = [...document.querySelectorAll(".tab-btn")]; const i = tabs.findIndex((b) => b.getAttribute("aria-current") === "page"); if (i > 1 || i < 0) tabs[0].click(); }); await wait(200); await page.evaluate(() => document.querySelector(".fab-add").click()); await page.waitForSelector(".amount-input"); await wait(350); await settle(page); };

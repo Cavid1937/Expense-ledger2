@@ -44,7 +44,7 @@ section("R24-ACB2. Use an account in the add form; in-use account cannot be remo
   await page.close();
   for (const [l, re] of [["az", /Hesablar və qalıqlar/], ["ru", /Счета и остатки/]]) {
     const p = await openPage(browser, { seed: baseSeed({ language: l }) }); await settle(p); await openSettings(p);
-    ok(re.test(await p.evaluate(() => document.querySelector('[data-section="my-accounts"]').innerText)), `${l}: section title`);
+    ok(re.test(await p.evaluate(() => document.querySelector('[data-fold-head="accounts"]').innerText)), `${l}: section title`);
     await p.close();
   }
 }

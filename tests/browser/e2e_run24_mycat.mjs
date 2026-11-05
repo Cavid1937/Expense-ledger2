@@ -34,7 +34,7 @@ section("R24-MCB2. In use cannot be removed; az and ru labels");
   await page.close();
   for (const [l, re] of [["az", /Mənim kateqoriyalarım/], ["ru", /Мои категории/]]) {
     const p = await openPage(browser, { seed: baseSeed({ language: l }) }); await settle(p); await openSettings(p);
-    ok(re.test(await p.evaluate(() => document.querySelector('[data-section="my-categories"]').innerText)), `${l}: section title`);
+    ok(re.test(await p.evaluate(() => document.querySelector('[data-fold-head="categories"]').innerText)), `${l}: section title`);
     await p.close();
   }
 }

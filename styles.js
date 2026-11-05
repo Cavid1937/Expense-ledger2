@@ -712,4 +712,8 @@ html,.page,.sheet{scroll-behavior:smooth}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
 }
+/* Run 27c: expandable Settings sections. The section title inside an opened card is already the row above, so it is kept for screen readers only. */
+.fold{margin-bottom:0}.fold-card{margin-bottom:10px}.fold-body{margin:-2px 0 10px;animation:fold-in 220ms ease-out}.fold-body>.card{margin-top:0}
+@keyframes fold-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.fold-body{animation:none}}[data-fx="off"] .fold-body{animation:none}
 `;

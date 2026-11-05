@@ -58,7 +58,6 @@ export function MyCategories({ state, onChanged, showToast }) {
   };
   return (
     <div className="card prefs-card" data-section="my-categories">
-      <div className="settings-section-lbl" style={{marginTop:14}}>{t("mycat.title")}</div>
       <div className="list-sub" style={{marginBottom:8}}>{t("mycat.sub")}</div>
       {list.map(c=>editing&&editing.id===c.id ? (
         <div key={c.id} data-cat-edit={c.id} style={{padding:"8px 0"}}>
@@ -140,7 +139,6 @@ export function MyAccounts({ state, currency, showToast }) {
   const nameOf=(id)=>(data.accounts.find(a=>a.id===id)||{}).name||"?";
   return (
     <div className="card prefs-card" data-section="my-accounts" style={{marginTop:14}}>
-      <div className="settings-section-lbl" style={{marginTop:14}}>{t("acc.title")}</div>
       <div className="list-sub" style={{marginBottom:8}}>{t("acc.sub")}</div>
       {data.accounts.map(a=>editing&&editing.id===a.id ? (
         <div key={a.id} className="reveal" data-account-edit={a.id} style={{padding:"8px 0"}}>
@@ -203,15 +201,31 @@ export function MyAccounts({ state, currency, showToast }) {
   );
 }
 
+// Run 27c: a Settings section the user opens by choice. Closed it is a single row; open, the section appears under it.
+export function Fold({ id, icon, title, open, onToggle, children }) {
+  return (
+    <div className="fold" data-fold={id}>
+      <div className="card list-card fold-card">
+        <button className="list-row fold-head" aria-expanded={!!open} aria-controls={`fold-${id}`} data-fold-head={id} onClick={onToggle}>
+          <span className="list-ico" style={{color:"var(--accent-text)"}}><Icon name={icon} size={20}/></span>
+          <span className="list-body"><span className="list-title">{title}</span></span>
+          <Icon name={open?"chevUp":"chevDown"} size={16} color="var(--ink-4)"/>
+        </button>
+      </div>
+      {open && <div className="fold-body" id={`fold-${id}`}>{children}</div>}
+    </div>
+  );
+}
 // Run 27b: Preferences is no longer a sheet behind a row. Its contents sit directly on the Settings tab, in two parts:
 // MoneySettings (accounts, categories, Safe to Spend switch, currency) and LookSettings (colour theme, reduce effects).
-export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast }) {
+export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, open, toggle }) {
   const { currency,safeToSpend={} }=state;
   const [curSym, setCurSym]=useState(currency);
   return (
     <>
-      <MyAccounts state={state} currency={state.currency} showToast={showToast}/>
-      <MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/>
+      <Fold id="accounts" icon="wallet" title={t("acc.title")} open={open.accounts} onToggle={()=>toggle("accounts")}><MyAccounts state={state} currency={state.currency} showToast={showToast}/></Fold>
+      <Fold id="categories" icon="list" title={t("mycat.title")} open={open.categories} onToggle={()=>toggle("categories")}><MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/></Fold>
+      <Fold id="money" icon="settings" title={t("st.foldMoney")} open={open.money} onToggle={()=>toggle("money")}>
       <div className="card st-card" data-section="st-money-options">
         {/* Safe to Spend: the switch only. The monthly savings floor is on Goals. */}
         <div className="settings-section-lbl" style={{marginTop:0}}>{t("safe.title")}</div>
@@ -235,15 +249,17 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
           </div>
         </div>
       </div>
+      </Fold>
     </>
   );
 }
 
-export function LookSettings({ showToast }) {
+export function LookSettings({ showToast, open, toggle }) {
   const [theme, setTheme]=useState(()=>readTheme());
   const [fxOff, setFxOff]=useState(()=>readFxOff());
   const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
   return (
+    <Fold id="look" icon="eye" title={t("st.foldLook")} open={open.look} onToggle={()=>toggle("look")}>
     <div className="card st-card" data-section="st-look">
       {/* Colour theme (Run 25): palettes supplied by the owner; a plain preference, separate from the ledger */}
       <div className="settings-section-lbl" style={{marginTop:0}}>{t("theme.title")}</div>
@@ -262,6 +278,7 @@ export function LookSettings({ showToast }) {
         <div className={`toggle-track${fxOff?" on":""}`} data-section="fx-toggle" onClick={toggleFx} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); toggleFx(); } }} role="switch" aria-checked={fxOff} aria-labelledby="set-fx-lbl" tabIndex={0}><div className="toggle-knob"/></div>
       </div>
     </div>
+    </Fold>
   );
 }
 export function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToast }) {
@@ -389,7 +406,9 @@ export function InfoSheet({ kind, onClose }) {
 export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, scrollTo="", onScrolled }) {
   const [name,setName]=useState(profileName);
   // Opened from Home (Accounts > Manage): glide down to that section once the page has settled (never a jump).
-  useEffect(()=>{ if (!scrollTo) return; const id=setTimeout(()=>{ const el=document.querySelector(`[data-section="${scrollTo}"]`); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:"smooth", block:"start" }); if (onScrolled) onScrolled(); },340); return ()=>clearTimeout(id); },[scrollTo]);
+  const [open,setOpen]=useState({});   // which Settings sections are expanded (all closed to start)
+  const toggle=(k)=>setOpen(o=>({...o,[k]:!o[k]}));
+  useEffect(()=>{ if (!scrollTo) return; const k=scrollTo==="my-accounts"?"accounts":scrollTo; setOpen(o=>({...o,[k]:true})); const id=setTimeout(()=>{ const el=document.querySelector(`[data-section="${scrollTo}"]`); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:"smooth", block:"start" }); if (onScrolled) onScrolled(); },340); return ()=>clearTimeout(id); },[scrollTo]);
   return (
     <div className="more-page">
       {/* Run 17: this tab is Settings. Profile name (used in the Home greeting) and the interface language are set here. */}
@@ -418,8 +437,8 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
       </div>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
-      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>
-      <LookSettings showToast={showToast}/>
+      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} open={open} toggle={toggle}/>
+      <LookSettings showToast={showToast} open={open} toggle={toggle}/>
       <div className="card list-card" data-section="more-money">
         {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
         <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>

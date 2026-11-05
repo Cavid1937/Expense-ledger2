@@ -601,6 +601,8 @@ export const MESSAGES = {
   "acc.kind.bank":  { en: "Bank account", az: "Bank hesabı", ru: "Банковский счёт" },
   "budgets.showAll": { en: "Show all {n}", az: "Hamısını göstər ({n})", ru: "Показать все ({n})" },
   "budgets.showFewer": { en: "Show fewer", az: "Daha az göstər", ru: "Свернуть" },
+  "st.foldMoney": { en: "Currency and Safe to Spend", az: "Valyuta və «Xərcləmək olar»", ru: "Валюта и «Можно потратить»" },
+  "st.foldLook": { en: "Appearance", az: "Görünüş", ru: "Внешний вид" },
   "st.groupMoney": { en: "Money", az: "Pul", ru: "Деньги" },
   "st.groupData": { en: "Data and safety", az: "Məlumat və təhlükəsizlik", ru: "Данные и безопасность" },
   "st.groupApp": { en: "App", az: "Tətbiq", ru: "Приложение" },

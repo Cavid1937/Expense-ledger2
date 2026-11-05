@@ -10,8 +10,8 @@ section("R26-M1. Accounts row on Settings; three accounts from quick-start chips
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page);
   await tab(page, "More"); await wait(200);
-  const row = await page.evaluate(() => !!document.querySelector('.more-page [data-section="my-accounts"]') && !document.querySelector('.more-page [data-more="accounts"]'));
-  ok(row, "the Settings tab shows Accounts open on the page (no Accounts row to open first)");
+  const row = await page.evaluate(() => { const h = document.querySelector('.more-page [data-fold-head="accounts"]'); if (!h || document.querySelector('[data-section="my-accounts"]')) return false; h.click(); return true; });
+  ok(row, "the Settings tab has an Accounts section that opens by choice (closed to start)");
   await page.waitForSelector('[data-section="my-accounts"]'); await wait(900);
   for (const k of ["cash", "card", "wallet"]) { await click(page, `[data-preset="${k}"]`); await wait(120); await click(page, '[data-section="acc-add"]'); await wait(300); }
   const s = await store(page);

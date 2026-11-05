@@ -1,14 +1,14 @@
 // Run 16 (2026-10-29) in the real bundled app: the "How it works" and Privacy sheets. Synthetic data only.
 import { launch, openPage, tab, wait, ok, section, finish, baseSeed, settle } from "./lib.mjs";
 const browser = await launch();
-const rows = (page) => page.evaluate(() => [...document.querySelectorAll(".more-page .list-row")].map((r) => r.innerText.replace(/\s+/g, " ").trim()));
+const rows = (page) => page.evaluate(() => [...document.querySelectorAll(".more-page .list-row:not(.fold-head)")].map((r) => r.innerText.replace(/\s+/g, " ").trim()));
 const openRow = async (page, i) => { await page.evaluate((i) => document.querySelector(`.more-page [data-more="${i}"]`).click(), i); await wait(400); };
 const sheet = (page, kind) => page.evaluate((k) => { const e = document.querySelector(`[data-section="info-${k}"]`); return e ? { heads: [...e.querySelectorAll(".list-title")].map((x) => x.innerText.trim()), text: e.innerText } : null; }, kind);
 
 section("R16-I1. More lists the two new rows after the first three, and each opens a sheet (en)");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await tab(page, "More"); await settle(page);
-  const r = await rows(page); ok(r.length === 9 && /Accounts/i.test(r[0]) && /Recurring|payments/i.test(r[1]) && /Debts/i.test(r[2]) && /Import/i.test(r[3]) && /App lock/i.test(r[4]) && /Keep your data safe/i.test(r[5]) && /Privacy/i.test(r[6]) && /Preferences/i.test(r[7]) && /How Expense Ledger/i.test(r[8]), "nine rows in three groups (Run 26): Money (Accounts, Recurring, Debts), Data and safety (Import / Export, App lock, Keep your data safe, Privacy), App (Preferences, How it works)", r);
+  const r = await rows(page); ok(r.length === 7 && /Recurring|payments/i.test(r[0]) && /Debts/i.test(r[1]) && /Import/i.test(r[2]) && /App lock/i.test(r[3]) && /Keep your data safe/i.test(r[4]) && /Privacy/i.test(r[5]) && /How Expense Ledger/i.test(r[6]), "seven rows (Run 27: Accounts and Preferences are expandable sections now, not rows): Recurring, Debts, Import / Export, App lock, Keep your data safe, Privacy, How it works", r);
   await openRow(page, "how"); const how = await sheet(page, "how");
   ok(!!how && how.heads.length === 4 && /Add what you spend/.test(how.heads[0]) && /Safe to Spend/.test(how.heads[1]), "How it works: four steps, the second explains Safe to Spend", how && how.heads);
   ok(/no account/i.test(how.text) && /backup/i.test(how.text), "it tells the user there is no account and to keep a backup file");

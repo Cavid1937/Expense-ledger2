@@ -81,7 +81,7 @@ page = await openPage(browser); await openAdd(page); await page.evaluate(() => d
 const sw = () => page.evaluate(() => document.querySelector('[role=switch][aria-label="Recurring"]').getAttribute("aria-checked"));
 await page.focus('[role=switch][aria-label="Recurring"]'); const before = await sw(); await page.keyboard.press("Space"); await wait(120); const afterSpace = await sw(); await page.keyboard.press("Enter"); await wait(120); const afterEnter = await sw();
 ok(before === "false" && afterSpace === "true" && afterEnter === "false", "the Recurring switch toggles with Space and Enter");
-await page.keyboard.press("Escape"); await wait(250); await openHowSheet(page);
+await page.keyboard.press("Escape"); await wait(250); await openSettings(page);
 const sws = () => page.evaluate(() => document.querySelector('[role=switch][aria-label="Safe to Spend"]').getAttribute("aria-checked"));
 await page.focus('[role=switch][aria-label="Safe to Spend"]'); const s0 = await sws(); await page.keyboard.press("Space"); await wait(150); const s1 = await sws();
 ok(s0 === "true" && s1 === "false" && (await state(page)).safeToSpend.enabled === false, "the Safe to Spend switch toggles with Space and the setting is saved");

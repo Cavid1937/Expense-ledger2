@@ -137,7 +137,8 @@
     "e2e_run25_settle.mjs": 7,
     "e2e_run26_motion.mjs": 18,
     "e2e_run26_confirm.mjs": 6,
-    "e2e_run26_walk.mjs": 137
+    "e2e_run26_walk.mjs": 137,
+    "e2e_run27_fold.mjs": 13
   }
 }
 
