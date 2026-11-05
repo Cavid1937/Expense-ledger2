@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LANGS, LANG_NAMES, t, tIn, tn } from "../i18n.js";
-import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readSubcats, readTheme, revealFocus, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme } from "../App.jsx";
+import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readSubcats, readTheme, revealFocus, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIRST LAUNCH — choose the interface language. Native radio buttons: nothing is preselected, arrow keys move between
@@ -106,6 +106,7 @@ export function MyAccounts({ state, currency, showToast }) {
   const presetName={ cash:t("acc.preset.cash"), card:t("acc.preset.card"), wallet:t("acc.preset.wallet"), savings:t("acc.preset.savings") };
   const PRESETS=[["cash","cash"],["card","card"],["wallet","wallet"],["savings","bank"]].filter(([k])=>!data.accounts.some(a=>a.name.toLowerCase()===presetName[k].toLowerCase()));
   const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
+  const np=useMemo(()=>netPosition(data,state.transactions,readDebts()),[data,state.transactions]);   // Run 28: null unless some debt or loan exists
   const errs=()=>({ empty:t("acc.err.empty"), long:t("acc.err.long"), full:t("acc.err.full"), dup:t("acc.err.dup"), amount:t("acc.err.amount"), same:t("acc.err.same"), account:t("acc.err.account"), date:t("acc.err.date") });
   const commit=(next)=>{ if (!writeAccounts(next)) { showToast(t("acc.saveFailed"),5000); return false; } setData(readAccounts()); return true; };
   const add=()=>{
@@ -165,6 +166,7 @@ export function MyAccounts({ state, currency, showToast }) {
         </div>
       ))}
       {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
+      {np&&(<div className="list-sub" data-section="acc-net" style={{margin:"4px 2px 8px"}}><strong>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</strong><br/>{t("acc.netNote")}</div>)}
       {PRESETS.length>0&&(<div data-section="acc-presets"><div className="list-sub" style={{margin:"6px 2px"}}>{t("acc.presetHint")}</div>
         <div className="filter-bar" role="group" aria-label={t("acc.presetHint")}>
           {PRESETS.map(([k,kd])=>(<button key={k} className="chip" data-preset={k} onClick={()=>{ setName(presetName[k]); setKind(kd); }}>{presetName[k]}</button>))}

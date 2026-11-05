@@ -627,6 +627,8 @@ export const MESSAGES = {
   "acc.inUse":  { en: "Entries or transfers use this account, so it cannot be removed. Hide it instead.", az: "Bu hesabdan qeydlər və ya köçürmələr istifadə edir, buna görə silinə bilməz. Əvəzinə gizlədin.", ru: "Этот счёт используется в операциях или переводах, удалить его нельзя. Скройте его." },
   "acc.saveFailed": { en: "Could not save. Free some storage and try again.", az: "Saxlamaq mümkün olmadı. Yaddaşı boşaldıb yenidən cəhd edin.", ru: "Не удалось сохранить. Освободите память и повторите." },
   "acc.total":  { en: "Total in shown accounts: {amount}", az: "Göstərilən hesablarda cəmi: {amount}", ru: "Всего на показанных счетах: {amount}" },
+  "acc.net":  { en: "Net position: {amount}", az: "Xalis vəziyyət: {amount}", ru: "Чистая позиция: {amount}" },
+  "acc.netNote": { en: "Accounts, plus money owed to you, minus what you owe and what is left on your loans (loan balances are estimates).", az: "Hesablar, üstəgəl sizə borclu olunan pul, çıx öz borcunuz və kreditlərin qalığı (kredit qalıqları təxminidir).", ru: "Счета плюс долги вам, минус ваши долги и остатки по кредитам (остатки по кредитам — оценка)." },
   "acc.totalNote": { en: "This is not your net worth: debts and loans are not included.", az: "Bu sizin xalis sərvətiniz deyil: borclar və kreditlər daxil edilməyib.", ru: "Это не ваш капитал: долги и кредиты не учтены." },
   "acc.transferTitle": { en: "Move money between accounts", az: "Hesablar arasında pul köçürün", ru: "Перевод между счетами" },
   "acc.transferSub": { en: "A transfer is not income and not spending. It changes only the two balances.", az: "Köçürmə nə gəlirdir, nə də xərc. O yalnız iki qalığı dəyişir.", ru: "Перевод — не доход и не расход. Он меняет только два остатка." },

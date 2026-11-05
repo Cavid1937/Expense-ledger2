@@ -586,11 +586,14 @@ export function accountName(id) {
   return _accMap[id]||"";
 }
 // Balance per account id, in money (exact to the cent). Entries whose account is unknown here are not counted anywhere.
-export function accountBalances(data, transactions) {
-  const d=cleanAccountData(data), out={};
+// Run 28: a balance is "as of" a day (default: today). An entry or transfer dated AFTER that day has not happened yet, so it does not move
+// the balance (a planned bill for the 20th must not lower the balance on the 5th). Entries without a valid date count, as before.
+export function accountBalances(data, transactions, asOf) {
+  const d=cleanAccountData(data), out={}, cut=isValidDateStr(asOf) ? asOf : localDateStr();
+  const happened=(date)=>!isValidDateStr(date) || date<=cut;
   d.accounts.forEach(a=>{ out[a.id]=centsOf(a.opening.amount); });
-  (transactions||[]).forEach(x=>{ if (!x || !(accId(x.account) in out)) return; const c=centsOf(x.amount); out[x.account]+= x.type==="income" ? c : x.type==="expense" ? -c : 0; });
-  d.transfers.forEach(x=>{ out[x.from]-=centsOf(x.amount); out[x.to]+=centsOf(x.amount); });
+  (transactions||[]).forEach(x=>{ if (!x || !(accId(x.account) in out) || !happened(x.date)) return; const c=centsOf(x.amount); out[x.account]+= x.type==="income" ? c : x.type==="expense" ? -c : 0; });
+  d.transfers.forEach(x=>{ if (!happened(x.date)) return; out[x.from]-=centsOf(x.amount); out[x.to]+=centsOf(x.amount); });
   Object.keys(out).forEach(k=>{ out[k]=out[k]/100; });
   return out;
 }
@@ -703,7 +706,24 @@ export function loanExtraEffect(l, extra) {
 }
 export function debtRemaining(d) { return Math.max(0,d.principal-(d.payments||[]).reduce((s,p)=>s+p.amount,0)); }
 export function debtCanPay(d, amount) { return isQapik(amount) && amount<=debtRemaining(d); }
-
+// Run 28: net position = money in the visible accounts + money people owe you − what you owe − what is left on your loans. All in whole cents
+// (the debts store keeps cents as integers, so there is no unit conversion). Loan balances come from the repayment schedule after the payments
+// recorded so far, so they are ESTIMATES (an extra payment or a bank's own rounding can move them). Returns null when there is nothing owed
+// either way, so a screen can stay quiet instead of repeating the accounts total.
+export function loanRemainingCents(l) {
+  const sc=loanSchedule(l); if (!sc) return 0;
+  const k=Math.min(Array.isArray(l.payments)?l.payments.length:0, sc.payments.length);
+  return k>=sc.payments.length ? 0 : k===0 ? l.principal : Math.max(0,sc.payments[k-1].balance);
+}
+export function netPosition(accountData, transactions, debtData, asOf) {
+  const a=cleanAccountData(accountData), debts=cleanDebtData(debtData), bal=accountBalances(a,transactions,asOf);
+  const accounts=a.accounts.filter(x=>!x.hidden).reduce((s,x)=>s+Math.round((bal[x.id]||0)*100),0);
+  const owedToMe=debts.debts.filter(x=>x.direction==="owed").reduce((s,x)=>s+debtRemaining(x),0);
+  const iOwe=debts.debts.filter(x=>x.direction==="owe").reduce((s,x)=>s+debtRemaining(x),0);
+  const loans=debts.loans.reduce((s,x)=>s+loanRemainingCents(x),0);
+  if (!owedToMe && !iOwe && !loans) return null;
+  return { accounts, owedToMe, iOwe, loans, net:accounts+owedToMe-iOwe-loans };
+}
 function cleanPayments(list, withTxn) {
   if (!Array.isArray(list)) return [];
   const seen=new Set(), out=[];

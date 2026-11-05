@@ -56,6 +56,7 @@
     "run24catedit.test.mjs": 8,
     "run25subrename.test.mjs": 13,
     "run25themes.test.mjs": 18,
+     "run28networth.test.mjs": 11,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -138,7 +139,8 @@
     "e2e_run26_motion.mjs": 18,
     "e2e_run26_confirm.mjs": 6,
     "e2e_run26_walk.mjs": 137,
-    "e2e_run27_fold.mjs": 13
+    "e2e_run27_fold.mjs": 13,
+    "e2e_run28_netpos.mjs": 8
   }
 }
 

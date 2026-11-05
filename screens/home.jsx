@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useState } from "react";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcSpendingPace, calcSpentToDate, calcWhatChanged, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcSpendingPace, calcSpentToDate, calcWhatChanged, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 
@@ -59,6 +59,7 @@ export function HomeAccounts({ transactions, currency, onManage }) {
   const data=readAccounts(), shown=data.accounts.filter(a=>!a.hidden);
   if (!shown.length) return null;
   const bal=accountBalances(data,transactions);
+  const np=netPosition(data,transactions,readDebts());   // Run 28: null unless some debt or loan exists
   const kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
   const kindIcon={ cash:"finance", card:"card", wallet:"wallet", bank:"safe", other:"list" };
   const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
@@ -75,6 +76,7 @@ export function HomeAccounts({ transactions, currency, onManage }) {
         ))}
       </div>
       {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</div>}
+      {np&&<div className="list-sub" data-section="home-netpos" style={{margin:"4px 2px 0"}}>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</div>}
     </div>
   );
 }
