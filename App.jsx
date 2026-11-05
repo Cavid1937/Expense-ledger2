@@ -526,7 +526,7 @@ function writeSubcats(map) {   // an empty list removes the key instead of keepi
 // Accounts (a card, cash, a bank account) live in their own storage key with the transfers between them. An ordinary entry may carry
 // an optional `account` id. A balance is never stored: opening balance + income − expenses (entries with that account) + transfers in −
 // transfers out, all in whole cents. A transfer is its own record, so it can never count as income or spending.
-const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","bank","other"];
+const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","wallet","bank","other"];
 const accId=(v)=>typeof v==="string" && /^a_[a-z0-9]{3,12}$/.test(v) ? v : "";
 const centsOf=(v)=>{ const n=Number(v); return Number.isFinite(n) ? Math.round(n*100) : 0; };
 function cleanAccountData(raw) {
@@ -2502,6 +2502,7 @@ const ICONS = {
   arrowDown:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`,
   pace:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
   goal:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
+  wallet:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A2.5 2.5 0 015.5 5H19v14H5.5A2.5 2.5 0 013 16.5z"/><path d="M19 9h-4a2 2 0 000 4h4"/><circle cx="15.5" cy="11" r=".6" fill="currentColor"/></svg>`,
   safe:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`,
   merchant:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h18"/><path d="M4 10V20h16V10"/><path d="M2 10l2-7h16l2 7"/><path d="M2 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M9 20v-5h6v5"/></svg>`,
   pattern:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M8.2 14.5A7 7 0 1 1 15.8 14.5c-.9.6-1.3 1.3-1.5 2.5h-4.6c-.2-1.2-.6-1.9-1.5-2.5Z"/></svg>`,
@@ -3182,6 +3183,20 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .hero-amount .cur,.safe-amount .cur,.month-stat-val .cur{font-size:.6em;font-weight:500;letter-spacing:0}
 /* Pressed rows change tone (a layer step), not shadow, so touch feedback stays cheap. */
 @media (hover:none){.txn-row:active,.setup-step:active{background:var(--surface-raised)}}
+/* Run 26: movement that explains itself. Scrolling glides instead of jumping; forms ease open where they belong; cards rise in once
+   when a screen opens (CSS animations only run on insertion, never on a re-render); presses give a small, quick squeeze. */
+html,.page,.sheet{scroll-behavior:smooth}
+@keyframes revealIn{from{opacity:0;transform:translateY(-10px) scale(0.985)}to{opacity:1;transform:none}}
+.reveal{animation:revealIn 320ms cubic-bezier(0.22,1,0.36,1);transform-origin:top center}
+@keyframes rowRise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.page:not(.page-sub)>.card,.page:not(.page-sub)>.section-title{animation:rowRise 340ms cubic-bezier(0.22,1,0.36,1) backwards}
+.page:not(.page-sub)>:nth-child(2){animation-delay:40ms}.page:not(.page-sub)>:nth-child(3){animation-delay:80ms}
+.page:not(.page-sub)>:nth-child(4){animation-delay:120ms}.page:not(.page-sub)>:nth-child(5){animation-delay:160ms}
+.page:not(.page-sub)>:nth-child(n+6){animation-delay:200ms}
+.btn{transition:opacity 120ms,background 120ms,transform 90ms}
+.btn:active:not(:disabled){transform:scale(0.97)}
+.fab-add:active{transform:scale(0.92)}
+@media (prefers-reduced-motion:reduce){.reveal,.page>.card,.page>.section-title{animation:none}.btn:active:not(:disabled),.fab-add:active{transform:none}}
 .topbar,.tabbar{backdrop-filter:none;-webkit-backdrop-filter:none}
 .topbar{background:var(--bg)}
 .tabbar{background:var(--bg-card)}
@@ -3573,6 +3588,7 @@ function AppInner() {
   const [showAdd,  setShowAdd]  = useState(false);
   const [addLeaving, setAddLeaving] = useState(false), addTok=useRef(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsFocus, setSettingsFocus] = useState("");
   const [,setCatVer] = useState(0);   // Run 24: bumped when the user's own categories change, so every screen redraws with them
   const [toast,    setToast]    = useState(null);
   const [snackbar, setSnackbar] = useState(null);
@@ -4117,7 +4133,7 @@ function AppInner() {
             onDeleteTemplate={id=>setState(s=>({...s,templates:s.templates.filter(t=>t.id!==id)}))}
             onUpdateTemplate={(id,patch)=>setState(s=>({...s,templates:s.templates.map(x=>x.id===id?{...x,...patch}:x)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
-          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} onSettings={()=>setShowSettings(true)} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
+          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} onSettings={(f)=>{ setSettingsFocus(f||""); setShowSettings(true); }} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
@@ -4154,7 +4170,7 @@ function AppInner() {
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
         {showLock&&<LockSheet onClose={()=>setShowLock(false)} showToast={showToast}/>}
         {showSettings&&(
-          <SettingsSheet state={state} onCatsChanged={()=>setCatVer(v=>v+1)}
+          <SettingsSheet focus={settingsFocus} state={state} onCatsChanged={()=>setCatVer(v=>v+1)}
             onCurrencyChange={c=>setState(s=>({...s,currency:c}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}
             onClose={()=>setShowSettings(false)} showToast={showToast}/>
@@ -5622,7 +5638,9 @@ function MyAccounts({ state, currency, showToast }) {
   const [name,setName]=useState(""), [kind,setKind]=useState("card"), [opening,setOpening]=useState("");
   const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState(""), [editing,setEditing]=useState(null);
   const bal=useMemo(()=>accountBalances(data,state.transactions),[data,state.transactions]);
-  const shown=data.accounts.filter(a=>!a.hidden), kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
+  const shown=data.accounts.filter(a=>!a.hidden), kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
+  const presetName={ cash:t("acc.preset.cash"), card:t("acc.preset.card"), wallet:t("acc.preset.wallet"), savings:t("acc.preset.savings") };
+  const PRESETS=[["cash","cash"],["card","card"],["wallet","wallet"],["savings","bank"]].filter(([k])=>!data.accounts.some(a=>a.name.toLowerCase()===presetName[k].toLowerCase()));
   const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
   const errs=()=>({ empty:t("acc.err.empty"), long:t("acc.err.long"), full:t("acc.err.full"), dup:t("acc.err.dup"), amount:t("acc.err.amount"), same:t("acc.err.same"), account:t("acc.err.account"), date:t("acc.err.date") });
   const commit=(next)=>{ if (!writeAccounts(next)) { showToast(t("acc.saveFailed"),5000); return false; } setData(readAccounts()); return true; };
@@ -5660,7 +5678,7 @@ function MyAccounts({ state, currency, showToast }) {
       <div className="settings-section-lbl" style={{marginTop:14}}>{t("acc.title")}</div>
       <div className="list-sub" style={{marginBottom:8}}>{t("acc.sub")}</div>
       {data.accounts.map(a=>editing&&editing.id===a.id ? (
-        <div key={a.id} data-account-edit={a.id} style={{padding:"8px 0"}}>
+        <div key={a.id} className="reveal" data-account-edit={a.id} style={{padding:"8px 0"}}>
           <div className="field"><label className="field-lbl" htmlFor="acc-edit-name">{t("acc.name")}</label>
             <input id="acc-edit-name" className="field-input" value={editing.name} maxLength={40} onChange={e=>setEditing({...editing,name:e.target.value})}/></div>
           <div className="field"><label className="field-lbl" htmlFor="acc-edit-bal">{t("acc.opening")}</label>
@@ -5684,6 +5702,10 @@ function MyAccounts({ state, currency, showToast }) {
         </div>
       ))}
       {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
+      {PRESETS.length>0&&(<div data-section="acc-presets"><div className="list-sub" style={{margin:"6px 2px"}}>{t("acc.presetHint")}</div>
+        <div className="filter-bar" role="group" aria-label={t("acc.presetHint")}>
+          {PRESETS.map(([k,kd])=>(<button key={k} className="chip" data-preset={k} onClick={()=>{ setName(presetName[k]); setKind(kd); }}>{presetName[k]}</button>))}
+        </div></div>)}
       <div className="field"><label className="field-lbl" htmlFor="acc-name">{t("acc.name")}</label>
         <input id="acc-name" className="field-input" value={name} maxLength={40} onChange={e=>setName(e.target.value)}/></div>
       <div className="filter-bar" role="group" aria-label={t("acc.kind")}>
@@ -5716,8 +5738,14 @@ function MyAccounts({ state, currency, showToast }) {
   );
 }
 
-function SettingsSheet({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
+function SettingsSheet({ focus="", state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, onClose, showToast }) {
   const { currency,safeToSpend={} }=state;
+  // Opened from the Accounts row: after the sheet has risen, glide down to the Accounts section (never a jump).
+  useEffect(()=>{
+    if (focus!=="accounts") return;
+    const id=setTimeout(()=>{ const el=document.querySelector('[data-section="my-accounts"]'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:"smooth", block:"start" }); },340);
+    return ()=>clearTimeout(id);
+  },[focus]);
   const [curSym,      setCurSym]      = useState(currency);
   const [theme,       setTheme]       = useState(()=>readTheme());
   const [fxOff,       setFxOff]       = useState(()=>readFxOff());
@@ -6281,12 +6309,14 @@ function MorePage({ language, profileName="", onLanguageChange, onProfileName, o
       <div className="card list-card">
         <ListRow icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
         <ListRow icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
-        <ListRow icon="settings" title={t("set.preferences")} sub={t("more.settingsSub")} onClick={onSettings}/>
+        <ListRow icon="settings" title={t("set.preferences")} sub={t("more.settingsSub")} onClick={()=>onSettings()}/>
         {/* Run 16: appended after the earlier rows, so the first three keep their places */}
         <ListRow icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
         <ListRow icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
         {/* Run 17: appended, so the first five rows keep their places */}
         <ListRow icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
+        {/* Run 26: accounts are one tap from Settings (they used to be found only by scrolling inside Preferences) */}
+        <ListRow icon="wallet" title={t("acc.title")} sub={t("more.accountsSub")} onClick={()=>onSettings("accounts")}/>
         {/* Run 18: appended, so every earlier row keeps its place */}
         <ListRow icon="safe" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
         {/* Run 19: appended last */}
@@ -6382,7 +6412,7 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
     if (addSignal===seenSignal.current) return; seenSignal.current=addSignal;
     if (seg==="goals") setShowNewGoal(true);
     else { const free=CATEGORIES.filter(c=>!c.income && !(budgets[c.id]>0)); setNewBudget({ catId:(free[0]||CATEGORIES[0]).id, val:"" }); }
-    window.scrollTo(0,0);
+    window.scrollTo({ top:0, behavior:"smooth" });   // Run 26: a glide, not a jump (reduced motion turns it off in CSS)
   },[addSignal]);
   const [goalName,setGoalName]=useState(""), [goalTarget,setGoalTarget]=useState(""), [goalSaved,setGoalSaved]=useState("");
   const [goalMonthly,setGoalMonthly]=useState(""), [goalDate,setGoalDate]=useState(""), [editGoalId,setEditGoalId]=useState(null);
@@ -6405,9 +6435,25 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
     if (editGoalId) onUpdateGoal(editGoalId,g); else onAddGoal(g);
     setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);setEditGoalId(null);
   };
-  const startEditGoal=(g)=>{ setEditGoalId(g.id); setGoalName(g.name||""); setGoalTarget(String(g.target||"")); setGoalSaved(String(g.saved||"")); setGoalMonthly(g.monthlyTarget?String(g.monthlyTarget):""); setGoalDate(g.targetDate||""); setShowNewGoal(true); window.scrollTo(0,0); };
+  const startEditGoal=(g)=>{ setEditGoalId(g.id); setGoalName(g.name||""); setGoalTarget(String(g.target||"")); setGoalSaved(String(g.saved||"")); setGoalMonthly(g.monthlyTarget?String(g.monthlyTarget):""); setGoalDate(g.targetDate||""); setShowNewGoal(true); };   // Run 26: the form opens in the goal's own place and eases in; no jump to the top
+  // The form eases in, then the view glides to it and the first box is focused without a jump.
+  const formShown=(el)=>{ if (!el || el.dataset.shown) return; el.dataset.shown="1"; requestAnimationFrame(()=>{ try { el.scrollIntoView({ behavior:"smooth", block:"center" }); const i=el.querySelector("input"); if (i) i.focus({ preventScroll:true }); } catch {} }); };
+  const renderGoalForm=()=>(
+    <div className="card reveal" ref={formShown} data-section="goal-form">
+      <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="goal-name">{t("set.goalName")}</label><input id="goal-name" className="field-input" placeholder={t("set.goalNamePh")} value={goalName} onChange={e=>setGoalName(e.target.value)}/></div>
+      <div className="field-row" style={{marginBottom:10}}>
+        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-target">{t("set.target",{currency})}</label><input id="goal-target" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={goalTarget} onChange={e=>setGoalTarget(cleanMoneyText(e.target.value))}/></div>
+        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-saved">{t("set.savedSoFar")}</label><input id="goal-saved" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={goalSaved} onChange={e=>setGoalSaved(cleanMoneyText(e.target.value))}/></div>
+      </div>
+      <div className="field-row" style={{marginBottom:10}}>
+        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-monthly">{t("set.monthlyContribution")}</label><input id="goal-monthly" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.optionalPh")} value={goalMonthly} onChange={e=>setGoalMonthly(cleanMoneyText(e.target.value))}/></div>
+        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-date">{t("set.targetDate")}</label><input id="goal-date" className="field-input" lang={locale()} type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
+      </div>
+      <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={saveGoal}>{t("set.saveGoal")}</button>
+    </div>
+  );
   const editRow=(cat,limit)=>editBudget===cat.id&&(
-    <div style={{display:"flex",gap:7,marginTop:9}}>
+    <div className="reveal" style={{display:"flex",gap:7,marginTop:9}}>
       <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} autoFocus style={{flex:1,padding:"8px 10px",fontSize:13}}/>
       <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
       <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
@@ -6495,23 +6541,11 @@ function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget
           <span className="section-title" style={{margin:0}}>{t("set.financialGoals")}</span>
           <button className="btn btn-sm" onClick={()=>{ if (showNewGoal) { setEditGoalId(null); setGoalName(""); setGoalTarget(""); setGoalSaved(""); setGoalMonthly(""); setGoalDate(""); } setShowNewGoal(s=>!s); }}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
         </div>
-        {showNewGoal&&(
-          <div className="card">
-            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="goal-name">{t("set.goalName")}</label><input id="goal-name" className="field-input" placeholder={t("set.goalNamePh")} value={goalName} onChange={e=>setGoalName(e.target.value)} autoFocus/></div>
-            <div className="field-row" style={{marginBottom:10}}>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-target">{t("set.target",{currency})}</label><input id="goal-target" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={goalTarget} onChange={e=>setGoalTarget(cleanMoneyText(e.target.value))}/></div>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-saved">{t("set.savedSoFar")}</label><input id="goal-saved" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={goalSaved} onChange={e=>setGoalSaved(cleanMoneyText(e.target.value))}/></div>
-            </div>
-            <div className="field-row" style={{marginBottom:10}}>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-monthly">{t("set.monthlyContribution")}</label><input id="goal-monthly" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.optionalPh")} value={goalMonthly} onChange={e=>setGoalMonthly(cleanMoneyText(e.target.value))}/></div>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-date">{t("set.targetDate")}</label><input id="goal-date" className="field-input" lang={locale()} type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
-            </div>
-            <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={saveGoal}>{t("set.saveGoal")}</button>
-          </div>
-        )}
+        {showNewGoal&&!editGoalId&&renderGoalForm()}
         {goals.length===0&&!showNewGoal&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noGoals")}</div>}
         {goals.map(goal=>{
           const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion}=gp; const req=goalRequiredMonthly(goal);
+          if (showNewGoal && editGoalId===goal.id) return <Fragment key={goal.id}>{renderGoalForm()}</Fragment>;
           return (
             <div key={goal.id} className="card goal-card" data-section="goal-card">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
