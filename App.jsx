@@ -2202,11 +2202,30 @@ export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date
   const p=monthProgress(mon,now);
 
   const schedules=buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense");
-  let upcomingCommitments=0, unrecordedCommitments=0, upcomingCount=0, unrecordedCount=0;
+  let upcomingCommitments=0, unrecordedCommitments=0, upcomingCount=0, unrecordedCount=0, matchedAheadCount=0;
+  // F1 (counter-review): a payment typed in as an ordinary entry (not linked to its bill) is already inside curExp, so the bill's
+  // own expected payment must not be subtracted a second time. Only entries dated AFTER today count (money deliberately set aside
+  // ahead; past-dated look-alikes stay unmatched until the user links them — the Run 12 rule). Such an entry settles an upcoming
+  // date only when it is clearly the same payment: this month, linked to no bill, same category, same merchant as the bill's name,
+  // same amount to the cent. Each entry settles at most one date. Anything less certain stays counted (never optimistic).
+  const knownIds=new Set((bills||[]).map(b=>b.id));
+  const looseExp=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon) && t.date>todayStr && !(t.billId && knownIds.has(t.billId)));
+  const usedLoose=new Set();
+  const cents=(x)=>Math.round((Number(x)||0)*100);
   schedules.forEach(s=>{
     const st=scheduleMonthStatus(s,transactions,mon,now);
-    upcomingCommitments+=s.amount*st.upcoming.length;  upcomingCount+=st.upcoming.length;
-    unrecordedCommitments+=s.amount*st.overdue.length; unrecordedCount+=st.overdue.length;
+    const settle=(dates)=>{
+      if (!s.billId) return dates.length;   // inferred schedules already count their own recurring entries
+      let open=0;
+      dates.forEach(()=>{
+        const hit=looseExp.find(t=>!usedLoose.has(t.id) && t.category===s.category && norm(t.merchant)===norm(s.merchant) && cents(t.amount)===cents(s.amount));
+        if (hit) { usedLoose.add(hit.id); matchedAheadCount++; } else open++;
+      });
+      return open;
+    };
+    const up=settle(st.upcoming), od=st.overdue.length;
+    upcomingCommitments+=s.amount*up;  upcomingCount+=up;
+    unrecordedCommitments+=s.amount*od; unrecordedCount+=od;
   });
   const futureCommitments=upcomingCommitments+unrecordedCommitments;
   const recurringMonthly=schedules.reduce((sum,s)=>sum+scheduleMonthly(s),0);
@@ -2224,7 +2243,7 @@ export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date
 
   return {
     curInc, expectedInc, curExp, laterExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
-    futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount,
+    futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount, matchedAheadCount,
     scheduleCount:schedules.length, recurringMonthly,
     disposable, remaining, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAllowance,
     feasible:curInc>0,
