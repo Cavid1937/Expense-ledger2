@@ -18,7 +18,7 @@ section("R31-2. Account holds less than Safe to Spend");
   const r = await read(page);
   ok(r.note !== null && /100/.test(r.note) && /less than this figure/.test(r.note) && /not account balances/.test(r.note), "the note names the accounts' total (100) and says the figure is not a balance", r);
   ok(r.amount === plain, "the Safe to Spend number is exactly the same as without accounts (display-only change)", [r.amount, plain]);
-  ok(await page.evaluate(() => (document.querySelector('[data-section="home-safe-held"]') || {}).getAttribute("role") === "note"), "the note is a labelled note for screen readers");
+  ok(await page.evaluate(() => { const e = document.querySelector('[data-section="home-safe-held"]'); return !!e && !!e.closest('[role="note"]'); }), "the note sits inside a labelled note region for screen readers");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }

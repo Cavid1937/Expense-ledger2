@@ -1,5 +1,5 @@
-Azerbaijani localization audit — 2026-10-31T06:37:34.922Z
-Catalog: 967 keys, 1053 rendered forms (plural forms counted separately). Keys passed directly to t()/tn() in App.jsx: 632.
+Azerbaijani localization audit — 2026-11-06T16:42:58.077Z
+Catalog: 1127 keys, 1221 rendered forms (plural forms counted separately). Keys passed directly to t()/tn() in App.jsx: 757.
 Review sheet: az-review-sheet.csv (UTF-8, opens in Excel/Sheets) — one row per form, example values filled in, empty reviewer columns.
 
 A. Turkish spellings in Azerbaijani text: 0

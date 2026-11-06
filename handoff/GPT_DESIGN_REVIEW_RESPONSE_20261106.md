@@ -18,9 +18,11 @@ Confirmed, from source (`calcSafeToSpend`, `accountBalances`):
 |---|---|
 | Home hierarchy; Safe to Spend prominent; no competing focal point | Already satisfactory (Safe card first, month card quiet when Safe is on); no change |
 | Net / income / expenses distinct from Safe to Spend | Month card already separate; new note links it to balances |
-| Transactions filter hierarchy, active-filter chips, advanced area | NEEDS WORK / NOT ASSESSED in this pass: not inspected in depth |
+| Transactions filter hierarchy, active-filter chips, advanced area | IMPLEMENTED (commit 0ede4d3): trip/wallet/account filters behind "More filters" (chip shows how many are on), new account filter, Clear resets all, day total shown as spending (−35.00, announced "Spent"). Browser test e2e_run31_ledger 15 checks |
+| Settings (owner: Figma version better) | IMPLEMENTED (12b5ca9), own design: identity card, groups Money / Look and language / Data and safety / App, closed folds show a one-line summary. e2e_run31_settings 14 checks |
+| Recurring empty state | IMPLEMENTED: empty screen offers "Add bill" |
 | Add form amount-first, quick-fill, validation | Already present (amount-first, number pad, templates); not re-tested here |
-| Budgets and Goals progress clarity, empty states | NEEDS WORK / NOT ASSESSED: not inspected in this pass |
+| Budgets and Goals progress clarity, empty states | Inspected at 360 px: spent / limit / remaining and progress bars already clear; already satisfactory, no change. Tab "Goals" vs title "Budgets & Goals" left (rename is the owner's call) |
 | Theme consistency/contrast in all themes | Existing theme tests (run25_themes) pass; per-theme contrast not re-audited here |
 | Animations (transitions, save feedback, reduced motion) | Existing motion work (run26_motion) passes; no new animation added; reduced-motion respected by existing tests |
 | Localization completeness | i18n logic suite and az/ru walks pass (1245 logic, walk 137); native review still outstanding |

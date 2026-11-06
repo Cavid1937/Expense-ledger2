@@ -34,6 +34,12 @@ function t(key, vars) {
   const s = e[I18N_LANG] ?? e.en;
   return fill(typeof s === "string" ? s : (s.other ?? ""), vars);
 }
+// Run 29: inside the Android app (window.LedgerNative exists) a few privacy / safety texts differ, because Android's automatic Google backup may keep an
+// older copy of the data. A text with the same key plus "A" is used there when it exists; the website and every other case keep the plain text.
+function tShell(key, vars) {
+  const native = typeof window !== "undefined" && !!window.LedgerNative;
+  return native && MESSAGES[key + "A"] ? t(key + "A", vars) : t(key, vars);
+}
 // Text in a specific language, whatever the current one is (used where all three languages are shown together).
 function tIn(lang, key) { const e = MESSAGES[key]; return e ? (e[lang] ?? e.en) : key; }
 // Count-dependent text: picks the plural form for n in the current language; {n} is the count.
@@ -348,12 +354,9 @@ const MESSAGES = {
   "add.moreDetails": { en: "More details", az: "Daha çox təfərrüat", ru: "Подробнее" },
   "add.lessDetails": { en: "Fewer details", az: "Daha az təfərrüat", ru: "Скрыть подробности" },
   "add.moreHint":    { en: "Merchant, note, date, wallet, repeat", az: "Satıcı, qeyd, tarix, ödəniş vasitəsi, təkrar", ru: "Продавец, заметка, дата, способ оплаты, повтор" },
+  "add.kindPrompt":  { en: "What do you want to record?", az: "Nəyi qeyd etmək istəyirsiniz?", ru: "Что вы хотите записать?" },
   "add.loan":        { en: "Loan", az: "Kredit", ru: "Кредит" },
   "add.debt":        { en: "Debt", az: "Borc", ru: "Долг" },
-  "pad.hide":        { en: "Hide number pad", az: "Rəqəm panelini gizlət", ru: "Скрыть клавиатуру" },
-  "pad.label":      { en: "Number pad", az: "Rəqəm paneli", ru: "Цифровая клавиатура" },
-  "pad.back":        { en: "Delete last digit", az: "Son rəqəmi sil", ru: "Удалить последнюю цифру" },
-  "pad.decimal":     { en: "Decimal point", az: "Onluq nöqtə", ru: "Десятичная точка" },
   "crash.title":  { en: "Something went wrong", az: "Gözlənilməz xəta baş verdi", ru: "Что-то пошло не так" },
   "crash.body":    { en: "Your records are safe: they are stored on this phone and were not changed. Reload the app to carry on.", az: "Qeydləriniz təhlükəsizdir: onlar bu telefonda saxlanılır və dəyişdirilməyib. Davam etmək üçün tətbiqi yenidən yükləyin.", ru: "Ваши записи в безопасности: они хранятся на этом телефоне и не изменились. Перезагрузите приложение, чтобы продолжить." },
   "crash.reload":  { en: "Reload the app", az: "Tətbiqi yenidən yüklə", ru: "Перезагрузить приложение" },
@@ -373,7 +376,6 @@ const MESSAGES = {
   "more.localData":   { en: "Your data is stored only on this device", az: "Məlumatlarınız yalnız bu cihazda saxlanılır", ru: "Ваши данные хранятся только на этом устройстве" },
   "more.recurringSub": { en: "Bills, subscriptions and regular income", az: "Hesablar, abunəliklər və müntəzəm gəlir", ru: "Счета, подписки и регулярный доход" },
   "more.ioSub":       { en: "Backups, CSV and JSON files", az: "Ehtiyat nüsxələr, CSV və JSON faylları", ru: "Резервные копии, файлы CSV и JSON" },
-  "more.settingsSub": { en: "Currency and Safe to Spend", az: "Valyuta və «Xərcləmək olar»", ru: "Валюта и «Можно потратить»" },
   "st.profile":       { en: "Profile", az: "Profil", ru: "Профиль" },
   "st.profileName":   { en: "Your name", az: "Adınız", ru: "Ваше имя" },
   "st.profileSub":    { en: "Used in the greeting on Home. It stays on this phone.", az: "Ana səhifədəki salamlaşmada istifadə olunur. Yalnız bu telefonda qalır.", ru: "Используется в приветствии на главной. Остаётся на этом телефоне." },
@@ -431,6 +433,11 @@ const MESSAGES = {
   "debt.confirmDelete": { en: "Delete this record and its payments?", az: "Bu qeyd və onun ödənişləri silinsin?", ru: "Удалить эту запись и её платежи?" },
   "loan.none":        { en: "No loans yet. Add one to see its payments and what it costs.", az: "Hələ kredit əlavə edilməyib. Ödəniş cədvəlini və təxmini faiz məbləğini görmək üçün kredit əlavə edin.", ru: "Пока кредитов нет. Добавьте кредит, чтобы увидеть график платежей и примерную сумму процентов." },
   "loan.lender":      { en: "Lender", az: "Kreditor", ru: "Кредитор" },
+  "debt.addedToast":  { en: "Debt added", az: "Borc əlavə olundu", ru: "Долг добавлен" },
+  "debt.removedToast": { en: "Debt removed", az: "Borc silindi", ru: "Долг удалён" },
+  "loan.addedToast":  { en: "Loan added", az: "Kredit əlavə olundu", ru: "Кредит добавлен" },
+  "loan.removedToast": { en: "Loan removed", az: "Kredit silindi", ru: "Кредит удалён" },
+  "loan.payRemovedToast": { en: "Payment removed", az: "Ödəniş silindi", ru: "Платёж удалён" },
   "loan.kind":        { en: "Kind", az: "Növ", ru: "Вид" },
   "loan.kind.cash":   { en: "Cash loan", az: "Nağd kredit", ru: "Кредит наличными" },
   "loan.kind.card":   { en: "Credit card", az: "Kredit kartı", ru: "Кредитная карта" },
@@ -606,7 +613,53 @@ const MESSAGES = {
   "acc.kind":   { en: "Account type", az: "Hesab növü", ru: "Тип счёта" },
   "acc.kind.cash":  { en: "Cash", az: "Nağd", ru: "Наличные" },
   "acc.kind.card":  { en: "Card", az: "Kart", ru: "Карта" },
+  "acc.kind.wallet": { en: "Mobile wallet", az: "Mobil pul kisəsi", ru: "Мобильный кошелёк" },
   "acc.kind.bank":  { en: "Bank account", az: "Bank hesabı", ru: "Банковский счёт" },
+  "budgets.showAll": { en: "Show all {n}", az: "Hamısını göstər ({n})", ru: "Показать все ({n})" },
+  "budgets.showFewer": { en: "Show fewer", az: "Daha az göstər", ru: "Свернуть" },
+  "st.foldMoney": { en: "Currency and Safe to Spend", az: "Valyuta və «Xərcləmək olar»", ru: "Валюта и «Можно потратить»" },
+  "st.foldLook": { en: "Appearance", az: "Görünüş", ru: "Внешний вид" },
+  // Run 30 (Android app only): reminders. az / ru written by Claude, NOT yet reviewed by a native speaker.
+  "remind.title":      { en: "Reminders", az: "Xatırlatmalar", ru: "Напоминания" },
+  "remind.sub":        { en: "Get a nudge before a bill or a recurring payment is due. Nothing leaves your phone.", az: "Ödəniş vaxtı çatmamış xəbər alın. Heç nə telefondan çıxmır.", ru: "Напомним до срока платежа. Ничего не покидает ваш телефон." },
+  "remind.bills":      { en: "Bills due", az: "Ödəniş günü", ru: "Срок счетов" },
+  "remind.billsSub":   { en: "On the due day", az: "Ödəniş günü", ru: "В день платежа" },
+  "remind.recurring":  { en: "Recurring payments", az: "Təkrarlanan ödənişlər", ru: "Регулярные платежи" },
+  "remind.recurringSub": { en: "The day before", az: "Bir gün əvvəl", ru: "За день до срока" },
+  "remind.daily":      { en: "Daily check-in", az: "Gündəlik xatırlatma", ru: "Ежедневное напоминание" },
+  "remind.dailySub":   { en: "At 21:00, if nothing is recorded today", az: "Bu gün heç nə qeyd olunmayıbsa, 21:00-da", ru: "В 21:00, если сегодня ничего не записано" },
+  "remind.time":       { en: "Reminder time", az: "Xatırlatma vaxtı", ru: "Время напоминания" },
+  "remind.hide":       { en: "Hide amounts in notifications", az: "Bildirişlərdə məbləği gizlət", ru: "Скрывать суммы в уведомлениях" },
+  "remind.hideSub":    { en: "Others who see your lock screen will not see what you pay", az: "Kilid ekranını görənlər nə ödədiyinizi görməyəcək", ru: "Те, кто видит экран блокировки, не увидят, за что вы платите" },
+  "remind.denied":     { en: "Notifications are blocked for this app. Allow them in the phone's settings to get reminders.", az: "Bu tətbiq üçün bildirişlər bloklanıb. Xatırlatmalar üçün telefonun ayarlarında icazə verin.", ru: "Уведомления для приложения запрещены. Разрешите их в настройках телефона." },
+  "remind.battery":    { en: "If a reminder arrives late, allow Expense Ledger to run in the background in your phone's battery settings.", az: "Xatırlatma gec gəlirsə, telefonun batareya ayarlarında Expense Ledger üçün fonda işləməyə icazə verin.", ru: "Если напоминание приходит с опозданием, разрешите Expense Ledger работать в фоне в настройках батареи." },
+  "remind.billTitle":  { en: "{name} is due today", az: "{name} — ödəniş günüdür", ru: "{name}: срок платежа сегодня" },
+  "remind.recurTitle": { en: "{name} is due tomorrow", az: "{name} — sabah ödəniş günüdür", ru: "{name}: срок платежа завтра" },
+  "remind.body":       { en: "{amount} · open the app to record it", az: "{amount} · qeyd etmək üçün tətbiqi açın", ru: "{amount} · откройте приложение, чтобы записать" },
+  "remind.bodyHidden": { en: "Open the app to record it", az: "Qeyd etmək üçün tətbiqi açın", ru: "Откройте приложение, чтобы записать" },
+  "remind.aPayment":   { en: "A payment", az: "Bir ödəniş", ru: "Платёж" },
+  "remind.dailyTitle": { en: "Anything to add today?", az: "Bu gün əlavə ediləcək nə isə var?", ru: "Есть что записать сегодня?" },
+  "remind.dailyBody":  { en: "A few seconds now keeps your ledger accurate.", az: "İndi bir neçə saniyə dəftəri dəqiq saxlayır.", ru: "Несколько секунд сейчас сохранят учёт точным." },
+  "st.groupMoney": { en: "Money", az: "Pul", ru: "Деньги" },
+  "st.groupLook": { en: "Look and language", az: "Görünüş və dil", ru: "Вид и язык" },
+  "st.sumAcc": { en: "Total {amount}", az: "Cəmi {amount}", ru: "Всего {amount}" },
+  "st.sumAccNone": { en: "Add your first account", az: "İlk hesabınızı əlavə edin", ru: "Добавьте первый счёт" },
+  "st.sumCat": { en: "Your own: {n}", az: "Sizin: {n}", ru: "Ваши: {n}" },
+  "st.sumCatNone": { en: "Using the built-in set", az: "Hazır siyahıdan istifadə olunur", ru: "Используется стандартный набор" },
+  "st.sumMoneyOn": { en: "{c} · Safe to Spend on", az: "{c} · «Xərcləmək olar» aktivdir", ru: "{c} · «Можно потратить» включено" },
+  "st.sumMoneyOff": { en: "{c} · Safe to Spend off", az: "{c} · «Xərcləmək olar» söndürülüb", ru: "{c} · «Можно потратить» выключено" },
+  "st.sumLookFx": { en: "{theme} · fewer effects", az: "{theme} · effektlər azaldılıb", ru: "{theme} · меньше эффектов" },
+  "st.sumRem": { en: "{n} on", az: "{n} aktiv", ru: "Включено: {n}" },
+  "st.sumRemNone": { en: "All off", az: "Hamısı söndürülüb", ru: "Всё выключено" },
+  "st.groupData": { en: "Data and safety", az: "Məlumat və təhlükəsizlik", ru: "Данные и безопасность" },
+  "st.groupApp": { en: "App", az: "Tətbiq", ru: "Приложение" },
+  "acc.homeTitle": { en: "Accounts", az: "Hesablar", ru: "Счета" },
+  "acc.manage": { en: "Manage", az: "İdarə et", ru: "Управлять" },
+  "acc.preset.cash":    { en: "Cash", az: "Nağd pul", ru: "Наличные" },
+  "acc.preset.card":    { en: "Bank card", az: "Bank kartı", ru: "Банковская карта" },
+  "acc.preset.wallet":  { en: "Mobile wallet", az: "Mobil pul kisəsi", ru: "Мобильный кошелёк" },
+  "acc.preset.savings": { en: "Savings", az: "Yığım", ru: "Накопления" },
+  "acc.presetHint": { en: "Quick start: tap one to fill the name and type", az: "Tez başlanğıc: ada və növə toxunun, avtomatik dolsun", ru: "Быстрый старт: нажмите, чтобы подставить название и тип" },
   "acc.kind.other": { en: "Other", az: "Digər", ru: "Другое" },
   "acc.opening": { en: "Balance today (optional)", az: "Bu günkü qalıq (istəyə bağlı)", ru: "Остаток сегодня (необязательно)" },
   "acc.add":    { en: "Add account", az: "Hesab əlavə et", ru: "Добавить счёт" },
@@ -614,11 +667,15 @@ const MESSAGES = {
   "acc.removed": { en: "Account removed", az: "Hesab silindi", ru: "Счёт удалён" },
   "acc.remove": { en: "Remove account {name}", az: "{name} hesabını sil", ru: "Удалить счёт {name}" },
   "acc.hidden": { en: "hidden", az: "gizlədilib", ru: "скрыт" },
+  "acc.edit":   { en: "Edit", az: "Dəyiş", ru: "Изменить" },
+  "acc.edited": { en: "Account updated", az: "Hesab yeniləndi", ru: "Счёт обновлён" },
   "acc.hide":   { en: "Hide", az: "Gizlət", ru: "Скрыть" },
   "acc.show":   { en: "Show", az: "Göstər", ru: "Показать" },
   "acc.inUse":  { en: "Entries or transfers use this account, so it cannot be removed. Hide it instead.", az: "Bu hesabdan qeydlər və ya köçürmələr istifadə edir, buna görə silinə bilməz. Əvəzinə gizlədin.", ru: "Этот счёт используется в операциях или переводах, удалить его нельзя. Скройте его." },
   "acc.saveFailed": { en: "Could not save. Free some storage and try again.", az: "Saxlamaq mümkün olmadı. Yaddaşı boşaldıb yenidən cəhd edin.", ru: "Не удалось сохранить. Освободите память и повторите." },
   "acc.total":  { en: "Total in shown accounts: {amount}", az: "Göstərilən hesablarda cəmi: {amount}", ru: "Всего на показанных счетах: {amount}" },
+  "acc.net":  { en: "Net position: {amount}", az: "Xalis vəziyyət: {amount}", ru: "Чистая позиция: {amount}" },
+  "acc.netNote": { en: "Accounts, plus money owed to you, minus what you owe and what is left on your loans (loan balances are estimates).", az: "Hesablar, üstəgəl sizə borclu olunan pul, çıx öz borcunuz və kreditlərin qalığı (kredit qalıqları təxminidir).", ru: "Счета плюс долги вам, минус ваши долги и остатки по кредитам (остатки по кредитам — оценка)." },
   "acc.totalNote": { en: "This is not your net worth: debts and loans are not included.", az: "Bu sizin xalis sərvətiniz deyil: borclar və kreditlər daxil edilməyib.", ru: "Это не ваш капитал: долги и кредиты не учтены." },
   "acc.transferTitle": { en: "Move money between accounts", az: "Hesablar arasında pul köçürün", ru: "Перевод между счетами" },
   "acc.transferSub": { en: "A transfer is not income and not spending. It changes only the two balances.", az: "Köçürmə nə gəlirdir, nə də xərc. O yalnız iki qalığı dəyişir.", ru: "Перевод — не доход и не расход. Он меняет только два остатка." },
@@ -668,6 +725,9 @@ const MESSAGES = {
   "ledger.selectAll":  { en: "Select all ({n})", az: "Hamısını seç ({n})", ru: "Выбрать все ({n})" },
   "ledger.selectNone": { en: "Clear selection", az: "Seçimi təmizlə", ru: "Снять выбор" },
   "ledger.deleteSel":  { en: "Delete {n}", az: "{n} sil", ru: "Удалить: {n}" },
+  "ledger.selOnly":    { en: "Selected only", az: "Yalnız seçilənlər", ru: "Только выбранные" },
+  "ledger.selSum":     { en: "{n} selected · Spent {exp} · Income {inc} · Net {net}", az: "{n} seçilib · Xərc {exp} · Gəlir {inc} · Xalis {net}", ru: "Выбрано: {n} · Расход {exp} · Доход {inc} · Итого {net}" },
+  "ledger.selHint":    { en: "Tap entries to select. Your selection stays when you change the search or filters.", az: "Seçmək üçün qeydlərə toxunun. Axtarışı və ya filtrləri dəyişsəniz də seçim qalır.", ru: "Нажимайте на записи, чтобы выбрать. Выбор сохраняется при смене поиска и фильтров." },
   "budget.crossOver": { en: "{cat} budget exceeded this month ({pct}%)", az: "{cat} büdcəsi bu ay aşıldı ({pct}%)", ru: "Бюджет «{cat}» в этом месяце превышен ({pct}%)" },
   "budget.crossNear": { en: "{cat} budget is {pct}% used", az: "{cat} büdcəsinin {pct}%-i istifadə olunub", ru: "Бюджет «{cat}» использован на {pct}%" },
   "toast.recorded": { en: "Transaction recorded", az: "Əməliyyat qeydə alındı", ru: "Операция записана" },
@@ -682,6 +742,15 @@ const MESSAGES = {
   "banner.readPaused":  { en: "Saving is paused because your saved data could not be read. Nothing has been overwritten. Close and reopen the app; if this keeps happening, check the browser's storage settings.", az: "Saxlanmış məlumatlarınız oxuna bilmədiyi üçün yadda saxlama dayandırılıb. Heç nəyin üzərinə yazılmayıb. Tətbiqi bağlayıb yenidən açın; bu təkrarlanarsa, brauzerin yaddaş parametrlərini yoxlayın.", ru: "Сохранение приостановлено, так как не удалось прочитать сохранённые данные. Ничего не перезаписано. Закройте и снова откройте приложение; если это повторяется, проверьте настройки хранилища браузера." },
   "banner.saveFailed":  { en: "Could not save changes — storage may be full. Back up your data now.", az: "Dəyişiklikləri yadda saxlamaq mümkün olmadı — yaddaş dolu ola bilər. Məlumatlarınızın ehtiyat nüsxəsini indi yaradın.", ru: "Не удалось сохранить изменения — возможно, хранилище заполнено. Сделайте резервную копию прямо сейчас." },
   "banner.backUp":      { en: "Back up", az: "Ehtiyat nüsxə", ru: "Сделать копию" },
+  "more.localDataA":  { en: "Your data lives on this device; Google backup may keep a copy", az: "Məlumatlarınız bu cihazdadır; Google ehtiyat nüsxəsi surət saxlaya bilər", ru: "Ваши данные на этом устройстве; резервная копия Google может хранить копию" },
+  "info.how.4.hA":    { en: "Your data and its backups", az: "Məlumatlarınız və ehtiyat nüsxələri", ru: "Ваши данные и резервные копии" },
+  "info.how.4.bA":    { en: "There is no account in this app. On Android your phone may also keep an encrypted automatic backup of your data in your Google account and bring it back when you reinstall the app or change phones. That copy can be a day old, so also save a backup file (More → Import / Export) to Google Drive, Telegram or e-mail.", az: "Bu tətbiqdə hesab yoxdur. Android-də telefonunuz məlumatlarınızın şifrələnmiş avtomatik ehtiyat nüsxəsini Google hesabınızda saxlaya və tətbiqi yenidən quraşdırdıqda və ya telefonu dəyişdikdə geri qaytara bilər. Bu nüsxə bir gün köhnə ola bilər, ona görə ehtiyat nüsxə faylını da (Digər → İdxal / ixrac) Google Drive-a, Telegram-a və ya e-poçta saxlayın.", ru: "В этом приложении нет аккаунта. На Android телефон может также хранить зашифрованную автоматическую копию ваших данных в аккаунте Google и возвращать её при переустановке приложения или смене телефона. Такая копия может быть суточной давности, поэтому дополнительно сохраните резервный файл (Ещё → Импорт и экспорт) в Google Drive, Telegram или на почту." },
+  "info.safe.1.hA":   { en: "Your data lives on this phone", az: "Məlumatlarınız bu telefondadır", ru: "Ваши данные на этом телефоне" },
+  "info.safe.1.bA":   { en: "The app has no account and no server of its own. On Android, Google's automatic backup may keep a copy of your data in your Google account. It can be about a day old, so it does not replace a backup file. You can switch it off in your phone's Google backup settings.", az: "Tətbiqin hesabı və öz serveri yoxdur. Android-də Google-un avtomatik ehtiyat nüsxəsi məlumatlarınızın surətini Google hesabınızda saxlaya bilər. O təxminən bir gün köhnə ola bilər, ona görə ehtiyat nüsxə faylını əvəz etmir. Onu telefonun Google ehtiyat nüsxə ayarlarında söndürə bilərsiniz.", ru: "У приложения нет аккаунта и собственного сервера. На Android автоматическая резервная копия Google может хранить копию ваших данных в аккаунте Google. Она может быть примерно суточной давности, поэтому не заменяет файл резервной копии. Её можно отключить в настройках резервного копирования Google на телефоне." },
+  "info.safe.2.bA":   { en: "Clearing the app's storage, a phone reset or losing the phone, and a very full phone. Uninstalling the app or moving to a new phone can bring back an older automatic copy if Google backup is on.", az: "Tətbiq yaddaşının təmizlənməsi, telefonun sıfırlanması və ya itirilməsi, telefonun çox dolu olması. Google ehtiyat nüsxəsi açıqdırsa, tətbiqi silmək və ya yeni telefona keçmək köhnə avtomatik nüsxəni geri qaytara bilər.", ru: "Очистка хранилища приложения, сброс или потеря телефона, переполненная память. Если резервное копирование Google включено, удаление приложения или переход на новый телефон может вернуть более старую автоматическую копию." },
+  "info.privacy.1.bA": { en: "Your entries, budgets, goals, bills and settings are stored in the app's own storage on this device. If Google backup is on, Android may also keep a copy in your Google account. The app has no account of its own, no ads, and no analytics of what you enter.", az: "Qeydləriniz, büdcələriniz, məqsədləriniz, ödənişləriniz və ayarlarınız bu cihazda, tətbiqin öz yaddaşında saxlanılır. Google ehtiyat nüsxəsi açıqdırsa, Android surəti Google hesabınızda da saxlaya bilər. Tətbiqin öz hesabı, reklamı və daxil etdiyiniz məlumatların analitikası yoxdur.", ru: "Ваши записи, бюджеты, цели, платежи и настройки хранятся в собственной памяти приложения на этом устройстве. Если резервное копирование Google включено, Android может хранить копию и в вашем аккаунте Google. У приложения нет собственного аккаунта и рекламы, а также аналитики того, что вы вводите." },
+  "info.privacy.4.bA": { en: "You can export everything at any time. To delete your data, clear the app's data in your phone's settings or uninstall the app; a copy in your Google backup, if you have one, is managed in your Google account. Without a backup file or a Google backup, deleted data cannot be recovered.", az: "İstənilən vaxt hər şeyi ixrac edə bilərsiniz. Məlumatları silmək üçün telefonun ayarlarında tətbiqin məlumatlarını təmizləyin və ya tətbiqi silin; Google ehtiyat nüsxənizdəki surət (varsa) Google hesabınızda idarə olunur. Ehtiyat nüsxə faylı və ya Google ehtiyat nüsxəsi olmadan silinmiş məlumatı bərpa etmək olmaz.", ru: "Вы можете в любой момент экспортировать всё. Чтобы удалить данные, очистите данные приложения в настройках телефона или удалите приложение; копия в резервной копии Google (если она есть) управляется в вашем аккаунте Google. Без файла резервной копии или резервной копии Google удалённые данные восстановить нельзя." },
+  "restore.notice":     { en: "Your data was restored from a backup ({n} entries, latest: {date}). Anything you entered after that backup may be missing – please check your latest entries.", az: "Məlumatlarınız ehtiyat nüsxədən bərpa olunub (əməliyyat sayı: {n}, ən sonuncusu: {date}). Həmin nüsxədən sonra daxil etdikləriniz çatışmaya bilər – son əməliyyatlarınızı yoxlayın.", ru: "Данные восстановлены из резервной копии (операций: {n}, последняя: {date}). Всё, что вы вносили после этой копии, может отсутствовать — проверьте последние операции." },
   "banner.backupDue":   { en: "Back up your data to avoid losing it", az: "Məlumatlarınızı itirməmək üçün ehtiyat nüsxəsini yaradın", ru: "Сделайте резервную копию, чтобы не потерять данные" },
   "banner.backUpNow":   { en: "Back up now", az: "İndi yarat", ru: "Сделать сейчас" },
   "banner.backupConfirm": { en: "A backup file was created. The app can't see your Downloads — once you've found the file, confirm it here.", az: "Ehtiyat nüsxə faylı yaradıldı. Tətbiq «Yükləmələr» qovluğunu görə bilmir — faylı tapdıqdan sonra burada təsdiqləyin.", ru: "Файл резервной копии создан. Приложение не видит папку «Загрузки» — когда найдёте файл, подтвердите это здесь." },
@@ -865,6 +934,19 @@ const MESSAGES = {
   // Run 16 (DRAFT az/ru): the user's own subcategories (suggestions in the picker; entries keep the text).
   "subcat.mine":     { en: "My own", az: "Özümünkü", ru: "Своя" },
   "subcat.ph":       { en: "e.g. Street food", az: "məs. Küçə yeməyi", ru: "напр. Уличная еда" },
+  "theme.title":     { en: "Colour theme", az: "Rəng temi", ru: "Цветовая тема" },
+  "theme.changed":   { en: "Theme changed", az: "Tema dəyişdi", ru: "Тема изменена" },
+  "theme.saveFailed": { en: "Could not save the theme choice on this device", az: "Tema seçimi bu cihazda saxlanıla bilmədi", ru: "Не удалось сохранить выбор темы на этом устройстве" },
+  "fx.title":        { en: "Reduce effects", az: "Effektləri azalt", ru: "Меньше эффектов" },
+  "fx.sub":          { en: "Turns off shadows and highlights. Layers stay visible through colour and edges.", az: "Kölgələri və işıqlanmanı söndürür. Qatlar rəng və kənarlar vasitəsilə görünməyə davam edir.", ru: "Отключает тени и подсветку. Слои остаются заметны по цвету и границам." },
+  "theme.sea":       { en: "Sea glass", az: "Dəniz şüşəsi", ru: "Морское стекло" },
+  "theme.nordic":    { en: "Nordic", az: "Şimal", ru: "Север" },
+  "theme.mist":      { en: "Mist (light)", az: "Duman (açıq)", ru: "Дымка (светлая)" },
+  "theme.dusk":      { en: "Dusk", az: "Qürub", ru: "Сумерки" },
+  "theme.sapphire":  { en: "Sapphire", az: "Sapfir", ru: "Сапфир" },
+  "theme.cocoa":     { en: "Cocoa", az: "Kakao", ru: "Какао" },
+  "subcat.rename":   { en: "Rename \"{name}\"", az: "«{name}» adını dəyiş", ru: "Переименовать «{name}»" },
+  "subcat.renamed":  { en: "Renamed, including earlier entries", az: "Adı dəyişdi, əvvəlki qeydlər də daxil", ru: "Переименовано, включая прежние записи" },
   "subcat.remove":   { en: "Remove \"{name}\" from my list", az: "«{name}» siyahımdan sil", ru: "Убрать «{name}» из моего списка" },
   "subcat.saveFailed": { en: "Could not save your list on this device. The entry itself is not affected.", az: "Siyahı bu cihazda saxlanmadı. Qeydin özünə təsir etmir.", ru: "Не удалось сохранить список на этом устройстве. Сама запись не затронута." },
   "subcat.err.empty":    { en: "Type a name first.", az: "Əvvəlcə ad yazın.", ru: "Сначала введите название." },
@@ -906,6 +988,7 @@ const MESSAGES = {
   "safe.goalsExceedFloor": { en: "Goal contributions ({goals}) exceed the savings floor ({floor}) — using the higher amount", az: "Məqsədlərə ayırmalar ({goals}) aylıq minimum yığımdan ({floor}) çoxdur — böyük məbləğ götürülür", ru: "Взносы на цели ({goals}) превышают минимум накоплений ({floor}) — учитывается бо́льшая сумма" },
   "safe.noteIncome":     { en: "Counts income received so far (dated today or earlier).", az: "İndiyədək daxil olan gəlir hesablanır (bu gün və ya daha əvvəlki tarixli).", ru: "Учитывается уже полученный доход (с датой не позже сегодняшней)." },
   "safe.noteSchedules":  { en: "Includes {up} upcoming and {un} unrecorded {payments} from {s} recurring {schedules}.", az: "{s} təkrarlanan cədvəldən {up} qarşıdakı və {un} qeydə alınmamış ödəniş daxildir.", ru: "Учтены платежи из регулярных графиков ({s}): предстоящие — {up}, незаписанные — {un}." },
+  "safe.noteBalance": { en: "Your accounts hold {held} in total, less than this figure. Safe to Spend counts this month's recorded income and spending, not account balances; entries with no account are in no balance.", az: "Hesablarınızda cəmi {held} var, bu rəqəmdən azdır. «Xərcləmək olar» məbləği hesab qalıqlarını yox, bu ayın qeydə alınmış gəlir və xərclərini sayır; hesabı olmayan qeydlər heç bir qalığa daxil deyil.", ru: "На ваших счетах всего {held}, это меньше указанной суммы. «Можно потратить» считает записанные доходы и расходы этого месяца, а не остатки на счетах; записи без счёта не входят ни в один остаток." },
   "safe.noteNoRecurring": { en: "No recurring payments are set up, so upcoming bills are not included.", az: "Təkrarlanan ödənişlər qurulmayıb, ona görə qarşıdakı hesablar nəzərə alınmayıb.", ru: "Регулярные платежи не настроены, поэтому предстоящие счета не учтены." },
   "safe.waiting":        { en: "Safe to Spend appears once this month's income has arrived (income dated today or earlier).", az: "«Xərcləmək olar» bu ayın gəliri daxil olduqdan sonra görünəcək (bu gün və ya daha əvvəlki tarixli gəlir).", ru: "«Можно потратить» появится, когда поступит доход за этот месяц (с датой не позже сегодняшней)." },
   "safe.waitingExpected": { en: "{amount} is expected later this month.", az: "Bu ay daha sonra {amount} gözlənilir.", ru: "Позже в этом месяце ожидается {amount}." },
@@ -1093,7 +1176,6 @@ const MESSAGES = {
   "set.floorSub":      { en: "Minimum reserved from income — if your goal contributions exceed this, the higher amount is used automatically", az: "Gəlirdən ayrılan minimum məbləğ — məqsədlərə ayırmalar bundan çox olarsa, avtomatik olaraq böyük məbləğ götürülür", ru: "Минимум, который откладывается из дохода. Если взносы на цели больше, автоматически учитывается бо́льшая сумма" },
   "set.zeroOrMore":    { en: "Enter a number, 0 or more", az: "0 və ya daha böyük ədəd daxil edin", ru: "Введите число от 0 и больше" },
   "set.saved":         { en: "Saved", az: "Yadda saxlanıldı", ru: "Сохранено" },
-  "set.preferences":   { en: "Preferences", az: "Seçimlər", ru: "Параметры" },
   "set.currency":      { en: "Currency symbol", az: "Valyuta işarəsi", ru: "Символ валюты" },
   "set.currencySub":   { en: "Display only — amounts are not converted. Currently: {currency}", az: "Yalnız göstərmək üçündür — məbləğlər çevrilmir. Hazırda: {currency}", ru: "Только для отображения — суммы не пересчитываются. Сейчас: {currency}" },
   "set.currencyEmpty": { en: "Enter a currency symbol", az: "Valyuta işarəsini daxil edin", ru: "Введите символ валюты" },
@@ -1190,6 +1272,16 @@ const MESSAGES = {
 
 
 
+
+
+
+
+
+
+
+
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PERSONAL FINANCIAL OS v9
 // Storage key: expense_ledger_v5 — PERMANENT, never rename
@@ -1268,6 +1360,16 @@ function cleanMoneyText(raw) {
   const intPart=s.slice(0,at).replace(/[.,]/g,""), dec=s.slice(at+1).replace(/[.,]/g,"").slice(0,2);
   return (intPart===""?"0":intPart)+"."+dec;
 }// A form value that ends in the decimal mark ("145.") means 145; parseMoney itself stays strict for imports.
+// Run 26: an in-app question instead of the browser's own confirm box (same look as the rest, animated, translated). askConfirm(text) gives
+// a promise of true/false; the <ConfirmHost/> in the app shell shows it. Without a host (never in the app) it falls back to window.confirm.
+let confirmHost=null;
+function askConfirm(message) { return new Promise(res=>{ if (!confirmHost) { res(typeof window!=="undefined" && window.confirm ? window.confirm(message) : false); return; } confirmHost({ message, res }); }); }
+// Run 26: one shared way to open an inline form without a jump: the view glides to it (smooth scroll) and the first box is focused
+// with preventScroll (a plain autoFocus makes phones snap the page). Use as ref={revealFocus}; it only acts once per element.
+function revealFocus(el) {
+  if (!el || el.dataset.shown) return; el.dataset.shown="1";
+  requestAnimationFrame(()=>{ try { el.scrollIntoView({ behavior:"smooth", block:"center" }); const i=el.matches("input,select,textarea") ? el : el.querySelector("input,select,textarea"); if (i) i.focus({ preventScroll:true }); } catch {} });
+}
 function formMoney(v, opts) { return parseMoney(typeof v==="string" ? v.trim().replace(/\.$/,"") : v, opts); }
 
 function isPlainObject(x) { return x!==null && typeof x==="object" && !Array.isArray(x); }
@@ -1523,6 +1625,16 @@ function addCustomCat(list, name, income, color) {
   const next=cleanCustomCats([...(list||[]),{ id:newCustomCatId(list), name:n, income:!!income, color }]);
   return next.length>(list||[]).length ? { list:next, added:true, reason:"" } : { list, added:false, reason:"dup" };
 }
+// Renames a category and/or changes its colour. Entries and budgets point at the id, so nothing else changes; the type stays as it was.
+function editCustomCat(list, id, name, color) {
+  const cur=(list||[]).find(c=>c.id===id);
+  if (!cur) return { list, edited:false, reason:"missing" };
+  const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
+  if (!n) return { list, edited:false, reason:"empty" };
+  if (n.length>CCAT_LEN) return { list, edited:false, reason:"long" };
+  const next=cleanCustomCats(list.map(c=>c.id===id ? { ...c, name:n, color:color||c.color } : c));
+  return next.length===list.length && next.some(c=>c.id===id) ? { list:next, edited:true, reason:"" } : { list, edited:false, reason:"dup" };
+}
 function customCatInUse(id, transactions, budgets) { return (transactions||[]).some(x=>x && x.category===id) || !!(budgets && budgets[id]>0); }
 try { applyCustomCats(readCustomCats()); } catch {}
 
@@ -1681,6 +1793,21 @@ function removeUserSubcat(map, catId, text) {
   if (rest.length) out[catId]=rest; else delete out[catId];
   return out;
 }
+// Run 25: renaming one of the user's own subcategories. Same rules as adding (length, no duplicate, not a built-in name); the position
+// in the list is kept. Entries that used the old name are renamed by renameSubcatInEntries (only that category's entries).
+function renameUserSubcat(map, catId, oldText, newText) {
+  const cat=CATEGORIES.find(c=>c.id===catId); if (!cat) return { map, edited:false, reason:"category" };
+  const mine=(map&&map[catId])||[], idx=mine.findIndex(x=>subKey(x)===subKey(oldText));
+  if (idx<0) return { map, edited:false, reason:"missing" };
+  const s=typeof newText==="string" ? newText.trim().replace(/\s+/g," ") : ""; if (!s) return { map, edited:false, reason:"empty" };
+  if (s.length>SUBCAT_LEN) return { map, edited:false, reason:"long" };
+  if ((cat.subs||[]).some(x=>subKey(x)===subKey(s)) || mine.some((x,i)=>i!==idx && subKey(x)===subKey(s))) return { map, edited:false, reason:"dup" };
+  const list=[...mine]; list[idx]=s;
+  return { map:{ ...map, [catId]:list }, edited:true, reason:"", name:s };
+}
+function renameSubcatInEntries(transactions, catId, oldText, newText) {
+  return (transactions||[]).map(x=> x && x.category===catId && typeof x.subcategory==="string" && subKey(x.subcategory)===subKey(oldText) ? { ...x, subcategory:newText } : x);
+}
 function mergeSubcats(a, b) { const out={}; const A=cleanSubcats(a), B=cleanSubcats(b); new Set([...Object.keys(A),...Object.keys(B)]).forEach(k=>{ out[k]=[...(A[k]||[]),...(B[k]||[])]; }); return cleanSubcats(out); }
 function readSubcats() { try { const r=localStorage.getItem(SUBCAT_KEY); return r ? cleanSubcats(JSON.parse(r)) : {}; } catch { return {}; } }
 function writeSubcats(map) {   // an empty list removes the key instead of keeping an empty shell
@@ -1690,7 +1817,7 @@ function writeSubcats(map) {   // an empty list removes the key instead of keepi
 // Accounts (a card, cash, a bank account) live in their own storage key with the transfers between them. An ordinary entry may carry
 // an optional `account` id. A balance is never stored: opening balance + income − expenses (entries with that account) + transfers in −
 // transfers out, all in whole cents. A transfer is its own record, so it can never count as income or spending.
-const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","bank","other"];
+const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","wallet","bank","other"];
 const accId=(v)=>typeof v==="string" && /^a_[a-z0-9]{3,12}$/.test(v) ? v : "";
 const centsOf=(v)=>{ const n=Number(v); return Number.isFinite(n) ? Math.round(n*100) : 0; };
 function cleanAccountData(raw) {
@@ -1722,12 +1849,22 @@ function readAccounts() { try { const r=localStorage.getItem(ACC_KEY); return r 
 function writeAccounts(data) {
   try { const c=cleanAccountData(data); if (!c.accounts.length) localStorage.removeItem(ACC_KEY); else localStorage.setItem(ACC_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
 }
+// Run 26: the name of an account for a row label. Cached against the raw stored text, so listing many rows does not parse it again.
+let _accRaw=null, _accMap={};
+function accountName(id) {
+  if (!accId(id)) return "";
+  try { const raw=localStorage.getItem(ACC_KEY); if (raw!==_accRaw) { _accRaw=raw; _accMap={}; cleanAccountData(raw?JSON.parse(raw):null).accounts.forEach(a=>{ _accMap[a.id]=a.name; }); } } catch { return ""; }
+  return _accMap[id]||"";
+}
 // Balance per account id, in money (exact to the cent). Entries whose account is unknown here are not counted anywhere.
-function accountBalances(data, transactions) {
-  const d=cleanAccountData(data), out={};
+// Run 28: a balance is "as of" a day (default: today). An entry or transfer dated AFTER that day has not happened yet, so it does not move
+// the balance (a planned bill for the 20th must not lower the balance on the 5th). Entries without a valid date count, as before.
+function accountBalances(data, transactions, asOf) {
+  const d=cleanAccountData(data), out={}, cut=isValidDateStr(asOf) ? asOf : localDateStr();
+  const happened=(date)=>!isValidDateStr(date) || date<=cut;
   d.accounts.forEach(a=>{ out[a.id]=centsOf(a.opening.amount); });
-  (transactions||[]).forEach(x=>{ if (!x || !(accId(x.account) in out)) return; const c=centsOf(x.amount); out[x.account]+= x.type==="income" ? c : x.type==="expense" ? -c : 0; });
-  d.transfers.forEach(x=>{ out[x.from]-=centsOf(x.amount); out[x.to]+=centsOf(x.amount); });
+  (transactions||[]).forEach(x=>{ if (!x || !(accId(x.account) in out) || !happened(x.date)) return; const c=centsOf(x.amount); out[x.account]+= x.type==="income" ? c : x.type==="expense" ? -c : 0; });
+  d.transfers.forEach(x=>{ if (!happened(x.date)) return; out[x.from]-=centsOf(x.amount); out[x.to]+=centsOf(x.amount); });
   Object.keys(out).forEach(k=>{ out[k]=out[k]/100; });
   return out;
 }
@@ -1741,6 +1878,18 @@ function addAccount(data, name, kind, openingAmount, openingDate) {
   const amt=Number(openingAmount||0); if (!Number.isFinite(amt) || Math.abs(amt)>=1e12) return { data:d, added:false, reason:"amount" };
   const id=newAccId("a_",new Set(d.accounts.map(a=>a.id)));
   return { data:cleanAccountData({ accounts:[...d.accounts,{ id, name:n, kind, opening:{ amount:amt, date:openingDate||"" }, hidden:false }], transfers:d.transfers }), added:true, reason:"", id };
+}
+// Rename an account and/or set its opening amount (the date of the opening stays, or becomes the given date when it had none).
+function editAccount(data, id, name, openingAmount, openingDate) {
+  const d=cleanAccountData(data), cur=d.accounts.find(a=>a.id===id);
+  if (!cur) return { data:d, edited:false, reason:"account" };
+  const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
+  if (!n) return { data:d, edited:false, reason:"empty" };
+  if (n.length>40) return { data:d, edited:false, reason:"long" };
+  if (d.accounts.some(a=>a.id!==id && a.name.toLowerCase()===n.toLowerCase())) return { data:d, edited:false, reason:"dup" };
+  const amt=Number(openingAmount); if (!Number.isFinite(amt) || Math.abs(amt)>=1e12) return { data:d, edited:false, reason:"amount" };
+  const accounts=d.accounts.map(a=>a.id!==id ? a : { ...a, name:n, opening:{ amount:Math.round(amt*100)/100, date:a.opening.date||openingDate||"" } });
+  return { data:cleanAccountData({ accounts, transfers:d.transfers }), edited:true, reason:"" };
 }
 function addTransfer(data, from, to, amount, date, note="") {
   const d=cleanAccountData(data), c=centsOf(amount);
@@ -1828,7 +1977,24 @@ function loanExtraEffect(l, extra) {
 }
 function debtRemaining(d) { return Math.max(0,d.principal-(d.payments||[]).reduce((s,p)=>s+p.amount,0)); }
 function debtCanPay(d, amount) { return isQapik(amount) && amount<=debtRemaining(d); }
-
+// Run 28: net position = money in the visible accounts + money people owe you − what you owe − what is left on your loans. All in whole cents
+// (the debts store keeps cents as integers, so there is no unit conversion). Loan balances come from the repayment schedule after the payments
+// recorded so far, so they are ESTIMATES (an extra payment or a bank's own rounding can move them). Returns null when there is nothing owed
+// either way, so a screen can stay quiet instead of repeating the accounts total.
+function loanRemainingCents(l) {
+  const sc=loanSchedule(l); if (!sc) return 0;
+  const k=Math.min(Array.isArray(l.payments)?l.payments.length:0, sc.payments.length);
+  return k>=sc.payments.length ? 0 : k===0 ? l.principal : Math.max(0,sc.payments[k-1].balance);
+}
+function netPosition(accountData, transactions, debtData, asOf) {
+  const a=cleanAccountData(accountData), debts=cleanDebtData(debtData), bal=accountBalances(a,transactions,asOf);
+  const accounts=a.accounts.filter(x=>!x.hidden).reduce((s,x)=>s+Math.round((bal[x.id]||0)*100),0);
+  const owedToMe=debts.debts.filter(x=>x.direction==="owed").reduce((s,x)=>s+debtRemaining(x),0);
+  const iOwe=debts.debts.filter(x=>x.direction==="owe").reduce((s,x)=>s+debtRemaining(x),0);
+  const loans=debts.loans.reduce((s,x)=>s+loanRemainingCents(x),0);
+  if (!owedToMe && !iOwe && !loans) return null;
+  return { accounts, owedToMe, iOwe, loans, net:accounts+owedToMe-iOwe-loans };
+}
 function cleanPayments(list, withTxn) {
   if (!Array.isArray(list)) return [];
   const seen=new Set(), out=[];
@@ -1913,7 +2079,7 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
     else {
       const inc=win.filter(x=>x.type==="income").reduce(addAmt,0), exp=win.filter(x=>x.type==="expense").reduce(addAmt,0);
       if (!(inc>0)) numbers.push({ id:"noIncome" });
-      else { const pct=Math.round(exp/inc*100); numbers.push(exp<=inc ? { id:"spent", pct, kept:100-pct } : { id:"over", pct }); }
+      else { const pct=Math.round(exp/inc*100); numbers.push(exp<=inc ? { id:"spent", pct, kept:100-pct } : { id:"over", pct:Math.max(101,pct) }); }
     }
   }
   if (future>0) numbers.push({ id:"future", n:future });
@@ -1925,7 +2091,7 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
   }
   const monKey=(d)=>d.getFullYear()*12+d.getMonth(), curK=monKey(now);
   const incBy={}; let firstK=null;
-  past.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); if (firstK===null||k<firstK) firstK=k; if (x.type==="income") incBy[k]=(incBy[k]||0)+(Number(x.amount)||0); });
+  past.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); if (firstK===null||k<firstK) firstK=k; if (x.type==="income") incBy[k]=Math.round(((incBy[k]||0)+(Number(x.amount)||0))*100)/100; });
   if (firstK!==null) {
     const from=Math.max(firstK,curK-6), months=[]; for (let k=from;k<curK;k++) months.push(k);
     if (months.length>=4) {
@@ -1955,12 +2121,13 @@ function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
   // only with all three earlier months present; the biggest rise only. R10: interest still to pay on each running loan (qapik).
   {
     const spend=forSpending(past.filter(x=>x.type==="expense")), byCat={}, seen=new Set();
-    spend.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); seen.add(k); if (!byCat[x.category]) byCat[x.category]={}; byCat[x.category][k]=(byCat[x.category][k]||0)+(Number(x.amount)||0); });
+    spend.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); seen.add(k); if (!byCat[x.category]) byCat[x.category]={}; byCat[x.category][k]=Math.round(((byCat[x.category][k]||0)+(Number(x.amount)||0))*100)/100; });
     if ([1,2,3].every(i=>seen.has(curK-i))) {
       let best=null;
       Object.keys(byCat).forEach(c=>{
-        const cur=byCat[c][curK]||0, avg=([1,2,3].reduce((s,i)=>s+(byCat[c][curK-i]||0),0))/3;
-        if (avg>0 && cur>=1.5*avg && cur-avg>=20 && (!best || cur-avg>best.d)) best={ d:cur-avg, id:"catUp", cat:c, pct:Math.round((cur/avg-1)*100) };
+        // Whole cents, no division: "at least 50% above the average of 3 months" is 2×current ≥ sum of the 3 months, and "20 or more above" is 3×current − sum ≥ 60.
+        const curC=Math.round((byCat[c][curK]||0)*100), prevC=[1,2,3].reduce((s,i)=>s+Math.round((byCat[c][curK-i]||0)*100),0);
+        if (prevC>0 && 2*curC>=prevC && 3*curC-prevC>=6000 && (!best || (3*curC-prevC)/3>best.d)) best={ d:(3*curC-prevC)/3, id:"catUp", cat:c, pct:Math.round((curC*3/prevC-1)*100) };
       });
       if (best) numbers.push({ id:best.id, cat:best.cat, pct:best.pct });
     }
@@ -1977,6 +2144,51 @@ function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().l
 
 // "Hide amounts" is remembered until the user changes it (Run 20, owner request): it is a preference, kept under its own key like the other
 // side settings, so the ledger key is not touched. An unreadable or blocked store simply means "off".
+// ─── Colour themes (Run 25, owner-supplied palettes) ───────────────────────────────────────────────────────────────────────────────
+// A theme is a set of overrides for the CSS colour variables, applied to the page root; "sea" (the original look) has none. The choice
+// is a plain preference in its own storage key (not in the ledger, so backups and imports never touch it). Meaning colours (income,
+// spending, warning) stay readable on every theme: tests/logic/run25themes checks the contrast of every text colour on every surface.
+const THEME_KEY=`${KEY}__theme`;
+const DARK_MEANING={ "--violet":"#B3A1FF","--info":"#83B9F5","--pos":"#8BD97A","--pos-bg":"#173622","--neg":"#FF8188","--neg-bg":"#3B1C22","--warn":"#F0C46F","--warn-bg":"#352B14" };
+const THEMES={
+  sea:{ swatch:["#07151A","#4CC9C4"], dark:true, vars:{} },
+  nordic:{ swatch:["#1F2933","#A68A64"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#171E26","--bg-card":"#1F2933","--bg-warm":"#2B3745","--bg-inset":"#232D39","--ink":"#F7F7F2","--ink-2":"#E2E3DE","--ink-3":"#B3B8BF","--ink-4":"#A0A7AF","--ink-5":"#3A4756",
+    "--rule":"#34414F","--rule-2":"#4B5B6C","--accent":"#C2A57C","--accent-light":"#3A3226","--accent-mid":"#D6BE9C","--accent-text":"#C2A57C","--accent-fill":"#A68A64","--on-accent":"#14181D" } },
+  mist:{ swatch:["#DEDCDC","#57707A"], dark:false, vars:{
+    "--bg":"#DEDCDC","--bg-card":"#EDEBEB","--bg-warm":"#D9D7D9","--bg-inset":"#E6E4E4","--ink":"#191D23","--ink-2":"#2D333B","--ink-3":"#4A525C","--ink-4":"#4B5661","--ink-5":"#B5B7BD",
+    "--rule":"#C6C4C6","--rule-2":"#A9AAB0","--accent":"#3A535D","--accent-light":"#CFD9DE","--accent-mid":"#57707A","--accent-text":"#3A535D","--accent-fill":"#57707A","--on-accent":"#FFFFFF",
+    "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1B6B3A","--pos-bg":"#D5E6D1","--neg":"#A8360A","--neg-bg":"#F0D6D3","--warn":"#7A5200","--warn-bg":"#EBDDB9" } },
+  dusk:{ swatch:["#0B132B","#D97706"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#0B132B","--bg-card":"#1C2541","--bg-warm":"#26365A","--bg-inset":"#16203D","--ink":"#FBF1E3","--ink-2":"#EAD9C0","--ink-3":"#B7C3D9","--ink-4":"#A3B0C8","--ink-5":"#3A506B",
+    "--rule":"#2C3A5E","--rule-2":"#46608A","--accent":"#F0A44B","--accent-light":"#38281A","--accent-mid":"#F4D6B0","--accent-text":"#F0A44B","--accent-fill":"#D97706","--on-accent":"#0B132B" } },
+  sapphire:{ swatch:["#000926","#0F52BA"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#000926","--bg-card":"#08143A","--bg-warm":"#10276A","--bg-inset":"#0B1B4D","--ink":"#E4EEF7","--ink-2":"#D6E6F3","--ink-3":"#A6C5D7","--ink-4":"#93B2C6","--ink-5":"#1E3A7A",
+    "--rule":"#16295F","--rule-2":"#2D4FA0","--accent":"#6FA3F5","--accent-light":"#0F2A63","--accent-mid":"#A6C5D7","--accent-text":"#6FA3F5","--accent-fill":"#0F52BA","--on-accent":"#FFFFFF" } },
+  cocoa:{ swatch:["#1A120E","#A88462"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#1A120E","--bg-card":"#261A13","--bg-warm":"#3A2418","--bg-inset":"#2E1F16","--ink":"#F2E8DA","--ink-2":"#D5C4AE","--ink-3":"#B9A58B","--ink-4":"#A8947B","--ink-5":"#4A3426",
+    "--rule":"#3A2A1F","--rule-2":"#5A4130","--accent":"#C9A882","--accent-light":"#3A2A1C","--accent-mid":"#D5C4AE","--accent-text":"#C9A882","--accent-fill":"#A88462","--on-accent":"#1A120E" } },
+};
+const THEME_IDS=Object.keys(THEMES);
+const themeId=(v)=>typeof v==="string" && Object.prototype.hasOwnProperty.call(THEMES,v) ? v : "sea";
+function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return "sea"; } }
+function writeTheme(id) { try { if (themeId(id)==="sea") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY,themeId(id)); return true; } catch { return false; } }
+function applyTheme(id) {   // sets (or clears) the colour variables on the page root; safe to call before the app renders
+  if (typeof document==="undefined" || !document.documentElement) return;
+  const th=THEMES[themeId(id)], root=document.documentElement, all=new Set(Object.values(THEMES).flatMap(x=>Object.keys(x.vars)));
+  all.forEach(k=>root.style.removeProperty(k));
+  Object.entries(th.vars).forEach(([k,v])=>root.style.setProperty(k,v));
+  root.style.colorScheme=th.dark?"dark":"light"; root.setAttribute("data-theme",themeId(id));
+  const m=document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content",th.vars["--bg"]||th.swatch[0]);
+}
+if (typeof document!=="undefined") applyTheme(readTheme());
+
+// Run 25: "Reduce effects" - a plain preference (own key). Turns off shadows and highlights; tone and hairline edges stay, so layers remain readable.
+const FX_KEY=KEY+"__fx";
+function readFxOff() { try { return localStorage.getItem(FX_KEY)==="off"; } catch { return false; } }
+function writeFxOff(off) { try { if (off) localStorage.setItem(FX_KEY,"off"); else localStorage.removeItem(FX_KEY); return true; } catch { return false; } }
+function applyFx(off) { if (typeof document==="undefined" || !document.documentElement) return; if (off) document.documentElement.setAttribute("data-fx","off"); else document.documentElement.removeAttribute("data-fx"); }
+if (typeof document!=="undefined") applyFx(readFxOff());
 const PRIVACY_KEY=`${KEY}__privacy`;
 function readPrivacy() { try { return localStorage.getItem(PRIVACY_KEY)==="1"; } catch { return false; } }
 function writePrivacy(on) { try { if (on) localStorage.setItem(PRIVACY_KEY,"1"); else localStorage.removeItem(PRIVACY_KEY); return true; } catch { return false; } }
@@ -3261,11 +3473,30 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bil
   const p=monthProgress(mon,now);
 
   const schedules=buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense");
-  let upcomingCommitments=0, unrecordedCommitments=0, upcomingCount=0, unrecordedCount=0;
+  let upcomingCommitments=0, unrecordedCommitments=0, upcomingCount=0, unrecordedCount=0, matchedAheadCount=0;
+  // F1 (counter-review): a payment typed in as an ordinary entry (not linked to its bill) is already inside curExp, so the bill's
+  // own expected payment must not be subtracted a second time. Only entries dated AFTER today count (money deliberately set aside
+  // ahead; past-dated look-alikes stay unmatched until the user links them — the Run 12 rule). Such an entry settles an upcoming
+  // date only when it is clearly the same payment: this month, linked to no bill, same category, same merchant as the bill's name,
+  // same amount to the cent. Each entry settles at most one date. Anything less certain stays counted (never optimistic).
+  const knownIds=new Set((bills||[]).map(b=>b.id));
+  const looseExp=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon) && t.date>todayStr && !(t.billId && knownIds.has(t.billId)));
+  const usedLoose=new Set();
+  const cents=(x)=>Math.round((Number(x)||0)*100);
   schedules.forEach(s=>{
     const st=scheduleMonthStatus(s,transactions,mon,now);
-    upcomingCommitments+=s.amount*st.upcoming.length;  upcomingCount+=st.upcoming.length;
-    unrecordedCommitments+=s.amount*st.overdue.length; unrecordedCount+=st.overdue.length;
+    const settle=(dates)=>{
+      if (!s.billId) return dates.length;   // inferred schedules already count their own recurring entries
+      let open=0;
+      dates.forEach(()=>{
+        const hit=looseExp.find(t=>!usedLoose.has(t.id) && t.category===s.category && norm(t.merchant)===norm(s.merchant) && cents(t.amount)===cents(s.amount));
+        if (hit) { usedLoose.add(hit.id); matchedAheadCount++; } else open++;
+      });
+      return open;
+    };
+    const up=settle(st.upcoming), od=st.overdue.length;
+    upcomingCommitments+=s.amount*up;  upcomingCount+=up;
+    unrecordedCommitments+=s.amount*od; unrecordedCount+=od;
   });
   const futureCommitments=upcomingCommitments+unrecordedCommitments;
   const recurringMonthly=schedules.reduce((sum,s)=>sum+scheduleMonthly(s),0);
@@ -3283,7 +3514,7 @@ function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bil
 
   return {
     curInc, expectedInc, curExp, laterExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
-    futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount,
+    futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount, matchedAheadCount,
     scheduleCount:schedules.length, recurringMonthly,
     disposable, remaining, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAllowance,
     feasible:curInc>0,
@@ -3401,13 +3632,13 @@ function calcPatterns(transactions, currency="₼", now=new Date()) {
   const monExp=expenses.filter(t=>t.date.startsWith(mon)&&t.date<=todayStr);   // what has happened this month (not entries dated later)
   const monTotal=sumOf(monExp);
   if (monExp.length>=5 && monTotal>0) {
-    const catTotals={}; monExp.forEach(t=>{ catTotals[t.category]=(catTotals[t.category]||0)+t.amount; });
+    const catTotals={}; monExp.forEach(t=>{ catTotals[t.category]=addAmt(catTotals[t.category]||0,t); });
     const topCat=Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
     const pct=Math.round((topCat[1]/monTotal)*100);
     if (pct>=40) insights.push({ id:"catconc", basis:{ n:monExp.length, per:"month" }, text:t("ins.catConc",{ cat:catName(topCat[0]), pct }) });
-    const mTotals={}; monExp.filter(t=>t.merchant).forEach(t=>{ mTotals[t.merchant]=(mTotals[t.merchant]||0)+t.amount; });
+    const mTotals={}, mShown={}; monExp.filter(t=>t.merchant&&t.merchant.trim()).forEach(t=>{ const k=t.merchant.trim().toLowerCase(); if (!(k in mShown)) mShown[k]=t.merchant.trim(); mTotals[k]=addAmt(mTotals[k]||0,t); });   // "Bravo" and "bravo " are one merchant
     const top3=Object.entries(mTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>a+v,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", basis:{ n:monExp.length, per:"month" }, text:t("ins.merchantConc",{ names:top3.map(([m])=>m).join(", "), pct:pc }) }); }
+    if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>Math.round((a+v)*100)/100,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", basis:{ n:monExp.length, per:"month" }, text:t("ins.merchantConc",{ names:top3.map(([m])=>mShown[m]).join(", "), pct:pc }) }); }
   }
 
   // ── Typical transaction vs last month: the MEDIAN per transaction (a part-month stays comparable, and one unusual purchase
@@ -3569,6 +3800,75 @@ function iosBrowserTab() {
   } catch { return false; }
 }
 function iosNoteSeen() { try { return localStorage.getItem(IOS_NOTE_KEY)==="1"; } catch { return false; } }
+// Run 29: Android restores an app's data from the user's Google backup (or a phone-to-phone transfer) when the app is installed. That copy can be
+// older than the ledger the user had, and nothing in the data says so (confirmed on an emulator, 6 Nov 2026: an entry made after the backup was gone
+// after a reinstall, silently). The Android shell keeps a random id in a place that is NOT backed up (window.LedgerNative.installId()); the ledger
+// keeps the id it saw last under KEY+"__install" (which IS backed up). A different id means this data came from somewhere else: say so once.
+// No id (website, older shell) or no earlier id (first run, ledger from before this feature) never produces a notice.
+const INSTALL_KEY=KEY+"__install";
+function restoreCheck(stored, current) {
+  const cur=typeof current==="string"?current.trim():"";
+  if (!cur || cur.length>128) return "none";
+  if (typeof stored!=="string" || !stored) return "first";
+  return stored===cur?"same":"restored";
+}
+// Run 30 (Android app only): reminders. The Android shell (window.LedgerNative.reminders) schedules local notifications; nothing is sent anywhere.
+// Preferences are a plain setting kept beside the ledger (KEY+"__reminders"), all OFF until the user turns them on (Android asks for permission then).
+// reminderPlan() is a pure function: from the bills / recurring payments and the entries already recorded, it lists the notifications that
+// should exist in the next days. The shell cancels what it had and schedules exactly this list, so a paid bill, an edited date or a deleted
+// bill can never leave a stale reminder behind. Bills: on the due day. Recurring payments found from entries: the day before. Daily nudge: 21:00.
+const REMIND_KEY=KEY+"__reminders";
+const REMIND_EVENT="ledger-reminders-changed";
+const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", hideAmount:false });
+function cleanReminderPrefs(raw) {
+  const r=raw && typeof raw==="object" ? raw : {};
+  const time=typeof r.time==="string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) ? r.time : REMIND_DEFAULT.time;
+  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, hideAmount:r.hideAmount===true };
+}
+function readReminders() { try { return cleanReminderPrefs(JSON.parse(localStorage.getItem(REMIND_KEY)||"null")); } catch { return { ...REMIND_DEFAULT }; } }
+function writeReminders(p) {
+  try { localStorage.setItem(REMIND_KEY,JSON.stringify(cleanReminderPrefs(p))); if (typeof window!=="undefined") window.dispatchEvent(new Event(REMIND_EVENT)); return true; } catch { return false; }
+}
+const remindersAvailable=()=>{ try { const n=window.LedgerNative; return !!(n && n.reminders && typeof n.reminders.sync==="function"); } catch { return false; } };
+function reminderId(s) { let h=5381; for (let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return (h%2147483000)+1; }   // stable positive int per (kind, schedule, date)
+function reminderPlan(schedules, transactions, prefs, now=new Date(), opts={}) {
+  const p=cleanReminderPrefs(prefs), horizon=opts.horizon||30, cap=opts.cap||60, out=[];
+  const [hh,mm]=p.time.split(":").map(Number), todayStr=localDateStr(now);
+  const endStr=localDateStr(new Date(now.getFullYear(),now.getMonth(),now.getDate()+horizon));
+  const at=(dStr,h,m)=>{ const d=parseLocalDate(dStr); return new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,m,0,0); };
+  const push=(kind,key,dStr,when,extra)=>{ if (when.getTime()<=now.getTime()) return; out.push({ id:reminderId(kind+"|"+key+"|"+dStr), kind, date:dStr, atMs:when.getTime(), ...extra }); };
+  if (p.bills || p.recurring) {
+    (Array.isArray(schedules)?schedules:[]).filter(s=>s && s.isActive && s.type==="expense").forEach(s=>{
+      const bill=!!s.billId; if (bill ? !p.bills : !p.recurring) return;
+      const seen=new Set();
+      for (let i=0;i<=Math.ceil(horizon/28)+1;i++) {
+        const mon=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i));
+        scheduleMonthStatus(s,transactions,mon,now).remaining.filter(d=>d>=todayStr && d<=endStr).forEach(d=>{
+          if (seen.has(d)) return; seen.add(d);
+          const name=s.merchant||s.note||s.category, extra={ name, amount:s.amount };
+          if (bill) push("bill",s.key,d,at(d,hh,mm),extra);
+          else { const day=parseLocalDate(d); push("recurring",s.key,d,at(localDateStr(new Date(day.getFullYear(),day.getMonth(),day.getDate()-1)),hh,mm),extra); }
+        });
+      }
+    });
+  }
+  if (p.daily) {
+    const spentToday=(Array.isArray(transactions)?transactions:[]).some(x=>x && x.date===todayStr);
+    for (let i=0;i<14;i++) {
+      const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+i), ds=localDateStr(d);
+      if (i===0 && spentToday) continue;
+      push("daily","d",ds,new Date(d.getFullYear(),d.getMonth(),d.getDate(),21,0,0,0),{});
+    }
+  }
+  return out.sort((a,b)=>a.atMs-b.atMs || a.id-b.id).slice(0,cap);
+}
+// The text of one notification (shown on the lock screen). With "hide amounts" on, or the app's own privacy mode, no amount is written.
+function reminderMessage(item, prefs, currency) {
+  if (item.kind==="daily") return { title:t("remind.dailyTitle"), body:t("remind.dailyBody") };
+  const hide=cleanReminderPrefs(prefs).hideAmount || PRIVACY;
+  const name=hide ? t("remind.aPayment") : item.name;
+  return { title:t(item.kind==="bill"?"remind.billTitle":"remind.recurTitle",{name}), body:hide ? t("remind.bodyHidden") : t("remind.body",{amount:fmt(item.amount,currency)}) };
+}
 
 function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills=[]) {
   const cards = [];
@@ -3676,6 +3976,6 @@ function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bi
 
 
 
-export { migrateAndLoad, buildMerchantMemory, merchantSuggest, memKey, calcHelperCards, calcSafeToSpend, calcSpendingPace, calcBudgetStatus, calcMonthSummary, calcPatterns, calcGoalProgress, goalRequiredMonthly, goalScenario, walletId, WALLET_IDS, lastWallet, calcWalletSpend, cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats, writeSubcats, calcCategorySpend, calcWhatChanged, calcTxnStats, calcSpentToDate, prevMon, nMon, surplusLabel, surplusColor, normaliseTxn, addMonths, strictNum, parseMoney, moneyReason, isUsableRawTxn, checkRawTxn, isValidDateStr, localDateStr, localMonthStr, parseLocalDate, daysInMonth, daysBetween, parseCSV, validateSettings, planImport, applyImport, buildBackup, buildCsv, countSuspectedDuplicates, txnFingerprint, partitionTransactions, ensureUniqueIds, summariseReasons, noteLoad, buildSchedules, scheduleOccurrences, scheduleMonthStatus, scheduleNextDue, scheduleKey, monthProgress, toMonthlyAmountHelper, fmt, detectRecurrence, calcMerchantProfile, resolveCategory, curMon, sanitizeTransactions, MAX_AMOUNT, CATEGORIES, CAT, calcWeekdayWeekend, backupReminderDue, BACKUP_REMINDER_DAYS, pctShares, donutSlices, cumulativeByDay, greetingKey, storageProtection, shareBackupFile, shareViaNative, nativeShareHook, appVersionOf, checkForUpdate, validateBill, convertLegacySchedules, assignToBill, BACKUP_VERSION, buildBillsMirror, planBillRestore, applyBillRestore, BILLS_MIRROR_KEY, calcMonthEndForecast, calcCoach, forSpending, loanCashOut, debtsHealth, debtCashFlow, debtLinkRef, billPaymentsLeft, loanExtraEffect, PRIVACY_KEY, readPrivacy, writePrivacy, LOCK_KEY, LOCK_TIMEOUTS, validPin, lockSupported, readLock, writeLock, removeLock, makeLockRecord, verifyPin, lockWaitMs, lockShouldEngage, cleanProfileName, PROFILE_NAME_MAX, loanSchedule, impliedNominalPct, debtRemaining, debtCanPay, cleanDebtData, readDebts, writeDebts, mergeDebtData, tripName, tripTotals, catTotals, budgetCrossing, billsToIcs, icsEscape, bankMoney, bankDate, cleanCustomCats, applyCustomCats, addCustomCat, mergeCustomCats, customCatInUse, planImportWithCats, splitTransaction, cleanAccountData, accountBalances, addAccount, addTransfer, accountInUse, mergeAccountData, parseCsvImport, t, tn, tIn, setLang, getLang, MESSAGES, LANGS, LANG_NAMES, LOCALES, catName, subName, monthName, monthShort, fmtLongDate };
+export { migrateAndLoad, buildMerchantMemory, merchantSuggest, memKey, calcHelperCards, calcSafeToSpend, calcSpendingPace, calcBudgetStatus, calcMonthSummary, calcPatterns, calcGoalProgress, goalRequiredMonthly, goalScenario, walletId, WALLET_IDS, lastWallet, calcWalletSpend, cleanSubcats, addUserSubcat, removeUserSubcat, THEMES, THEME_IDS, THEME_KEY, themeId, readTheme, writeTheme, renameUserSubcat, renameSubcatInEntries, mergeSubcats, readSubcats, writeSubcats, calcCategorySpend, calcWhatChanged, calcTxnStats, calcSpentToDate, prevMon, nMon, surplusLabel, surplusColor, normaliseTxn, addMonths, strictNum, parseMoney, moneyReason, isUsableRawTxn, checkRawTxn, isValidDateStr, localDateStr, localMonthStr, parseLocalDate, daysInMonth, daysBetween, parseCSV, validateSettings, planImport, applyImport, buildBackup, buildCsv, countSuspectedDuplicates, txnFingerprint, partitionTransactions, ensureUniqueIds, summariseReasons, noteLoad, buildSchedules, scheduleOccurrences, scheduleMonthStatus, scheduleNextDue, scheduleKey, monthProgress, toMonthlyAmountHelper, fmt, detectRecurrence, calcMerchantProfile, resolveCategory, curMon, sanitizeTransactions, MAX_AMOUNT, CATEGORIES, CAT, calcWeekdayWeekend, backupReminderDue, BACKUP_REMINDER_DAYS, pctShares, donutSlices, cumulativeByDay, greetingKey, storageProtection, shareBackupFile, shareViaNative, nativeShareHook, appVersionOf, checkForUpdate, validateBill, convertLegacySchedules, assignToBill, BACKUP_VERSION, buildBillsMirror, planBillRestore, applyBillRestore, BILLS_MIRROR_KEY, calcMonthEndForecast, calcCoach, forSpending, loanCashOut, debtsHealth, debtCashFlow, debtLinkRef, billPaymentsLeft, loanExtraEffect, PRIVACY_KEY, readPrivacy, writePrivacy, LOCK_KEY, LOCK_TIMEOUTS, validPin, lockSupported, readLock, writeLock, removeLock, makeLockRecord, verifyPin, lockWaitMs, lockShouldEngage, cleanProfileName, PROFILE_NAME_MAX, loanSchedule, impliedNominalPct, debtRemaining, debtCanPay, cleanDebtData, readDebts, writeDebts, mergeDebtData, tripName, tripTotals, catTotals, budgetCrossing, billsToIcs, icsEscape, bankMoney, bankDate, cleanCustomCats, applyCustomCats, addCustomCat, editCustomCat, mergeCustomCats, customCatInUse, planImportWithCats, splitTransaction, cleanAccountData, accountBalances, addAccount, editAccount, addTransfer, accountInUse, mergeAccountData, parseCsvImport, netPosition, loanRemainingCents, reminderPlan, cleanReminderPrefs, reminderMessage, REMIND_DEFAULT, t, tn, tIn, setLang, getLang, MESSAGES, LANGS, LANG_NAMES, LOCALES, catName, subName, monthName, monthShort, fmtLongDate };
 export const getNotice=()=>LOAD_NOTICE; export const getSaveBlocked=()=>SAVE_BLOCKED;
 export const resetFlags=()=>{LOAD_NOTICE=null;SAVE_BLOCKED=false;if(typeof SAVE_BLOCKED_READ!=='undefined')SAVE_BLOCKED_READ=false;};
