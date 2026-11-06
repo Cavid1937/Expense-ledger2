@@ -28,7 +28,7 @@ section("R27C-2. Home > Accounts > Manage opens the Settings tab with Accounts e
 {
   const accs = { version: 1, accounts: [{ id: "a_cash01", name: "Cash", kind: "cash", opening: { amount: 120, date: "" }, hidden: false }], transfers: [] };
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }), pre: () => { try { if (!sessionStorage.getItem("__a")) { sessionStorage.setItem("__a", "1"); localStorage.setItem("expense_ledger_v5__accounts", JSON.stringify({ version: 1, accounts: [{ id: "a_cash01", name: "Cash", kind: "cash", opening: { amount: 120, date: "" }, hidden: false }], transfers: [] })); } } catch (e) {} } }); await settle(page); await wait(400);
-  await page.click('[data-section="home-accounts-manage"]'); await wait(1000);
+  await page.evaluate(() => document.querySelector('[data-section="home-accounts-manage"]').click()); await wait(1000);   // Run 31: Home is taller now (balance note), so a mouse click could land on the floating + button
   const s = await state(page);
   ok(s.accounts === "true" && s.categories === "false", "Accounts is open, the rest closed", s);
   ok(await page.evaluate(() => !!document.querySelector('[data-section="my-accounts"]') && !document.querySelector(".sheet")), "the accounts card is on the page (no sheet)");

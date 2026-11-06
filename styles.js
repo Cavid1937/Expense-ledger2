@@ -540,6 +540,7 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .list-ico{width:28px;display:inline-flex;justify-content:center;flex-shrink:0}
 .list-body{flex:1;min-width:0}
 .more-id{display:flex;align-items:center;gap:14px}
+.st-ident-top{display:flex;align-items:center;gap:14px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--rule)}   /* Run 31: identity card header */
 .more-mark{width:46px;height:46px;border-radius:50%;background:var(--accent-light);border:1px solid var(--accent);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 /* Segmented control */
 .seg{display:flex;background:var(--bg-card);border:1px solid var(--rule);border-radius:12px;padding:3px;margin-bottom:14px}

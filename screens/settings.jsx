@@ -204,13 +204,15 @@ export function MyAccounts({ state, currency, showToast }) {
 }
 
 // Run 27c: a Settings section the user opens by choice. Closed it is a single row; open, the section appears under it.
-export function Fold({ id, icon, title, open, onToggle, children }) {
+// Run 31 (own design after the Figma prototype review): a closed row also says where things stand in one short line (`sub`),
+// so the page can be read without opening anything. The line is hidden while the section is open (its content says it better).
+export function Fold({ id, icon, title, sub, open, onToggle, children }) {
   return (
     <div className="fold" data-fold={id}>
       <div className="card list-card fold-card">
         <button className="list-row fold-head" aria-expanded={!!open} aria-controls={`fold-${id}`} data-fold-head={id} onClick={onToggle}>
           <span className="list-ico" style={{color:"var(--accent-text)"}}><Icon name={icon} size={20}/></span>
-          <span className="list-body"><span className="list-title">{title}</span></span>
+          <span className="list-body"><span className="list-title">{title}</span>{sub&&!open&&<span className="list-sub" data-fold-sub={id}>{sub}</span>}</span>
           <Icon name={open?"chevUp":"chevDown"} size={16} color="var(--ink-4)"/>
         </button>
       </div>
@@ -223,11 +225,18 @@ export function Fold({ id, icon, title, open, onToggle, children }) {
 export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, open, toggle }) {
   const { currency,safeToSpend={} }=state;
   const [curSym, setCurSym]=useState(currency);
+  // One-line summaries for the closed rows, read from what is saved now (they are rebuilt each time a row closes).
+  const accData=readAccounts(), shownAcc=accData.accounts.filter(a=>!a.hidden);
+  const accBal=shownAcc.length?accountBalances(accData,state.transactions):{};
+  const accSum=shownAcc.length?t("st.sumAcc",{amount:fmt(shownAcc.reduce((s,a)=>s+Math.round((accBal[a.id]||0)*100),0)/100,currency)}):t("st.sumAccNone");
+  const catN=readCustomCats().length;
+  const catSum=catN>0?t("st.sumCat",{n:catN}):t("st.sumCatNone");
+  const moneySum=t(safeToSpend.enabled?"st.sumMoneyOn":"st.sumMoneyOff",{c:currency});
   return (
     <>
-      <Fold id="accounts" icon="wallet" title={t("acc.title")} open={open.accounts} onToggle={()=>toggle("accounts")}><MyAccounts state={state} currency={state.currency} showToast={showToast}/></Fold>
-      <Fold id="categories" icon="list" title={t("mycat.title")} open={open.categories} onToggle={()=>toggle("categories")}><MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/></Fold>
-      <Fold id="money" icon="settings" title={t("st.foldMoney")} open={open.money} onToggle={()=>toggle("money")}>
+      <Fold id="accounts" icon="wallet" title={t("acc.title")} sub={accSum} open={open.accounts} onToggle={()=>toggle("accounts")}><MyAccounts state={state} currency={state.currency} showToast={showToast}/></Fold>
+      <Fold id="categories" icon="list" title={t("mycat.title")} sub={catSum} open={open.categories} onToggle={()=>toggle("categories")}><MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/></Fold>
+      <Fold id="money" icon="settings" title={t("st.foldMoney")} sub={moneySum} open={open.money} onToggle={()=>toggle("money")}>
       <div className="card st-card" data-section="st-money-options">
         {/* Safe to Spend: the switch only. The monthly savings floor is on Goals. */}
         <div className="settings-section-lbl" style={{marginTop:0}}>{t("safe.title")}</div>
@@ -261,7 +270,7 @@ export function LookSettings({ showToast, open, toggle }) {
   const [fxOff, setFxOff]=useState(()=>readFxOff());
   const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
   return (
-    <Fold id="look" icon="eye" title={t("st.foldLook")} open={open.look} onToggle={()=>toggle("look")}>
+    <Fold id="look" icon="eye" title={t("st.foldLook")} sub={fxOff?t("st.sumLookFx",{theme:t("theme."+theme)}):t("theme."+theme)} open={open.look} onToggle={()=>toggle("look")}>
     <div className="card st-card" data-section="st-look">
       {/* Colour theme (Run 25): palettes supplied by the owner; a plain preference, separate from the ledger */}
       <div className="settings-section-lbl" style={{marginTop:0}}>{t("theme.title")}</div>
@@ -305,7 +314,7 @@ export function RemindersSettings({ showToast, open, toggle }) {
     </div>
   );
   return (
-    <Fold id="reminders" icon="calendar" title={t("remind.title")} open={open.reminders} onToggle={()=>toggle("reminders")}>
+    <Fold id="reminders" icon="calendar" title={t("remind.title")} sub={(()=>{ const n=["bills","recurring","daily"].filter(k=>p[k]).length; return n?t("st.sumRem",{n}):t("st.sumRemNone"); })()} open={open.reminders} onToggle={()=>toggle("reminders")}>
       <div className="card st-card" data-section="st-reminders">
         <div className="list-sub" style={{marginBottom:8}}>{t("remind.sub")}</div>
         <Row k="bills" title={t("remind.bills")} sub={t("remind.billsSub")}/>
@@ -453,7 +462,12 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
   return (
     <div className="more-page">
       {/* Run 17: this tab is Settings. Profile name (used in the Home greeting) and the interface language are set here. */}
-      <div className="card st-card" data-section="st-profile" role="group" aria-label={t("st.profile")}>
+      <div className="card st-card st-ident" data-section="st-profile" role="group" aria-label={t("st.profile")}>
+        {/* Run 31: one identity card (it replaces three separate cards: name, brand and "stored on this device"). */}
+        <div className="st-ident-top">
+          <span className="more-mark" aria-hidden="true"><span style={{fontSize:22,fontWeight:700,color:"var(--accent)",lineHeight:1}}>{cleanProfileName(profileName)?Array.from(cleanProfileName(profileName))[0].toUpperCase():"₼"}</span></span>
+          <div><div className="list-title">{cleanProfileName(profileName)||"Expense Ledger"}</div><div className="list-sub" data-section="st-local">{tShell("more.localData")}</div></div>
+        </div>
         <label className="field-lbl" htmlFor="profile-name">{t("st.profileName")}</label>
         <div style={{display:"flex",gap:8}}>
           <input id="profile-name" className="field-input" autoComplete="off" maxLength={PROFILE_NAME_MAX*2} placeholder={t("st.profilePh")} value={name} onChange={e=>setName(e.target.value)} style={{flex:1}}/>
@@ -461,7 +475,16 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         </div>
         <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
       </div>
-      <div className="card st-card" data-section="st-language">
+      <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
+      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} open={open} toggle={toggle}/>
+      <div className="card list-card" data-section="more-money">
+        {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
+        <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
+        <ListRow id="debts" icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
+      </div>
+      {/* Run 31: language moved next to Appearance: both are about how the app looks and reads, not about money. */}
+      <div className="settings-section-lbl more-group-lbl">{t("st.groupLook")}</div>
+      <div className="card st-card st-lang" data-section="st-language">
         <div className="settings-section-lbl" id="set-lang-lbl" style={{marginTop:0}}>{t("lang.setting")}</div>
         <fieldset className="lang-switch" aria-labelledby="set-lang-lbl">
           {LANGS.map(l=>(
@@ -473,19 +496,8 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         </fieldset>
         <div className="list-sub" style={{marginTop:6}}>{t("lang.settingSub")}</div>
       </div>
-      <div className="card more-id">
-        <span className="more-mark" aria-hidden="true"><span style={{fontSize:24,fontWeight:700,color:"var(--accent)",lineHeight:1}}>₼</span></span>
-        <div><div className="list-title">Expense Ledger</div><div className="list-sub">{tShell("more.localData")}</div></div>
-      </div>
-      <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
-      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} open={open} toggle={toggle}/>
       <LookSettings showToast={showToast} open={open} toggle={toggle}/>
       <RemindersSettings showToast={showToast} open={open} toggle={toggle}/>
-      <div className="card list-card" data-section="more-money">
-        {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
-        <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
-        <ListRow id="debts" icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
-      </div>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupData")}</div>
       <div className="card list-card" data-section="more-data">
         <ListRow id="io" icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
