@@ -2510,6 +2510,18 @@ function iosBrowserTab() {
   } catch { return false; }
 }
 function iosNoteSeen() { try { return localStorage.getItem(IOS_NOTE_KEY)==="1"; } catch { return false; } }
+// Run 29: Android restores an app's data from the user's Google backup (or a phone-to-phone transfer) when the app is installed. That copy can be
+// older than the ledger the user had, and nothing in the data says so (confirmed on an emulator, 6 Nov 2026: an entry made after the backup was gone
+// after a reinstall, silently). The Android shell keeps a random id in a place that is NOT backed up (window.LedgerNative.installId()); the ledger
+// keeps the id it saw last under KEY+"__install" (which IS backed up). A different id means this data came from somewhere else: say so once.
+// No id (website, older shell) or no earlier id (first run, ledger from before this feature) never produces a notice.
+const INSTALL_KEY=KEY+"__install";
+export function restoreCheck(stored, current) {
+  const cur=typeof current==="string"?current.trim():"";
+  if (!cur || cur.length>128) return "none";
+  if (typeof stored!=="string" || !stored) return "first";
+  return stored===cur?"same":"restored";
+}
 // ─── SVG icon system ──────────────────────────────────────────────────────────
 const ICONS = {
   food:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v7"/><path d="M7 2v7"/><path d="M10 2v7"/><path d="M4 7a3 3 0 0 0 6 0"/><path d="M7 10v12"/><path d="M17 2c-2.2 2-3 4.5-3 7v2h6V9c0-2.5-.8-5-3-7Z"/><path d="M17 11v11"/></svg>`,
@@ -2747,6 +2759,24 @@ function AppInner() {
   const [recoveryNotice, setRecoveryNotice] = useState(()=>LOAD_NOTICE);
   const stateRef = useRef(state);
   stateRef.current = state;   // always the latest committed state, for callbacks that must not close over a stale copy
+  useEffect(()=>{   // Run 29: tell the user once when Android has restored this data from a backup (see restoreCheck)
+    let live=true;
+    try {
+      const nat=window.LedgerNative; if (!nat || typeof nat.installId!=="function") return;
+      Promise.resolve(nat.installId()).then(cur=>{   // the shell may answer at once or asynchronously
+        if (!live) return;
+        const r=restoreCheck(localStorage.getItem(INSTALL_KEY),cur);
+        if (r==="none" || r==="same") return;
+        localStorage.setItem(INSTALL_KEY,String(cur).trim());
+        if (r!=="restored") return;
+        const tx=stateRef.current.transactions||[]; if (tx.length===0) return;
+        const newest=tx.reduce((m,x)=>x&&x.date&&x.date>m?x.date:m,"");
+        const msg=t("restore.notice",{n:tx.length,date:newest?fmtDate(newest):"–"});
+        setRecoveryNotice(prev=>prev?prev+" "+msg:msg);
+      }).catch(()=>{ /* the shell or storage is unavailable: no notice, nothing else is affected */ });
+    } catch { /* same */ }
+    return ()=>{ live=false; };
+  },[]);
   // Run 13: bills an older app version removed (worked out once, from the data as loaded, against the mirror kept on disk).
   // While the offer is open the mirror is not rewritten, so ignoring the banner never loses the bills; restoring, or
   // choosing "No thanks", closes it and the mirror then follows the ledger again.

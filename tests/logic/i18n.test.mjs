@@ -87,7 +87,9 @@ const dynamic = { "nav.": ["home", "ledger", "monthly", "goals", "more"], "cat."
 const dynMissing = [];
 for (const [p, vals] of Object.entries(dynamic)) { ok(src.includes(`"${p}"`) || src.includes(`"${p}"+`) || src.includes(`'${p}'`), `App.jsx builds keys with the prefix "${p}"`); for (const v of vals) if (!MESSAGES[p + v]) dynMissing.push(p + v); }
 ok(dynMissing.length === 0, "every key built at run time (category, subcategory, weekday, frequency, reason …) exists", dynMissing);
-const unused = keys.filter((k) => !used.has(k) && !Object.entries(dynamic).some(([p, vals]) => vals.some((v) => p + v === k)));
+// Run 29: "<key>A" is the Android-app variant of "<key>", picked at run time by tShell() (i18n.js); it counts as used when its base key exists.
+const shellVariant = (k) => k.endsWith("A") && !!MESSAGES[k.slice(0, -1)];
+const unused = keys.filter((k) => !used.has(k) && !shellVariant(k) && !Object.entries(dynamic).some(([p, vals]) => vals.some((v) => p + v === k)));
 ok(unused.length === 0, "no unused keys in the catalog", unused);
 
 section("L4. No hard-coded English text left in the interface");

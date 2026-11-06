@@ -75,6 +75,7 @@ export function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, c
 export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onEdit, onView, onAdd }) {
   const [selMode, setSelMode] = useState(false);          // Run 24: select several entries, then delete them together (undo stays available)
   const [picked,  setPicked]  = useState(()=>new Set());
+  const [onlySel, setOnlySel] = useState(false);          // Run 29: show only the selected entries, whatever the filters say
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [catFilter,  setCatFilter]  = useState("all");
@@ -190,25 +191,33 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
       )}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,margin:"2px 2px 12px"}}>
         <div className="list-sub">{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</div>
-        <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
+        <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); setOnlySel(false); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
       </div>
-      {filtered.length===0?(
+      {filtered.length===0&&!(selMode&&picked.size>0)?(
         <div className="empty" style={{padding:"36px 0"}}>
           <div className="empty-icon"><Icon name="search" size={28}/></div>
           <div className="empty-title">{t("ledger.noResults")}</div>
           <div className="empty-body">{t("ledger.noResultsBody")}</div>
         </div>
       ):selMode?(()=>{
-        const shown=filtered.filter(x=>picked.has(String(x.id))), allOn=shown.length===filtered.length;
+        // Run 29: the selection belongs to the whole ledger, not to the current filter: it stays when the search or filters change,
+        // the sum line covers every selected entry, and "Selected only" shows exactly those entries.
+        const shown=transactions.filter(x=>picked.has(String(x.id)));
+        const allOn=filtered.length>0 && filtered.every(x=>picked.has(String(x.id)));
+        const exp=shown.filter(x=>x.type==="expense").reduce(addAmt,0), inc=shown.filter(x=>x.type==="income").reduce(addAmt,0);
+        const net=Math.round((inc-exp)*100)/100;
+        const list=onlySel?shown:filtered;
         return (
           <div data-section="tx-select">
             <div className="filter-bar" style={{position:"sticky",top:0,zIndex:2,background:"var(--bg)",paddingBottom:6}}>
-              <button className="chip" data-section="tx-select-all" onClick={()=>setPicked(allOn?new Set():new Set(filtered.map(x=>String(x.id))))}>{t(allOn?"ledger.selectNone":"ledger.selectAll",{n:filtered.length})}</button>
+              <button className="chip" data-section="tx-select-all" onClick={()=>setPicked(p=>{ const n=new Set(p); filtered.forEach(x=>allOn?n.delete(String(x.id)):n.add(String(x.id))); return n; })}>{t(allOn?"ledger.selectNone":"ledger.selectAll",{n:filtered.length})}</button>
+              <button className={`chip${onlySel?" on":""}`} aria-pressed={onlySel} data-section="tx-select-only" disabled={!shown.length&&!onlySel} onClick={()=>setOnlySel(s=>!s)}>{t("ledger.selOnly")}</button>
               <button className="chip on" data-section="tx-select-delete" disabled={!shown.length} style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)",opacity:shown.length?1:0.5}}
-                onClick={()=>{ onDeleteMany(shown.map(x=>x.id)); setPicked(new Set()); setSelMode(false); }}>{t("ledger.deleteSel",{n:shown.length})}</button>
+                onClick={()=>{ onDeleteMany(shown.map(x=>x.id)); setPicked(new Set()); setOnlySel(false); setSelMode(false); }}>{t("ledger.deleteSel",{n:shown.length})}</button>
             </div>
+            <div className="list-sub" data-section="tx-select-sum" aria-live="polite" style={{margin:"0 2px 8px",fontWeight:shown.length?600:400}}>{shown.length?t("ledger.selSum",{n:shown.length,exp:fmt(exp,currency),inc:fmt(inc,currency),net:fmt(net,currency)}):t("ledger.selHint")}</div>
             <div className="txn-list">
-              {filtered.map(x=>{ const on=picked.has(String(x.id)); return (
+              {list.map(x=>{ const on=picked.has(String(x.id)); return (
                 <button key={x.id} className="list-row" role="checkbox" aria-checked={on} data-picked={on?"1":"0"} style={{width:"100%",textAlign:"left",font:"inherit",display:"flex",alignItems:"center",gap:10,background:on?"var(--accent-bg, rgba(0,0,0,0.05))":"none",border:"none",borderBottom:"1px solid var(--rule)",padding:"10px 4px",cursor:"pointer"}}
                   onClick={()=>setPicked(p=>{ const n=new Set(p); const k=String(x.id); n.has(k)?n.delete(k):n.add(k); return n; })}>
                   <span aria-hidden="true" style={{width:20,height:20,borderRadius:6,border:"2px solid var(--ink-3)",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"none"}}>{on?<Icon name="check" size={13}/>:null}</span>
@@ -456,4 +465,4 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
     </div>
   );
 }
-
+

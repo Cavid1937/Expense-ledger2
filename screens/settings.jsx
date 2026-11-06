@@ -1,6 +1,6 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { LANGS, LANG_NAMES, t, tIn, tn } from "../i18n.js";
+import { LANGS, LANG_NAMES, t, tIn, tn, tShell } from "../i18n.js";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readSubcats, readTheme, revealFocus, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -395,8 +395,8 @@ export function InfoSheet({ kind, onClose }) {
         </div>
         {Array.from({length:n},(_,i)=>i+1).map(i=>(
           <div key={i} style={{marginBottom:14}}>
-            <div className="list-title">{t("info."+kind+"."+i+".h")}</div>
-            <div className="list-sub" style={{lineHeight:1.55,marginTop:2}}>{t("info."+kind+"."+i+".b")}</div>
+            <div className="list-title">{tShell("info."+kind+"."+i+".h")}</div>
+            <div className="list-sub" style={{lineHeight:1.55,marginTop:2}}>{tShell("info."+kind+"."+i+".b")}</div>
           </div>
         ))}
         <button className="btn btn-primary btn-full" style={{marginTop:4}} data-closer="1" onClick={onClose}>{t("common.close")}</button>
@@ -436,7 +436,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       </div>
       <div className="card more-id">
         <span className="more-mark" aria-hidden="true"><span style={{fontSize:24,fontWeight:700,color:"var(--accent)",lineHeight:1}}>₼</span></span>
-        <div><div className="list-title">Expense Ledger</div><div className="list-sub">{t("more.localData")}</div></div>
+        <div><div className="list-title">Expense Ledger</div><div className="list-sub">{tShell("more.localData")}</div></div>
       </div>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
       <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} open={open} toggle={toggle}/>
@@ -494,7 +494,7 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
       </div>
       <div className="io-grid">
         <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}}>
-          <input ref={fileRef} type="file" accept=".json,.csv" aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
+          <input ref={fileRef} type="file" accept={nativeShareHook()?undefined:".json,.csv,application/json,text/csv"} aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
           <span className="io-ico" style={{color:"var(--accent-text)"}}><Icon name="upload" size={24}/></span>
           <div className="list-title">{t("io.import")}</div>
           <div className="list-sub">{t("io.importSub")}</div>
@@ -533,4 +533,4 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
     </div>
   );
 }
-
+

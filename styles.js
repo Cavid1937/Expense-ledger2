@@ -134,7 +134,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .empty-body{font-size:13px;color:var(--ink-3);line-height:1.65;max-width:240px}
 /* Add overlay */
 .add-overlay{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;max-width:430px;margin:0 auto;animation:slideUp 340ms cubic-bezier(0.22,1,0.36,1);overflow-y:auto}
-@keyframes slideUp{from{transform:translateY(100%);opacity:0.6}to{transform:translateY(0);opacity:1}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}   /* Run 29: transform only - at opacity 0.6 the screen behind showed through the moving sheet (a double exposure, seen in the 6 Nov phone video) */
 .add-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--rule);flex-shrink:0}
 .add-title{font-family:var(--font);font-size:17px;font-weight:700}
 .add-close{width:30px;height:30px;border-radius:50%;border:1px solid var(--rule);background:transparent;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:border-color 120ms,color 120ms}
@@ -525,7 +525,7 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .empty{animation:sectionIn 320ms ease-out both}   /* calm empty states: they ease in rather than appear */
 @media (prefers-reduced-motion:reduce){.seg-btn{transition:none}}
 .add-overlay.leaving{animation:addOut 220ms cubic-bezier(0.4,0,1,1) forwards;pointer-events:none}
-@keyframes addOut{from{transform:translateY(0);opacity:1}to{transform:translateY(100%);opacity:0.6}}
+@keyframes addOut{from{transform:translateY(0)}to{transform:translateY(100%)}}
 .sheet-overlay.leaving{animation:dimOut 200ms ease-in forwards;pointer-events:none}
 .sheet-overlay.leaving .sheet{animation:sheetFall 200ms cubic-bezier(0.4,0,1,1) forwards}
 @keyframes dimOut{from{opacity:1}to{opacity:0}}
@@ -720,4 +720,9 @@ html,.page,.sheet{scroll-behavior:smooth}
 .safe-card{background:linear-gradient(165deg,color-mix(in srgb,var(--accent) 16%,var(--surface-raised)),var(--surface-raised) 62%);border-color:color-mix(in srgb,var(--accent) 38%,var(--rule));padding:18px 18px 14px}
 .safe-card .safe-amount{font-size:clamp(38px,12.5vw,50px);font-weight:800;letter-spacing:-1.5px;margin:6px 0 4px}
 .runway{display:flex;align-items:flex-end;gap:2px;height:16px;margin:12px 0 6px}.runway i{flex:1;height:7px;border-radius:2px;background:var(--rule-2);opacity:.55}.runway i.on{background:var(--accent);opacity:.9}.runway i.now{height:16px;background:var(--accent-text);opacity:1}
+/* Run 29: inside the Android app the page draws under the status bar (clock, battery). --sat is the status-bar height: the browser's env() when it has one, else the value the Capacitor shell injects; 0 on the website. */
+:root{--sat:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px))}
+.app{padding-top:var(--sat)}
+.topbar{top:var(--sat)}
+body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--sat);background:var(--bg);z-index:150;pointer-events:none}
 `;
