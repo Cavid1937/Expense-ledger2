@@ -103,7 +103,7 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
   return (
     <div>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
-      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} currency={currency} now={now}/>
+      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} currency={currency} now={now} held={accountsHeld(accountTxns||transactions)}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount"><MoneyText v={fmt(curExp,currency)}/></div>
@@ -210,7 +210,15 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
 }
 
 // The Safe to Spend card and its note (redesign: shown first on Home). A separate function only to keep HomePage readable.
-export function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
+// GPT review P0: Safe to Spend (this month's recorded income less spending and commitments) and the money sitting in the accounts are
+// different things. Total of the visible accounts' balances, or null when there are none. Display only; no formula changes.
+export function accountsHeld(transactions) {
+  const data=readAccounts(), shown=data.accounts.filter(a=>!a.hidden);
+  if (!shown.length) return null;
+  const bal=accountBalances(data,transactions);
+  return shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0)/100;
+}
+export function SafeToSpendCard({ safeToSpend, safeInfo, currency, now, held=null }) {
   // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
   // summary and upcoming bills out of the first screen.
   const [open,setOpen]=useState(false);
@@ -299,6 +307,8 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, currency, now }) {
           </div>}
           {/* Always visible, open or not: without recurring bills the number is optimistic, and the user must not have to tap to learn that. */}
           {safeInfo.scheduleCount===0&&<div className="safe-note safe-caveat" role="note">{t("safe.noteNoRecurring")}</div>}
+          {/* The figure is a month-flow plan, not a bank balance: when the accounts hold less than it, say so (always visible). */}
+          {held!==null&&safeInfo.remaining>0&&held<safeInfo.remaining&&<div className="safe-note safe-caveat" role="note" data-section="home-safe-held">{t("safe.noteBalance",{ held:fmt(held,currency) })}</div>}
         </div>
       )}
 
@@ -335,4 +345,4 @@ export function HomeDetails({ hasTxns, onAdd, onOpenLedger, onInfo }) {
     </div>
   );
 }
-
+
