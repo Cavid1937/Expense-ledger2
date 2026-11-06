@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LANGS, LANG_NAMES, t, tIn, tn, tShell } from "../i18n.js";
-import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readSubcats, readTheme, revealFocus, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
+import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, revealFocus, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIRST LAUNCH — choose the interface language. Native radio buttons: nothing is preselected, arrow keys move between
@@ -283,6 +283,45 @@ export function LookSettings({ showToast, open, toggle }) {
     </Fold>
   );
 }
+// Run 30: reminders (Android app only; the section does not exist on the website). Turning a reminder ON asks Android for notification permission first;
+// if it is refused the switch stays off and the user is told how to allow it. The schedule itself is rebuilt by App.jsx (reminderPlan).
+export function RemindersSettings({ showToast, open, toggle }) {
+  const [p, setP]=useState(()=>readReminders());
+  const [blocked, setBlocked]=useState(false);
+  if (!remindersAvailable()) return null;
+  // Always build the new value from what is saved NOW, not from the copy this render closed over: the permission question below takes a moment
+  // and the user may change another switch or the time meanwhile (found on an emulator: the time change was overwritten by a late "Allow").
+  const save=(patch)=>{ if (!writeReminders({ ...readReminders(), ...patch })) { showToast(t("theme.saveFailed"),5000); return; } setP(readReminders()); };
+  const flip=(k)=>{
+    if (readReminders()[k]) { save({ [k]:false }); return; }
+    Promise.resolve(window.LedgerNative.reminders.requestPermission()).then(r=>{
+      if (r && r.granted) { setBlocked(false); save({ [k]:true }); } else setBlocked(true);
+    }).catch(()=>setBlocked(true));
+  };
+  const Row=({k,title,sub})=>(
+    <div className="settings-row">
+      <div><div className="settings-row-title" id={`set-rem-${k}`}>{title}</div><div className="settings-row-sub">{sub}</div></div>
+      <div className={`toggle-track${p[k]?" on":""}`} data-section={`rem-${k}`} onClick={()=>flip(k)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(k); } }} role="switch" aria-checked={!!p[k]} aria-labelledby={`set-rem-${k}`} tabIndex={0}><div className="toggle-knob"/></div>
+    </div>
+  );
+  return (
+    <Fold id="reminders" icon="calendar" title={t("remind.title")} open={open.reminders} onToggle={()=>toggle("reminders")}>
+      <div className="card st-card" data-section="st-reminders">
+        <div className="list-sub" style={{marginBottom:8}}>{t("remind.sub")}</div>
+        <Row k="bills" title={t("remind.bills")} sub={t("remind.billsSub")}/>
+        <Row k="recurring" title={t("remind.recurring")} sub={t("remind.recurringSub")}/>
+        <Row k="daily" title={t("remind.daily")} sub={t("remind.dailySub")}/>
+        <div className="settings-row">
+          <div><div className="settings-row-title" id="set-rem-time">{t("remind.time")}</div></div>
+          <input className="field-input" type="time" value={p.time} aria-labelledby="set-rem-time" data-section="rem-time" onChange={e=>{ if (e.target.value) save({ time:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
+        </div>
+        <Row k="hideAmount" title={t("remind.hide")} sub={t("remind.hideSub")}/>
+        {blocked && <div className="list-sub" role="alert" data-section="rem-denied" style={{marginTop:8}}>{t("remind.denied")}</div>}
+        <div className="list-sub" style={{marginTop:8}}>{t("remind.battery")}</div>
+      </div>
+    </Fold>
+  );
+}
 export function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToast }) {
   const [savingsT,setSavingsT]=useState(String(safeToSpend.savingsTarget||0));
   if (!safeToSpend.enabled) return null;
@@ -441,6 +480,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
       <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} open={open} toggle={toggle}/>
       <LookSettings showToast={showToast} open={open} toggle={toggle}/>
+      <RemindersSettings showToast={showToast} open={open} toggle={toggle}/>
       <div className="card list-card" data-section="more-money">
         {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
         <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>

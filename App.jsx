@@ -2522,6 +2522,63 @@ export function restoreCheck(stored, current) {
   if (typeof stored!=="string" || !stored) return "first";
   return stored===cur?"same":"restored";
 }
+// Run 30 (Android app only): reminders. The Android shell (window.LedgerNative.reminders) schedules local notifications; nothing is sent anywhere.
+// Preferences are a plain setting kept beside the ledger (KEY+"__reminders"), all OFF until the user turns them on (Android asks for permission then).
+// reminderPlan() is a pure function: from the bills / recurring payments and the entries already recorded, it lists the notifications that
+// should exist in the next days. The shell cancels what it had and schedules exactly this list, so a paid bill, an edited date or a deleted
+// bill can never leave a stale reminder behind. Bills: on the due day. Recurring payments found from entries: the day before. Daily nudge: 21:00.
+const REMIND_KEY=KEY+"__reminders";
+const REMIND_EVENT="ledger-reminders-changed";
+export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", hideAmount:false });
+export function cleanReminderPrefs(raw) {
+  const r=raw && typeof raw==="object" ? raw : {};
+  const time=typeof r.time==="string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) ? r.time : REMIND_DEFAULT.time;
+  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, hideAmount:r.hideAmount===true };
+}
+export function readReminders() { try { return cleanReminderPrefs(JSON.parse(localStorage.getItem(REMIND_KEY)||"null")); } catch { return { ...REMIND_DEFAULT }; } }
+export function writeReminders(p) {
+  try { localStorage.setItem(REMIND_KEY,JSON.stringify(cleanReminderPrefs(p))); if (typeof window!=="undefined") window.dispatchEvent(new Event(REMIND_EVENT)); return true; } catch { return false; }
+}
+export const remindersAvailable=()=>{ try { const n=window.LedgerNative; return !!(n && n.reminders && typeof n.reminders.sync==="function"); } catch { return false; } };
+function reminderId(s) { let h=5381; for (let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return (h%2147483000)+1; }   // stable positive int per (kind, schedule, date)
+export function reminderPlan(schedules, transactions, prefs, now=new Date(), opts={}) {
+  const p=cleanReminderPrefs(prefs), horizon=opts.horizon||30, cap=opts.cap||60, out=[];
+  const [hh,mm]=p.time.split(":").map(Number), todayStr=localDateStr(now);
+  const endStr=localDateStr(new Date(now.getFullYear(),now.getMonth(),now.getDate()+horizon));
+  const at=(dStr,h,m)=>{ const d=parseLocalDate(dStr); return new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,m,0,0); };
+  const push=(kind,key,dStr,when,extra)=>{ if (when.getTime()<=now.getTime()) return; out.push({ id:reminderId(kind+"|"+key+"|"+dStr), kind, date:dStr, atMs:when.getTime(), ...extra }); };
+  if (p.bills || p.recurring) {
+    (Array.isArray(schedules)?schedules:[]).filter(s=>s && s.isActive && s.type==="expense").forEach(s=>{
+      const bill=!!s.billId; if (bill ? !p.bills : !p.recurring) return;
+      const seen=new Set();
+      for (let i=0;i<=Math.ceil(horizon/28)+1;i++) {
+        const mon=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i));
+        scheduleMonthStatus(s,transactions,mon,now).remaining.filter(d=>d>=todayStr && d<=endStr).forEach(d=>{
+          if (seen.has(d)) return; seen.add(d);
+          const name=s.merchant||s.note||s.category, extra={ name, amount:s.amount };
+          if (bill) push("bill",s.key,d,at(d,hh,mm),extra);
+          else { const day=parseLocalDate(d); push("recurring",s.key,d,at(localDateStr(new Date(day.getFullYear(),day.getMonth(),day.getDate()-1)),hh,mm),extra); }
+        });
+      }
+    });
+  }
+  if (p.daily) {
+    const spentToday=(Array.isArray(transactions)?transactions:[]).some(x=>x && x.date===todayStr);
+    for (let i=0;i<14;i++) {
+      const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+i), ds=localDateStr(d);
+      if (i===0 && spentToday) continue;
+      push("daily","d",ds,new Date(d.getFullYear(),d.getMonth(),d.getDate(),21,0,0,0),{});
+    }
+  }
+  return out.sort((a,b)=>a.atMs-b.atMs || a.id-b.id).slice(0,cap);
+}
+// The text of one notification (shown on the lock screen). With "hide amounts" on, or the app's own privacy mode, no amount is written.
+export function reminderMessage(item, prefs, currency) {
+  if (item.kind==="daily") return { title:t("remind.dailyTitle"), body:t("remind.dailyBody") };
+  const hide=cleanReminderPrefs(prefs).hideAmount || PRIVACY;
+  const name=hide ? t("remind.aPayment") : item.name;
+  return { title:t(item.kind==="bill"?"remind.billTitle":"remind.recurTitle",{name}), body:hide ? t("remind.bodyHidden") : t("remind.body",{amount:fmt(item.amount,currency)}) };
+}
 // ─── SVG icon system ──────────────────────────────────────────────────────────
 const ICONS = {
   food:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v7"/><path d="M7 2v7"/><path d="M10 2v7"/><path d="M4 7a3 3 0 0 0 6 0"/><path d="M7 10v12"/><path d="M17 2c-2.2 2-3 4.5-3 7v2h6V9c0-2.5-.8-5-3-7Z"/><path d="M17 11v11"/></svg>`,
@@ -3080,6 +3137,29 @@ function AppInner() {
     const tok=++addTok.current; setAddLeaving(true);
     setTimeout(()=>{ if (addTok.current===tok) done(); },200);
   },[]);
+  // Run 30 (Android app only): keep the phone's reminders equal to reminderPlan() whenever the ledger, language, currency or the reminder settings change.
+  const [remindTick,setRemindTick]=useState(0);
+  useEffect(()=>{ const f=()=>setRemindTick(n=>n+1); window.addEventListener(REMIND_EVENT,f); return ()=>window.removeEventListener(REMIND_EVENT,f); },[]);
+  useEffect(()=>{
+    if (!remindersAvailable()) return;
+    try {
+      const prefs=readReminders(), tx=state.transactions||[], bl=state.bills||[], cur=state.currency;
+      const items=(prefs.bills||prefs.recurring||prefs.daily) ? reminderPlan(buildSchedules(tx,bl),tx,prefs,new Date()).map(i=>({ ...i, ...reminderMessage(i,prefs,cur) })) : [];
+      Promise.resolve(window.LedgerNative.reminders.sync({ items })).catch(()=>{ /* the shell is unavailable: the ledger is not affected */ });
+    } catch { /* same */ }
+  },[state.transactions,state.bills,state.currency,state.language,remindTick]);
+  // Run 30 (Android app only): long-press shortcuts on the app icon ("Add expense" / "Add income") open the add form.
+  useEffect(()=>{
+    const nat=window.LedgerNative; if (!nat || typeof nat.onShortcut!=="function") return;
+    let off=null;
+    try {
+      off=nat.onShortcut(k=>{
+        if (k==="expense") openAdd();
+        else if (k==="income") openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null});
+      });
+    } catch { /* same */ }
+    return ()=>{ try { if (typeof off==="function") off(); } catch { /* same */ } };
+  },[openAdd]);
 
   // Run 10: storage protection (asked once at start; again from Import / Export, where a tap counts as a user gesture) and
   // the browser's own "install" offer, kept for the Install button. Neither is stored in the ledger data.

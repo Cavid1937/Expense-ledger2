@@ -57,6 +57,7 @@
     "run25subrename.test.mjs": 13,
     "run25themes.test.mjs": 18,
      "run28networth.test.mjs": 11,
+    "run30reminders.test.mjs": 25,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -144,7 +145,8 @@
     "e2e_run29_select.mjs": 13,
     "e2e_run29_addsheet.mjs": 9,
     "e2e_run29_restored.mjs": 19,
-    "e2e_run29_shellwording.mjs": 12
+    "e2e_run29_shellwording.mjs": 12,
+    "e2e_run30_reminders.mjs": 30
   }
 }
 
