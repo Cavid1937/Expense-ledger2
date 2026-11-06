@@ -3412,7 +3412,7 @@ function AppInner() {
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
           {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
-            onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill}
+            onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill} onAddBill={()=>setEditBill(null)}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
           {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}

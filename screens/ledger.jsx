@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
-import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
+import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
@@ -18,7 +18,8 @@ export function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPr
           <div key={date} className="txn-group">
             <div className="txn-date-hdr">
               <span className="txn-date-lbl">{fmtDate(date)}</span>
-              {dayTotal>0&&<span className="txn-date-total">{fmt(dayTotal,currency)}</span>}
+              {/* Run 31: the figure is what was SPENT that day (income is not in it); say so with a minus sign and for screen readers. */}
+              {dayTotal>0&&<span className="txn-date-total" aria-label={t("ledger.daySpent",{amount:fmt(dayTotal,currency)})}>−{fmt(dayTotal,currency)}</span>}
             </div>
             <div className="txn-list">
               {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact/>)}
@@ -81,6 +82,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
   const [catFilter,  setCatFilter]  = useState("all");
   const [tripFilter, setTripFilter] = useState("all");   // Run 22: "all" or a trip name (compared without case)
   const [walletFilter, setWalletFilter] = useState("all");   // Run 16: "all", a wallet id, or "none" (entries without one)
+  const [accFilter,  setAccFilter]  = useState("all");   // Run 31: "all", an account id, or "none" (entries without an account)
+  const [moreOpen,   setMoreOpen]   = useState(false);   // Run 31: trip / wallet / account filters sit behind one "More filters" chip
   const [dateFrom,   setDateFrom]   = useState("");
   const [dateTo,     setDateTo]     = useState("");
   const [showDates,  setShowDates]  = useState(false);
@@ -111,10 +114,13 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
     if (catFilter!=="all")  list=list.filter(x=>x.category===catFilter);
     if (walletFilter!=="all") list=list.filter(x=>(walletId(x.wallet)||"none")===walletFilter);
     if (tripFilter!=="all") list=list.filter(x=>tripName(x.trip).toLowerCase()===tripFilter.toLowerCase());
+    if (accFilter!=="all")  list=list.filter(x=>(accId(x.account)||"none")===accFilter);
     if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
     if (dateTo)             list=list.filter(x=>x.date<=dateTo);
     return list;
-  },[transactions,search,typeFilter,catFilter,walletFilter,tripFilter,dateFrom,dateTo,locale()]);
+  },[transactions,search,typeFilter,catFilter,walletFilter,tripFilter,accFilter,dateFrom,dateTo,locale()]);
+  const usedAccs=useMemo(()=>[...new Set(transactions.map(x=>accId(x.account)).filter(Boolean))],[transactions]);
+  const hasUnsetAcc=useMemo(()=>transactions.some(x=>!accId(x.account)),[transactions]);
   // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
   const trips=useMemo(()=>tripTotals(transactions),[transactions]);
   const catSel=useMemo(()=>catFilter==="all" ? null : catTotals(transactions,catFilter),[transactions,catFilter]);   // Run 24
@@ -129,6 +135,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
   const usedCats=useMemo(()=>catsFor(typeFilter).map(id=>CAT(id)).filter(Boolean),[transactions,typeFilter]);
   const chooseType=(ty)=>{ setTypeFilter(ty); if (catFilter!=="all" && !catsFor(ty).includes(catFilter)) setCatFilter("all"); };
   const hasCatFilter=catFilter!=="all",hasDateFilter=dateFrom||dateTo;
+  const hasMore=trips.length>0||usedWallets.length>0||usedAccs.length>0;
+  const moreActive=(tripFilter!=="all"?1:0)+(walletFilter!=="all"?1:0)+(accFilter!=="all"?1:0);   // how many of the tucked-away filters are on
   const selectedCat=CAT(catFilter);
 
   if (transactions.length===0) return (
@@ -157,12 +165,17 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
         <button className={`chip${(showDates||hasDateFilter)?" on":""}`} aria-pressed={!!(showDates||hasDateFilter)} onClick={()=>setShowDates(s=>!s)}>
           <Icon name="calendar" size={11}/> {t("ledger.date")}
         </button>
-        {(hasCatFilter||hasDateFilter||typeFilter!=="all"||walletFilter!=="all"||tripFilter!=="all")&&(
-          <button className="chip on" style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)"}}
-            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");setTripFilter("all");}}>{t("ledger.clear")} ×</button>
+        {hasMore&&(
+          <button className={`chip${(moreOpen||moreActive>0)?" on":""}`} aria-pressed={moreOpen} aria-expanded={moreOpen} data-section="tx-more-toggle" onClick={()=>setMoreOpen(o=>!o)}>
+            {t("ledger.more")}{moreActive>0?` · ${moreActive}`:""}<Icon name={moreOpen?"chevUp":"chevDown"} size={11}/>
+          </button>
+        )}
+        {(hasCatFilter||hasDateFilter||typeFilter!=="all"||moreActive>0)&&(
+          <button className="chip on" data-section="tx-clear" style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)"}}
+            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");setTripFilter("all");setAccFilter("all");}}>{t("ledger.clear")} ×</button>
         )}
       </div>
-      {trips.length>0&&(
+      {moreOpen&&trips.length>0&&(
         <div className="filter-bar" role="group" aria-label={t("trip.filterLabel")} data-section="tx-trip-filter">
           {["all",...trips.map(x=>x.name)].map(n=>(
             <button key={n} className={`chip${tripFilter===n?" on":""}`} aria-pressed={tripFilter===n} onClick={()=>setTripFilter(n)}>{n==="all"?t("trip.filterAll"):n}</button>
@@ -176,10 +189,17 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
         </div>
       )}
       {tripSel&&<div className="list-sub" data-section="tx-trip-total" style={{margin:"2px 2px 8px"}}>{t("trip.total",{name:tripSel.name,total:fmt(tripSel.total),n:tripSel.n})}</div>}
-      {usedWallets.length>0&&(
+      {moreOpen&&usedWallets.length>0&&(
         <div className="filter-bar" role="group" aria-label={t("wallet.filterLabel")} data-section="tx-wallet-filter">
           {["all",...usedWallets,...(hasUnsetWallet?["none"]:[])].map(w=>(
             <button key={w} className={`chip${walletFilter===w?" on":""}`} aria-pressed={walletFilter===w} onClick={()=>setWalletFilter(w)}>{w==="all"?t("wallet.filterAll"):w==="none"?t("wallet.none"):walletName(w)}</button>
+          ))}
+        </div>
+      )}
+      {moreOpen&&usedAccs.length>0&&(
+        <div className="filter-bar" role="group" aria-label={t("ledger.accFilter")} data-section="tx-acc-filter">
+          {["all",...usedAccs,...(hasUnsetAcc?["none"]:[])].map(a=>(
+            <button key={a} className={`chip${accFilter===a?" on":""}`} aria-pressed={accFilter===a} onClick={()=>setAccFilter(a)}>{a==="all"?t("ledger.accAll"):a==="none"?t("ledger.accNone"):accountName(a)}</button>
           ))}
         </div>
       )}

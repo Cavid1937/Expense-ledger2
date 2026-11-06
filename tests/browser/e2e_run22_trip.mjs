@@ -27,6 +27,7 @@ section("R22-B2. Ledger: trip filter and per-trip total; a row shows its trip; C
   const seed = base({ transactions: [tx({ id: 1790002000010, merchant: "Hotel", amount: 100, trip: "Shaki" }), tx({ id: 1790002000011, merchant: "Bus", amount: 20.5, trip: "shaki" }), tx({ id: 1790002000012, merchant: "Groceries", amount: 5 })] });
   const page = await openPage(browser, { seed }); await tab(page, "Ledger"); await settle(page);
   const rows = () => page.evaluate(() => [...document.querySelectorAll(".txn-row")].map((r) => r.innerText.replace(/\s+/g, " ")));
+  await page.evaluate(() => document.querySelector('[data-section="tx-more-toggle"]').click()); await wait(200);   // Run 31: trip / wallet / account filters sit behind "More filters"
   const labels = await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-trip-filter"] .chip')].map((b) => b.innerText.trim()));
   ok(labels.length === 2 && labels[0] === "All labels" && labels[1].toLowerCase() === "shaki", "one chip per trip ('Shaki' and 'shaki' are the same trip) plus All labels", labels);
   ok((await rows()).find((r) => /Hotel/.test(r) && /Shaki/.test(r)) && !(await rows()).find((r) => /Groceries/.test(r) && /haki/.test(r)), "a row shows its trip; an entry without one shows nothing extra", await rows());

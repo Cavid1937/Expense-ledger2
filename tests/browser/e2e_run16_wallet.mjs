@@ -49,6 +49,7 @@ section("R16-B3. The entry list, the filter and Analytics");
   const page = await openPage(browser, { seed }); await tab(page, "Ledger"); await settle(page);
   const rows = () => page.evaluate(() => [...document.querySelectorAll(".txn-row")].map((r) => r.innerText.replace(/\s+/g, " ")));
   ok((await rows()).find((r) => /A cash/.test(r) && /Cash/.test(r)) && !(await rows()).find((r) => /C unset/.test(r) && /Cash|Bank card/.test(r)), "a row shows its wallet next to the category; an entry without one shows nothing extra", await rows());
+  await page.evaluate(() => document.querySelector('[data-section="tx-more-toggle"]').click()); await wait(200);   // Run 31: trip / wallet / account filters sit behind "More filters"
   const filt = async (label) => page.evaluate((l) => [...document.querySelectorAll('[data-section="tx-wallet-filter"] .chip')].find((b) => b.innerText.trim() === l).click(), label);
   const labels = await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-wallet-filter"] .chip')].map((b) => b.innerText.trim()));
   ok(labels.join("|") === "All wallets|Cash|Bank card|Not set", "the wallet filter lists All, only the wallets in use, and Not set", labels);

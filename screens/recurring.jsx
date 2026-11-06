@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, activateKey, billPaymentsLeft, billsToIcs, buildSchedules, catName, daysBetween, downloadFile, fmt, fmtDate, localDateStr, localMonthStr, maskText, scheduleMonthStatus, scheduleMonthly, scheduleNextDue, subName, today } from "../App.jsx";
 
-export function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedule, onRecordPayment, onConvert, onEditBill, onToggleBill }) {
+export function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedule, onRecordPayment, onConvert, onEditBill, onToggleBill, onAddBill }) {
   const schedules=useMemo(()=>{
     const nowD=new Date();
     return buildSchedules(transactions,bills).map(x=>{
@@ -24,6 +24,8 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
       <div className="empty-icon"><Icon name="repeat" size={30}/></div>
       <div className="empty-title">{t("rec.emptyTitle")}</div>
       <div className="empty-body">{t("rec.emptyBody")}</div>
+      {/* Run 31: an empty screen is an invitation to act: the same "Add bill" the header action opens */}
+      {onAddBill&&<button className="btn btn-primary btn-full" data-section="rec-empty-add" style={{maxWidth:220,marginTop:4}} onClick={onAddBill}>{t("bill.add")}</button>}
     </div>
   );
 
@@ -130,4 +132,4 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
     </div>
   );
 }
-
+

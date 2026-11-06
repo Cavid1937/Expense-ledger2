@@ -306,9 +306,13 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, currency, now, held=nul
           </div>
           </div>}
           {/* Always visible, open or not: without recurring bills the number is optimistic, and the user must not have to tap to learn that. */}
-          {safeInfo.scheduleCount===0&&<div className="safe-note safe-caveat" role="note">{t("safe.noteNoRecurring")}</div>}
-          {/* The figure is a month-flow plan, not a bank balance: when the accounts hold less than it, say so (always visible). */}
-          {held!==null&&safeInfo.remaining>0&&held<safeInfo.remaining&&<div className="safe-note safe-caveat" role="note" data-section="home-safe-held">{t("safe.noteBalance",{ held:fmt(held,currency) })}</div>}
+          {/* Run 31: the caveats share ONE quiet block (two stacked boxes competed with the number). The balance paragraph keeps its own hook. */}
+          {(()=>{ const noRec=safeInfo.scheduleCount===0, lowHeld=held!==null&&safeInfo.remaining>0&&held<safeInfo.remaining; if (!noRec&&!lowHeld) return null; return (
+            <div className="safe-note safe-caveat" role="note" data-section="home-safe-notes">
+              {noRec&&<div>{t("safe.noteNoRecurring")}</div>}
+              {/* The figure is a month-flow plan, not a bank balance: when the accounts hold less than it, say so (always visible). */}
+              {lowHeld&&<div data-section="home-safe-held" style={noRec?{marginTop:6}:undefined}>{t("safe.noteBalance",{ held:fmt(held,currency) })}</div>}
+            </div>); })()}
         </div>
       )}
 
