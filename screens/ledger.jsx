@@ -1,6 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
+import { pickerCats, readCatPrefs } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { Collapse, Swap } from "./motion.jsx";
@@ -91,6 +92,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [catFilter,  setCatFilter]  = useState("all");
+  const [subFilter,  setSubFilter]  = useState("all");   // Run 36: subcategory within the chosen category ("all", "none" or the lower-cased name)
+  useEffect(()=>{ setSubFilter("all"); },[catFilter]);
   const [tripFilter, setTripFilter] = useState("all");   // Run 22: "all" or a trip name (compared without case)
   const [walletFilter, setWalletFilter] = useState("all");   // Run 16: "all", a wallet id, or "none" (entries without one)
   const [accFilter,  setAccFilter]  = useState("all");   // Run 31: "all", an account id, or "none" (entries without an account)
@@ -123,13 +126,14 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
     }
     if (typeFilter!=="all") list=list.filter(x=>x.type===typeFilter);
     if (catFilter!=="all")  list=list.filter(x=>x.category===catFilter);
+    if (catFilter!=="all" && subFilter!=="all") list=list.filter(x=>{ const s=lc(String(x.subcategory||"").trim()); return subFilter==="none" ? !s : s===subFilter; });
     if (walletFilter!=="all") list=list.filter(x=>(walletId(x.wallet)||"none")===walletFilter);
     if (tripFilter!=="all") list=list.filter(x=>lc(tripName(x.trip))===lc(tripFilter));
     if (accFilter!=="all")  list=list.filter(x=>(accId(x.account)||"none")===accFilter);
     if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
     if (dateTo)             list=list.filter(x=>x.date<=dateTo);
     return list;
-  },[transactions,search,typeFilter,catFilter,walletFilter,tripFilter,accFilter,dateFrom,dateTo,locale()]);
+  },[transactions,search,typeFilter,catFilter,subFilter,walletFilter,tripFilter,accFilter,dateFrom,dateTo,locale()]);
   const usedAccs=useMemo(()=>[...new Set(transactions.map(x=>accId(x.account)).filter(Boolean))],[transactions]);
   const hasUnsetAcc=useMemo(()=>transactions.some(x=>!accId(x.account)),[transactions]);
   // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
@@ -149,6 +153,13 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const hasMore=trips.length>0||usedWallets.length>0||usedAccs.length>0;
   const moreActive=(tripFilter!=="all"?1:0)+(walletFilter!=="all"?1:0)+(accFilter!=="all"?1:0);   // how many of the tucked-away filters are on
   const selectedCat=CAT(catFilter);
+  // Run 36: the subcategories used inside the chosen category (first spelling wins), plus "without one" when some entries have none.
+  const usedSubs=useMemo(()=>{
+    if (catFilter==="all") return [];
+    const m=new Map(); let none=false;
+    transactions.forEach(x=>{ if (x.category!==catFilter) return; const s=String(x.subcategory||"").trim(); if (!s) { none=true; return; } if (!m.has(lc(s))) m.set(lc(s),s); });
+    return m.size ? [...[...m.entries()].sort((a,b)=>subName(a[1]).localeCompare(subName(b[1]))), ...(none?[["none",""]]:[])] : [];
+  },[transactions,catFilter]);
 
   if (transactions.length===0) return (
     <div className="empty">
@@ -197,6 +208,13 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
         <div className="list-sub" data-section="tx-cat-totals" style={{margin:"2px 2px 8px"}}>
           <div style={{fontWeight:600}}>{t("cat.allTime",{total:fmt(catSel.total),n:catSel.n})}</div>
           {catSel.months.slice(0,12).map(m=><div key={m.month} data-month={m.month}>{t("cat.month",{month:monthName(m.month),total:fmt(m.total)})}</div>)}
+        </div>
+      )}
+      {usedSubs.length>0&&(
+        <div className="filter-bar" role="group" aria-label={t("ledger.subFilter")} data-section="tx-sub-filter">
+          {[["all",""],...usedSubs].map(([k,s])=>(
+            <button key={k} className={`chip${subFilter===k?" on":""}`} aria-pressed={subFilter===k} onClick={()=>setSubFilter(k)}>{k==="all"?t("ledger.subAll"):k==="none"?t("ledger.subNone"):subName(s)}</button>
+          ))}
         </div>
       )}
       {tripSel&&<div className="list-sub" data-section="tx-trip-total" style={{margin:"2px 2px 8px"}}>{t("trip.total",{name:tripSel.name,total:fmt(tripSel.total),n:tripSel.n})}</div>}
@@ -302,7 +320,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
 // ─── S6: Transaction Detail Sheet with Merchant Intelligence ─────────────────
 // Run 24: the split form inside the entry's detail sheet: pick a category and an amount per part; Save is enabled only when the parts add up exactly.
 export function SplitPanel({ txn, currency, onSplit }) {
-  const sameKind=CATEGORIES.filter(c=>c.income===(txn.type==="income"));
+  const sameKind=pickerCats(txn.type==="income",readCatPrefs(),[txn.category]);   // Run 36: user's order; hidden only if it is this entry's own
   const other=(sameKind.find(c=>c.id!==txn.category)||sameKind[0]).id;
   const [open,setOpen]=useState(false);
   const [parts,setParts]=useState([{ category:txn.category, amount:"" },{ category:other, amount:"" }]);
@@ -379,6 +397,7 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
             [t("add.category"),  catName(txn.category)+(txn.subcategory?` / ${subName(txn.subcategory)}`:"")],
             [t("add.recurring"), txn.recurring?(txn.recurFreq?t("freqCap."+txn.recurFreq):t("common.yes")):t("common.no")],
             ...(txn.wallet?[[t(txn.type==="income"?"wallet.labelIn":"wallet.label"), walletName(txn.wallet)]]:[]),
+            ...(txn.type==="income"&&txn.category==="refund"&&txn.refundFor?[[t("add.refundFor"), catName(txn.refundFor)]]:[]),
           ].map(([lbl,val])=>(
             <div key={lbl} style={{background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px"}}>
               <div style={{fontSize:12,fontWeight:500,color:"var(--ink-3)",marginBottom:3}}>{lbl}</div>

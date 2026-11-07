@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Collapse, useLeave } from "./motion.jsx";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
+import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,6 +39,42 @@ export function LanguageChooser({ onChoose }) {
 // ─── Preferences sheet ────────────────────────────────────────────────────────
 // Run 17: language and the profile name live on the Settings page itself, the all-time overview is on Analytics, and the savings floor
 // and the quick-add templates are on Goals. What remains here: the currency and the Safe to Spend on/off switch.
+// Run 36: order and visibility of every category (built-in and own) in the pickers. Up / down buttons (no dragging needed), and a
+// Show / Hide switch. Hiding never touches entries or reports; "Other" and "Other income" always stay. Stored under its own key.
+export function CategoryOrder({ onChanged, showToast }) {
+  const [prefs,setPrefs]=useState(()=>readCatPrefs());
+  const [income,setIncome]=useState(false);
+  const save=(next)=>{ if (!writeCatPrefs(next)) { showToast(t("mycat.saveFailed"),5000); return; } setPrefs(readCatPrefs()); onChanged(); };
+  const list=orderedCats(income,prefs), hidden=new Set(prefs.hidden);
+  const shownN=list.filter(c=>!hidden.has(c.id)).length;
+  return (
+    <div className="card prefs-card" data-section="cat-order" style={{marginTop:10}}>
+      <div className="settings-row-title">{t("catord.title")}</div>
+      <div className="list-sub" style={{margin:"2px 0 8px"}}>{t("catord.sub")}</div>
+      <div className="filter-bar" role="group" aria-label={t("mycat.type")}>
+        {[false,true].map(v=>(<button key={String(v)} className={`chip${income===v?" on":""}`} aria-pressed={income===v} data-section={v?"catord-income":"catord-expense"} onClick={()=>setIncome(v)}>{t(v?"add.income":"add.expense")}</button>))}
+      </div>
+      <div className="list-sub" aria-live="polite" style={{margin:"4px 0 6px"}}>{t("catord.count",{shown:shownN,all:list.length})}</div>
+      <ul style={{listStyle:"none",margin:0,padding:0}}>
+        {list.map((c,i)=>{ const off=hidden.has(c.id), fixed=CPREF_UNHIDEABLE.has(c.id), nm=catName(c.id);
+          return (
+            <li key={c.id} className="settings-row" data-catord={c.id} data-hidden={off?"1":"0"} style={{opacity:off?0.55:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+                <CatIcon catId={c.id} size={16}/>
+                <div style={{minWidth:0}}><div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{nm}</div>{off&&<div className="settings-row-sub">{t("catord.hiddenNote")}</div>}</div>
+              </div>
+              <div style={{display:"flex",gap:4,flexShrink:0}}>
+                <button className="chip" data-section="catord-up" aria-label={t("catord.up",{name:nm})} disabled={i===0} onClick={()=>save(moveCat(prefs,income,c.id,-1))} style={{minWidth:44,minHeight:44}}>↑</button>
+                <button className="chip" data-section="catord-down" aria-label={t("catord.down",{name:nm})} disabled={i===list.length-1} onClick={()=>save(moveCat(prefs,income,c.id,1))} style={{minWidth:44,minHeight:44}}>↓</button>
+                {!fixed&&<button className="chip" data-section="catord-toggle" aria-pressed={!off} aria-label={t(off?"catord.showName":"catord.hideName",{name:nm})} onClick={()=>save(toggleHiddenCat(prefs,c.id))} style={{minHeight:44}}>{t(off?"catord.show":"catord.hide")}</button>}
+              </div>
+            </li>
+          ); })}
+      </ul>
+      {(prefs.hidden.length>0||prefs.order.length>0)&&<button className="btn btn-ghost btn-full" data-section="catord-reset" style={{marginTop:8}} onClick={()=>save({ hidden:[], order:[] })}>{t("catord.reset")}</button>}
+    </div>
+  );
+}
 // Run 24: the user's own categories — add (name, expense or income, colour) and remove one that no entry or budget uses.
 export function MyCategories({ state, onChanged, showToast }) {
   const [list,setList]=useState(()=>readCustomCats());
@@ -236,7 +273,7 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
   return (
     <>
       <Fold id="accounts" icon="wallet" title={t("acc.title")} sub={accSum} open={open.accounts} onToggle={()=>toggle("accounts")}><MyAccounts state={state} currency={state.currency} showToast={showToast}/></Fold>
-      <Fold id="categories" icon="list" title={t("mycat.title")} sub={catSum} open={open.categories} onToggle={()=>toggle("categories")}><MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/></Fold>
+      <Fold id="categories" icon="list" title={t("mycat.title")} sub={catSum} open={open.categories} onToggle={()=>toggle("categories")}><MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/><CategoryOrder onChanged={onCatsChanged} showToast={showToast}/></Fold>
       <Fold id="money" icon="settings" title={t("st.foldMoney")} sub={moneySum} open={open.money} onToggle={()=>toggle("money")}>
       <div className="card st-card" data-section="st-money-options">
         {/* Safe to Spend: the switch only. The monthly savings floor is on Goals. */}
@@ -358,7 +395,7 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
   const [tplSubcat,   setTplSubcat]   = useState("");
   const [tplMerchant, setTplMerchant] = useState("");
   const [tplNote,     setTplNote]     = useState("");
-  const expCats=CATEGORIES.filter(c=>!c.income);
+  const expCats=pickerCats(false,readCatPrefs(),[tplCatId,...templates.map(x=>x.catId)]);   // Run 36: user's order; hidden only if a template uses it
   const myOwn=useMemo(()=>showNewTpl?((readSubcats()[tplCatId])||[]):[],[showNewTpl,tplCatId]);
   const builtIn=(CATEGORIES.find(c=>c.id===tplCatId)||{}).subs||[];
   const saveTpl=()=>{
@@ -434,7 +471,7 @@ export function ListRow({ icon, title, sub, onClick, color="var(--accent-text)",
 // Run 16: "How it works" (four short steps) and the privacy notice, one simple sheet each. The notice describes what the app does
 // today (no account, no analytics, nothing sent); it is not legal advice and must be kept true if the app ever changes.
 export function InfoSheet({ kind, onClose }) {
-  const n=kind==="how"?4:kind==="safe"?6:8;
+  const n=kind==="how"?5:kind==="safe"?6:8;   // Run 36: "how" gained part 5 (income, money in and refunds)
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("info."+kind+".title")} data-section={"info-"+kind}>

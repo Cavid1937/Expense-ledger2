@@ -453,16 +453,66 @@ export function editCustomCat(list, id, name, color) {
   const next=cleanCustomCats(list.map(c=>c.id===id ? { ...c, name:n, color:color||c.color } : c));
   return next.length===list.length && next.some(c=>c.id===id) ? { list:next, edited:true, reason:"" } : { list, edited:false, reason:"dup" };
 }
+// ─── Run 36: hide and reorder categories in the pickers (own storage key; the ledger and every report are unchanged) ──────────────────
+// Hiding only takes a category out of the quick pickers (add form, bills, budgets, change category). Entries in it keep it, every report and
+// chart still counts it, and a form editing such an entry still shows it. "Other" and "Other income" cannot be hidden (the fallbacks).
+// Order is a list of ids; ids it does not know (another version's, the other type's) are kept as they are. Nothing here is ever deleted.
+export const CPREF_KEY=KEY+"__catprefs", CPREF_UNHIDEABLE=new Set(["other","income"]);
+const isCatIdText=(v)=>typeof v==="string" && /^[a-z][a-z0-9_]{1,31}$/.test(v);
+export function cleanCatPrefs(raw) {
+  const src=isPlainObject(raw) ? raw : {};
+  const uniq=(a)=>[...new Set((Array.isArray(a)?a:[]).filter(isCatIdText))].slice(0,300);
+  return { hidden:uniq(src.hidden).filter(id=>!CPREF_UNHIDEABLE.has(id)), order:uniq(src.order) };
+}
+export function readCatPrefs() { try { const r=localStorage.getItem(CPREF_KEY); return cleanCatPrefs(r ? JSON.parse(r) : {}); } catch { return cleanCatPrefs({}); } }
+export function writeCatPrefs(p) {
+  try { const c=cleanCatPrefs(p); if (!c.hidden.length && !c.order.length) localStorage.removeItem(CPREF_KEY); else localStorage.setItem(CPREF_KEY,JSON.stringify({ version:1, ...c })); return true; } catch { return false; }
+}
+export function orderedCats(income, prefs) {
+  const p=cleanCatPrefs(prefs), pos=new Map(p.order.map((id,i)=>[id,i]));
+  return CATEGORIES.filter(c=>!!c.income===!!income).map((c,i)=>({ c, k:pos.has(c.id) ? pos.get(c.id) : 1e6+i })).sort((a,b)=>a.k-b.k).map(x=>x.c);
+}
+// keep: ids always shown even when hidden (the category of the entry or bill being edited), so editing never changes a category silently.
+export function pickerCats(income, prefs, keep=[]) {
+  const p=cleanCatPrefs(prefs), hid=new Set(p.hidden), k=new Set((Array.isArray(keep)?keep:[keep]).filter(Boolean));
+  return orderedCats(income,p).filter(c=>!hid.has(c.id) || k.has(c.id));
+}
+export function moveCat(prefs, income, id, dir) {
+  const p=cleanCatPrefs(prefs), ids=orderedCats(income,p).map(c=>c.id), i=ids.indexOf(id), j=i+(dir<0?-1:1);
+  if (i<0 || j<0 || j>=ids.length) return p;
+  [ids[i],ids[j]]=[ids[j],ids[i]];
+  return { ...p, order:[...p.order.filter(x=>!ids.includes(x)), ...ids] };
+}
+export function toggleHiddenCat(prefs, id) {
+  const p=cleanCatPrefs(prefs);
+  if (CPREF_UNHIDEABLE.has(id) || !isCatIdText(id)) return p;
+  return { ...p, hidden:p.hidden.includes(id) ? p.hidden.filter(x=>x!==id) : [...p.hidden,id] };
+}
+// Search for the pickers: matches the category's name in the current language, its English name, short name, and its subcategories
+// (built-in and the user's own), ignoring case. A subcategory match returns that subcategory too, so one tap picks both.
+export function searchCats(list, query, mySubs={}) {
+  const q=lc(String(query||"").trim()); if (!q) return list.map(c=>({ cat:c, sub:"" }));
+  const byName=[], bySub=[];   // a category whose own name matches comes before one found through a subcategory
+  list.forEach(c=>{
+    const names=[catName(c.id), catTile(c.id), c.name, c.tile].filter(Boolean).map(lc);
+    if (names.some(s=>s.includes(q))) { byName.push({ cat:c, sub:"" }); return; }
+    const subs=[...(c.subs||[]), ...((mySubs&&mySubs[c.id])||[])];
+    const hit=subs.find(s=>lc(subName(s)).includes(q) || lc(s).includes(q));
+    if (hit) bySub.push({ cat:c, sub:hit });
+  });
+  return [...byName, ...bySub];
+}
 export function customCatInUse(id, transactions, budgets) { return (transactions||[]).some(x=>x && x.category===id) || !!(budgets && budgets[id]>0); }
 try { applyCustomCats(readCustomCats()); } catch {}
 
 // planImport reads a backup's own categories first, so its entries keep their category instead of becoming "Other"; nothing is stored here.
 function planImportWithCats(raw, filename="") {
-  let inc=[]; try { const p=JSON.parse(String(raw).replace(/^﻿/,"")); if (isPlainObject(p)) inc=cleanCustomCats(p.customCategories); } catch {}
-  if (!inc.length) return planImport(raw,filename);
+  let inc=[], prefs=null; try { const p=JSON.parse(String(raw).replace(/^﻿/,"")); if (isPlainObject(p)) { inc=cleanCustomCats(p.customCategories); if (isPlainObject(p.categoryPrefs)) { const c=cleanCatPrefs(p.categoryPrefs); if (c.hidden.length || c.order.length) prefs=c; } } } catch {}
+  const withPrefs=(r)=>{ if (r && r.ok && prefs) r.catPrefs=prefs; return r; };   // Run 36
+  if (!inc.length) return withPrefs(planImport(raw,filename));
   const had=currentCustomCats();
   applyCustomCats(mergeCustomCats(had,inc));
-  try { const r=planImport(raw,filename); if (r && r.ok) r.customCats=inc; return r; } finally { applyCustomCats(had); }
+  try { const r=planImport(raw,filename); if (r && r.ok) r.customCats=inc; return withPrefs(r); } finally { applyCustomCats(had); }
 }
 
 // Callers validate with checkRawTxn() first (see partitionTransactions). normaliseTxn never takes abs(),
@@ -500,6 +550,8 @@ function normaliseTxn(t, opts={}) {
     ...(tripName(t.trip) ? { trip:tripName(t.trip) } : {}),
     // Run 24: the account the entry was paid from or received into. Optional, same rule; an id this phone does not know is kept as it is.
     ...(accId(t.account) ? { account:accId(t.account) } : {}),
+    // Run 36: which expense category a refund gives money back to. Optional, same rule; kept only on income entries.
+    ...(normType(t.type)==="income" && refundForId(t.refundFor) ? { refundFor:refundForId(t.refundFor) } : {}),
   };
 }
 // Run 22: a trip is a short free-text label (max 40 characters) on ordinary entries. Anything that is not text gives no trip.
@@ -549,8 +601,44 @@ export function debtCashFlow(list, mon) {
   out.out=Math.round(out.out*100)/100; out.in=Math.round(out.in*100)/100;
   return out;
 }
-function forSpending(list) {
-  return (Array.isArray(list)?list:[]).flatMap(t=>{
+// Run 36: a refund the user marked as "refund of <expense category>" (field refundFor) lowers that category's spending in the refund's
+// month instead of counting as money in. Rule (written into How it is calculated): only that category, only that calendar month, never
+// below zero. The refund takes from the latest entries dated on or before it first, then later ones in the month; an entry brought to
+// zero leaves the spending views. Any part with nothing left to lower stays as money in, so money in minus spending always equals the
+// raw cash difference (nothing is counted twice or lost). Refunds without refundFor behave exactly as before. Nothing is ever inferred.
+// Only an income entry in "Refunds" can name an expense category it refunds; anything else stores no field.
+function refundPart(data, refundFor) { const id=refundForId(refundFor), c=id && CATEGORIES.find(x=>x.id===id); return data && data.type==="income" && data.category==="refund" && c && !c.income ? { refundFor:id } : {}; }
+export function refundForId(v) { return typeof v==="string" && /^[a-z][a-z0-9_]{1,31}$/.test(v) ? v : ""; }
+function netRefunds(rows) {
+  const refunds=rows.filter(t=>t && t.type==="income" && t.category==="refund" && refundForId(t.refundFor) && /^\d{4}-\d{2}/.test(String(t.date)));
+  if (!refunds.length) return rows;
+  const out=rows.slice(), drop=new Set(), cents=(x)=>Math.round((Number(x)||0)*100);
+  refunds.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(r=>{
+    const cat=r.refundFor, mon=String(r.date).slice(0,7), rd=String(r.date).slice(0,10);
+    const idx=[]; out.forEach((x,i)=>{ if (x && !drop.has(i) && x.type==="expense" && x.category===cat && String(x.date).slice(0,7)===mon) idx.push(i); });
+    // latest on or before the refund first, then later in the month (earliest first)
+    const before=idx.filter(i=>String(out[i].date).slice(0,10)<=rd).sort((a,b)=>String(out[b].date).localeCompare(String(out[a].date))||b-a);
+    const after=idx.filter(i=>String(out[i].date).slice(0,10)>rd).sort((a,b)=>String(out[a].date).localeCompare(String(out[b].date))||a-b);
+    let left=cents(r.amount);
+    for (const i of [...before,...after]) {
+      if (left<=0) break;
+      const have=cents(out[i].amount), take=Math.min(have,left);
+      left-=take;
+      if (have-take<=0) drop.add(i); else out[i]={...out[i], amount:(have-take)/100};
+    }
+    const ri=out.indexOf(r);
+    if (left<=0) drop.add(ri); else out[ri]={...r, amount:left/100};
+  });
+  return out.filter((_,i)=>!drop.has(i));
+}
+// Run 36: how much "Refund of" entries lowered spending in a month (shown in Analytics so the lower figure is never a mystery).
+export function refundsNetted(list, mon) {
+  const pre=forSpendingRows(list), post=netRefunds(pre), m=(x)=>x && x.type==="expense" && String(x.date).slice(0,7)===mon;
+  return Math.round((sumCents(pre.filter(m))-sumCents(post.filter(m)))*100)/100;
+}
+function forSpending(list) { return netRefunds(forSpendingRows(list)); }
+function forSpendingRows(list) {
+  return ((Array.isArray(list)?list:[]).flatMap(t=>{
     if (t && t.debtLink && debtLinkRef(t.debtLink)) return [];
     // Run 35b: refunds and withdrawals from savings stay in this list (they are real money in: month net, Safe-to-Spend and the coach count them).
     // Only figures LABELLED income leave them out, via isEarnedCat in calcMonthSummary (curInc vs curIn).
@@ -558,7 +646,7 @@ function forSpending(list) {
     if (!r) return [t];
     const part=r.interest===null ? 0 : Math.min(r.interest,Number(t.amount)||0);
     return part>0 ? [{...t,amount:part}] : [];
-  });
+  }));
 }
 export function loanCashOut(list, mon) {
   const out={ paid:0, n:0, interest:0, unknown:0 };
@@ -1603,9 +1691,11 @@ function buildBackup(state, now=new Date().toISOString()) {
   const dd=cleanDebtData(state.debtData);   // Run 17: debts and loans, optional in the same way
   const acc=cleanAccountData(state.accountData);   // Run 24: accounts and transfers, optional in the same way
   const ccats=cleanCustomCats(state.customCats);   // Run 24: the user's own categories, optional in the same way
+  const cprefs=cleanCatPrefs(state.catPrefs);       // Run 36: hidden / reordered categories, optional in the same way
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
     transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}),
     ...(ccats.length ? { customCategories:ccats } : {}),
+    ...(cprefs.hidden.length || cprefs.order.length ? { categoryPrefs:cprefs } : {}),
     ...(acc.accounts.length ? { accounts:acc.accounts, ...(acc.transfers.length ? { transfers:acc.transfers } : {}) } : {}),
     ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
 }
@@ -1658,10 +1748,10 @@ function buildCsv(transactions) {
   // Run 16: "Wallet" is the last column, so the columns before it did not move (older readers and the older import still work).
   // Run 32: Account (its name), LoanInterest (the interest part of a loan instalment; "unknown" when the split was not given) and DebtRepayment ("yes" for a person-to-person
   // repayment entry) are appended after "Trip", so earlier columns did not move. They are for the user's spreadsheet: this CSV is NOT a backup and the import ignores them.
-  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip","Account","LoanInterest","DebtRepayment"]];   // Run 22: "Trip" is appended after "Wallet"
+  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip","Account","LoanInterest","DebtRepayment","RefundOf"]];   // Run 36: "RefundOf" appended last, earlier columns unchanged   // Run 22: "Trip" is appended after "Wallet"
   transactions.forEach(t=>{ const lr=loanRef(t.loan);
     rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category,walletId(t.wallet),tripName(t.trip),
-      accountName(t.account),lr ? (lr.interest===null ? "unknown" : lr.interest.toFixed(2)) : "",debtLinkRef(t.debtLink) ? "yes" : ""]); });
+      accountName(t.account),lr ? (lr.interest===null ? "unknown" : lr.interest.toFixed(2)) : "",debtLinkRef(t.debtLink) ? "yes" : "",refundForId(t.refundFor) ? (CAT(t.refundFor)?.name||t.refundFor) : ""]); });
   // Formula-injection guard: a cell starting with = + - @ tab or CR would run as a formula in a spreadsheet, so it gets a
   // leading apostrophe (shown as text). parseCsvImport removes it again, so the app's own CSV round trip stays exact.
   const safe=(v)=>{ const s=String(v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; };
@@ -3211,11 +3301,12 @@ function AppInner() {
     return { ...s, transactions:r.transactions, bills:r.bills };
   };
   const addTransaction=useCallback((txn)=>{
-    const { billChoice, wallet, trip, account, ...data }=txn, id=Date.now()+Math.random();
+    const { billChoice, wallet, trip, account, refundFor, ...data }=txn, id=Date.now()+Math.random();
+    const rf=refundPart(data,refundFor);
     // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
     // bill the entry may have created, and refuses if something else changed in the meantime, like the other undo windows.
     const before=stateRef.current;
-    const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),...(accId(account)?{account:accId(account)}:{}),id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
+    const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),...(accId(account)?{account:accId(account)}:{}),...rf,id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
     setState(next);
     freshTxnId=id; setTimeout(()=>{ if (freshTxnId===id) freshTxnId=null; },1500);   // Run 25: the new row settles in (see TxnRow)
     const cross=budgetCrossing(before.transactions,next.transactions,next.budgets,{...data});
@@ -3237,9 +3328,10 @@ function AppInner() {
     const dd=readDebts(), d=dd.debts.find(x=>x.id===tx.debtLink.debtId); return !!(d && d.payments.some(p=>p.id===tx.debtLink.paymentId)); };
   const updateTransaction=useCallback((id,txn)=>{
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
-    const { billChoice, wallet, trip, account, ...data }=txn;
-    // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored). Run 22: same for the trip.
-    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}) }; })},id,billChoice));
+    const { billChoice, wallet, trip, account, refundFor, ...data }=txn;
+    const rf=refundPart(data,refundFor);
+    // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored). Run 22: same for the trip. Run 36: same for "refund of".
+    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, refundFor:_rf, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}), ...rf }; })},id,billChoice));
     showToast(t("toast.updated"));
   },[showToast]);
 
@@ -3456,7 +3548,7 @@ function AppInner() {
   const exportJSON=useCallback(()=>{
     if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: native shell → the hand-over, never a dead download link
     const now=new Date().toISOString();
-    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),accountData:readAccounts()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
+    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),accountData:readAccounts()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
     // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
     // It is not a confirmed backup until the user says they have the file (see backupReminderDue).
     setState(s=>({...s,lastBackup:now}));
@@ -3468,7 +3560,7 @@ function AppInner() {
   // the phone. Cancelled → nothing changes. No file sharing on this device → falls back to the download above.
   const shareBackup=useCallback(async ()=>{
     const now=new Date().toISOString();
-    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),accountData:readAccounts()},now),null,2),`ledger-backup-${today()}.json`);
+    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),accountData:readAccounts()},now),null,2),`ledger-backup-${today()}.json`);
     if (r==="unsupported") { exportJSON(); return; }
     if (r==="failed") { showToast(t("io.shareFailed"),6000); return; }   // Run 13: told, and nothing is recorded
     if (r!=="shared") return;
@@ -3507,7 +3599,7 @@ function AppInner() {
 
   const exportEncrypted=useCallback(async (pass)=>{
     const now=new Date().toISOString();
-    const r=await encryptBackupText(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),accountData:readAccounts()},now),null,2),pass);
+    const r=await encryptBackupText(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),accountData:readAccounts()},now),null,2),pass);
     if (!r.ok) return r.reason;
     const name=`ledger-backup-encrypted-${today()}.json`, native=nativeShareHook();
     if (native) {
@@ -3539,7 +3631,7 @@ function AppInner() {
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
     const restore=(k,raw)=>{ try { if (raw===undefined) return; if (raw===null) localStorage.removeItem(k); else localStorage.setItem(k,raw); } catch {} };
-    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY) };
+    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY) };
     const catsHad=currentCustomCats();
     const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); applyCustomCats(catsHad); };
     // Run 24: the file's own categories are added to the ones on this phone (by id; a name already in use is skipped, never renamed).
@@ -3548,6 +3640,8 @@ function AppInner() {
       if (!writeCustomCats(merged)) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
       applyCustomCats(merged); setCatVer(v=>v+1);
     }
+    // Run 36: the file's hidden / ordered categories are used only when this phone has none of its own (they are never mixed or overwritten).
+    if (plan.catPrefs) { const mine=readCatPrefs(); if (!mine.hidden.length && !mine.order.length && !writeCatPrefs(plan.catPrefs)) { undoAux(); showToast(t("import.auxFailed"),6000); return; } }
     // Run 16: the file's own-subcategory suggestions are added to the ones on this phone (union; nothing is overwritten or removed).
     const hasSub=plan.subcategories && Object.keys(plan.subcategories).length;
     // Run 17: debts and loans from the file are added by id (what is already on this phone is never overwritten).

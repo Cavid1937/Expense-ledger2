@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Collapse, Swap, useLeave } from "./motion.jsx";
 import { locale, t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, KEY, isEarnedCat, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
+import { CAT, CatIcon, Icon, KEY, isEarnedCat, refundsNetted, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
 import { LedgerArt, MoneyText, PlannedNote, cmpPrev, cmpText, cmpTitle } from "./home.jsx";
 
 // ─── Redesign pages (2026-10-27) ─────────────────────────────────────────────────────────────────────────────────────
@@ -113,6 +113,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
   const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
   const debtCash    = useMemo(()=>debtCashFlow(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 18
   const loanCash    = useMemo(()=>loanCashOut(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 17
+  const refundLow   = useMemo(()=>refundsNetted(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 36
   // Run 18g: the user can hide a coach tip they do not want (stored only on this device; due-date warnings cannot be hidden).
   const COACH_MUTE_KEY=`${KEY}__coachmute`, COACH_ACTIONS=["loanDue","loanOverdue","owedLate"];
   const [muted,setMuted]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(COACH_MUTE_KEY)||"[]"); return Array.isArray(v)?v.filter(x=>typeof x==="string"):[]; } catch { return []; } });
@@ -196,6 +197,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           <div className="month-stat-val" style={{color:surplusColor(curIn,curExp)}}><MoneyText v={fmt(Math.abs(curIn-curExp),currency)}/></div>
           <div className="month-stat-lbl">{t("month.net."+(curIn>curExp?"Net surplus":curIn<curExp?"Net deficit":"Break-even"))}</div>
           {curOther>0&&<div className="list-sub" data-section="an-other-in" style={{marginTop:4}}>{t("month.otherIn",{amount:fmt(curOther,currency)})}</div>}
+          {refundLow>0&&<div className="list-sub" data-section="an-refund-net" style={{marginTop:4}}>{t("month.refundNet",{amount:fmt(refundLow,currency)})}</div>}
           {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
           {momDiff!==null&&cmpKind==="same"&&<div className="cmp-window" style={{fontSize:11,color:"var(--ink-3)",marginTop:2}}>{t("cmp.window",{d:cmpDays})}</div>}
         </div>

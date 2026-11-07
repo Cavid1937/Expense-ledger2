@@ -1,6 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
+import { pickerCats, readCatPrefs, searchCats } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // ─── Recurring Hub ────────────────────────────────────────────────────────────
@@ -13,7 +14,7 @@ export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast
   const [category,setCategory]=useState(bill?.category||"housing"), [freq,setFreq]=useState(bill?.freq||"monthly");
   const [anchor,setAnchor]=useState(bill?.anchorDate||today()), [active,setActive]=useState(bill?bill.active!==false:true);
   const [endDate,setEndDate]=useState(bill?.endDate||"");
-  const cats=CATEGORIES.filter(c=>type==="income"?c.income:!c.income);
+  const cats=pickerCats(type==="income",readCatPrefs(),[bill?.category,category]);   // Run 36: user's order; hidden ones only if this bill uses it
   const save=()=>{
     const b=validateBill({ id:bill?.id||"tmp", name, type, category:cats.some(c=>c.id===category)?category:cats[0].id, subcategory:bill?.subcategory||"",
       amount:formMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), endDate, active, createdAt:bill?.createdAt||new Date().toISOString() });
@@ -67,7 +68,9 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const isEditing=!!editId;
   const [type,     setType]     = useState(prefill?.type||"expense");
   const [amount,   setAmount]   = useState(prefill?.amount?String(prefill.amount):"");
-  const [catId,    setCatId]    = useState(prefill?.category||"food");
+  // Run 36: a new entry starts on the first category the user shows (Food / Salary unless they reordered or hid them).
+  const firstCat=(ty)=>{ const l=pickerCats(ty==="income",readCatPrefs()); return (l[0]&&l[0].id)||(ty==="income"?"salary":"food"); };
+  const [catId,    setCatId]    = useState(prefill?.category||firstCat(prefill?.type||"expense"));
   const [subcat,   setSubcat]   = useState(prefill?.subcategory||"");
   const [merchant, setMerchant] = useState(prefill?.merchant||"");
   const [note,     setNote]     = useState(prefill?.note||"");
@@ -80,6 +83,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [trip, setTrip] = useState(tripName(prefill?.trip));
   const accData=useMemo(()=>readAccounts(),[]);   // Run 24: optional account (card, cash...) the entry belongs to
   const [account, setAccount] = useState(accId(prefill?.account));
+  // Run 36: a refund can say which kind of spending it gives money back to; then it lowers that category's spending instead of counting as money in.
+  const [refundFor, setRefundFor] = useState(typeof prefill?.refundFor==="string" ? prefill.refundFor : "");
   const knownTrips=useMemo(()=>tripTotals(transactions).map(x=>x.name),[transactions]);
   // Run 16: the user's own subcategory suggestions (separate storage key; entries keep the text itself).
   const [mySubs, setMySubs] = useState(()=>readSubcats());
@@ -109,21 +114,25 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
   // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
   // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
-  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account }).current;
+  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account, refundFor }).current;
   const [askDiscard, setAskDiscard] = useState(false);
-  const defaultCat=type===initial.type ? initial.catId : (type==="income"?"salary":"food");
+  const defaultCat=type===initial.type ? initial.catId : firstCat(type);
   const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
-    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account;
+    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account || refundFor!==initial.refundFor;
   const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
 
   const expCats=CATEGORIES.filter(c=>!c.income);
-  const incCats=CATEGORIES.filter(c=>c.income);
-  const displayCats=type==="income"?incCats:expCats;
+  // Run 36: the pickers follow the user's order and hide what they hid; the entry's own category (when editing) is always offered.
+  const catPrefs=useMemo(()=>readCatPrefs(),[]);
+  const pickList=pickerCats(type==="income",catPrefs,[prefill?.category,catId]);
+  const [catQ,setCatQ]=useState("");
+  const catHits=searchCats(pickList,catQ,mySubs);
+  const displayCats=catHits.map(h=>h.cat);
   const selectedCat=CAT(catId);
   const moreSummary=[merchant.trim(), note.trim(), wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
 
   useEffect(()=>{ setTimeout(()=>amtRef.current?.focus(),60); },[]);
-  useEffect(()=>{ if(!prefill) setCatId(type==="income"?"salary":"food"); },[type]);
+  useEffect(()=>{ if(!prefill) setCatId(firstCat(type)); setCatQ(""); },[type]);
 
   const merchantMatches=useMemo(()=>{
     if (!merchant.trim()) return [];
@@ -170,7 +179,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
       const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
       if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
     }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",
       billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
@@ -219,15 +228,29 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
 
         <div className="field" role="group" aria-labelledby="txn-cat-lbl">
           <div className="field-lbl" id="txn-cat-lbl">{t("add.category")} <span style={{fontWeight:600,color:"var(--ink-2)",letterSpacing:0.4}}>· {catName(catId)}</span></div>
+          {pickList.length>10&&(
+            <input type="search" className="field-input" data-section="add-cat-search" aria-label={t("cat.search")} placeholder={t("cat.search")} value={catQ} onChange={e=>setCatQ(e.target.value)} style={{marginBottom:8}}/>
+          )}
           <div className="cat-scroll">
-            {displayCats.map(cat=>(
-              <button key={cat.id} className={`cat-tile${catId===cat.id?" sel":""}`} aria-pressed={catId===cat.id} aria-label={catName(cat.id)} onClick={()=>{setCatId(cat.id);setSubcat("");}}>
+            {catHits.map(({cat,sub})=>(
+              <button key={cat.id} className={`cat-tile${catId===cat.id?" sel":""}`} aria-pressed={catId===cat.id} aria-label={catName(cat.id)+(sub?" · "+subName(sub):"")} onClick={()=>{setCatId(cat.id);setSubcat(sub||"");}}>
                 <CatIcon catId={cat.id} size={18} color={catId===cat.id?cat.color:undefined}/>
                 <span className="cat-tile-name">{catTile(cat.id)}</span>
+                {sub&&<span className="cat-tile-name" style={{fontSize:10,opacity:0.75}}>{subName(sub)}</span>}
               </button>
             ))}
           </div>
-          {type==="income"&&CAT(catId).earned===false&&<div className="list-sub" data-section="add-not-income" style={{marginTop:6}}>{t("add.notIncome")}</div>}
+          {catQ.trim()&&!catHits.length&&<div className="list-sub" role="status" data-section="add-cat-none" style={{marginTop:6}}>{t("cat.searchNone")}</div>}
+          {type==="income"&&CAT(catId).earned===false&&<div className="list-sub" data-section="add-not-income" style={{marginTop:6}}>{t(catId==="refund"&&refundFor?"add.refundNets":"add.notIncome")}</div>}
+          {type==="income"&&catId==="refund"&&(
+            <div className="field" data-section="add-refund-for" style={{marginTop:8,marginBottom:0}}>
+              <label className="field-lbl" htmlFor="txn-refund-for">{t("add.refundFor")} {optional}</label>
+              <select id="txn-refund-for" className="field-input field-select" value={expCats.some(c=>c.id===refundFor)?refundFor:""} onChange={e=>setRefundFor(e.target.value)}>
+                <option value="">{t("add.refundForNone")}</option>
+                {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}
+              </select>
+            </div>
+          )}
           {(selectedCat?.subs?.length>0 || (mySubs[catId]||[]).length>0 || selectedCat)&&(
             <div data-section="add-subcat">
               <div className="field-lbl" style={{marginBottom:5,marginTop:4}}>{t("add.subcategory")} {optional}</div>

@@ -1,6 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
+import { pickerCats, readCatPrefs } from "../App.jsx";
 import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { SavingsFloorCard, TemplatesSection } from "./settings.jsx";
 import { Collapse, useLeave } from "./motion.jsx";
@@ -21,7 +22,7 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
   useEffect(()=>{
     if (addSignal===seenSignal.current) return; seenSignal.current=addSignal;
     if (seg==="goals") setShowNewGoal(true);
-    else { const free=CATEGORIES.filter(c=>!c.income && !(budgets[c.id]>0)); setNewBudget({ catId:(free[0]||CATEGORIES[0]).id, val:"" }); }
+    else { const free=pickerCats(false,readCatPrefs()).filter(c=>!(budgets[c.id]>0)); setNewBudget({ catId:(free[0]||CATEGORIES[0]).id, val:"" }); }
     window.scrollTo({ top:0, behavior:"smooth" });   // Run 26: a glide, not a jump (reduced motion turns it off in CSS)
   },[addSignal]);
   const [goalName,setGoalName]=useState(""), [goalTarget,setGoalTarget]=useState(""), [goalSaved,setGoalSaved]=useState("");
@@ -31,7 +32,8 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
   const items=calcBudgetStatus(budgets,catSpend,now);
   const byCat=Object.fromEntries(items.map(x=>[x.catId,x]));
   const limitTotal=items.reduce((s,x)=>s+x.limit,0), spentTotal=items.reduce((s,x)=>s+x.spent,0);
-  const expCats=CATEGORIES.filter(c=>!c.income);
+  // Run 36: the user's order; a hidden category is listed only when it already has a budget (never dropped from view silently).
+  const expCats=pickerCats(false,readCatPrefs(),Object.keys(budgets).filter(k=>budgets[k]>0));
   const budgeted=expCats.filter(c=>byCat[c.id]), unbudgeted=expCats.filter(c=>!byCat[c.id]);
 
   const saveGoal=()=>{
