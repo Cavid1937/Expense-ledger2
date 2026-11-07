@@ -23,7 +23,7 @@ for (const lang of ["en", "az", "ru"]) {
   ok(summary.length >= 1, `${lang}: the what-if opener has an accessible name and a disclosure role`, nodes.filter((n) => /Try a|Başqa|Попробовать/.test(n.name || "")).map((n) => [n.role, n.name, n.expanded]));
   const collapsed = summary.some((n) => n.expanded === false || n.expanded === undefined);
   ok(collapsed, `${lang}: the what-if is reported as collapsed until opened`, summary.map((n) => n.expanded));
-  await page.evaluate(() => { document.querySelector(".goal-scenario").open = true; }); await wait(150);
+  await page.evaluate(() => { document.querySelector(".goal-scenario .gs-toggle").click(); }); await wait(400);
   nodes = flat(await page.accessibility.snapshot());
   const input = find(nodes, (n) => /textbox|spinbutton/.test(n.role) && /Amount per month|Aylıq məbləğ|Сумма в месяц/.test(n.name || ""));
   ok(input.length === 1, `${lang}: the amount field is labelled 'amount per month'`, nodes.filter((n) => /textbox|spinbutton/.test(n.role)).map((n) => [n.role, n.name]));

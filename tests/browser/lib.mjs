@@ -78,12 +78,18 @@ export async function clickIn(page, finder) { await page.evaluate((src) => { con
 // under More. Tests keep their original names; this maps them (Ledger → 1st… by position, so it works in every language).
 const TAB_POS = { Home: 0, Ledger: 1, Transactions: 1, Monthly: 2, Analytics: 2, Goals: 3, More: 4 };
 const MORE_ROW = { Recurring: "recurring", ImportExport: "io" };   // Run 26: rows are found by name (the list is grouped now), not by position
+export async function showAllAnalytics(page) { try { await page.waitForSelector(".an-panel", { timeout: 3000 }); } catch { return; } await page.evaluate(() => document.querySelectorAll(".an-panel[hidden]").forEach((p) => p.removeAttribute("hidden"))); await wait(60); }
+export async function openAnSeg(page, id) { await page.evaluate((i) => document.querySelector(`[data-section="an-seg"] [data-seg="${i}"]`).click(), id); await wait(320); }
 export async function tab(page, name) {
   if (name in MORE_ROW) {
     await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(200);
     await page.evaluate((i) => document.querySelector(`.more-page [data-more="${i}"]`).click(), MORE_ROW[name]); await wait(200); return;
   }
-  if (name in TAB_POS) { await page.evaluate((i) => document.querySelectorAll(".tab-btn")[i].click(), TAB_POS[name]); await wait(150); return; }
+  if (name in TAB_POS) {
+    await page.evaluate((i) => document.querySelectorAll(".tab-btn")[i].click(), TAB_POS[name]); await wait(150);
+    if (TAB_POS[name] === 2) await showAllAnalytics(page);   // Run 34: Analytics has four sections; older tests read every card, so they get all sections un-hidden (the segment test checks the real behaviour)
+    return;
+  }
   return clickText(page, ".tab-btn", new RegExp(name));
 }
 // Run 9: the Safe to Spend calculation opens on tap ("How is this calculated?"); tests that read its rows open it first.

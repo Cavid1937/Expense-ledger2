@@ -165,7 +165,8 @@
     "e2e_run32_a11y.mjs": 8,
     "e2e_run32_enc.mjs": 26,
     "e2e_run32_storage.mjs": 10,
-    "e2e_run33_native.mjs": 33
+    "e2e_run33_native.mjs": 33,
+    "e2e_run34_motion.mjs": 41
   }
 }
 

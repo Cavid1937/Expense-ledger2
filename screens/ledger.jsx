@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
+import { Collapse, Swap } from "./motion.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
 export const LEDGER_PAGE=150;   // Run 32: rows drawn at first and per "Show more" (a throttled phone froze for seconds drawing 300+ rows at once). Whole days only.
@@ -82,7 +83,8 @@ export function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, c
 }
 
 // ─── Ledger Page ──────────────────────────────────────────────────────────────
-export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onEdit, onView, onAdd }) {
+export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onGroupMany, onEdit, onView, onAdd }) {
+  const [grpOpen,setGrpOpen]=useState(false), [grpName,setGrpName]=useState("");   // Run 34: "Add to group" panel inside select mode
   const [selMode, setSelMode] = useState(false);          // Run 24: select several entries, then delete them together (undo stays available)
   const [picked,  setPicked]  = useState(()=>new Set());
   const [onlySel, setOnlySel] = useState(false);          // Run 29: show only the selected entries, whatever the filters say
@@ -212,16 +214,17 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
           ))}
         </div>
       )}
-      {showDates&&(
+      <Collapse open={!!showDates} id="tx-dates">
         <div className="date-inputs">
           <label className="date-input-wrap"><span className="date-lbl">{t("ledger.from")}</span><input type="date" lang={locale()} className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
           <label className="date-input-wrap"><span className="date-lbl">{t("ledger.to")}</span><input type="date" lang={locale()} className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
         </div>
-      )}
+      </Collapse>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,margin:"2px 2px 12px"}}>
         <div className="list-sub">{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</div>
-        <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); setOnlySel(false); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
+        <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); setOnlySel(false); setGrpOpen(false); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
       </div>
+      <Swap k={typeFilter+"|"+selMode}>
       {filtered.length===0&&!(selMode&&picked.size>0)?(
         <div className="empty" style={{padding:"36px 0"}}>
           <div className="empty-icon"><Icon name="search" size={28}/></div>
@@ -238,18 +241,31 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
         const list=onlySel?shown:filtered;
         return (
           <div data-section="tx-select">
-            <div className="filter-bar" style={{position:"sticky",top:0,zIndex:2,background:"var(--bg)",paddingBottom:6}}>
+            <div className="filter-bar sel-bar" style={{position:"sticky",top:0,zIndex:2,background:"var(--bg)",paddingBottom:6}}>
               <button className="chip" data-section="tx-select-all" onClick={()=>setPicked(p=>{ const n=new Set(p); filtered.forEach(x=>allOn?n.delete(String(x.id)):n.add(String(x.id))); return n; })}>{t(allOn?"ledger.selectNone":"ledger.selectAll",{n:filtered.length})}</button>
               <button className={`chip${onlySel?" on":""}`} aria-pressed={onlySel} data-section="tx-select-only" disabled={!shown.length&&!onlySel} onClick={()=>setOnlySel(s=>!s)}>{t("ledger.selOnly")}</button>
+              <button className={`chip${grpOpen?" on":""}`} aria-pressed={grpOpen} aria-expanded={grpOpen} aria-controls="tx-group-panel" data-section="tx-select-group" disabled={!shown.length&&!grpOpen} onClick={()=>setGrpOpen(o=>!o)}>{t("ledger.addToGroup")}</button>
               <button className="chip on" data-section="tx-select-delete" disabled={!shown.length} style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)",opacity:shown.length?1:0.5}}
                 onClick={()=>{ onDeleteMany(shown.map(x=>x.id)); setPicked(new Set()); setOnlySel(false); setSelMode(false); }}>{t("ledger.deleteSel",{n:shown.length})}</button>
             </div>
             <div className="list-sub" data-section="tx-select-sum" aria-live="polite" style={{margin:"0 2px 8px",fontWeight:shown.length?600:400}}>{shown.length?t("ledger.selSum",{n:shown.length,exp:fmt(exp,currency),inc:fmt(inc,currency),net:fmt(net,currency)}):t("ledger.selHint")}</div>
+            <Collapse open={grpOpen} id="tx-group-panel">
+              <div className="card" data-section="tx-group-panel" style={{margin:"0 0 10px",padding:"12px 14px"}}>
+                <label className="field-lbl" htmlFor="tx-group-name">{t("ledger.groupName")}</label>
+                <input id="tx-group-name" className="field-input" maxLength={40} placeholder={t("ledger.groupPh")} value={grpName} onChange={e=>setGrpName(e.target.value)}/>
+                {trips.length>0&&<div className="filter-bar" role="group" aria-label={t("trip.filterLabel")} style={{marginTop:8}}>{trips.slice(0,8).map(x=>(<button key={x.name} className={`chip${lc(grpName.trim())===lc(x.name)?" on":""}`} aria-pressed={lc(grpName.trim())===lc(x.name)} onClick={()=>setGrpName(x.name)}>{x.name}</button>))}</div>}
+                <div className="list-sub" style={{margin:"8px 0"}}>{t("ledger.groupHelp")}</div>
+                <div style={{display:"flex",gap:8}}>
+                  <button className="btn btn-primary" style={{flex:1,marginTop:0}} data-section="tx-group-apply" disabled={!grpName.trim()||!shown.length} onClick={()=>{ if (onGroupMany(shown.map(x=>x.id),grpName)) { setGrpName(""); setGrpOpen(false); setPicked(new Set()); setOnlySel(false); setSelMode(false); } }}>{t("ledger.groupApply",{n:shown.length})}</button>
+                  <button className="btn btn-ghost" style={{flex:"none",marginTop:0}} data-section="tx-group-remove" disabled={!shown.some(x=>x.trip)} onClick={()=>{ if (onGroupMany(shown.map(x=>x.id),"")) { setGrpOpen(false); setPicked(new Set()); setOnlySel(false); setSelMode(false); } }}>{t("ledger.groupRemove")}</button>
+                </div>
+              </div>
+            </Collapse>
             <div className="txn-list">
               {list.map(x=>{ const on=picked.has(String(x.id)); return (
-                <button key={x.id} className="list-row" role="checkbox" aria-checked={on} data-picked={on?"1":"0"} style={{width:"100%",textAlign:"left",font:"inherit",display:"flex",alignItems:"center",gap:10,background:on?"var(--accent-bg, rgba(0,0,0,0.05))":"none",border:"none",borderBottom:"1px solid var(--rule)",padding:"10px 4px",cursor:"pointer"}}
+                <button key={x.id} className={"list-row txn-sel-row"+(on?" on":"")} role="checkbox" aria-checked={on} data-picked={on?"1":"0"} style={{width:"100%",textAlign:"left",font:"inherit",display:"flex",alignItems:"center",gap:10,background:on?"var(--accent-bg, rgba(0,0,0,0.05))":"none",border:"none",borderBottom:"1px solid var(--rule)",padding:"10px 4px",cursor:"pointer"}}
                   onClick={()=>setPicked(p=>{ const n=new Set(p); const k=String(x.id); n.has(k)?n.delete(k):n.add(k); return n; })}>
-                  <span aria-hidden="true" style={{width:20,height:20,borderRadius:6,border:"2px solid var(--ink-3)",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"none"}}>{on?<Icon name="check" size={13}/>:null}</span>
+                  <span aria-hidden="true" className={"txn-check"+(on?" on":"")} style={{width:20,height:20,borderRadius:6,border:"2px solid "+(on?"var(--accent)":"var(--ink-3)"),background:on?"var(--accent)":"transparent",color:on?"var(--on-accent,#fff)":"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"none"}}><Icon name="check" size={13}/></span>
                   <span style={{flex:1,minWidth:0}}><span style={{display:"block",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(x.merchant||x.note)||catName(x.category)}</span><span className="list-sub">{fmtDate(x.date)}</span></span>
                   <span style={{fontWeight:600}}>{x.type==="income"?"+":"−"}{fmt(x.amount,currency)}</span>
                 </button>); })}
@@ -259,6 +275,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
       })():(
         <GroupedTxns txns={filtered} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={x=>{ setSelMode(true); setPicked(new Set([String(x.id)])); }}/>
       )}
+      </Swap>
       {showCatSheet&&(
         <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setShowCatSheet(false)}>
           <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("ledger.filterTitle")}>

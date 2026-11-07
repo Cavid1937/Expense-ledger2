@@ -29,10 +29,10 @@ section("R17-K1. The calendar replaces the heatmap");
 section("R17-K2. Tapping a day shows what was spent; tapping again hides it");
 {
   const page = await openPage(browser, { seed: seed() }); await settle(page); await tab(page, "Analytics"); await wait(400);
-  await page.evaluate((d) => document.querySelector(`button.cal-day[data-date="${d}"]`).click(), TODAY); await wait(250);
+  await page.evaluate((d) => document.querySelector(`button.cal-day[data-date="${d}"]`).click(), TODAY); await wait(500);
   let d = await detail(page);
   ok(/55\.00/.test(d) && /Food/.test(d) && /Transport/.test(d), "55.00 with Food and Transport", d);
-  await page.evaluate((d) => document.querySelector(`button.cal-day[data-date="${d}"]`).click(), TODAY); await wait(250);
+  await page.evaluate((d) => document.querySelector(`button.cal-day[data-date="${d}"]`).click(), TODAY); await wait(500);
   ok((await detail(page)) === "", "tapping the same day again hides the detail");
   const quiet = `${Y}-${String(M).padStart(2, "0")}-01`;
   await page.evaluate((d) => document.querySelector(`button.cal-day[data-date="${d}"]`).click(), quiet); await wait(250);

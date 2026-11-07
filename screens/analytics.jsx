@@ -1,5 +1,6 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { Collapse, Swap, useLeave } from "./motion.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, KEY, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
 import { LedgerArt, MoneyText, PlannedNote, cmpPrev, cmpText, cmpTitle } from "./home.jsx";
@@ -82,10 +83,16 @@ export function monthsBetween(from, to) {   // "YYYY-MM" inclusive, newest first
   while (y>fy || (y===fy && m>=fm)) { out.push(`${y}-${String(m).padStart(2,"0")}`); m--; if (m===0) { m=12; y--; } }
   return out;
 }
+// Run 34: Analytics was one very long page ("pure chaos"). It now has four sections under the month picker; every section stays mounted (only hidden), so nothing is lost when you switch.
+const AN_SEGS=["overview","spending","trends","insights"];
+const AN_SEG_KEY={ overview:"an.seg.overview", spending:"an.seg.spending", trends:"an.seg.trends", insights:"an.seg.insights" };
+function AnPanel({ id, seg, children }) { return <div className="an-panel" data-panel={id} hidden={seg!==id}>{children}</div>; }
 export function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[], onView }) {
   const [selectedMon, setSelectedMon] = useState(curMon());
-  const [activeBar,  setActiveBar]  = useState(null);
-  const [calDay, setCalDay] = useState(null);
+  const [seg, setSeg] = useState("overview"), [dir, setDir] = useState(0);
+  const [activeBar,  setActiveBar]  = useState(null), barKeep=useRef(null); if (activeBar!==null) barKeep.current=activeBar;
+  const [calDay, setCalDay] = useState(null), calKeep=useRef(null); if (calDay) calKeep.current=calDay;
+  const { isLeaving, leave }=useLeave();
   const lc=locale();
   const patternsData=useMemo(()=>calcPatterns(transactions,currency),[transactions,currency,lc]);   // insight text follows the language
 
@@ -95,8 +102,8 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
     return monthsBetween(first,last);
   }, [transactions]);
   const idx=allMonths.indexOf(selectedMon);
-  const prevM = () => { if (idx < allMonths.length - 1) setSelectedMon(allMonths[idx + 1]); };
-  const nextM = () => { if (idx > 0) setSelectedMon(allMonths[idx - 1]); };
+  const prevM = () => { if (idx < allMonths.length - 1) { setDir(-1); setSelectedMon(allMonths[idx + 1]); } };
+  const nextM = () => { if (idx > 0) { setDir(1); setSelectedMon(allMonths[idx - 1]); } };
   const prv = useMemo(() => { const [y,m]=selectedMon.split("-").map(Number); return localMonthStr(new Date(y,m-2,1)); }, [selectedMon]);
 
   const { curExp, curInc, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
@@ -162,6 +169,13 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         <button className="month-nav-btn" onClick={nextM} disabled={idx===0} aria-label={t("month.next")} style={{opacity:idx===0?0.3:1}}>›</button>
       </div>
 
+      <div className="an-seg" onClick={e=>e.stopPropagation()}>
+        <div className="seg" role="tablist" aria-label={t("an.segLabel")} data-section="an-seg">
+          {AN_SEGS.map(id=>(<button key={id} role="tab" id={"an-tab-"+id} aria-selected={seg===id} className={`seg-btn${seg===id?" on":""}`} data-seg={id} onClick={()=>{ setSeg(id); setActiveBar(null); setCalDay(null); }}>{t(AN_SEG_KEY[id])}</button>))}
+        </div>
+      </div>
+      <Swap k={selectedMon} dir={dir}>
+      <AnPanel id="overview" seg={seg}>
       {/* Summary stats */}
       <div className="month-stats" data-section="an-summary" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
         <div className="month-stat">
@@ -210,7 +224,14 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           </>):<div className="list-sub">{t("an.forecastNeed")}</div>}
         </div>
       )}
+      {recurringCount>0&&(
+        <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"var(--ink-3)"}}>
+          <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",recurringCount)}
+        </div>
+      )}
+      </AnPanel>
 
+      <AnPanel id="insights" seg={seg}>
       {isCurrentMon&&coach.length>0&&(
         <div className="a-card" data-section="an-coach">
           <div className="a-card-title">{t("coach.title")}</div>
@@ -233,9 +254,9 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
               : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
               : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
             return (
-              <div key={i} className="coach-line" data-coach={c.id} style={{fontSize:13,lineHeight:1.5,padding:"8px 0",borderTop:i?"1px solid var(--rule)":"none",color:"var(--ink)"}}>
+              <div key={c.id+i} className={"coach-line"+(isLeaving("c-"+c.id)?" row-leaving":"")} data-coach={c.id} style={{fontSize:13,lineHeight:1.5,padding:"8px 0",borderTop:i?"1px solid var(--rule)":"none",color:"var(--ink)"}}>
                 {line}
-                {!COACH_ACTIONS.includes(c.id)&&<div><button className="btn btn-sm coach-hide" style={{marginTop:4}} onClick={()=>setMute([...muted,c.id])}>{t("coach.hide")}</button></div>}
+                {!COACH_ACTIONS.includes(c.id)&&<div><button className="btn btn-sm coach-hide" style={{marginTop:4}} onClick={()=>leave("c-"+c.id,()=>setMute([...muted,c.id]))}>{t("coach.hide")}</button></div>}
               </div>
             );
           })}
@@ -243,7 +264,9 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           {muted.length>0&&<button className="btn btn-sm coach-unhide" style={{marginTop:6}} onClick={()=>setMute([])}>{t("coach.showHidden",{n:muted.length})}</button>}
         </div>
       )}
+      </AnPanel>
 
+      <AnPanel id="spending" seg={seg}>
       {/* What changed — same comparison window as the summary */}
       {(wc.totalDiff!==0||wc.catChanges.length>0)&&prevExp>0&&momDiff!==null&&(
         <div className="a-card" data-section="an-changes">
@@ -381,17 +404,14 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         </div>
       )}
 
+      </AnPanel>
+
       {/* Run 15: the "Top expenses" and "All transactions" lists were removed from Analytics. They repeated rows of the Transactions
           tab (which can be searched by month name and filtered by date). Analytics keeps what Transactions cannot show: totals,
           comparisons, categories, merchants and trends. */}
-      {recurringCount>0&&(
-        <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"var(--ink-3)"}}>
-          <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",recurringCount)}
-        </div>
-      )}
 
       {/* A month without entries says so (the list of entries lives in Transactions) */}
-      {monTxns.length===0&&(
+      {monTxns.length===0&&(seg==="overview"||seg==="spending")&&(
         <div className="empty" style={{padding:"32px 0"}} data-section="an-empty">
           <div className="empty-icon"><LedgerArt/></div>
           <div className="empty-title">{t("month.emptyTitle")}</div>
@@ -400,6 +420,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
       )}
 
       {/* Run 27d: the all-time overview sits with the other not-month-specific part (Trends), below the selected month, so the page starts with the month the picker shows */}
+      <AnPanel id="trends" seg={seg}>
         {transactions.length>0&&(()=>{
           const totalInc=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
           return (
@@ -414,9 +435,11 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
             </div>
           );
         })()}
+      </AnPanel>
 
       {/* Trends — recent months up to today; not affected by the month selected above */}
       {hasTrends&&(<>
+        <AnPanel id="trends" seg={seg}>
         <div className="trends-head" data-section="an-trends" style={{marginTop:22,marginBottom:10}}>
           <div className="label-sm">{t("month.trendsTitle")}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",lineHeight:1.5,marginTop:4}}>{t("month.trendsSub")}</div>
@@ -425,12 +448,12 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         <div className="a-card">
           <div className="a-card-title">{t("an.sixMonth")}</div>
           {monthAvg>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10}}>{t("an.sixMonthAvg")} <strong style={{fontFamily:"var(--font)",color:"var(--ink)"}}>{fmt(monthAvg,currency)}</strong></div>}
-          {activeBar!==null&&monthlyData[activeBar]&&(
+          <Collapse open={activeBar!==null&&!!monthlyData[activeBar]}>{(()=>{ const ab=activeBar!==null?activeBar:barKeep.current; return ab!==null&&monthlyData[ab]&&(
             <div data-section="an-sixmonth-detail" style={{background:"var(--ink)",color:"var(--bg)",borderRadius:7,padding:"8px 12px",fontSize:12,fontWeight:600,marginBottom:10,display:"flex",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-              <span>{monthName(monthlyData[activeBar].ym)}</span>
-              <span style={{fontFamily:"var(--font)",fontSize:13}}>{t("an.sixSpent")} {fmt(monthlyData[activeBar].exp,currency)} · {t("an.sixIncome")} {fmt(monthlyData[activeBar].inc,currency)} · {t("an.sixNet")} {monthlyData[activeBar].inc-monthlyData[activeBar].exp<0?"−":""}{fmt(Math.abs(monthlyData[activeBar].inc-monthlyData[activeBar].exp),currency)}</span>
+              <span>{monthName(monthlyData[ab].ym)}</span>
+              <span style={{fontFamily:"var(--font)",fontSize:13}}>{t("an.sixSpent")} {fmt(monthlyData[ab].exp,currency)} · {t("an.sixIncome")} {fmt(monthlyData[ab].inc,currency)} · {t("an.sixNet")} {monthlyData[ab].inc-monthlyData[ab].exp<0?"−":""}{fmt(Math.abs(monthlyData[ab].inc-monthlyData[ab].exp),currency)}</span>
             </div>
-          )}
+          ); })()}</Collapse>
           <div className="month-bars">
             {monthlyData.map((m,i)=>(
               <div key={i} className="m-col" role="button" tabIndex={0} aria-pressed={activeBar===i} aria-label={`${monthName(m.ym)}: ${fmt(m.exp,currency)}`}
@@ -446,19 +469,21 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           </div>
           <div className="trend-legend" data-section="an-sixmonth-legend"><span><i style={{background:"var(--ink-4)"}}/>{t("an.sixSpent")}</span><span><i style={{background:"var(--pos)",opacity:0.75}}/>{t("an.sixIncome")}</span></div>
         </div>
+        </AnPanel>
 
+        <AnPanel id="insights" seg={seg}>
         {patterns.length>0&&(
           <div className="a-card">
             <div className="a-card-title">{t("an.patterns")}</div>
             {patterns.filter(p=>!patMuted.includes(p.id)).map(p=>{
               const titleKey=PATTERN_TITLE_KEY[p.id.startsWith("trend-")?"trend":p.id];
               return (
-                <div key={p.id} className="pattern-item" data-section="pattern-item" data-id={p.id}>
+                <div key={p.id} className={"pattern-item"+(isLeaving("p-"+p.id)?" row-leaving":"")} data-section="pattern-item" data-id={p.id}>
                   <Icon name="pattern" size={14} color="var(--ink-3)"/>
                   <div style={{flex:1,minWidth:0}}>
                     {titleKey&&<div style={{fontWeight:700,color:"var(--ink)",marginBottom:2}}>{t(titleKey)}</div>}
                     <span>{PRIVACY?t("privacy.hiddenText"):p.text}</span>{p.basis&&<div className="list-sub pattern-basis" style={{marginTop:4}}>{tn(PATTERN_BASIS_KEY[p.basis.per],p.basis.n)}</div>}
-                    <div><button className="btn btn-sm pattern-hide" style={{marginTop:6}} onClick={()=>setPatMute([...patMuted,p.id])}>{t("coach.hide")}</button></div>
+                    <div><button className="btn btn-sm pattern-hide" style={{marginTop:6}} onClick={()=>leave("p-"+p.id,()=>setPatMute([...patMuted,p.id]))}>{t("coach.hide")}</button></div>
                   </div>
                 </div>
               );
@@ -466,7 +491,9 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
             {patMuted.length>0&&<button className="btn btn-sm pattern-unhide" style={{marginTop:2}} onClick={()=>setPatMute([])}>{t("coach.showHidden",{n:patMuted.length})}</button>}
           </div>
         )}
+        </AnPanel>
 
+        <AnPanel id="trends" seg={seg}>
         {Object.values(dayOfWeek).some(d=>d.count>0)&&(
           <div className="a-card">
             <div className="a-card-title">{t("an.byDay",{month:monthName(now)})}</div>
@@ -489,7 +516,9 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
             })}
           </div>
         )}
+        </AnPanel>
 
+        <AnPanel id="insights" seg={seg}>
         {anomalies.length>0&&(
           <div className="a-card">
             <div className="a-card-title">{t("an.unusual")}</div>
@@ -530,6 +559,9 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           </div>
         )}
 
+        </AnPanel>
+
+        <AnPanel id="trends" seg={seg}>
         <div className="a-card" data-section="an-calendar">
           <div className="a-card-title">{t("an.calendar")}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.calendarHint")}</div>
@@ -544,17 +576,20 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
                 onClick={e=>{ e.stopPropagation(); setCalDay(on?null:c.date); setActiveBar(null); }}>{c.day}</button>;
             })}
           </div>
-          {calDay&&(()=>{ const c=calDays.find(x=>x.date===calDay); if(!c) return null; return (
+          <Collapse open={!!calDay}>{(()=>{ const c=calDays.find(x=>x.date===(calDay||calKeep.current)); if(!c) return null; return (
             <div data-section="an-calendar-detail" role="status" style={{background:"var(--bg-inset)",borderRadius:10,padding:"10px 12px",marginTop:10,fontSize:12,fontWeight:600}}>
               <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span>{fmtDate(c.date)}</span><span style={{fontFamily:"var(--font)",fontSize:14}}>{c.amt>0?fmt(c.amt,currency):t("an.noSpending")}</span></div>
               {c.cats&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:3,fontWeight:500}}>{c.cats}</div>}
-            </div>); })()}
+            </div>); })()}</Collapse>
           <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,justifyContent:"flex-end"}}>
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
             {[0.15,0.35,0.6,0.85].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(76,201,196,${o})`}}/>)}
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
           </div>
-        </div>      </>)}
+        </div>
+        </AnPanel>
+      </>)}
+      </Swap>
     </div>
   );
 }
@@ -587,4 +622,4 @@ export function SmartHelper({ transactions, bills=[], budgets, goals, safeToSpen
       ))}
     </div>
   );
-}
+}

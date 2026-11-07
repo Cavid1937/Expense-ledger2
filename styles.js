@@ -566,8 +566,8 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .goal-need-muted{font-size:12px;color:var(--ink-3);line-height:1.5}
 .goal-need-note{margin-top:4px}
 .goal-scenario{margin-top:10px;padding-top:10px;border-top:1px solid var(--rule)}
-.goal-scenario summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--ink-3);min-height:24px;padding:2px 0}
-.goal-scenario summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.goal-scenario .gs-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:var(--ink-3);min-height:32px;padding:2px 0;text-align:left}
+.goal-scenario .gs-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .goal-scenario .field-input{margin-top:6px}
 .goal-scenario-out{margin-top:8px;font-size:12px;color:var(--ink-2);line-height:1.5}
 .trend-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px;font-size:12px;color:var(--ink-3)}
@@ -619,8 +619,16 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 /* Run 9 privacy mode: numbers and names are replaced in the text itself (see fmt / maskText); graphics that would still
    reveal proportions are blurred. Navigation, titles and buttons are never blurred. */
 .privacy-toggle.on{color:var(--accent-text);background:var(--accent-light);border-radius:50%}
+/* Run 34: no more smudge. A hidden chart is replaced by a calm hatched panel (its shape and proportions are not shown), and it fades in and out instead of snapping. */
+.donut svg,.trend-card svg,.bar,.cat-bar-track,.budget-track,.goal-progress,.pace-track,.month-bars,.cal{transition:background-color 240ms ease-out}
+.donut svg>*,.trend-card svg>*,.bar>*,.cat-bar-track>*,.budget-track>*,.goal-progress>*,.pace-track>*,.month-bars>*,.cal>*{transition:opacity 260ms ease-out}
 .privacy-on .donut svg,.privacy-on .trend-card svg,.privacy-on .bar,.privacy-on .cat-bar-track,.privacy-on .budget-track,
-.privacy-on .goal-progress,.privacy-on .pace-track,.privacy-on .month-bars,.privacy-on .cal{filter:blur(6px)}
+.privacy-on .goal-progress,.privacy-on .pace-track,.privacy-on .month-bars,.privacy-on .cal{background:repeating-linear-gradient(135deg,var(--rule) 0 5px,transparent 5px 10px);border-radius:10px;pointer-events:none}
+.privacy-on .donut svg>*,.privacy-on .trend-card svg>*,.privacy-on .bar>*,.privacy-on .cat-bar-track>*,.privacy-on .budget-track>*,
+.privacy-on .goal-progress>*,.privacy-on .pace-track>*,.privacy-on .month-bars>*,.privacy-on .cal>*{opacity:0}
+.page.pf-a{animation:pfA 300ms ease-out}.page.pf-b{animation:pfB 300ms ease-out}
+@keyframes pfA{from{opacity:.35}to{opacity:1}}@keyframes pfB{from{opacity:.35}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.page.pf-a,.page.pf-b{animation:none}}
 /* Run 25: layers. Tone first, then a hairline edge; shadows only on things that float (sheet, menus, toasts, the + button).
    Levels: 0 sunken (wells) - 1 page - 2 card - 3 raised - 4 floating. Everything is opaque on purpose: no blur behind numbers or lists. */
 :root{--sunken-mix:#000;--sunken-pct:32%;--raise-mix:var(--ink);--raise-pct:6%;--float-pct:11%;
@@ -714,7 +722,7 @@ html,.page,.sheet{scroll-behavior:smooth}
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
 }
 /* Run 27c: expandable Settings sections. The section title inside an opened card is already the row above, so it is kept for screen readers only. */
-.fold{margin-bottom:0}.fold-card{margin-bottom:10px}.fold-body{margin:-2px 0 10px;animation:fold-in 220ms ease-out}.fold-body>.card{margin-top:0}
+.fold{margin-bottom:0}.fold-card{margin-bottom:10px}.fold-body{margin:-2px 0 10px}.fold-body>.card{margin-top:0}
 @keyframes fold-in{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.fold-body{animation:none}}[data-fx="off"] .fold-body{animation:none}
 /* Run 27d: Safe to Spend is the hero of Home (larger, accent-edged, with the month runway); the cards below stay quieter. */
@@ -726,4 +734,55 @@ html,.page,.sheet{scroll-behavior:smooth}
 .app{padding-top:var(--sat)}
 .topbar{top:var(--sat)}
 body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--sat);background:var(--bg);z-index:150;pointer-events:none}
+/* Run 34 (7 Nov 2026): the Claude-app feel for everything that opens and closes INSIDE a screen. About 0.25 s, soft landing, no bounce, closing as smooth as opening. */
+:root{--ease-out:cubic-bezier(0.22,1,0.36,1);--ease-in:cubic-bezier(0.4,0,1,1)}
+.collapse{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:0fr;opacity:0;transition:grid-template-rows 220ms var(--ease-in),opacity 160ms ease-in}
+.collapse.is-open{grid-template-rows:1fr;opacity:1;transition:grid-template-rows 260ms var(--ease-out),opacity 220ms ease-out}
+.collapse-in{min-height:0;overflow:hidden}
+.collapse.is-settled .collapse-in{overflow:visible}
+[data-fx="off"] .collapse,[data-fx="off"] .collapse.is-open{transition:none}
+@media (prefers-reduced-motion:reduce){.collapse,.collapse.is-open{transition:none}}
+.swap-in{animation:swapIn 260ms var(--ease-out) backwards}
+.swap-next.swap-in{animation-name:swapInNext}.swap-prev.swap-in{animation-name:swapInPrev}
+@keyframes swapIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes swapInNext{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+@keyframes swapInPrev{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:none}}
+[data-fx="off"] .swap-in,[data-fx="off"] .an-panel{animation:none}
+@media (prefers-reduced-motion:reduce){.swap-in,.an-panel{animation:none}}
+.an-panel{animation:swapIn 260ms var(--ease-out) backwards}
+.an-panel[hidden]{display:none}
+.row-leaving{opacity:0;transform:translateX(-14px);transition:opacity 200ms var(--ease-in),transform 200ms var(--ease-in);pointer-events:none}
+@media (prefers-reduced-motion:reduce){.row-leaving{transition:none}}
+.banner-leave{animation:bannerOut 220ms var(--ease-in) forwards;overflow:hidden}
+@keyframes bannerOut{to{opacity:0;transform:translateY(-8px);max-height:0;margin-top:0;margin-bottom:0;padding-top:0;padding-bottom:0;border-width:0}}
+@media (prefers-reduced-motion:reduce){.banner-leave{animation:none;display:none}}
+.page.page-out{animation:pageOut 190ms var(--ease-in) forwards;pointer-events:none}
+@keyframes pageOut{to{opacity:0;transform:translateX(26px)}}
+@media (prefers-reduced-motion:reduce){.page.page-out{animation:none}}
+.sel-bar{animation:swapIn 220ms var(--ease-out) backwards}
+.chip{transition:background-color 180ms ease-out,border-color 180ms ease-out,color 180ms ease-out,transform 120ms ease-out}
+.txn-sel-row{transition:background-color 160ms ease-out}
+.txn-check{transition:background-color 160ms ease-out,border-color 160ms ease-out}
+.txn-check svg{transform:scale(0.4);opacity:0;transition:transform 180ms var(--ease-out),opacity 140ms ease-out}
+.txn-check.on svg{transform:none;opacity:1}
+/* Toggles: a calm track and a knob that stretches a little under the finger, no bounce */
+.toggle-track{width:50px;height:30px;border-radius:15px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ink) 14%,transparent);transition:background-color 220ms var(--ease-out),box-shadow 220ms ease-out}
+.toggle-track.on{box-shadow:none}
+.toggle-knob{width:24px;height:24px;top:3px;left:3px;transition:transform 240ms var(--ease-out),width 160ms var(--ease-out);box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.toggle-track.on .toggle-knob{transform:translateX(20px)}
+.toggle-track:active .toggle-knob{transform:none;width:29px}
+.toggle-track.on:active .toggle-knob{transform:translateX(15px);width:29px}
+@media (prefers-reduced-motion:reduce){.toggle-track,.toggle-knob{transition:none}}
+.fold-chev{transition:transform 240ms var(--ease-out)}
+.fold-chev{display:inline-flex}
+.fold-chev.open{transform:rotate(180deg)}
+.fold-chev.r90.open{transform:rotate(90deg)}
+.privacy-toggle svg{animation:eyeSwap 220ms var(--ease-out)}
+@keyframes eyeSwap{from{opacity:0;transform:scale(0.7)}to{opacity:1;transform:none}}
+.an-seg{position:sticky;top:calc(var(--sat) + 60px);z-index:5;background:var(--bg);padding:4px 0 8px;margin-bottom:4px}
+.an-seg .seg{margin-bottom:0;flex-wrap:wrap}
+.an-seg .seg-btn{flex:1 1 64px;min-width:0;padding:0 6px;overflow-wrap:anywhere}
+.tab-fade{animation:swapIn 240ms var(--ease-out) backwards}
+@media (prefers-reduced-motion:reduce){.tab-fade,.sel-bar,.privacy-toggle svg{animation:none}}
 `;
+

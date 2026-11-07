@@ -1,6 +1,6 @@
 // Run 9 (2026-10-27 evening) in the real bundled app: placeholder contrast (the Add form's empty "0.00" was ≈1.4:1),
 // header actions, privacy mode, linking an existing expense to a recurring bill. Written before each fix.
-import { openSafe, launch, openPage, state, clickText, openAdd, tab, wait, ok, section, finish, tx, baseSeed, settle, fs, path } from "./lib.mjs";
+import { openAnSeg, openSafe, launch, openPage, state, clickText, openAdd, tab, wait, ok, section, finish, tx, baseSeed, settle, fs, path } from "./lib.mjs";
 const browser = await launch();
 const LANGS = ["en", "az", "ru"];
 
@@ -92,8 +92,8 @@ for (const l of LANGS) {
   await goSettings(page); await check("settings"); await closeSheet(page);
   ok(Object.keys(bad).length === 0, `${l}: with privacy on, no amount, percentage, merchant, note or goal name is shown or read out on 10 screens`, bad);
   await tab(page, "Home"); await wait(200);
-  const blur = await page.evaluate(() => ({ donut: getComputedStyle(document.querySelector(".donut svg")).filter, pressed: document.querySelector(".topbar .privacy-toggle").getAttribute("aria-pressed") }));
-  ok(/blur/.test(blur.donut) && blur.pressed === "true", `${l}: the spending ring is blurred and privacy is still on after visiting every screen`, blur);
+  const blur = await page.evaluate(() => ({ donut: getComputedStyle(document.querySelector(".donut svg")).filter + "|" + getComputedStyle(document.querySelector(".donut svg")).backgroundImage, pressed: document.querySelector(".topbar .privacy-toggle").getAttribute("aria-pressed") }));
+  ok(/repeating-linear-gradient/.test(blur.donut) && !/blur/.test(blur.donut) && blur.pressed === "true", `${l}: the spending ring is replaced by a hatched veil (Run 34: no smudge) and privacy is still on after visiting every screen`, blur);
   const navOk = await page.evaluate(() => [...document.querySelectorAll(".tab-lbl")].every((e) => e.innerText.trim().length > 1 && getComputedStyle(e).filter === "none"));
   ok(navOk, `${l}: tab labels stay readable (navigation is not blurred)`);
   // Run 20: the setting is now remembered, under its own key; everything else in storage must be exactly as before.
@@ -104,7 +104,7 @@ for (const l of LANGS) {
   await togglePrivacy(page); await page.reload(); await page.waitForSelector(".tabbar"); await wait(400);
   const pr = () => page.evaluate(() => document.querySelector(".topbar .privacy-toggle").getAttribute("aria-pressed"));
   ok((await pr()) === "true", `${l}: Run 20 — privacy stays on after closing and reopening (kept until the user changes it)`);
-  ok((await page.evaluate(() => /\d/.test(document.querySelector(".page").innerText) && getComputedStyle(document.querySelector(".donut svg")).filter.includes("blur"))), `${l}: and the amounts are hidden straight away on reopening`);
+  ok((await page.evaluate(() => /\d/.test(document.querySelector(".page").innerText) && getComputedStyle(document.querySelector(".donut svg")).backgroundImage.includes("repeating-linear-gradient"))), `${l}: and the amounts are hidden straight away on reopening`);
   await togglePrivacy(page); await page.reload(); await page.waitForSelector(".tabbar"); await wait(400);
   ok((await pr()) === "false", `${l}: turned off again, it stays off after reopening`);
   ok(page.errors.length === 0, `${l}: no JavaScript errors`, page.errors[0]);
@@ -151,7 +151,7 @@ section("R9-5. The Analytics overview names surplus, deficit and break-even in w
     const res = [];
     for (const [name, inc, exp, key, amt] of cases) {
       const page = await openPage(browser, { seed: baseSeed({ language: l, transactions: [tx({ type: "income", category: "salary", amount: inc }), tx({ amount: exp })] }), chooseLang: l });
-      await page.evaluate(() => document.querySelectorAll(".tab-btn")[2].click()); await wait(450);   // Run 17: the overview is on Analytics
+      await page.evaluate(() => document.querySelectorAll(".tab-btn")[2].click()); await wait(450); await openAnSeg(page, "trends");   // Run 17: the overview is on Analytics (Run 34: in its Trends section)
       const txt = await page.evaluate(() => (document.querySelector('[data-section="an-overview"]') || {}).innerText || "");
       const label = tIn(l, key), line = txt.split("\n").map((x, i, a) => x.trim() === label ? `${x.trim()} ${a[i + 1] || ""}` : null).find(Boolean);
       res.push({ name, ok: !!line && line.includes(amt), line });

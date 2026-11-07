@@ -82,7 +82,7 @@ await page.close();
 page = await openPage(browser, { seed: baseSeed({ lastBackup: iso(8), backupConfirmedAt: iso(8) }) });
 b = (await banners(page)).join(" | ");
 ok(/Back up your data to avoid losing it/.test(b), "last confirmed backup 8 days ago → 'Back up your data' reminder", b);
-await page.evaluate(() => [...document.querySelectorAll(".backup-banner")].find((x) => /Back up your data/.test(x.innerText)).querySelector(".backup-dismiss").click()); await wait(200);
+await page.evaluate(() => [...document.querySelectorAll(".backup-banner")].find((x) => /Back up your data/.test(x.innerText)).querySelector(".backup-dismiss").click()); await wait(450);   // Run 34: the banner eases out (about 0.25 s) before it is removed
 ok(!(await banners(page)).some((t) => /Back up your data/.test(t)), "dismiss hides it for this visit");
 await page.close();
 page = await openPage(browser, { seed: baseSeed({ lastBackup: iso(1), backupConfirmedAt: iso(1) }) });

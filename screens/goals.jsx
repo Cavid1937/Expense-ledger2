@@ -3,6 +3,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
 import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { SavingsFloorCard, TemplatesSection } from "./settings.jsx";
+import { Collapse, useLeave } from "./motion.jsx";
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
 export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange }) {
@@ -11,9 +12,11 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
   const [showNewGoal,setShowNewGoal]=useState(false);
   const UNB_SHOW=4, [unbAll,setUnbAll]=useState(false);   // Run 26: the long "without a budget" list shows four, the rest one tap away
-  const [updGoal,setUpdGoal]=useState(null);   // Run 26: the saved amount is changed inline (null = closed; otherwise { id, val }), not in the browser's own pop-up
+  const [updGoal,setUpdGoal]=useState(null), updKeep=useRef(null); if (updGoal) updKeep.current=updGoal;   // Run 34: remembered so the row keeps its text while it eases closed
+  const { isLeaving, leave }=useLeave();   // Run 26: the saved amount is changed inline (null = closed; otherwise { id, val }), not in the browser's own pop-up
   // "New budget" form opened by the title bar's "+" on the Budgets half: pick a category without a limit, type the limit.
-  const [newBudget,setNewBudget]=useState(null);   // null = closed; otherwise { catId, val }
+  const [newBudget,setNewBudget]=useState(null), nbKeep=useRef(null); if (newBudget) nbKeep.current=newBudget;   // null = closed; otherwise { catId, val } (nbKeep: kept so the card keeps its text while it eases closed)
+  const nb=newBudget||nbKeep.current;
   const seenSignal=useRef(addSignal);
   useEffect(()=>{
     if (addSignal===seenSignal.current) return; seenSignal.current=addSignal;
@@ -59,13 +62,13 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
       <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={saveGoal}>{t("set.saveGoal")}</button>
     </div>
   );
-  const editRow=(cat,limit)=>editBudget===cat.id&&(
-    <div className="reveal" style={{display:"flex",gap:7,marginTop:9}}>
+  const editRow=(cat,limit)=>(<Collapse open={editBudget===cat.id}>{editBudget===cat.id&&(
+    <div style={{display:"flex",gap:7,marginTop:9}}>
       <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} ref={revealFocus} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
       <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
       <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
     </div>
-  );
+  )}</Collapse>);
   const editBtn=(cat,limit)=>(
     <button className="btn btn-sm" onClick={()=>{setEditBudget(cat.id);setBudgetVal(limit>0?String(limit):"");}} aria-label={`${limit>0?t("common.edit"):t("set.set")}: ${catName(cat.id)}`}>{limit>0?t("common.edit"):t("set.set")}</button>
   );
@@ -79,23 +82,23 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
       </div>
 
       {seg==="budgets"&&(<>
-        {newBudget&&(
-          <div className="card new-budget reveal" ref={revealFocus}>
+        <Collapse open={!!newBudget}>{nb&&(
+          <div className="card new-budget" ref={revealFocus}>
             <div className="card-title" style={{marginBottom:10}}>{t("goals.addBudget")}</div>
             <div className="field-row" style={{marginBottom:10}}>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-cat">{t("add.category")}</label>
-                <select id="nb-cat" className="field-input field-select" value={newBudget.catId} onChange={e=>setNewBudget(b=>({...b,catId:e.target.value}))}>
+                <select id="nb-cat" className="field-input field-select" value={nb.catId} onChange={e=>setNewBudget(b=>({...b,catId:e.target.value}))}>
                   {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}{budgets[c.id]>0?` (${fmt(budgets[c.id],currency)})`:""}</option>)}
                 </select></div>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-val">{t("set.monthlyLimit")}</label>
-                <input id="nb-val" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={newBudget.val} onChange={e=>setNewBudget(b=>({...b,val:cleanMoneyText(e.target.value)}))}/></div>
+                <input id="nb-val" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={nb.val} onChange={e=>setNewBudget(b=>({...b,val:cleanMoneyText(e.target.value)}))}/></div>
             </div>
             <div style={{display:"flex",gap:8}}>
               <button className="btn btn-primary" style={{flex:1,marginTop:0}} onClick={()=>{ const v=newBudget.val.trim()===""?null:formMoney(newBudget.val,{positive:true}); if(v===null){showToast(t("add.errAmount"));return;} onSetBudget(newBudget.catId,v); setNewBudget(null); showToast(t("set.budgetSaved")); }}>{t("common.save")}</button>
               <button className="btn btn-ghost" style={{flex:1,marginTop:0}} onClick={()=>setNewBudget(null)}>{t("common.cancel")}</button>
             </div>
           </div>
-        )}
+        )}</Collapse>
         {limitTotal>0&&(
           <div className="card" data-section="bg-total">
             <div className="list-sub">{t("budgets.monthTotal",{month:monthName(now)})}</div>
@@ -149,13 +152,14 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
           <span className="section-title" style={{margin:0}}>{t("set.financialGoals")}</span>
           <button className="btn btn-sm" onClick={()=>{ if (showNewGoal) { setEditGoalId(null); setGoalName(""); setGoalTarget(""); setGoalSaved(""); setGoalMonthly(""); setGoalDate(""); } setShowNewGoal(s=>!s); }}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
         </div>
-        {showNewGoal&&!editGoalId&&renderGoalForm()}
+        <Collapse open={showNewGoal&&!editGoalId} id="goal-new">{renderGoalForm()}</Collapse>
         {goals.length===0&&!showNewGoal&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noGoals")}</div>}
         {goals.map(goal=>{
           const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion}=gp; const req=goalRequiredMonthly(goal);
           if (showNewGoal && editGoalId===goal.id) return <Fragment key={goal.id}>{renderGoalForm()}</Fragment>;
+          const ug=(updGoal&&updGoal.id===goal.id)?updGoal:(updKeep.current&&updKeep.current.id===goal.id?updKeep.current:null);
           return (
-            <div key={goal.id} className="card goal-card" data-section="goal-card">
+            <div key={goal.id} className={"card goal-card"+(isLeaving(goal.id)?" row-leaving":"")} data-section="goal-card">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <div style={{display:"flex",gap:10,alignItems:"center",minWidth:0,flex:"1 1 150px"}}>
                   <span className="cat-dot" style={{background:"var(--pos-bg)"}}><Icon name="goal" size={16} color="var(--pos)"/></span>
@@ -167,17 +171,17 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
                 <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0,marginLeft:"auto"}}>
                   <button className="btn btn-sm" data-section="goal-update" aria-expanded={updGoal&&updGoal.id===goal.id} onClick={()=>setUpdGoal(u=>u&&u.id===goal.id?null:{ id:goal.id, val:String(goal.saved||0) })}>{t("set.update")}</button>
                   <button className="btn btn-sm" data-section="goal-edit" aria-label={t("common.edit")+": "+maskText(goal.name)} onClick={()=>startEditGoal(goal)}>{t("common.edit")}</button>
-                  <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteGoal(goal.id)} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>
+                  <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>leave(goal.id,()=>onDeleteGoal(goal.id))} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>
                 </div>
               </div>
-              {updGoal&&updGoal.id===goal.id&&(
-                <div className="reveal" data-section="goal-update-row" style={{display:"flex",gap:7,marginTop:10}}>
-                  <input className="field-input" type="text" inputMode="decimal" autoComplete="off" data-section="goal-update-input" aria-label={t("set.updatePrompt",{name:maskText(goal.name)})} value={updGoal.val} ref={revealFocus} onChange={e=>setUpdGoal({...updGoal,val:cleanMoneyText(e.target.value)})}
-                    onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); const v=formMoney(updGoal.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } } else if (e.key==="Escape") setUpdGoal(null); }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-                  <button className="btn btn-sm btn-sm-primary" data-section="goal-update-save" onClick={()=>{ const v=formMoney(updGoal.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } }}>{t("common.save")}</button>
+              <Collapse open={!!(updGoal&&updGoal.id===goal.id)}>{ug&&(
+                <div data-section="goal-update-row" style={{display:"flex",gap:7,marginTop:10}}>
+                  <input className="field-input" type="text" inputMode="decimal" autoComplete="off" data-section="goal-update-input" aria-label={t("set.updatePrompt",{name:maskText(goal.name)})} value={ug.val} ref={revealFocus} onChange={e=>setUpdGoal({...ug,val:cleanMoneyText(e.target.value)})}
+                    onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); const v=formMoney(ug.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } } else if (e.key==="Escape") setUpdGoal(null); }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                  <button className="btn btn-sm btn-sm-primary" data-section="goal-update-save" onClick={()=>{ const v=formMoney(ug.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } }}>{t("common.save")}</button>
                   <button className="btn btn-sm" onClick={()=>setUpdGoal(null)} aria-label={t("common.cancel")}>✕</button>
                 </div>
-              )}
+              )}</Collapse>
               <div className="bud-bar-row" style={{marginTop:12}}>
                 <div className="bar"><div className="bar-fill" style={{width:`${pct}%`,background:"var(--accent)"}}/></div>
                 <span className="bud-pct">{fmtPct(Math.round(pct))}</span>
@@ -218,20 +222,25 @@ export function GoalScenario({ goal, currency }) {
   const amt=val.trim()===""?null:formMoney(val,{positive:true});
   const s=amt!==null ? goalScenario(goal,amt) : null;
   const id="gs-"+String(goal.id).replace(/[^a-zA-Z0-9_-]/g,"");
+  const [open,setOpen]=useState(false);   // Run 34: was a native <details> (opened and closed in one frame); now it eases both ways
   return (
-    <details className="goal-scenario" data-section="goal-scenario">
-      <summary>{t("goals.scenarioTitle")}</summary>
-      <label className="field-lbl" htmlFor={id}>{t("goals.scenarioLabel")}</label>
-      <input id={id} className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={val} onChange={e=>setVal(cleanMoneyText(e.target.value))}/>
-      {val.trim()!==""&&amt===null&&<div className="list-sub" role="status">{t("add.errAmount")}</div>}
-      {s&&s.valid&&(
-        <div className="goal-scenario-out" role="status" aria-live="polite">
-          <div>{t("goals.scenarioResult",{amount:fmt(amt,currency),months:tn("set.months",s.months),date:s.completion})}</div>
-          {s.meetsDeadline!==null&&<div className="list-sub" style={{color:s.meetsDeadline?"var(--pos)":"var(--neg)",fontWeight:600}}>{t(s.meetsDeadline?"goals.scenarioMeets":"goals.scenarioMisses")}</div>}
-          <div className="list-sub">{t("goals.scenarioEstimate")}</div>
-        </div>
-      )}
-    </details>
+    <div className="goal-scenario" data-section="goal-scenario">
+      <button type="button" className="gs-toggle" aria-expanded={open} aria-controls={id+"-body"} onClick={()=>setOpen(o=>!o)}>
+        <span>{t("goals.scenarioTitle")}</span><span className={"fold-chev"+(open?" open":"")}><Icon name="chevDown" size={14} color="var(--ink-4)"/></span>
+      </button>
+      <Collapse open={open} id={id+"-body"}>
+        <label className="field-lbl" htmlFor={id}>{t("goals.scenarioLabel")}</label>
+        <input id={id} className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={val} onChange={e=>setVal(cleanMoneyText(e.target.value))}/>
+        {val.trim()!==""&&amt===null&&<div className="list-sub" role="status">{t("add.errAmount")}</div>}
+        {s&&s.valid&&(
+          <div className="goal-scenario-out" role="status" aria-live="polite">
+            <div>{t("goals.scenarioResult",{amount:fmt(amt,currency),months:tn("set.months",s.months),date:s.completion})}</div>
+            {s.meetsDeadline!==null&&<div className="list-sub" style={{color:s.meetsDeadline?"var(--pos)":"var(--neg)",fontWeight:600}}>{t(s.meetsDeadline?"goals.scenarioMeets":"goals.scenarioMisses")}</div>}
+            <div className="list-sub">{t("goals.scenarioEstimate")}</div>
+          </div>
+        )}
+      </Collapse>
+    </div>
   );
 }
-
+

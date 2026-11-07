@@ -1,5 +1,6 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Collapse, useLeave } from "./motion.jsx";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
@@ -213,10 +214,10 @@ export function Fold({ id, icon, title, sub, open, onToggle, children }) {
         <button className="list-row fold-head" aria-expanded={!!open} aria-controls={`fold-${id}`} data-fold-head={id} onClick={onToggle}>
           <span className="list-ico" style={{color:"var(--accent-text)"}}><Icon name={icon} size={20}/></span>
           <span className="list-body"><span className="list-title">{title}</span>{sub&&!open&&<span className="list-sub" data-fold-sub={id}>{sub}</span>}</span>
-          <Icon name={open?"chevUp":"chevDown"} size={16} color="var(--ink-4)"/>
+          <span className={"fold-chev"+(open?" open":"")}><Icon name="chevDown" size={16} color="var(--ink-4)"/></span>
         </button>
       </div>
-      {open && <div className="fold-body" id={`fold-${id}`}>{children}</div>}
+      <Collapse open={!!open} id={`fold-${id}`}><div className="fold-body">{children}</div></Collapse>
     </div>
   );
 }
@@ -348,6 +349,7 @@ export function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToas
 
 // Goals: quick-add templates (the buttons on Home). A template can carry a subcategory.
 export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteTemplate, onUpdateTemplate, showToast }) {
+  const { isLeaving, leave } = useLeave();
   const [showNewTpl,  setShowNewTpl]  = useState(false);
   const [editTplId,   setEditTplId]   = useState(null);
   const [tplName,     setTplName]     = useState("");
@@ -395,19 +397,19 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
         <span className="section-title" style={{margin:0}}>{t("set.templates")}</span>
         <button className="btn btn-sm" onClick={()=>{ if (showNewTpl) { setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); } setShowNewTpl(s=>!s); }}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
       </div>
-      {showNewTpl&&!editTplId&&tplForm(false)}
+      <Collapse open={showNewTpl&&!editTplId} id="tpl-new">{tplForm(false)}</Collapse>
       {templates.length===0&&!showNewTpl&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noTemplates")}</div>}
       {templates.length>0&&(
         <div className="card list-card">
           {templates.map((tpl,ti)=>showNewTpl&&editTplId===tpl.id ? <Fragment key={tpl.id}>{tplForm(true)}</Fragment> : (
-            <div key={tpl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:ti<templates.length-1?"1px solid var(--rule)":"none"}}>
+            <div key={tpl.id} className={isLeaving(tpl.id)?"row-leaving":""} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:ti<templates.length-1?"1px solid var(--rule)":"none"}}>
               <CatIcon catId={tpl.catId} size={14}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{tpl.name}</div>
                 <div style={{fontSize:11,color:"var(--ink-3)"}}>{fmt(tpl.amount,currency)}{tpl.merchant?` · ${tpl.merchant}`:""} · {catName(tpl.catId)}{tpl.subcat?` › ${subName(tpl.subcat)}`:""}</div>
               </div>
               <button className="chip" data-section="tpl-edit" aria-label={t("common.edit")+": "+tpl.name} onClick={()=>startEdit(tpl)}>{t("common.edit")}</button>
-              <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>onDeleteTemplate(tpl.id)} aria-label={t("set.deleteTemplate",{name:tpl.name})}><Icon name="trash" size={14}/></button>
+              <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>leave(tpl.id,()=>onDeleteTemplate(tpl.id))} aria-label={t("set.deleteTemplate",{name:tpl.name})}><Icon name="trash" size={14}/></button>
             </div>
           ))}
         </div>

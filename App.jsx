@@ -10,6 +10,7 @@ import { ImportExportPage, ImportUnlock, InfoSheet, LanguageChooser, MorePage } 
 import { DebtsPage } from "./screens/debts.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
+import { Collapse, motionOff } from "./screens/motion.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PERSONAL FINANCIAL OS v9
@@ -3049,7 +3050,19 @@ function AppInner() {
     openSnack({msg,onUndo,ms,kind});
   },[showToast]);
 
-  const switchTab=useCallback((t)=>{ setTab(t); setTabKey(k=>k+1); },[]);
+  // Run 34: going back out of a sub-page (Recurring, Import / Export, Debts) slides the page away first (~0.19 s) instead of cutting; every other switch is as before.
+  const [pageOut,setPageOut]=useState(false), pageOutBusy=useRef(false);
+  const switchTab=useCallback((t)=>{
+    const from=tabRef.current;
+    if (SUBPAGE_PARENT[from] && SUBPAGE_PARENT[from]===t && !motionOff()) {
+      if (pageOutBusy.current) return;
+      pageOutBusy.current=true; setPageOut(true);
+      setTimeout(()=>{ pageOutBusy.current=false; setPageOut(false); setTab(t); setTabKey(k=>k+1); },190);
+      return;
+    }
+    setTab(t); setTabKey(k=>k+1);
+  },[]);
+  const pfCount=useRef(0), pfPrev=useRef(privacy); if (pfPrev.current!==privacy) { pfPrev.current=privacy; pfCount.current++; }   // the page softly re-draws when "Hide amounts" changes
   const [debtsStart,setDebtsStart]=useState("debts");   // Run 18: the add form can send you straight to the Debts or Loans list
   const tabRef=useRef(tab); tabRef.current=tab;
 
@@ -3196,6 +3209,20 @@ function AppInner() {
       undoBuffer.current=[];
     }, 6000, "delete");
   },[showSnackbar,showToast]);
+
+  // Run 34: put the chosen entries into one group (the existing "trip / group" label), or take them out of it when name is empty. Undo restores each entry's previous label.
+  const groupMany=useCallback((ids,name)=>{
+    const want=new Set((ids||[]).map(String)), label=tripName(name);
+    const prev=new Map(stateRef.current.transactions.filter(x=>want.has(String(x.id))).map(x=>[String(x.id),x.trip]));
+    if (!prev.size) return false;
+    const apply=(pick)=>setState(s=>({...s,transactions:s.transactions.map(x=>{
+      if (!prev.has(String(x.id))) return x;
+      const v=pick(x); const { trip:_old, ...rest }=x; return v ? { ...rest, trip:v } : rest;
+    })}));
+    apply(()=>label);
+    showSnackbar(label?tn("toast.grouped",prev.size,{name:label}):tn("toast.ungrouped",prev.size),()=>apply(x=>prev.get(String(x.id))),6000,"group");
+    return true;
+  },[showSnackbar]);
 
   // Run 24: splitting replaces one entry with several that add up to it; undo puts the original back unless something changed since.
   const splitEntry=useCallback((id,parts)=>{
@@ -3537,27 +3564,28 @@ function AppInner() {
         )}
         {/* Run 14: the routine backup reminders appear where they can be acted on (Home, Import / Export), not above every screen.
             Warnings about the data's safety (recovery notices, "cannot save", update) above stay on every screen. */}
-        {!backupDismissed&&(tab==="home"||tab==="io")&&backupReminder==="due"&&transactions.length>0&&(
+        {/* Run 34: these notices slide away (height + fade) when dismissed or when you leave the screen, instead of vanishing in one frame. */}
+        <Collapse open={!backupDismissed&&(tab==="home"||tab==="io")&&backupReminder==="due"&&transactions.length>0}>
           <div className="backup-banner backup-reminder" role="alert">
             <span>{t("banner.backupDue")}</span>
             <button className="backup-banner-btn" onClick={exportJSON}>{t("banner.backUpNow")}</button>
             <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label={t("common.dismiss")}>×</button>
           </div>
-        )}
-        {!backupDismissed&&(tab==="home"||tab==="io")&&backupReminder==="confirm"&&transactions.length>0&&(
+        </Collapse>
+        <Collapse open={!backupDismissed&&(tab==="home"||tab==="io")&&backupReminder==="confirm"&&transactions.length>0}>
           <div className="backup-banner backup-reminder" role="status">
             <span>{t("banner.backupConfirm")}</span>
             <button className="backup-banner-btn" onClick={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}>{t("banner.haveFile")}</button>
             <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label={t("common.dismiss")}>×</button>
           </div>
-        )}
+        </Collapse>
 
-        {iosNote&&tab==="home"&&(
+        <Collapse open={!!iosNote&&tab==="home"}>
           <div className="backup-banner backup-reminder" role="note" data-section="ios-note">
             <span>{t("banner.iosNote")}</span>
             <button className="backup-dismiss" onClick={()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } }} aria-label={t("common.dismiss")}>×</button>
           </div>
-        )}
+        </Collapse>
 
         <header className="topbar">
           {SUBPAGE_PARENT[tab]
@@ -3568,23 +3596,31 @@ function AppInner() {
             : <h1 className="wordmark">{tab==="home"?t(greetingKey())+(state.profileName?", "+state.profileName:""):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
             <button className={`topbar-btn privacy-toggle${privacy?" on":""}`} aria-pressed={privacy} aria-label={t(privacy?"privacy.show":"privacy.hide")} title={t(privacy?"privacy.show":"privacy.hide")}
-              onClick={()=>{ setPrivacy(p=>!p); showToast(t(privacy?"privacy.offToast":"privacy.onToast")); }}><Icon name={privacy?"eyeOff":"eye"} size={20}/></button>
+              onClick={()=>{ setPrivacy(p=>!p); showToast(t(privacy?"privacy.offToast":"privacy.onToast")); }}><Icon key={privacy?"off":"on"} name={privacy?"eyeOff":"eye"} size={20}/></button>
           </div>
         </header>
 
-        <main className={SUBPAGE_PARENT[tab]?"page page-sub":"page"} key={tabKey}>
+        <main className={(SUBPAGE_PARENT[tab]?"page page-sub":"page")+(pageOut?" page-out":"")+(pfCount.current>0?(pfCount.current%2?" pf-a":" pf-b"):"")} key={tabKey}>
           {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>{ setMoreScroll("my-accounts"); switchTab("more"); }} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
-          {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
+          {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onGroupMany={groupMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={spendState} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
-            onDeleteGoal={id=>setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}))}
+            onDeleteGoal={id=>{
+              const idx=stateRef.current.goals.findIndex(g=>g.id===id), gone=stateRef.current.goals[idx]; if (!gone) return;
+              setState(s=>({...s,goals:s.goals.filter(g=>g.id!==id)}));
+              showSnackbar(t("toast.goalDeleted",{name:gone.name||""}),()=>setState(s=>s.goals.some(g=>g.id===id)?s:{...s,goals:[...s.goals.slice(0,idx),gone,...s.goals.slice(idx)]}),6000,"goal");
+            }}
             onAddTemplate={tpl=>setState(s=>({...s,templates:[...s.templates,{...tpl,id:"t"+Date.now()}]}))}
-            onDeleteTemplate={id=>setState(s=>({...s,templates:s.templates.filter(t=>t.id!==id)}))}
+            onDeleteTemplate={id=>{
+              const idx=stateRef.current.templates.findIndex(x=>x.id===id), gone=stateRef.current.templates[idx]; if (!gone) return;
+              setState(s=>({...s,templates:s.templates.filter(x=>x.id!==id)}));
+              showSnackbar(t("toast.tplDeleted",{name:gone.name||""}),()=>setState(s=>s.templates.some(x=>x.id===id)?s:{...s,templates:[...s.templates.slice(0,idx),gone,...s.templates.slice(idx)]}),6000,"template");
+            }}
             onUpdateTemplate={(id,patch)=>setState(s=>({...s,templates:s.templates.map(x=>x.id===id?{...x,...patch}:x)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
           {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}

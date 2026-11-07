@@ -26,7 +26,7 @@ section("R23-IOS2. iPhone in a browser tab: note, dismiss, remembered");
   await asIphone(page, false);
   const n = await note(page);
   ok(!!n && /Safari can erase/.test(n) && /Home Screen/.test(n) && /backup/i.test(n), "the note explains the risk, the Home Screen fix and the backup", n);
-  await page.evaluate(() => document.querySelector('[data-section="ios-note"] .backup-dismiss').click()); await wait(250);
+  await page.evaluate(() => document.querySelector('[data-section="ios-note"] .backup-dismiss').click()); await wait(500);
   ok((await note(page)) === null, "dismissing removes it");
   ok((await page.evaluate((k) => localStorage.getItem(k), NOTE)) === "1", "the choice is stored under its own key");
   await page.reload(); await page.waitForSelector(".tabbar"); await wait(500);

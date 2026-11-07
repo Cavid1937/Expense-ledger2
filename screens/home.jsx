@@ -4,6 +4,7 @@ import { t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, accountBalances, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcSpendingPace, calcSpentToDate, calcWhatChanged, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
+import { Collapse } from "./motion.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // S2: HOME PAGE — Financial hierarchy
@@ -242,9 +243,9 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, currency, now, held=nul
             <div className="runway" aria-hidden="true">{Array.from({length:dim},(_,i)=><i key={i} className={i<gone?"on":i===gone?"now":""}/>)}</div>
           ); })()}
           <button className="safe-toggle" aria-expanded={open} aria-controls="safe-breakdown" onClick={()=>setOpen(o=>!o)}>
-            {t(open?"safe.hideHow":"safe.showHow")}<Icon name={open?"chevDown":"chevRight"} size={14}/>
+            {t(open?"safe.hideHow":"safe.showHow")}<span className={"fold-chev r90"+(open?" open":"")}><Icon name="chevRight" size={14}/></span>
           </button>
-          {open&&<div id="safe-breakdown">
+          <Collapse open={open} id="safe-breakdown">
           {/* Four explicit lines — planning engine, not just a number */}
           <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
             <div className="safe-row">
@@ -304,7 +305,7 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, currency, now, held=nul
             {t("safe.noteIncome")}{" "}
             {safeInfo.scheduleCount>0&&t("safe.noteSchedules",{ up:safeInfo.upcomingCount, un:safeInfo.unrecordedCount, s:safeInfo.scheduleCount, payments:tn("unit.payments",safeInfo.upcomingCount+safeInfo.unrecordedCount), schedules:tn("unit.schedules",safeInfo.scheduleCount) })}
           </div>
-          </div>}
+          </Collapse>
           {/* Always visible, open or not: without recurring bills the number is optimistic, and the user must not have to tap to learn that. */}
           {/* Run 31: the caveats share ONE quiet block (two stacked boxes competed with the number). The balance paragraph keeps its own hook. */}
           {(()=>{ const noRec=safeInfo.scheduleCount===0, lowHeld=held!==null&&safeInfo.remaining>0&&held<safeInfo.remaining; if (!noRec&&!lowHeld) return null; return (

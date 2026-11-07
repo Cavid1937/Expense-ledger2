@@ -66,9 +66,9 @@ section("R15-B3. Goals: the required monthly amount first, optional what-if seco
   ok(/Set a target date/.test(need), "Laptop (no date) asks for a date and invents no amount", need);
   ok(/not an automatic transfer/i.test(need), "says it is a plan, not an automatic transfer", need);
   ok((await count(page, ".goal-milestones")) === 0 && !/What-if scenarios/.test(await bodyText(page)), "the milestone tiles and the fixed what-if rows are gone");
-  const closed = await page.evaluate(() => [...document.querySelectorAll(".goal-scenario")].every((x) => !x.open));
+  const closed = await page.evaluate(() => [...document.querySelectorAll(".goal-scenario")].every((x) => x.querySelector(".gs-toggle").getAttribute("aria-expanded") === "false"));
   ok(closed && (await count(page, ".goal-scenario")) === 2, "the what-if is a collapsed, optional block on each goal", closed);
-  await page.evaluate(() => { document.querySelector(".goal-scenario").open = true; }); await wait(100);
+  await page.evaluate(() => { document.querySelector(".goal-scenario .gs-toggle").click(); }); await wait(400);
   const type = async (v) => { await page.evaluate((v) => { const el = document.querySelector(".goal-scenario input"); const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); }, v); await wait(120); };
   await type("100"); let out = await text(page, ".goal-scenario-out");
   ok(/12 months/.test(out) && /after the target date/i.test(out) && /estimate, not a guarantee/i.test(out), "100 a month: 12 months, after the target date, labelled an estimate", out);
@@ -93,7 +93,7 @@ for (const lang of ["az", "ru"]) {
   await openGoals(page, "goals"); await settle(page);
   const need = await text(page, '[data-section="goal-need"]');
   ok(need.length > 20 && !/goals\.need|undefined|NaN|\{/.test(need) && /150[.,]00/.test(need), `${lang}: the required monthly amount renders with real text and 150.00`, need);
-  ok(!/goals\.scenario|undefined|NaN/.test(await text(page, ".goal-scenario summary")), `${lang}: the what-if title is translated`);
+  ok(!/goals\.scenario|undefined|NaN/.test(await text(page, ".goal-scenario .gs-toggle")), `${lang}: the what-if title is translated`);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
   ok(!overflow, `${lang}: no horizontal overflow on the Goals screen at 390 px`);
   await page.close();
