@@ -152,7 +152,8 @@
     "e2e_run31_safeheld.mjs": 8,
     "e2e_run31_settings.mjs": 14,
     "e2e_run31_ledger.mjs": 15,
-    "e2e_run32_paste.mjs": 8
+    "e2e_run32_paste.mjs": 8,
+    "e2e_run32_restore.mjs": 8
   }
 }
 

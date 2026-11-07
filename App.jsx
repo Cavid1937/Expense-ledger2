@@ -3471,6 +3471,10 @@ function AppInner() {
                   <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
                     <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",marginBottom:4,overflowWrap:"anywhere"}}>{importPending.filename}</div>
                     <div style={{fontSize:12,color:"var(--ink-3)"}}>{tn("import.ready",importPending.transactions.length)}</div>
+                    <div data-section="import-compare" style={{fontSize:12,color:"var(--ink-3)",marginTop:4}}>{(()=>{   // Run 32: what the file holds next to what this device holds, so Replace is an informed choice
+                      const ds=importPending.transactions.map(x=>String(x.date).slice(0,10)).filter(isValidDateStr).sort();
+                      return t("import.compare",{ n:importPending.transactions.length, m:state.transactions.length, range:ds.length ? ` (${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])})` : "" });
+                    })()}</div>
                     {importPending.skippedCount>0&&<div style={{fontSize:12,color:"var(--warn)",marginTop:4}}>{tn("import.skipped",importPending.skippedCount,{summary:importPending.skippedSummary})}</div>}
                     {importPending.problems.map((m,i)=><div key={"p"+i} style={{fontSize:12,color:"var(--warn)",marginTop:4}}>{m}</div>)}
                     {importPending.warnings.map((m,i)=><div key={"w"+i} style={{fontSize:12,color:"var(--ink-3)",marginTop:4}}>{m}</div>)}
