@@ -76,12 +76,16 @@ function moneyReason(v, { positive=false } = {}) {
 export function parseMoney(v, opts) { return moneyReason(v,opts)===null ? strictNum(v) : null; }
 // Run 17: what a money box lets through while typing. Phones whose decimal key is a comma used to lose the mark (145,67 was saved as 14567 because the box was type=number).
 // Either "." or "," is the decimal mark; when both appear the LAST one is, the other is a thousands mark and goes. Digits are never changed, at most 2 decimals.
-export function cleanMoneyText(raw) {
+export function cleanMoneyText(raw, opts) {
   // A sign or an exponent is never turned into a different valid number (-5 must not become 5): it stays visible and is refused when saving.
   if (/[-+eE]/.test(String(raw??""))) return String(raw).replace(/[\s\u00a0\u202f]/g,"").slice(0,24);
   const s=String(raw??"").replace(/[\s\u00a0\u202f]/g,"").replace(/[^0-9.,]/g,"");
   const dot=s.indexOf("."), com=s.indexOf(","), lastDot=s.lastIndexOf("."), lastCom=s.lastIndexOf(",");
-  let at;                                           // index of the character that is the decimal mark
+  // Run 32: PASTED text ({paste:true}) like "1,234" or Azerbaijani "1.234" is 1234, not 1.23 (money has at most 2 decimals, so 3 digits after a lone mark are a thousands group).
+  // Only when every mark is the same character and each group after the first is 3 digits; a leading 0 ("0,123") stays a decimal.
+  // Typing keeps the older rule on purpose (a 3rd digit after the mark is ignored): a typed extra digit must not make the number jump 1000 times.
+  if (opts && opts.paste && (dot<0||com<0) && /^[1-9]\d{0,2}([.,]\d{3})+$/.test(s)) return s.replace(/[.,]/g,"");
+  let at;                                          // index of the character that is the decimal mark
   if (dot>=0 && com>=0) at=Math.max(lastDot,lastCom);
   else if (dot>=0) at=dot;                          // a repeated dot while typing (1.2.3): the first is the mark
   else if (com>=0) { if (lastCom!==com) return s.replace(/,/g,""); at=com; }   // 1,234,567 pasted: thousands marks

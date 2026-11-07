@@ -195,6 +195,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           <div className="amount-line">
             <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off" autoFocus={!editId}
               placeholder="0.00" value={amount} onChange={e=>{setAmount(cleanMoneyText(e.target.value));setErr("");}}
+              onPaste={e=>{ const p=(e.clipboardData&&e.clipboardData.getData("text"))||""; if (!p) return; e.preventDefault(); setAmount(cleanMoneyText(p,{paste:true})); setErr(""); }}
               min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}
               style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
             <span className="amount-cur">{currency}</span>
@@ -403,4 +404,4 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
     </div>
   );
 }
-
+

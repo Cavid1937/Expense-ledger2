@@ -1,0 +1,24 @@
+// Run 32 (backlog item 1): what a money box lets through when text is pasted or typed. Expected values worked out by hand.
+import { H, ok, section, finish } from "./lib.mjs";
+const { cleanMoneyText } = H;
+const c = (s) => cleanMoneyText(s), p = (s) => cleanMoneyText(s, { paste: true });
+section("R32-M1. Pasted text: a lone mark followed by 3 digits is a thousands mark (money has at most 2 decimals)");
+ok(p("1,234") === "1234", "paste 1,234 (English thousands) is 1234, not 1.23", p("1,234"));
+ok(p("1.234") === "1234", "paste 1.234 (Azerbaijani/Russian thousands) is 1234, not 1.23", p("1.234"));
+ok(p("1.234.567") === "1234567" && p("1,234,567") === "1234567", "paste 1.234.567 and 1,234,567 is 1234567", [p("1.234.567"), p("1,234,567")]);
+ok(p("12,345") === "12345" && p("123.456") === "123456", "paste 12,345 and 123.456 is 12345 and 123456", [p("12,345"), p("123.456")]);
+section("R32-M2. Typing keeps its older rule on purpose: a typed extra digit never makes the number jump 1000 times");
+ok(c("1,234") === "1.23" && c("1.234") === "1.23", "typing 1,234 or 1.234 still gives 1.23", [c("1,234"), c("1.234")]);
+ok(c("1,234,567") === "1234567", "1,234,567 (repeated commas) is thousands marks as before", c("1,234,567"));
+section("R32-M3. Real decimals are unchanged, typed or pasted");
+ok(c("145,67") === "145.67" && p("145,67") === "145.67" && p("145.67") === "145.67", "145,67 and 145.67 are 145.67", [c("145,67"), p("145,67"), p("145.67")]);
+ok(p("1,2") === "1.2" && p("1,23") === "1.23" && p("1.5") === "1.5", "pasted 1,2 1,23 1.5 stay decimals", [p("1,2"), p("1,23"), p("1.5")]);
+ok(p("0,123") === "0.12" && p("0.123") === "0.12", "pasted 0,123 and 0.123 keep the leading 0 as a decimal and are cut to 2 places", [p("0,123"), p("0.123")]);
+ok(p("1,2345") === "1.23", "pasted 1,2345 (4 digits after the mark) is a decimal cut to 2 places", p("1,2345"));
+section("R32-M4. Mixed marks: the last mark is the decimal");
+ok(p("1.234,56") === "1234.56" && p("1,234.56") === "1234.56" && c("1.234,56") === "1234.56", "1.234,56 and 1,234.56 are 1234.56", [p("1.234,56"), p("1,234.56")]);
+section("R32-M5. Signs and letters are never turned into a valid number");
+ok(p("-5") === "-5" && p("1e3") === "1e3", "-5 and 1e3 stay visible so saving refuses them", [p("-5"), p("1e3")]);
+ok(p("1 234") === "1234" && p("1 234,5") === "1234.5", "spaces (also non-breaking) are dropped", [p("1 234"), p("1 234,5")]);
+ok(p("") === "" && p(null) === "", "empty and missing give an empty box", [p(""), p(null)]);
+finish("run32money");
