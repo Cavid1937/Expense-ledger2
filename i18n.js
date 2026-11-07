@@ -1211,7 +1211,7 @@ export const MESSAGES = {
   "set.deleteGoal":    { en: "Delete goal {name}", az: "{name} məqsədini sil", ru: "Удалить цель «{name}»" },
   "set.atRate":        { en: "At {amount}/mo → est. {date}", az: "Ayda {amount} ilə → təxminən {date}", ru: "При {amount} в месяц → ориентир: {date}" },
   "set.months":        { en: { one: "{n} month", other: "{n} months" }, az: "{n} ay", ru: { one: "{n} месяц", few: "{n} месяца", many: "{n} месяцев", other: "{n} месяца" } },
-  "set.exportCsvSub":  { en: "Full ledger with merchant and subcategory", az: "Satıcı və alt kateqoriya ilə bütün əməliyyatlar", ru: "Все операции с продавцом и подкатегорией" },
+  "set.exportCsvSub":  { en: "For spreadsheets: every entry with account and details. Not a backup", az: "Cədvəllər üçün: hesab və təfərrüatlarla bütün əməliyyatlar. Ehtiyat nüsxə deyil", ru: "Для таблиц: все операции со счётом и деталями. Не резервная копия" },
   "set.jsonBackupSub": { en: { one: "{n} transaction · complete backup", other: "{n} transactions · complete backup" }, az: "{n} əməliyyat · tam ehtiyat nüsxə", ru: "Операций: {n} · полная копия" },
   "set.lastBackup":    { en: "Last backup file created:", az: "Son ehtiyat nüsxə faylı yaradılıb:", ru: "Последний файл копии создан:" },
   "set.confirmedOn":   { en: "You confirmed you have it on {date}.", az: "Faylın sizdə olduğunu {date} tarixində təsdiqlədiniz.", ru: "Вы подтвердили, что файл у вас, {date}." },

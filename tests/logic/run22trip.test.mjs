@@ -39,7 +39,7 @@ ok(tripTotals(loanTrip)[0].total === 75, "a loan instalment counts only its inte
 section("R22-T4. CSV: a last 'Trip' column that round-trips; older files still import");
 const csv = buildCsv([T({ id: 1, amount: 12.5, trip: "Baku trip" }), T({ id: 2, amount: 3 })]);
 const hdr = csv.replace(/^﻿/, "").split("\r\n")[0];
-ok(hdr.endsWith('"Wallet","Trip"'), "Trip is appended as the last column (earlier columns did not move)", hdr);
+ok(hdr.includes('"Wallet","Trip"'), "Trip is appended right after Wallet (earlier columns did not move; Run 32 added more columns after it)", hdr);
 const back = parseCsvImport(csv);
 ok(!back.error, "own export imports", back.error);
 const recs = back.records || back.rows || back.transactions || [];

@@ -1515,8 +1515,12 @@ function buildBackup(state, now=new Date().toISOString()) {
 
 function buildCsv(transactions) {
   // Run 16: "Wallet" is the last column, so the columns before it did not move (older readers and the older import still work).
-  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip"]];   // Run 22: "Trip" is appended after "Wallet"
-  transactions.forEach(t=>rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category,walletId(t.wallet),tripName(t.trip)]));
+  // Run 32: Account (its name), LoanInterest (the interest part of a loan instalment; "unknown" when the split was not given) and DebtRepayment ("yes" for a person-to-person
+  // repayment entry) are appended after "Trip", so earlier columns did not move. They are for the user's spreadsheet: this CSV is NOT a backup and the import ignores them.
+  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip","Account","LoanInterest","DebtRepayment"]];   // Run 22: "Trip" is appended after "Wallet"
+  transactions.forEach(t=>{ const lr=loanRef(t.loan);
+    rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category,walletId(t.wallet),tripName(t.trip),
+      accountName(t.account),lr ? (lr.interest===null ? "unknown" : lr.interest.toFixed(2)) : "",debtLinkRef(t.debtLink) ? "yes" : ""]); });
   // Formula-injection guard: a cell starting with = + - @ tab or CR would run as a formula in a spreadsheet, so it gets a
   // leading apostrophe (shown as text). parseCsvImport removes it again, so the app's own CSV round trip stays exact.
   const safe=(v)=>{ const s=String(v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; };

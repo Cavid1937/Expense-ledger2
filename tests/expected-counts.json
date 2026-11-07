@@ -34,6 +34,7 @@
     "run22safe.test.mjs": 14,
     "run22goals.test.mjs": 6,
     "run32money.test.mjs": 14,
+    "run32csv.test.mjs": 9,
     "run18debts.test.mjs": 20,
     "run18loanedge.test.mjs": 9,
     "run18debtlink.test.mjs": 10,
