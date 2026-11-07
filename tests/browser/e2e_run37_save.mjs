@@ -37,6 +37,12 @@ section("R37-S1. Save to Downloads: the whole backup goes to the shell; saved me
   ok(s3.length === 3 && s3[2].pick === true && s3[0].pick !== true, "'Save to a folder I choose…' asks for the system Save-as screen; the main button does not", s3.map((x) => x.pick));
   await page.close();
 }
+section("R37-S1b. The import picker shows every file (Drive often labels .json as plain text)");
+{
+  const page = await openPage(browser, { seed: seed() }); await settle(page); await openData(page);
+  ok(await page.evaluate(() => !document.querySelector(".io-page input[type=file]").hasAttribute("accept")), "no file-type filter on the website either (Run 39c)");
+  await page.close();
+}
 section("R37-S2. Cancel and failure record nothing");
 {
   let page = await openPage(browser, { seed: seed(), pre: fake("cancel") }); await settle(page); await openData(page);

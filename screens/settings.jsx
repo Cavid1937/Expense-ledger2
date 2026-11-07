@@ -702,7 +702,9 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
 
       <div className="section-title">{t("io2.importTitle")}</div>
       <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io2.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}} style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
-        <input ref={fileRef} type="file" accept={inApp?undefined:".json,.csv,application/json,text/csv"} aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
+        {/* Run 39c (owner: the backup is in Google Drive but the website's picker does not show it): no type filter anywhere. Drive and other apps often label
+            a .json file as plain text or unknown, and Android's picker then greys it out. The file's contents are checked after it is chosen. */}
+        <input ref={fileRef} type="file" aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
         <span className="io-ico" style={{color:"var(--accent-text)",flexShrink:0}}><Icon name="upload" size={24}/></span>
         <div style={{minWidth:0}}>
           <div className="list-title">{t("io.import")}</div>
