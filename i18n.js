@@ -631,6 +631,7 @@ export const MESSAGES = {
   "remind.dailyTitle": { en: "Anything to add today?", az: "Bu gün əlavə ediləcək nə isə var?", ru: "Есть что записать сегодня?" },
   "remind.dailyBody":  { en: "A few seconds now keeps your ledger accurate.", az: "İndi bir neçə saniyə dəftəri dəqiq saxlayır.", ru: "Несколько секунд сейчас сохранят учёт точным." },
   "st.groupMoney": { en: "Money", az: "Pul", ru: "Деньги" },
+  "ledger.showMore":   { en: "Show more ({n} left)", az: "Daha çox göstər ({n} qalıb)", ru: "Показать ещё (осталось {n})" },
   "ledger.daySpent": { en: "Spent: {amount}", az: "Xərc: {amount}", ru: "Потрачено: {amount}" },
   "ledger.more": { en: "More filters", az: "Digər filtrlər", ru: "Ещё фильтры" },
   "ledger.accFilter": { en: "Filter by account", az: "Hesaba görə süzgəc", ru: "Фильтр по счёту" },

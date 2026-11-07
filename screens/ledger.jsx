@@ -5,14 +5,21 @@ import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, accId, accountName, activate
 import { LedgerArt } from "./home.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
+export const LEDGER_PAGE=150;   // Run 32: rows drawn at first and per "Show more" (a throttled phone froze for seconds drawing 300+ rows at once). Whole days only.
 export function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPress, compact }) {
+  const [cap,setCap]=useState(LEDGER_PAGE);
   const groups=useMemo(()=>{
     const g={}; txns.forEach(t=>{ (g[t.date]=g[t.date]||[]).push(t); });
     return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));
   },[txns]);
+  const { visible, left }=useMemo(()=>{   // the newest days until `cap` rows are reached; search and filters already ran on the full list
+    let n=0; const out=[];
+    for (const gr of groups) { if (n>=cap) break; out.push(gr); n+=gr[1].length; }
+    return { visible:out, left:txns.length-n };
+  },[groups,cap,txns.length]);
   return (
     <>
-      {groups.map(([date,rows])=>{
+      {visible.map(([date,rows])=>{
         const dayTotal=rows.filter(t=>t.type==="expense").reduce(addAmt,0);
         return (
           <div key={date} className="txn-group">
@@ -27,6 +34,7 @@ export function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPr
           </div>
         );
       })}
+      {left>0&&<button className="btn btn-ghost btn-full" data-section="tx-show-more" style={{marginTop:8}} onClick={()=>setCap(c=>c+LEDGER_PAGE)}>{t("ledger.showMore",{n:left})}</button>}
     </>
   );
 }
