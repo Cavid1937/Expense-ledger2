@@ -167,7 +167,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .lock-switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--ink-3);transition:transform .15s,background .15s}
 .lock-bio-row[aria-checked="true"] .lock-switch{background:var(--accent-fill)}
 .lock-bio-row[aria-checked="true"] .lock-switch::after{transform:translateX(18px);background:var(--on-accent)}
-.lock-bio-row .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (prefers-reduced-motion:reduce){.lock-switch,.lock-switch::after{transition:none}}
 .numpad-key:active{background:var(--bg-warm);transform:scale(.95)}
 @media (prefers-reduced-motion:reduce){.numpad-key{transition:none}.numpad-key:active{transform:none}}

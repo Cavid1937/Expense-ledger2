@@ -30,6 +30,7 @@ const measure = () => {
   if (out.hscroll > 1) out.clipped.push("wider than the screen: " + [...document.querySelectorAll("body *")].filter((e) => e.getBoundingClientRect().right > innerWidth + 1 && !(e.parentElement && e.parentElement.closest(".filter-bar, [style*='overflow-x: auto']"))).slice(0, 3).map((e) => `.${String(e.className).split(" ")[0] || e.tagName} right=${Math.round(e.getBoundingClientRect().right)}`).join(", "));
   document.querySelectorAll("#root *").forEach((el) => {
     const own = [...el.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim()); if (!own) return;
+    if (el.closest(".sr-only")) return;   // words kept for screen readers are hidden on purpose (Run 32)
     const r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return;
     const layer = document.querySelector(".sheet-overlay, .add-overlay"); if (layer && !layer.contains(el)) return;
     const cs = getComputedStyle(el); if (cs.textOverflow === "ellipsis") return;   // deliberate truncation with "…"

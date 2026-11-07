@@ -68,7 +68,8 @@ export function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, c
         </div>
       </div>
       <div className="txn-right">
-        <div className={`txn-amt ${isInc?"inc":"exp"}`}>{isInc?"+":"−"}{fmt(txn.amount,currency)}</div>
+        {/* Run 32: a screen reader skips or mis-reads the minus character, so the row says Income or Expense in words and the sign stays visual only. */}
+        <div className={`txn-amt ${isInc?"inc":"exp"}`}><span className="sr-only">{isInc?t("add.income"):t("add.expense")}: </span><span aria-hidden="true">{isInc?"+":"−"}</span>{fmt(txn.amount,currency)}</div>
         {(onEdit||onDelete)&&!onView&&(
           <div className="txn-actions">
             {onEdit&&<button className="txn-act" onClick={e=>{e.stopPropagation();onEdit(txn);}} aria-label={t("common.edit")}><Icon name="edit" size={13}/></button>}
