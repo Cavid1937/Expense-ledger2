@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
-import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
+import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
@@ -121,7 +121,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
     if (typeFilter!=="all") list=list.filter(x=>x.type===typeFilter);
     if (catFilter!=="all")  list=list.filter(x=>x.category===catFilter);
     if (walletFilter!=="all") list=list.filter(x=>(walletId(x.wallet)||"none")===walletFilter);
-    if (tripFilter!=="all") list=list.filter(x=>tripName(x.trip).toLowerCase()===tripFilter.toLowerCase());
+    if (tripFilter!=="all") list=list.filter(x=>lc(tripName(x.trip))===lc(tripFilter));
     if (accFilter!=="all")  list=list.filter(x=>(accId(x.account)||"none")===accFilter);
     if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
     if (dateTo)             list=list.filter(x=>x.date<=dateTo);
@@ -132,7 +132,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onE
   // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
   const trips=useMemo(()=>tripTotals(transactions),[transactions]);
   const catSel=useMemo(()=>catFilter==="all" ? null : catTotals(transactions,catFilter),[transactions,catFilter]);   // Run 24
-  const tripSel=tripFilter==="all" ? null : trips.find(x=>x.name.toLowerCase()===tripFilter.toLowerCase()) || null;
+  const tripSel=tripFilter==="all" ? null : trips.find(x=>lc(x.name)===lc(tripFilter)) || null;
   // Run 16: the wallet filter is offered only when at least one entry has a wallet, and lists only the wallets in use.
   const usedWallets=useMemo(()=>[...new Set(transactions.map(x=>walletId(x.wallet)).filter(Boolean))],[transactions]);
   const hasUnsetWallet=useMemo(()=>transactions.some(x=>!walletId(x.wallet)),[transactions]);

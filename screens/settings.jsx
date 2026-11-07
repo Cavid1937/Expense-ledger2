@@ -1,6 +1,6 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { LANGS, LANG_NAMES, t, tIn, tn, tShell } from "../i18n.js";
+import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, revealFocus, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -465,7 +465,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       <div className="card st-card st-ident" data-section="st-profile" role="group" aria-label={t("st.profile")}>
         {/* Run 31: one identity card (it replaces three separate cards: name, brand and "stored on this device"). */}
         <div className="st-ident-top">
-          <span className="more-mark" aria-hidden="true"><span style={{fontSize:22,fontWeight:700,color:"var(--accent)",lineHeight:1}}>{cleanProfileName(profileName)?Array.from(cleanProfileName(profileName))[0].toUpperCase():"₼"}</span></span>
+          <span className="more-mark" aria-hidden="true"><span style={{fontSize:22,fontWeight:700,color:"var(--accent)",lineHeight:1}}>{cleanProfileName(profileName)?Array.from(cleanProfileName(profileName))[0].toLocaleUpperCase(locale()):"₼"}</span></span>
           <div><div className="list-title">{cleanProfileName(profileName)||"Expense Ledger"}</div><div className="list-sub" data-section="st-local">{tShell("more.localData")}</div></div>
         </div>
         <label className="field-lbl" htmlFor="profile-name">{t("st.profileName")}</label>

@@ -113,7 +113,8 @@ export const activateKey = (fn) => (e) => { if (e.target!==e.currentTarget) retu
 const flagValue = (v) => { if (typeof v==="boolean") return v; if (typeof v==="string") { const s=v.trim().toLowerCase(); if (s==="true") return true; if (s==="false") return false; } return null; };
 const isTrue = (v) => flagValue(v)===true;
 export const txt = (v) => typeof v==="string" ? v : (typeof v==="number" && Number.isFinite(v) ? String(v) : "");
-export const norm = (v) => txt(v).trim().toLowerCase().replace(/\s+/g," ");
+export const lc = (v) => String(v).toLowerCase().replace(/\u0307/g,"");   // Run 32: Azerbaijani "İ" lower-cases to "i" + a combining dot; drop the dot so "İzmir" and "izmir" are the same name when comparing
+export const norm = (v) => lc(txt(v).trim()).replace(/\s+/g," ");
 
 // Keep a recoverable copy of anything we cannot use, so the next save never overwrites it.
 function preserveRaw(label, raw) {
@@ -435,7 +436,7 @@ export function tripTotals(list) {
   const by=new Map();
   forSpending(list).forEach(x=>{
     const n=tripName(x && x.trip); if (!n || x.type==="income") return;
-    const k=n.toLowerCase(), g=by.get(k) || { name:n, cents:0, n:0 };
+    const k=lc(n), g=by.get(k) || { name:n, cents:0, n:0 };
     g.cents+=Math.round((Number(x.amount)||0)*100); g.n++; by.set(k,g);
   });
   return [...by.values()].map(g=>({ name:g.name, total:g.cents/100, n:g.n })).sort((a,b)=>b.total-a.total || a.name.localeCompare(b.name));
@@ -500,7 +501,7 @@ export const walletName=(id)=>WALLET_IDS.includes(id) ? t("wallet."+id) : t("wal
 // and an older version simply never shows them. Limits: 20 per category, 30 characters, no duplicates (ignoring case), nothing
 // equal to a built-in subcategory of that category.
 export const SUBCAT_KEY=KEY+"__subcats", SUBCAT_MAX=20, SUBCAT_LEN=30;
-export const subKey=(s)=>String(s).trim().toLowerCase();
+export const subKey=(s)=>lc(String(s).trim());
 function cleanSubcats(raw) {
   const out={};
   const src=raw && typeof raw==="object" && !Array.isArray(raw) ? (raw.byCategory && typeof raw.byCategory==="object" && !Array.isArray(raw.byCategory) ? raw.byCategory : raw) : {};
@@ -559,9 +560,9 @@ function cleanAccountData(raw) {
   (Array.isArray(src.accounts)?src.accounts:[]).forEach(a=>{
     if (!isPlainObject(a) || accounts.length>=ACC_MAX) return;
     const id=accId(a.id), name=typeof a.name==="string" ? a.name.trim().replace(/\s+/g," ").slice(0,40) : "";
-    if (!id || !name || ids.has(id) || names.has(name.toLowerCase())) return;
+    if (!id || !name || ids.has(id) || names.has(lc(name))) return;
     const op=isPlainObject(a.opening) ? a.opening : {}, amt=Number(op.amount);
-    ids.add(id); names.add(name.toLowerCase());
+    ids.add(id); names.add(lc(name));
     accounts.push({ id, name, kind:ACC_KINDS.includes(a.kind)?a.kind:"other", opening:{ amount:Number.isFinite(amt)&&Math.abs(amt)<1e12 ? Math.round(amt*100)/100 : 0, date:isValidDateStr(op.date)?op.date:"" }, hidden:a.hidden===true });
   });
   const tids=new Set(), transfers=[];
@@ -607,7 +608,7 @@ export function addAccount(data, name, kind, openingAmount, openingDate) {
   if (!n) return { data:d, added:false, reason:"empty" };
   if (n.length>40) return { data:d, added:false, reason:"long" };
   if (d.accounts.length>=ACC_MAX) return { data:d, added:false, reason:"full" };
-  if (d.accounts.some(a=>a.name.toLowerCase()===n.toLowerCase())) return { data:d, added:false, reason:"dup" };
+  if (d.accounts.some(a=>lc(a.name)===lc(n))) return { data:d, added:false, reason:"dup" };
   const amt=Number(openingAmount||0); if (!Number.isFinite(amt) || Math.abs(amt)>=1e12) return { data:d, added:false, reason:"amount" };
   const id=newAccId("a_",new Set(d.accounts.map(a=>a.id)));
   return { data:cleanAccountData({ accounts:[...d.accounts,{ id, name:n, kind, opening:{ amount:amt, date:openingDate||"" }, hidden:false }], transfers:d.transfers }), added:true, reason:"", id };
@@ -619,7 +620,7 @@ export function editAccount(data, id, name, openingAmount, openingDate) {
   const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
   if (!n) return { data:d, edited:false, reason:"empty" };
   if (n.length>40) return { data:d, edited:false, reason:"long" };
-  if (d.accounts.some(a=>a.id!==id && a.name.toLowerCase()===n.toLowerCase())) return { data:d, edited:false, reason:"dup" };
+  if (d.accounts.some(a=>a.id!==id && lc(a.name)===lc(n))) return { data:d, edited:false, reason:"dup" };
   const amt=Number(openingAmount); if (!Number.isFinite(amt) || Math.abs(amt)>=1e12) return { data:d, edited:false, reason:"amount" };
   const accounts=d.accounts.map(a=>a.id!==id ? a : { ...a, name:n, opening:{ amount:Math.round(amt*100)/100, date:a.opening.date||openingDate||"" } });
   return { data:cleanAccountData({ accounts, transfers:d.transfers }), edited:true, reason:"" };
@@ -1530,7 +1531,7 @@ function buildCsv(transactions) {
 // ─── Merchant memory ──────────────────────────────────────────────────────────
 // Memory is keyed by type + merchant, so a merchant used as both income and expense
 // keeps a separate category/subcategory for each. The most recent choice per type wins.
-export function memKey(type, merchant) { return `${type==="income"?"income":"expense"}|${String(merchant).trim().toLowerCase()}`; }
+export function memKey(type, merchant) { return `${type==="income"?"income":"expense"}|${lc(String(merchant).trim())}`; }
 
 function buildMerchantMemory(transactions) {
   const mem={};
@@ -1552,8 +1553,8 @@ function merchantSuggest(merchant, memory, type="expense") {
   if (!merchant||!merchant.trim()) return null;
   const exact=memory[memKey(type,merchant)];
   if (exact) return exact;
-  const q=merchant.trim().toLowerCase();
-  return Object.values(memory).find(v=>v.type===(type==="income"?"income":"expense")&&v.merchant.toLowerCase().startsWith(q))||null;
+  const q=lc(merchant.trim());
+  return Object.values(memory).find(v=>v.type===(type==="income"?"income":"expense")&&lc(v.merchant).startsWith(q))||null;
 }
 
 // S6: Full merchant profile per spec — frequency, timing, recurrence detection, forecasting
@@ -1579,9 +1580,9 @@ function detectRecurrence(txns) {
 
 export function calcMerchantProfile(merchant, transactions) {
   if (!merchant) return null;
-  const ml = merchant.toLowerCase();
+  const ml = lc(merchant);
   const txns = transactions
-    .filter(t => t.merchant && t.merchant.toLowerCase() === ml && t.type === "expense")
+    .filter(t => t.merchant && lc(t.merchant) === ml && t.type === "expense")
     .sort((a,b) => a.date.localeCompare(b.date));
   if (!txns.length) return null;
 
@@ -1917,7 +1918,7 @@ export function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=n
 
   // Build a set of merchant names that have any recurring transaction
   const recurringMerchants=new Set(
-    transactions.filter(t=>t.recurring&&t.merchant).map(t=>t.merchant.toLowerCase())
+    transactions.filter(t=>t.recurring&&t.merchant).map(t=>lc(t.merchant))
   );
 
   const cats=[...new Set([...Object.keys(catSpendMon),...Object.keys(catSpendPrv)])];
@@ -1933,7 +1934,7 @@ export function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=n
       prev:merchantPrv[m]||0,
       diff:(merchantMon[m]||0)-(merchantPrv[m]||0),
       // Fix 3: Is this merchant recurring or one-off?
-      isRecurring: recurringMerchants.has(m.toLowerCase()),
+      isRecurring: recurringMerchants.has(lc(m)),
     })).filter(m=>Math.abs(m.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,3);
     return { catId, cur, prev, diff, merchantDiffs };
   }).filter(c=>Math.abs(c.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
@@ -1945,7 +1946,7 @@ export function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=n
   const merchantChanges=allM.map(m=>({
     merchant:m, cur:merchantMon[m]||0, prev:merchantPrv[m]||0,
     diff:(merchantMon[m]||0)-(merchantPrv[m]||0),
-    isRecurring: recurringMerchants.has(m.toLowerCase()),
+    isRecurring: recurringMerchants.has(lc(m)),
   })).filter(c=>Math.abs(c.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff)).slice(0,5);
 
   return { curExp,prevExp,curInc,prevInc,catChanges,merchantChanges,totalDiff:curExp-prevExp,cmpKind,cmpDays };
@@ -2373,7 +2374,7 @@ export function calcPatterns(transactions, currency="₼", now=new Date()) {
     const topCat=Object.entries(catTotals).sort((a,b)=>b[1]-a[1])[0];
     const pct=Math.round((topCat[1]/monTotal)*100);
     if (pct>=40) insights.push({ id:"catconc", basis:{ n:monExp.length, per:"month" }, text:t("ins.catConc",{ cat:catName(topCat[0]), pct }) });
-    const mTotals={}, mShown={}; monExp.filter(t=>t.merchant&&t.merchant.trim()).forEach(t=>{ const k=t.merchant.trim().toLowerCase(); if (!(k in mShown)) mShown[k]=t.merchant.trim(); mTotals[k]=addAmt(mTotals[k]||0,t); });   // "Bravo" and "bravo " are one merchant
+    const mTotals={}, mShown={}; monExp.filter(t=>t.merchant&&t.merchant.trim()).forEach(t=>{ const k=lc(t.merchant.trim()); if (!(k in mShown)) mShown[k]=t.merchant.trim(); mTotals[k]=addAmt(mTotals[k]||0,t); });   // "Bravo" and "bravo " are one merchant
     const top3=Object.entries(mTotals).sort((a,b)=>b[1]-a[1]).slice(0,3);
     if (top3.length>=2) { const pc=Math.round((top3.reduce((a,[,v])=>Math.round((a+v)*100)/100,0)/monTotal)*100); if (pc>=60) insights.push({ id:"merchant", basis:{ n:monExp.length, per:"month" }, text:t("ins.merchantConc",{ names:top3.map(([m])=>mShown[m]).join(", "), pct:pc }) }); }
   }

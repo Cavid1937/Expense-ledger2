@@ -32,7 +32,7 @@ const sExp = merchantSuggest("Acme", mem, "expense"), sInc = merchantSuggest("Ac
 ok(sExp && sExp.category === "food" && sExp.subcategory === "Snacks", "expense suggestion → food / Snacks (latest expense choice)");
 ok(sInc && sInc.category === "salary" && sExp.count === 2 && sInc.count === 1, "income suggestion → salary; counts kept separately per type");
 ok(merchantSuggest("Acme", buildMerchantMemory([mk("income", "Acme", "salary", "", "2026-08-01")]), "expense") === null, "income-only merchant → nothing suggested for an expense");
-ok(SRC.includes("m.type===wantType&&m.merchant.toLowerCase().startsWith(q)") && SRC.includes("merchantMemory[memKey(type,ml)]"), "add form dropdown and hint both read the type-matched entry");
+ok(SRC.includes("m.type===wantType&&lc(m.merchant).startsWith(q)") && SRC.includes("merchantMemory[memKey(type,ml)]"), "add form dropdown and hint both read the type-matched entry");
 
 section("5. Storage recovery");
 reset();

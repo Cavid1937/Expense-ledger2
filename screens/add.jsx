@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
-import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
+import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // ─── Recurring Hub ────────────────────────────────────────────────────────────
 // Run 12: the bill form — add a bill, or edit / pause / delete one. The due date is the user's: the bill is expected on it
@@ -127,11 +127,11 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
 
   const merchantMatches=useMemo(()=>{
     if (!merchant.trim()) return [];
-    const q=merchant.toLowerCase();
+    const q=lc(merchant);
     // Only suggest what the user previously recorded as this same transaction type
     const wantType=type==="income"?"income":"expense";
     return Object.values(merchantMemory)
-      .filter(m=>m.type===wantType&&m.merchant.toLowerCase().startsWith(q))
+      .filter(m=>m.type===wantType&&lc(m.merchant).startsWith(q))
       .slice(0,4);
   },[merchant,merchantMemory,type]);
 
@@ -278,7 +278,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
             onFocus={()=>setShowMerchantSugs(true)}/>
           {/* Merchant intelligence hint — shown when merchant is recognised */}
           {merchant.trim()&&!showMerchantSugs&&(()=>{
-            const ml=merchant.trim().toLowerCase();
+            const ml=lc(merchant.trim());
             const match=merchantMemory[memKey(type,ml)];
             if (!match||match.count<2) return null;
             const profile=calcMerchantProfile(merchant.trim(),transactions);
