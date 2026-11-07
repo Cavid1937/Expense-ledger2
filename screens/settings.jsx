@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
-import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, revealFocus, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
+import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, revealFocus, storageUsage, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIRST LAUNCH — choose the interface language. Native radio buttons: nothing is preselected, arrow keys move between
@@ -564,6 +564,7 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
   const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
   // Can this device hand a file to the share menu? (Android and iPhone: yes; many desktop browsers: no.)
   const canShareFiles=useMemo(()=>{ try { if (nativeShareHook()) return true; return typeof navigator.canShare==="function" && typeof File!=="undefined" && navigator.canShare({files:[new File(["{}"],"x.json",{type:"application/json"})]}); } catch { return false; } },[]);
+  const usage=useMemo(()=>storageUsage(),[transactions.length]);   // Run 32: measured when the page opens and when the number of entries changes
   const standalone=typeof window!=="undefined" && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone===true);
   return (
     <div className="io-page">
@@ -578,6 +579,13 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
           <span className={`io-status${protection==="on"?" ok":""}`}>{protection==="on"?<><Icon name="check" size={12}/>{t("io.on")}</>:protection==="off"?t("io.off"):"—"}</span>
         </div>
         {protection==="off"&&<button className="btn btn-ghost btn-full io-protect" onClick={onProtect}>{t("io.protectBtn")}</button>}
+        {usage&&(
+          <div data-section="storage-usage" data-level={usage.level} style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
+            <div className="list-title">{t("io.storage")}</div>
+            <div className="list-sub" style={{lineHeight:1.5}}>{t("io.storageUsed",{pct:usage.pct})}</div>
+            {usage.level!=="ok"&&<div role="alert" style={{color:usage.level==="full"?"var(--neg)":"var(--warn)",fontSize:13,marginTop:6,lineHeight:1.5}}>{t(usage.level==="full"?"io.storageFull":"io.storageWarn")}</div>}
+          </div>
+        )}
         {!standalone&&(
           <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
             <div className="list-title">{t("io.installTitle")}</div>

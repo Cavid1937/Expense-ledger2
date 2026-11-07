@@ -31,6 +31,20 @@ const KEYS_LEGACY = [
 
 function writeRaw(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); return true; } catch { return false; } }
 
+// Run 32 (backlog item 17): how full the browser's per-app storage is. Browsers allow about 5 million characters of localStorage per site (Chrome and Firefox;
+// Safari is similar); there is no exact way to ask, so this is an estimate: every key and value of this site counted in characters. Measured with synthetic data:
+// one typical entry is ~240 characters, so ~20,000 entries already use ~4.8 million. Warn at 80%, "almost full" at 95%.
+export const STORAGE_LIMIT_CHARS=5000000;
+export function storageUsage(store=(typeof localStorage!=="undefined"?localStorage:null), limit=STORAGE_LIMIT_CHARS) {
+  try {
+    if (!store) return null;
+    let chars=0;
+    for (let i=0;i<store.length;i++) { const k=store.key(i); if (k===null) continue; chars+=k.length+String(store.getItem(k)??"").length; }
+    const pct=Math.min(100,Math.round(chars/limit*100));
+    return { chars, limit, pct, level:pct>=95?"full":pct>=80?"warn":"ok" };
+  } catch { return null; }
+}
+
 // Set when stored data needed recovery on load; the App shows it once.
 let LOAD_NOTICE = null;
 // True when a recovery copy could not be written: saving is then paused so the original data is never overwritten.
