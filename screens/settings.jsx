@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
-import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, revealFocus, storageUsage, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
+import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, revealFocus, storageUsage, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIRST LAUNCH — choose the interface language. Native radio buttons: nothing is preselected, arrow keys move between
@@ -582,7 +582,7 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
         {usage&&(
           <div data-section="storage-usage" data-level={usage.level} style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
             <div className="list-title">{t("io.storage")}</div>
-            <div className="list-sub" style={{lineHeight:1.5}}>{t("io.storageUsed",{pct:usage.pct})}</div>
+            <div className="list-sub" style={{lineHeight:1.5}}>{t("io.storageUsed",{pct:fmtPct(usage.pct).replace(/%$/,"")})}</div>
             {usage.level!=="ok"&&<div role="alert" style={{color:usage.level==="full"?"var(--neg)":"var(--warn)",fontSize:13,marginTop:6,lineHeight:1.5}}>{t(usage.level==="full"?"io.storageFull":"io.storageWarn")}</div>}
           </div>
         )}
