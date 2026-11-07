@@ -301,8 +301,8 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
         {/* Run 39: the quick-add link for Apple Shortcuts, an NFC sticker or a home-screen bookmark */}
         <div className="settings-section-lbl" style={{marginTop:14}}>{t("quick.title")}</div>
         <div className="list-sub" style={{lineHeight:1.5}}>{t("quick.sub")}</div>
-        <code data-section="quick-link" style={{display:"block",overflowWrap:"anywhere",fontSize:12,background:"var(--bg-inset)",borderRadius:8,padding:"8px 10px",margin:"8px 0"}}>{PUBLIC_URL+"?add=expense&amount=4.50&merchant=Bravo&category=food"}</code>
-        <button className="btn btn-ghost btn-full" data-section="quick-copy" onClick={()=>{ const s=PUBLIC_URL+"?add=expense&amount=4.50&merchant=Bravo&category=food"; try { Promise.resolve(navigator.clipboard.writeText(s)).then(()=>showToast(t("quick.copied"))).catch(()=>showToast(t("quick.copyFail"),5000)); } catch { showToast(t("quick.copyFail"),5000); } }}>{t("quick.copy")}</button>
+        <code data-section="quick-link" style={{display:"block",overflowWrap:"anywhere",fontSize:12,background:"var(--bg-inset)",borderRadius:8,padding:"8px 10px",margin:"8px 0"}}>{PUBLIC_URL+"?add=expense&amount=5&merchant=Bravo&category=food"}</code>
+        <button className="btn btn-ghost btn-full" data-section="quick-copy" onClick={()=>{ const s=PUBLIC_URL+"?add=expense&amount=5&merchant=Bravo&category=food"; try { Promise.resolve(navigator.clipboard.writeText(s)).then(()=>showToast(t("quick.copied"))).catch(()=>showToast(t("quick.copyFail"),5000)); } catch { showToast(t("quick.copyFail"),5000); } }}>{t("quick.copy")}</button>
       </div>
       </Fold>
     </>
