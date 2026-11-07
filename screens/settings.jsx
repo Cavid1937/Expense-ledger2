@@ -516,7 +516,49 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
 
 // Import / Export: the same import, export and backup functions Settings used to hold, on a page of their own.
 // There is no import history in the data, so no "recent imports" list is shown.
-export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup, onShareBackup, protection, onProtect, onInstall }) {
+// Run 32: asks for the passphrase of an encrypted backup file before it is read (shown inside the import sheet).
+export function ImportUnlock({ filename, onUnlock, onCancel }) {
+  const [pass,setPass]=useState(""), [err,setErr]=useState(""), [busy,setBusy]=useState(false);
+  const go=async (e)=>{ e&&e.preventDefault(); if (busy||!pass) return; setBusy(true); setErr(""); const r=await onUnlock(pass); setBusy(false); if (r) { setErr(t(r==="wrong"?"enc.wrong":r==="newer"?"enc.newer":r==="unsupported"?"enc.errUnsupported":"enc.damaged")); setPass(""); } };
+  return (
+    <form onSubmit={go} data-section="import-unlock">
+      <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",marginBottom:10,overflowWrap:"anywhere"}}>{filename}</div>
+      <input className="field-input" type="password" autoComplete="off" autoFocus aria-label={t("enc.unlockPass")} placeholder={t("enc.unlockPass")} value={pass} onChange={e=>setPass(e.target.value)} aria-invalid={!!err} aria-describedby={err?"enc-unlock-err":undefined}/>
+      {err&&<div id="enc-unlock-err" role="alert" style={{color:"var(--neg)",fontSize:13,marginTop:8,lineHeight:1.5}}>{err}</div>}
+      <button type="submit" className="btn btn-primary btn-full" disabled={busy||!pass} style={{marginTop:12}}>{busy?"…":t("enc.unlock")}</button>
+      <button type="button" className="btn btn-ghost btn-full" onClick={onCancel}>{t("common.cancel")}</button>
+    </form>
+  );
+}
+
+// Run 32: optional passphrase-protected backup. Two fields, checked here; the file is made (and re-opened as a check) by onExportEncrypted.
+function EncryptedBackup({ onExportEncrypted }) {
+  const [p1,setP1]=useState(""), [p2,setP2]=useState(""), [err,setErr]=useState(""), [busy,setBusy]=useState(false);
+  const go=async (e)=>{
+    e.preventDefault(); if (busy) return;
+    if ([...p1].length<8) { setErr(t("enc.errShort")); return; }
+    if (p1!==p2) { setErr(t("enc.errMismatch")); return; }
+    setErr(""); setBusy(true);
+    const r=await onExportEncrypted(p1);
+    setBusy(false);
+    if (r==="ok") { setP1(""); setP2(""); }
+    else if (r==="unsupported") setErr(t("enc.errUnsupported"));
+    else if (r==="short") setErr(t("enc.errShort"));
+    else if (r==="failed") setErr(t("enc.errFail"));
+  };
+  return (
+    <form onSubmit={go} data-section="enc-backup" style={{marginTop:14,paddingTop:14,borderTop:"1px solid var(--rule)"}}>
+      <div className="list-title">{t("enc.title")}</div>
+      <div className="list-sub" style={{lineHeight:1.5,marginBottom:8}}>{t("enc.sub")}</div>
+      <input className="field-input" type="password" autoComplete="new-password" aria-label={t("enc.pass")} placeholder={t("enc.pass")} value={p1} onChange={e=>setP1(e.target.value)} style={{marginBottom:8}}/>
+      <input className="field-input" type="password" autoComplete="new-password" aria-label={t("enc.repeat")} placeholder={t("enc.repeat")} value={p2} onChange={e=>setP2(e.target.value)}/>
+      {err&&<div role="alert" style={{color:"var(--neg)",fontSize:13,marginTop:8,lineHeight:1.5}}>{err}</div>}
+      <button type="submit" className="btn btn-ghost btn-full" disabled={busy||!p1} style={{marginTop:10}}><Icon name="backup" size={16}/>{busy?"…":t("enc.create")}</button>
+    </form>
+  );
+}
+
+export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall }) {
   const fileRef=useRef();
   const { transactions, lastBackup, backupConfirmedAt }=state;
   const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
@@ -581,6 +623,7 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
         <button className={`btn ${canShareFiles&&onShareBackup?"btn-ghost":"btn-primary"} btn-full`} onClick={onExportJSON} style={{marginTop:canShareFiles&&onShareBackup?8:12}}><Icon name="backup" size={16}/>{t("io.createBackup")}</button>
         {lastBackup && !confirmed && <button className="btn btn-ghost btn-full" onClick={onConfirmBackup}>{t("banner.haveFile")}</button>}
         <div className="list-sub" style={{marginTop:8}}>{tn("set.jsonBackupSub",transactions.length)}</div>
+        {onExportEncrypted&&<EncryptedBackup onExportEncrypted={onExportEncrypted}/>}
       </div>
     </div>
   );

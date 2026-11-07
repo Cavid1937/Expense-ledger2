@@ -37,6 +37,7 @@
     "run32csv.test.mjs": 9,
     "run32mut.test.mjs": 4,
     "run32locale.test.mjs": 11,
+    "run32enc.test.mjs": 32,
     "run18debts.test.mjs": 20,
     "run18loanedge.test.mjs": 9,
     "run18debtlink.test.mjs": 10,
@@ -157,7 +158,8 @@
     "e2e_run32_paste.mjs": 8,
     "e2e_run32_restore.mjs": 8,
     "e2e_run32_paging.mjs": 11,
-    "e2e_run32_a11y.mjs": 8
+    "e2e_run32_a11y.mjs": 8,
+    "e2e_run32_enc.mjs": 26
   }
 }
 

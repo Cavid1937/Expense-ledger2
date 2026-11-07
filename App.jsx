@@ -6,7 +6,7 @@ import { HomePage } from "./screens/home.jsx";
 import { LedgerPage, TxnDetailSheet, TxnRow } from "./screens/ledger.jsx";
 import { AddEditOverlay, BillSheet } from "./screens/add.jsx";
 import { RecurringHub } from "./screens/recurring.jsx";
-import { ImportExportPage, InfoSheet, LanguageChooser, MorePage } from "./screens/settings.jsx";
+import { ImportExportPage, ImportUnlock, InfoSheet, LanguageChooser, MorePage } from "./screens/settings.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
@@ -1512,6 +1512,50 @@ function buildBackup(state, now=new Date().toISOString()) {
     ...(ccats.length ? { customCategories:ccats } : {}),
     ...(acc.accounts.length ? { accounts:acc.accounts, ...(acc.transfers.length ? { transfers:acc.transfers } : {}) } : {}),
     ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
+}
+
+// ─── Run 32 (backlog item 9): optional passphrase-encrypted backup ─────────────────────────────────────────────────────────────────────
+// The encrypted file wraps the normal backup text: AES-256-GCM, key from the passphrase with PBKDF2-SHA-256 (random salt, iteration count stored in the
+// file). Nothing about the passphrase is stored anywhere; a forgotten passphrase cannot be recovered. The normal (plain) backup is unchanged.
+const ENC_FORMAT="expense-ledger-encrypted-backup", ENC_VERSION=1, ENC_ITER=600000, ENC_MIN_PASS=8, ENC_AAD="expense-ledger-encrypted-backup/1";
+const b64e=(u8)=>{ let s=""; for (let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); };
+const b64d=(s)=>{ const b=atob(String(s)); const u=new Uint8Array(b.length); for (let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; };
+export function isEncryptedBackup(text) {
+  const s=String(text||""); if (!s.includes(ENC_FORMAT)) return false;
+  try { const p=JSON.parse(s.replace(/^﻿/,"")); return isPlainObject(p) && p.format===ENC_FORMAT; } catch { return false; }
+}
+async function encKey(pass, salt, iter, usage) {
+  const subtle=globalThis.crypto.subtle;
+  const base=await subtle.importKey("raw",new TextEncoder().encode(String(pass).normalize("NFC")),"PBKDF2",false,["deriveKey"]);
+  return subtle.deriveKey({ name:"PBKDF2", hash:"SHA-256", salt, iterations:iter },base,{ name:"AES-GCM", length:256 },false,usage);
+}
+export async function decryptBackupText(envelopeText, pass) {
+  const c=globalThis.crypto; if (!c || !c.subtle) return { ok:false, reason:"unsupported" };
+  let p; try { p=JSON.parse(String(envelopeText).replace(/^﻿/,"")); } catch { return { ok:false, reason:"damaged" }; }
+  if (!isPlainObject(p) || p.format!==ENC_FORMAT) return { ok:false, reason:"damaged" };
+  if (Number.isInteger(p.version) && p.version>ENC_VERSION) return { ok:false, reason:"newer" };
+  try {
+    if (p.version!==ENC_VERSION || p.kdf!=="PBKDF2-SHA256" || p.cipher!=="AES-256-GCM" || !Number.isInteger(p.iterations) || p.iterations<1000 || p.iterations>5000000) return { ok:false, reason:"damaged" };
+    const salt=b64d(p.salt), iv=b64d(p.iv), data=b64d(p.data);
+    if (salt.length!==16 || iv.length!==12 || data.length<16) return { ok:false, reason:"damaged" };
+    const key=await encKey(pass,salt,p.iterations,["decrypt"]);
+    let plain; try { plain=await c.subtle.decrypt({ name:"AES-GCM", iv, additionalData:new TextEncoder().encode(ENC_AAD) },key,data); } catch { return { ok:false, reason:"wrong" }; }   // GCM cannot tell a wrong passphrase from an altered file
+    return { ok:true, text:new TextDecoder("utf-8",{ fatal:true }).decode(plain) };
+  } catch { return { ok:false, reason:"damaged" }; }
+}
+// Encrypts, then immediately decrypts the result and compares, so a file that could not be opened again is never handed out.
+export async function encryptBackupText(text, pass, iterations=ENC_ITER) {
+  const c=globalThis.crypto; if (!c || !c.subtle) return { ok:false, reason:"unsupported" };
+  if (typeof pass!=="string" || [...pass].length<ENC_MIN_PASS) return { ok:false, reason:"short" };
+  try {
+    const salt=c.getRandomValues(new Uint8Array(16)), iv=c.getRandomValues(new Uint8Array(12));
+    const key=await encKey(pass,salt,iterations,["encrypt"]);
+    const ct=new Uint8Array(await c.subtle.encrypt({ name:"AES-GCM", iv, additionalData:new TextEncoder().encode(ENC_AAD) },key,new TextEncoder().encode(String(text))));
+    const out=JSON.stringify({ format:ENC_FORMAT, version:ENC_VERSION, kdf:"PBKDF2-SHA256", iterations, cipher:"AES-256-GCM", salt:b64e(salt), iv:b64e(iv), data:b64e(ct) });
+    const back=await decryptBackupText(out,pass);
+    if (!back.ok || back.text!==String(text)) return { ok:false, reason:"failed" };
+    return { ok:true, text:out };
+  } catch { return { ok:false, reason:"failed" }; }
 }
 
 function buildCsv(transactions) {
@@ -3263,13 +3307,43 @@ function AppInner() {
     const reader=new FileReader();
     reader.onerror=()=>setImportPending({ error:t("import.readFailed"), filename:file.name });
     reader.onload=e=>{
-      const plan=planImportWithCats(String(e.target.result||""), file.name||"");
+      const raw=String(e.target.result||"");
+      if (isEncryptedBackup(raw)) { setImportPending({ needPass:true, text:raw, filename:file.name }); return; }   // Run 32: asks for the passphrase first
+      const plan=planImportWithCats(raw, file.name||"");
       if (!plan.ok) { setImportPending({ error:plan.error, filename:file.name }); return; }
       setSkipDup(true);
       setImportPending({ ...plan, dupCount:countSuspectedDuplicates(stateRef.current.transactions, plan.transactions) });
     };
     reader.readAsText(file);
   },[]);
+
+  // Run 32: returns null when the file was opened (the normal review sheet then shows), otherwise the reason, so the sheet can say why.
+  const unlockImport=useCallback(async (pass)=>{
+    const p=importPending; if (!p || !p.needPass) return "damaged";
+    const r=await decryptBackupText(p.text,pass);
+    if (!r.ok) return r.reason;
+    const plan=planImportWithCats(r.text,"backup.json");
+    if (!plan.ok) { setImportPending({ error:plan.error, filename:p.filename }); return null; }
+    setSkipDup(true);
+    setImportPending({ ...plan, filename:p.filename, dupCount:countSuspectedDuplicates(stateRef.current.transactions, plan.transactions) });
+    return null;
+  },[importPending]);
+
+  const exportEncrypted=useCallback(async (pass)=>{
+    const now=new Date().toISOString();
+    const r=await encryptBackupText(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),accountData:readAccounts()},now),null,2),pass);
+    if (!r.ok) return r.reason;
+    const name=`ledger-backup-encrypted-${today()}.json`, native=nativeShareHook();
+    if (native) {
+      const s=await shareViaNative(native,name,r.text,"application/json");
+      if (s==="failed") { showToast(t("io.shareFailed"),6000); return "shown"; }
+      if (s!=="shared") return "shown";
+    } else downloadFile(r.text,"application/json",name);
+    setState(s=>({...s,lastBackup:now}));
+    setBackupDismissed(false);
+    showToast(t("enc.created"),6000);
+    return "ok";
+  },[state,showToast]);
 
   // mode: "merge" · "replace" · "settings" (a file with no usable transactions: apply its settings, keep every transaction).
   const commitImport=useCallback((mode)=>{
@@ -3425,7 +3499,7 @@ function AppInner() {
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
           {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
-            onShareBackup={shareBackup} protection={protection} onProtect={()=>askProtection(true)}
+            onShareBackup={shareBackup} onExportEncrypted={exportEncrypted} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
             onConfirmBackup={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}/>}
         </main>
@@ -3461,8 +3535,10 @@ function AppInner() {
           <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setImportPending(null)}>
             <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("import.dialogLabel")}>
               <div className="sheet-grip"><div className="sheet-handle"/></div>
-              <div className="sheet-title">{t("import.title")}</div>
-              {importPending.error?(
+              <div className="sheet-title">{t(importPending.needPass?"enc.unlockTitle":"import.title")}</div>
+              {importPending.needPass?(
+                <ImportUnlock filename={importPending.filename} onUnlock={unlockImport} onCancel={()=>setImportPending(null)}/>
+              ):importPending.error?(
                 <>
                   <div role="alert" style={{background:"var(--neg-bg)",color:"var(--neg)",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:13,lineHeight:1.55}}>{importPending.error}</div>
                   <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>setImportPending(null)}>{t("common.ok")}</button>
