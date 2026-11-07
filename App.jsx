@@ -610,7 +610,9 @@ export function debtCashFlow(list, mon) {
 function refundPart(data, refundFor) { const id=refundForId(refundFor), c=id && CATEGORIES.find(x=>x.id===id); return data && data.type==="income" && data.category==="refund" && c && !c.income ? { refundFor:id } : {}; }
 export function refundForId(v) { return typeof v==="string" && /^[a-z][a-z0-9_]{1,31}$/.test(v) ? v : ""; }
 function netRefunds(rows) {
-  const refunds=rows.filter(t=>t && t.type==="income" && t.category==="refund" && refundForId(t.refundFor) && /^\d{4}-\d{2}/.test(String(t.date)));
+  // A refund dated after today has not happened yet: until its day it stays expected money in and lowers nothing (spent-so-far stays true).
+  const todayS=localDateStr(new Date());
+  const refunds=rows.filter(t=>t && t.type==="income" && t.category==="refund" && refundForId(t.refundFor) && /^\d{4}-\d{2}-\d{2}/.test(String(t.date)) && String(t.date).slice(0,10)<=todayS);
   if (!refunds.length) return rows;
   const out=rows.slice(), drop=new Set(), cents=(x)=>Math.round((Number(x)||0)*100);
   refunds.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(r=>{

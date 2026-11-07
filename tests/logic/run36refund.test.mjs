@@ -1,6 +1,6 @@
 // Run 36 (2026-11-07): a refund marked "Refund of <expense category>" lowers that category's spending in the refund's month (never below
 // zero) instead of counting as money in. Expected values worked out by hand before running. Synthetic data only.
-import { H, ok, section, eq, reset, T, finish } from "./lib.mjs";
+import { H, ok, section, eq, reset, T, finish, setNow } from "./lib.mjs";
 const { forSpending, calcMonthSummary, calcCategorySpend, calcSafeToSpend, normaliseTxn, migrateAndLoad, buildCsv } = H;
 reset();
 const now = new Date(2026, 9, 31);
@@ -65,6 +65,15 @@ ok(migrateAndLoad().transactions[0].refundFor === "u_abc123", "a user's own cate
 const csv = buildCsv([r(30, "2026-10-10", "food")]);
 const lines = csv.replace(/^﻿/, "").split("\r\n");
 ok(/"DebtRepayment","RefundOf"$/.test(lines[0]) && /"Food & Dining"$|"Food"$/.test(lines[1]), "CSV: RefundOf is the last column and names the category", lines);
+section("R36-7b. A refund dated in the future lowers nothing until its day");
+setNow(2026, 9, 13);   // today = 13 Oct 2026
+L = [e("food", 100, "2026-10-03"), r(30, "2026-10-20", "food")];
+const fut = calcMonthSummary(forSpending(L), "2026-10", "2026-09", new Date(2026, 9, 13));
+ok(cat(L).food === 100 && fut.curIn === 0 && forSpending(L).some((x) => x.category === "refund" && x.amount === 30), "on 13 Oct a refund dated 20 Oct leaves food at 100 and is not yet money in (still listed for later)", [cat(L), fut.curIn]);
+setNow(2026, 9, 25);
+ok(cat(L).food === 70, "on 25 Oct it has happened: food 70", cat(L));
+setNow(2026, 9, 13);
+
 section("R36-8. How much refunds lowered spending (the Analytics note)");
 const { refundsNetted } = H;
 ok(refundsNetted([e("food", 100, "2026-10-03"), r(30, "2026-10-10", "food")], "2026-10") === 30 && refundsNetted([e("food", 20, "2026-10-02"), r(50, "2026-10-04", "food")], "2026-10") === 20 && refundsNetted([e("food", 100, "2026-09-20"), r(30, "2026-10-05", "food")], "2026-10") === 0, "30 when fully used; 20 when only 20 was spent; 0 when nothing was spent that month");
