@@ -73,6 +73,7 @@
     "run36ids.test.mjs": 6,
     "run37io.test.mjs": 13,
     "run38.test.mjs": 11,
+    "run39fx.test.mjs": 25,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -177,7 +178,8 @@
     "e2e_run36.mjs": 22,
     "e2e_run37_roundtrip.mjs": 13,
     "e2e_run37_save.mjs": 11,
-    "e2e_run38.mjs": 29
+    "e2e_run38.mjs": 29,
+    "e2e_run39_fx.mjs": 15
   }
 }
 

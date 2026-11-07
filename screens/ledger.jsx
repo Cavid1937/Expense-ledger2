@@ -399,6 +399,8 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
             [t("add.recurring"), txn.recurring?(txn.recurFreq?t("freqCap."+txn.recurFreq):t("common.yes")):t("common.no")],
             ...(txn.wallet?[[t(txn.type==="income"?"wallet.labelIn":"wallet.label"), walletName(txn.wallet)]]:[]),
             ...(txn.type==="income"&&txn.category==="refund"&&txn.refundFor?[[t("add.refundFor"), catName(txn.refundFor)]]:[]),
+            // Run 39: what was really paid, in which currency and at which rate
+            ...(txn.fx&&txn.fx.cur?[[t("fx.detailLabel"), t("fx.detail",{ amt:Number(txn.fx.amt).toFixed(2), cur:txn.fx.cur, rate:String(txn.fx.rate), date:txn.fx.on?fmtDate(txn.fx.on):"", src:t(txn.fx.src==="manual"?"fx.srcShortOwn":"fx.srcShortCbar") })]]:[]),
           ].map(([lbl,val])=>(
             <div key={lbl} style={{background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px"}}>
               <div style={{fontSize:12,fontWeight:500,color:"var(--ink-3)",marginBottom:3}}>{lbl}</div>

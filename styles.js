@@ -178,6 +178,8 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .more-toggle-sub{flex:1;min-width:0;font-size:12px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .more-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .amount-cur{font-family:var(--font);font-size:15px;font-weight:600;color:var(--ink-3);white-space:nowrap;position:relative;top:-2px}
+/* Run 39: the currency sign is a button when other currencies can be used (min 44px tall to tap) */
+.amount-cur-btn{background:var(--bg-warm);border:1px solid var(--rule);border-radius:999px;padding:0 10px;min-height:44px;min-width:44px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;color:var(--ink-2);top:0}
 input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
 input[type=number]{-moz-appearance:textfield}
 /* Type toggle */

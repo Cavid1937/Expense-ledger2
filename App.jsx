@@ -566,6 +566,8 @@ function normaliseTxn(t, opts={}) {
     ...(accId(t.account) ? { account:accId(t.account) } : {}),
     // Run 36: which expense category a refund gives money back to. Optional, same rule; kept only on income entries.
     ...(normType(t.type)==="income" && refundForId(t.refundFor) ? { refundFor:refundForId(t.refundFor) } : {}),
+    // Run 39: what was really paid in another currency. Optional, same rule; the manat amount above stays the one every figure uses.
+    ...(cleanFx(t.fx) ? { fx:cleanFx(t.fx) } : {}),
   };
 }
 // Run 22: a trip is a short free-text label (max 40 characters) on ordinary entries. Anything that is not text gives no trip.
@@ -620,6 +622,61 @@ export function debtCashFlow(list, mon) {
 // below zero. The refund takes from the latest entries dated on or before it first, then later ones in the month; an entry brought to
 // zero leaves the spending views. Any part with nothing left to lower stays as money in, so money in minus spending always equals the
 // raw cash difference (nothing is counted twice or lost). Refunds without refundFor behave exactly as before. Nothing is ever inferred.
+// ─── Run 39: an entry paid in another currency (owner: "check these possibilities"; source verified 7 Nov 2026) ─────────────────────────────
+// The ledger's own amount stays in manat (every total, budget and report uses it, unchanged). The entry may also carry fx = what was really
+// paid: { cur:"EUR", amt:100, rate:1.90371 (manat per 1 unit), on:"2026-11-06" (the rate's day), src:"cbar" | "manual" }.
+// Rates: the Central Bank of Azerbaijan's official daily rate, through Frankfurter (api.frankfurter.dev, provider "cbar": free, no key, allows
+// browser requests). Only the currency code and the date are sent. Offline or no answer: the person types the rate. Offered only when the
+// ledger currency is the manat.
+export const FX_CODES=["USD","EUR","RUB","TRY","GBP","GEL","AED","KZT","UAH","CNY","CHF","JPY"];
+export const fxBaseOk=(currency)=>currency==="₼" || currency==="AZN";
+export function cleanFx(v) {
+  if (!isPlainObject(v)) return null;
+  const cur=typeof v.cur==="string" && /^[A-Z]{3}$/.test(v.cur) && v.cur!=="AZN" ? v.cur : null;
+  const amt=typeof v.amt==="number" ? v.amt : NaN, rate=typeof v.rate==="number" ? v.rate : NaN;
+  if (!cur || !(amt>0) || amt>1e10 || Number(amt.toFixed(2))!==amt || !(rate>0) || rate>1e5) return null;
+  return { cur, amt, rate:Number(rate.toPrecision(6)), on:isValidDateStr(v.on)?v.on:"", src:v.src==="manual"?"manual":"cbar" };
+}
+// Manat amount = foreign amount × rate, rounded half-up to the qəpik, in whole numbers (no floating-point drift): 100.00 EUR × 1.90371 = 190.37.
+export function fxToBase(amt, rate) {
+  const cents=BigInt(Math.round(amt*100)), micro=BigInt(Math.round(rate*1e6));
+  const prod=cents*micro, q=prod/1000000n, r=prod%1000000n;
+  return Number(q+(r*2n>=1000000n?1n:0n))/100;
+}
+const FX_CACHE_KEY=KEY+"__fxcache";
+function readFxCache() { try { const v=JSON.parse(localStorage.getItem(FX_CACHE_KEY)||"{}"); return isPlainObject(v) ? v : {}; } catch { return {}; } }
+function writeFxCache(c) { try { const keys=Object.keys(c); if (keys.length>300) keys.slice(0,keys.length-300).forEach(k=>delete c[k]); localStorage.setItem(FX_CACHE_KEY,JSON.stringify(c)); } catch {} }
+// -> { rate, on } or throws. A day without a published rate (weekend, holiday) gets the latest earlier one, and `on` says which day that was.
+export async function fetchCbarRate(cur, date, fetchFn=(typeof fetch!=="undefined"?fetch:null)) {
+  if (!/^[A-Z]{3}$/.test(String(cur)) || !fetchFn) throw new Error("bad");
+  const today=localDateStr(new Date()), day=isValidDateStr(date) && date<=today ? date : today, key=cur+"|"+day, cache=readFxCache();
+  if (cache[key] && cache[key].rate>0) return cache[key];
+  // Asked as "1 <cur> = ? AZN": the answer is the Central Bank's own published figure (1 USD = 1.7, 1 EUR = 1.9037, 1 RUB = 0.02084), checked
+  // against cbar.az on 7 Nov 2026. (Asking the other way round gives a rounded inverse: 1 / 0.58824 = 1.69999, one qəpik off on 1,000 USD.)
+  const res=await fetchFn(`https://api.frankfurter.dev/v2/rates?base=${cur}&providers=cbar&quotes=AZN&date=${day}`);
+  if (!res || !res.ok) throw new Error("http");
+  const data=await res.json(), rec=Array.isArray(data) ? data.find(x=>x && x.quote==="AZN") : data;
+  if (!rec || rec.quote!=="AZN" || !(typeof rec.rate==="number" && rec.rate>0 && rec.rate<1e5)) throw new Error("none");
+  const out={ rate:Number(rec.rate.toPrecision(6)), on:isValidDateStr(rec.date)?rec.date:day };
+  cache[key]=out; writeFxCache(cache);
+  return out;
+}
+// ─── Run 39: quick-add link (owner: frictionless entry; Apple Shortcuts / NFC tag / home-screen bookmark) ─────────────────────────────────────
+// https://expense-ledger2.vercel.app/?add=expense&amount=4.50&merchant=Coffee&category=food opens the add form already filled in. It never saves
+// by itself (the person presses Save), every value is checked, and unknown words fall back to the normal defaults.
+export const PUBLIC_URL="https://expense-ledger2.vercel.app/";
+export function parseQuickAdd(search) {
+  let q; try { q=new URLSearchParams(String(search||"")); } catch { return null; }
+  const type=String(q.get("add")||"").toLowerCase();
+  if (type!=="expense" && type!=="income") return null;
+  const raw=String(q.get("amount")||"").trim().replace(",",".");
+  const amount=/^\d{1,9}(\.\d{1,2})?$/.test(raw) && Number(raw)>0 ? Number(raw) : "";
+  const catRaw=String(q.get("category")||"").slice(0,40), cid=catRaw ? resolveCategory(catRaw) : "";
+  const c=cid && CATEGORIES.find(x=>x.id===cid && !!x.income===(type==="income"));
+  const clip=(v,n)=>String(v||"").replace(/[\u0000-\u001f\u007f]+/g," ").trim().slice(0,n);
+  const date=String(q.get("date")||"");
+  return { type, amount, category:c ? c.id : (type==="income"?"salary":"food"), merchant:clip(q.get("merchant"),80), note:clip(q.get("note"),200), ...(isValidDateStr(date)?{ date }:{}) };
+}
 // Only an income entry in "Refunds" can name an expense category it refunds; anything else stores no field.
 function refundPart(data, refundFor) { const id=refundForId(refundFor), c=id && CATEGORIES.find(x=>x.id===id); return data && data.type==="income" && data.category==="refund" && c && !c.income ? { refundFor:id } : {}; }
 export function refundForId(v) { return typeof v==="string" && /^[a-z][a-z0-9_]{1,31}$/.test(v) ? v : ""; }
@@ -1479,9 +1536,13 @@ async function checkForUpdate(currentVersion, fetchHtml) {
 // rejects on any failure. Only "saved" is ever reported as saved.
 export const nativeSaveHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeSave==="function") ? window.__ledgerNativeSave : null;
 async function saveViaNative(native, filename, text, mime) {
-  try { const r=await native(filename, text, mime); return r && r.status==="saved" ? { status:"saved", where:typeof r.where==="string" ? r.where.slice(0,200) : "" } : r && r.status==="cancelled" ? { status:"cancelled" } : { status:"failed" }; }
+  try { const r=await native(filename, text, mime); return r && r.status==="saved" ? { status:"saved", where:typeof r.where==="string" ? r.where.slice(0,200) : "", uri:typeof r.uri==="string" && /^content:\/\//.test(r.uri) ? r.uri : "", mime } : r && r.status==="cancelled" ? { status:"cancelled" } : { status:"failed" }; }
   catch { return { status:"failed" }; }
 }
+// Run 37b (owner: "I still can't see downloaded files anywhere"): after a save the message offers "Open" (the file itself, through the phone),
+// and Import / Export offers "Show my Downloads". Both exist only in the Android app (window.__ledgerNativeOpen / __ledgerNativeDownloads).
+export const nativeOpenHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeOpen==="function") ? window.__ledgerNativeOpen : null;
+export const nativeDownloadsHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeDownloads==="function") ? window.__ledgerNativeDownloads : null;
 export function downloadFile(content, mime, filename) {
   const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const a=document.createElement("a"); a.href=url; a.download=filename;
@@ -1817,10 +1878,10 @@ function buildCsv(transactions) {
   // Run 16: "Wallet" is the last column, so the columns before it did not move (older readers and the older import still work).
   // Run 32: Account (its name), LoanInterest (the interest part of a loan instalment; "unknown" when the split was not given) and DebtRepayment ("yes" for a person-to-person
   // repayment entry) are appended after "Trip", so earlier columns did not move. They are for the user's spreadsheet: this CSV is NOT a backup and the import ignores them.
-  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip","Account","LoanInterest","DebtRepayment","RefundOf"]];   // Run 36: "RefundOf" appended last, earlier columns unchanged   // Run 22: "Trip" is appended after "Wallet"
+  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip","Account","LoanInterest","DebtRepayment","RefundOf","PaidAmount","PaidCurrency","Rate"]];   // Run 36: "RefundOf" appended last; Run 39: what was paid in another currency (earlier columns unchanged)   // Run 22: "Trip" is appended after "Wallet"
   transactions.forEach(t=>{ const lr=loanRef(t.loan);
     rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category,walletId(t.wallet),tripName(t.trip),
-      accountName(t.account),lr ? (lr.interest===null ? "unknown" : lr.interest.toFixed(2)) : "",debtLinkRef(t.debtLink) ? "yes" : "",refundForId(t.refundFor) ? (CAT(t.refundFor)?.name||t.refundFor) : ""]); });
+      accountName(t.account),lr ? (lr.interest===null ? "unknown" : lr.interest.toFixed(2)) : "",debtLinkRef(t.debtLink) ? "yes" : "",refundForId(t.refundFor) ? (CAT(t.refundFor)?.name||t.refundFor) : "",...(cleanFx(t.fx) ? [cleanFx(t.fx).amt.toFixed(2),cleanFx(t.fx).cur,String(cleanFx(t.fx).rate)] : ["","",""])]); });
   // Formula-injection guard: a cell starting with = + - @ tab or CR would run as a formula in a spreadsheet, so it gets a
   // leading apostrophe (shown as text). parseCsvImport removes it again, so the app's own CSV round trip stays exact.
   const safe=(v)=>{ const s=String(v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; };
@@ -3249,22 +3310,22 @@ function AppInner() {
   // Undo snackbars (Run 8): a snackbar of the same kind replaces the open one (more deletions share one "N deleted" undo);
   // a different kind waits until the open one's undo window ends, so an undo is never silently taken away.
   const snackQueue=useRef([]), snackKind=useRef(null);
-  const openSnack=useCallback(({msg,onUndo,ms,kind})=>{
+  const openSnack=useCallback(({msg,onUndo,ms,kind,label})=>{
     clearTimeout(snackTimer.current);
-    setSnackbar({msg,onUndo,ms}); snackActive.current=true; snackKind.current=kind;
+    setSnackbar({msg,onUndo,ms,label}); snackActive.current=true; snackKind.current=kind;
     snackTimer.current=setTimeout(()=>closeSnack(),ms);
   },[]);
   const closeSnack=useCallback(()=>{
     clearTimeout(snackTimer.current); setSnackbar(null); snackActive.current=false; snackKind.current=null;
     const next=snackQueue.current.shift(); if (next) setTimeout(()=>openSnack(next),250);
   },[]);
-  const showSnackbar=useCallback((msg,onUndo,ms=4000,kind="other")=>{
+  const showSnackbar=useCallback((msg,onUndo,ms=4000,kind="other",label="")=>{   // Run 37b: label = the button's text ("Open"); default "Undo"
     // Run 16: the undo after ADDING an entry is the least important one. It gives way at once to any other undo (a delete, an
     // import ...) instead of making that one wait, and it never waits behind another undo: a plain message is shown instead.
-    if (snackActive.current && snackKind.current==="add" && kind!=="add") { openSnack({msg,onUndo,ms,kind}); return; }
+    if (snackActive.current && snackKind.current==="add" && kind!=="add") { openSnack({msg,onUndo,ms,kind,label}); return; }
     if (kind==="add" && snackActive.current && snackKind.current!=="add") { showToast(msg); return; }
-    if (snackActive.current && snackKind.current!==kind) { snackQueue.current.push({msg,onUndo,ms,kind}); return; }
-    openSnack({msg,onUndo,ms,kind});
+    if (snackActive.current && snackKind.current!==kind) { snackQueue.current.push({msg,onUndo,ms,kind,label}); return; }
+    openSnack({msg,onUndo,ms,kind,label});
   },[showToast]);
 
   // Run 34: going back out of a sub-page (Recurring, Import / Export, Debts) slides the page away first (~0.19 s) instead of cutting; every other switch is as before.
@@ -3394,8 +3455,8 @@ function AppInner() {
     return { ...s, transactions:r.transactions, bills:r.bills };
   };
   const addTransaction=useCallback((txn)=>{
-    const { billChoice, wallet, trip, account, refundFor, ...data }=txn, id=Date.now()+Math.random();
-    const rf=refundPart(data,refundFor);
+    const { billChoice, wallet, trip, account, refundFor, fx, ...data }=txn, id=Date.now()+Math.random();
+    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}) };   // Run 39: fx kept only when valid
     // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
     // bill the entry may have created, and refuses if something else changed in the meantime, like the other undo windows.
     const before=stateRef.current;
@@ -3421,10 +3482,10 @@ function AppInner() {
     const dd=readDebts(), d=dd.debts.find(x=>x.id===tx.debtLink.debtId); return !!(d && d.payments.some(p=>p.id===tx.debtLink.paymentId)); };
   const updateTransaction=useCallback((id,txn)=>{
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
-    const { billChoice, wallet, trip, account, refundFor, ...data }=txn;
-    const rf=refundPart(data,refundFor);
+    const { billChoice, wallet, trip, account, refundFor, fx, ...data }=txn;
+    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}) };   // Run 39: switching back to manat removes fx
     // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored). Run 22: same for the trip. Run 36: same for "refund of".
-    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, refundFor:_rf, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}), ...rf }; })},id,billChoice));
+    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, refundFor:_rf, fx:_fx, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}), ...rf }; })},id,billChoice));
     showToast(t("toast.updated"));
   },[showToast]);
 
@@ -3594,6 +3655,19 @@ function AppInner() {
     return ()=>{ try { if (typeof off==="function") off(); } catch { /* same */ } };
   },[openAdd,showToast]);
 
+  // Run 39: a quick-add link opens the add form once (after the first-launch language choice), then the address is cleaned so a reload does not reopen it.
+  const quickDone=useRef(false);
+  useEffect(()=>{
+    if (quickDone.current || !state.language) return;
+    quickDone.current=true;
+    try {
+      const p=parseQuickAdd(window.location.search); if (!p) return;
+      window.history.replaceState(window.history.state,"",window.location.pathname+window.location.hash);
+      openAdd({ type:p.type, amount:p.amount, category:p.category, subcategory:"", merchant:p.merchant, note:p.note, ...(p.date?{ date:p.date }:{}), recurring:false, recurFreq:null });
+      showToast(t("quick.opened"),5000);
+    } catch { /* an unreadable address is simply ignored */ }
+  },[state.language,openAdd,showToast]);
+
   // Run 10: storage protection (asked once at start; again from Import / Export, where a tap counts as a user gesture) and
   // the browser's own "install" offer, kept for the Install button. Neither is stored in the ledger data.
   const [protection, setProtection] = useState("unknown");
@@ -3625,13 +3699,15 @@ function AppInner() {
     return ()=>{ window.removeEventListener("beforeinstallprompt",onBip); window.removeEventListener("appinstalled",onInstalled); };
   },[askProtection]);
 
+  // Run 37b: "Saved to Download/…" with an Open button (the phone opens the file with an app that can show it).
+  const savedNotice=(r)=>{ const open=nativeOpenHook(); showSnackbar(t("io.savedTo",{where:r.where||"Downloads"}), open&&r.uri ? ()=>{ Promise.resolve(open(r.uri,r.mime||"application/json")).catch(()=>showToast(t("io.openFailed"),5000)); } : null, 10000, "saved", open&&r.uri ? t("io.openFile") : ""); };
   // Run 37: one complete backup text for every way of saving it (download, Downloads folder, share, encrypted).
   const backupText=(now)=>JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),preferences:collectPrefs(state),accountData:readAccounts()},now),null,2);
   const exportCSV=useCallback(async ()=>{
     const save=nativeSaveHook();
     if (save) {   // Run 37: the Android app saves the spreadsheet into Downloads
       const r=await saveViaNative(save,`ledger-${today()}.csv`,buildCsv(state.transactions),"text/csv");
-      if (r.status==="saved") showToast(t("io.savedTo",{where:r.where||"Downloads"}),6000);
+      if (r.status==="saved") savedNotice(r);
       else if (r.status==="failed") showToast(t("io.saveFailed"),6000);
       return;
     }
@@ -3658,7 +3734,7 @@ function AppInner() {
       if (r.status!=="saved") return;
       setState(s=>({...s,lastBackup:now,backupConfirmedAt:new Date().toISOString()}));
       setBackupDismissed(false);
-      showToast(t("io.savedTo",{where:r.where||"Downloads"}),7000);
+      savedNotice(r);
       return;
     }
     if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: an older native shell without the save hook → the hand-over, never a dead download link
@@ -3723,7 +3799,7 @@ function AppInner() {
       if (s.status!=="saved") return "shown";
       setState(st=>({...st,lastBackup:now,backupConfirmedAt:new Date().toISOString()}));
       setBackupDismissed(false);
-      showToast(t("io.savedTo",{where:s.where||"Downloads"}),7000);
+      savedNotice(s);
       return "ok";
     }
     if (native) {
@@ -3817,7 +3893,7 @@ function AppInner() {
         {snackbar&&(
           <div className="snackbar" role="status" key={snackbar.msg} style={{"--snack-out":Math.max(0,(snackbar.ms||4000)-220)+"ms"}}>
             <span>{snackbar.msg}</span>
-            <button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();closeSnack();}}>{t("common.undo")}</button>
+            {snackbar.onUndo&&<button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();closeSnack();}}>{snackbar.label||t("common.undo")}</button>}
           </div>
         )}
         {recoveryNotice&&(

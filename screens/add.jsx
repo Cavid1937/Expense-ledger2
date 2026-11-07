@@ -1,7 +1,8 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
-import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats } from "../App.jsx";
+import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase } from "../App.jsx";
+import { Collapse } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // ─── Recurring Hub ────────────────────────────────────────────────────────────
@@ -67,7 +68,16 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [askBill, setAskBill] = useState(null);   // a same-name bill exists: ask before making another one
   const isEditing=!!editId;
   const [type,     setType]     = useState(prefill?.type||"expense");
-  const [amount,   setAmount]   = useState(prefill?.amount?String(prefill.amount):"");
+  // Run 39: paid in another currency. fxCur "" = the ledger's own currency. An entry that already has fx opens in that currency and rate.
+  const fxOk=fxBaseOk(currency), pfx=fxOk?cleanFx(prefill?.fx):null;
+  const [amount,   setAmount]   = useState(pfx?String(pfx.amt):prefill?.amount?String(prefill.amount):"");
+  const [fxCur, setFxCur]=useState(pfx?pfx.cur:"");
+  const [fxPick, setFxPick]=useState(false);
+  const [fxRate, setFxRate]=useState(pfx?{ rate:pfx.rate, on:pfx.on, src:pfx.src }:null);
+  const [fxState, setFxState]=useState(pfx?"ok":"idle");   // idle | loading | ok | fail
+  const [fxOwn, setFxOwn]=useState(!!(pfx&&pfx.src==="manual"));   // the person types the rate
+  const [fxManual, setFxManual]=useState(pfx&&pfx.src==="manual"?String(pfx.rate):"");
+  const fxKey=useRef(pfx?pfx.cur+"|"+(prefill?.date||""):"");
   // Run 36: a new entry starts on the first category the user shows (Food / Salary unless they reordered or hid them).
   // Run 38: the picker order = the user's own order if they arranged one, otherwise most used in the last 90 days first (fixed while the form is open).
   const deskOrder=(ty,keep)=>{ const prefs=readCatPrefs(), inc=ty==="income", l=pickerCats(inc,prefs,keep); return hasManualOrder(prefs,inc) ? l : frequentFirst(l,transactions); };
@@ -117,11 +127,11 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
   // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
   // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
-  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account, refundFor }).current;
+  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account, refundFor, fxCur }).current;
   const [askDiscard, setAskDiscard] = useState(false);
   const defaultCat=type===initial.type ? initial.catId : firstCat(type);
   const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
-    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account || refundFor!==initial.refundFor;
+    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account || refundFor!==initial.refundFor || fxCur!==initial.fxCur;
   const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
 
   const expCats=CATEGORIES.filter(c=>!c.income);
@@ -167,10 +177,28 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
     );
   },[amount,catId,note,transactions,isEditing]);
 
+  // Run 39: the rate for the entry's day, looked up once per currency and day (or typed by the person).
+  useEffect(()=>{
+    if (!fxCur) return undefined;
+    const k=fxCur+"|"+date; if (k===fxKey.current && fxRate) return undefined;
+    fxKey.current=k; let alive=true; setFxState("loading");
+    fetchCbarRate(fxCur,date).then(r=>{ if (alive) { setFxRate({ ...r, src:"cbar" }); setFxState("ok"); } }).catch(()=>{ if (alive) { setFxRate(null); setFxState("fail"); } });
+    return ()=>{ alive=false; };
+  },[fxCur,date]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const fxManualRate=(()=>{ const s=String(fxManual||"").trim().replace(",","."); if (!/^\d{1,6}(\.\d{1,6})?$/.test(s)) return null; const n=Number(s); return n>0 ? n : null; })();   // a rate may have up to 6 decimals
+  const fxEff=!fxCur ? null : (fxOwn||fxState==="fail") ? (fxManualRate>0 && fxManualRate<=1e5 ? { rate:Number(fxManualRate.toPrecision(6)), on:isValidDateStr(date)?date:today(), src:"manual" } : null) : (fxState==="ok" ? fxRate : null);
+  const fxAmt=fxCur ? formMoney(amount,{positive:true}) : null;
+  const fxBase=fxEff && fxAmt!==null ? fxToBase(fxAmt,fxEff.rate) : null;
+
   const submit=(override)=>{
-    const amt=formMoney(amount,{positive:true});
-    if (amt===null) { setErr(t("add.errAmount")); return; }
+    const typed=formMoney(amount,{positive:true});
+    if (typed===null) { setErr(t("add.errAmount")); return; }
     if (!isValidDateStr(String(date||""))) { setErr(t("add.errDate")); return; }
+    // Run 39: in another currency the ledger keeps the manat amount and remembers what was paid and at which rate
+    if (fxCur && !fxEff) { setErr(t(fxState==="loading"?"fx.waitRate":"fx.needRate")); return; }
+    const amt=fxCur ? fxToBase(typed,fxEff.rate) : typed;
+    if (!(amt>0)) { setErr(t("add.errAmount")); return; }
+    const fx=fxCur ? { cur:fxCur, amt:typed, rate:fxEff.rate, on:fxEff.on, src:fxEff.src } : null;
     // S0: Preserve isActive when editing — never silently reactivate a paused recurring
     const isActive=isEditing?(prefill?.isActive!==undefined?prefill.isActive:true):true;
     // A bill that exists always links (also while old-style groups remain); only "a new bill" is held back until none remain.
@@ -181,7 +209,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
       const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
       if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
     }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",fx,
       billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
@@ -209,9 +237,31 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
               onPaste={e=>{ const p=(e.clipboardData&&e.clipboardData.getData("text"))||""; if (!p) return; e.preventDefault(); setAmount(cleanMoneyText(p,{paste:true})); setErr(""); }}
               min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}
               style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
-            <span className="amount-cur">{currency}</span>
+            {fxOk
+              ? <button type="button" className="amount-cur amount-cur-btn" data-section="fx-cur" aria-expanded={fxPick} aria-label={t("fx.choose")+": "+(fxCur||currency)} onClick={e=>{ e.stopPropagation(); setFxPick(p=>!p); }}>{fxCur||currency} <Icon name={fxPick?"chevUp":"chevDown"} size={11}/></button>
+              : <span className="amount-cur">{currency}</span>}
           </div>
         </div>
+        {/* Run 39: paid in another currency — choose it; the official rate of that day turns it into manat */}
+        <Collapse open={fxPick} id="fx-pick">
+          <div className="sub-strip" role="radiogroup" aria-label={t("fx.choose")} data-section="fx-list" style={{flexWrap:"wrap",overflowX:"visible",justifyContent:"center",marginBottom:8}}>
+            {["",...FX_CODES].map(c=>(<button key={c||"base"} type="button" role="radio" aria-checked={fxCur===c} data-fx={c||"base"} className={`sub-chip${fxCur===c?" sel":""}`} onClick={()=>{ setFxCur(c); setFxPick(false); if (!c) { setFxOwn(false); setFxState("idle"); } }}>{c||currency}</button>))}
+          </div>
+        </Collapse>
+        {fxCur&&(
+          <div className="list-sub" data-section="fx-line" role="status" style={{textAlign:"center",marginBottom:10,lineHeight:1.5}}>
+            {fxBase!==null ? t("fx.line",{ base:fmt(fxBase,currency), cur:fxCur, rate:String(fxEff.rate), date:fxEff.on?fmtDate(fxEff.on):"" }) : fxState==="loading" ? t("fx.loading") : fxState==="ok"&&!fxOwn ? t("fx.rateOnly",{ cur:fxCur, rate:String(fxRate.rate), date:fxRate.on?fmtDate(fxRate.on):"" }) : ""}
+            {fxEff&&<div style={{fontSize:11}}>{t(fxEff.src==="manual"?"fx.srcOwn":"fx.srcCbar")}</div>}
+            {fxState==="fail"&&!fxOwn&&<div role="alert" style={{color:"var(--warn)"}}>{t("fx.fail")}</div>}
+            {(fxOwn||fxState==="fail") ? (
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:6}}>
+                <label htmlFor="fx-manual">{t("fx.ownLabel",{ cur:fxCur })}</label>
+                <input id="fx-manual" className="field-input" inputMode="decimal" autoComplete="off" style={{width:110,minHeight:36,padding:"6px 8px"}} value={fxManual} placeholder={fxRate?String(fxRate.rate):"0.0000"} onChange={e=>setFxManual(e.target.value.replace(/[^0-9.,]/g,""))}/>
+                <span>{currency}</span>
+              </div>
+            ) : fxState==="ok"&&<button type="button" className="chip" data-section="fx-own" style={{marginTop:6}} onClick={()=>{ setFxOwn(true); setFxManual(String(fxRate.rate)); }}>{t("fx.useOwn")}</button>}
+          </div>
+        )}
         {err&&<div role="alert" style={{color:"var(--neg)",fontSize:12,textAlign:"center",marginBottom:10,fontWeight:600}}>{err}</div>}
         {isDupe&&<div className="dupe-warn" role="status"><Icon name="other" size={13}/>{t("add.dupe")}</div>}
 

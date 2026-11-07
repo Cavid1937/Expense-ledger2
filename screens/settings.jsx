@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Collapse, EditSwap, useLeave } from "./motion.jsx";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
-import { nativeSaveHook } from "../App.jsx";
+import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
@@ -213,8 +213,8 @@ export function MyAccounts({ state, currency, showToast }) {
         </div></div>)}
       <div className="field"><label className="field-lbl" htmlFor="acc-name">{t("acc.name")}</label>
         <input id="acc-name" className="field-input" value={name} maxLength={40} onChange={e=>setName(e.target.value)}/></div>
-      <div className="filter-bar" role="group" aria-label={t("acc.kind")}>
-        {ACC_KINDS.map(k=>(<button key={k} className={`chip${kind===k?" on":""}`} aria-pressed={kind===k} onClick={()=>setKind(k)}>{kindName[k]}</button>))}
+      <div className="filter-bar" role="group" aria-label={t("acc.kind")} style={{flexWrap:"wrap",overflowX:"visible"}}>
+        {ACC_KINDS.map(k=>(<button key={k} className={`chip${kind===k?" on":""}`} aria-pressed={kind===k} onClick={()=>setKind(k)} style={{whiteSpace:"normal",maxWidth:"100%",height:"auto",minHeight:36,textAlign:"center"}}>{kindName[k]}</button>))}
       </div>
       <div className="field"><label className="field-lbl" htmlFor="acc-open">{t("acc.opening")}</label>
         <input id="acc-open" className="field-input" inputMode="decimal" placeholder="0.00" value={opening} onChange={e=>setOpening(cleanMoneyText(e.target.value))}/></div>
@@ -286,7 +286,7 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
         {/* Currency */}
         <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
         {/* Run 24: common currencies are one tap, so nobody has to find the symbol on the keyboard; the box below still takes any other symbol. */}
-        <div className="filter-bar" role="group" aria-label={t("set.currencyPick")} data-section="currency-chips">
+        <div className="filter-bar" role="group" aria-label={t("set.currencyPick")} data-section="currency-chips" style={{flexWrap:"wrap",overflowX:"visible"}}>{/* Run 39: wraps, so every choice stays visible with large text */}
           {["₼","$","€","₽","£","₺","¥","₸","₴"].map(c=>(
             <button key={c} className={`chip${currency===c?" on":""}`} aria-pressed={currency===c} onClick={()=>{ setCurSym(c); onCurrencyChange(c); showToast(t("set.currencyUpdated")); }}>{c}</button>
           ))}
@@ -298,6 +298,11 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
             <button className="btn btn-sm btn-sm-primary" onClick={()=>{if(!curSym.trim()){showToast(t("set.currencyEmpty"));return;} onCurrencyChange(curSym.trim());showToast(t("set.currencyUpdated"));}}>{t("common.save")}</button>
           </div>
         </div>
+        {/* Run 39: the quick-add link for Apple Shortcuts, an NFC sticker or a home-screen bookmark */}
+        <div className="settings-section-lbl" style={{marginTop:14}}>{t("quick.title")}</div>
+        <div className="list-sub" style={{lineHeight:1.5}}>{t("quick.sub")}</div>
+        <code data-section="quick-link" style={{display:"block",overflowWrap:"anywhere",fontSize:12,background:"var(--bg-inset)",borderRadius:8,padding:"8px 10px",margin:"8px 0"}}>{PUBLIC_URL+"?add=expense&amount=4.50&merchant=Bravo&category=food"}</code>
+        <button className="btn btn-ghost btn-full" data-section="quick-copy" onClick={()=>{ const s=PUBLIC_URL+"?add=expense&amount=4.50&merchant=Bravo&category=food"; try { Promise.resolve(navigator.clipboard.writeText(s)).then(()=>showToast(t("quick.copied"))).catch(()=>showToast(t("quick.copyFail"),5000)); } catch { showToast(t("quick.copyFail"),5000); } }}>{t("quick.copy")}</button>
       </div>
       </Fold>
     </>
@@ -689,6 +694,8 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
         <button className="btn btn-primary btn-full" data-section="io-save" onClick={onExportJSON} style={{marginTop:12}}><Icon name={saveToPhone?"download":"backup"} size={16}/>{t(saveToPhone?"io2.saveDownloads":"io.createBackup")}</button>
         {canShareFiles&&onShareBackup&&<button className="btn btn-ghost btn-full io-share" onClick={onShareBackup} style={{marginTop:8}}><Icon name="upload" size={16}/>{t("io2.share")}</button>}
         <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t(saveToPhone?"io2.whereApp":canShareFiles?"io2.whereShare":"io2.whereWeb")}</div>
+        {/* Run 37b (owner could not find the saved files): opens the phone's own Downloads screen */}
+        {nativeDownloadsHook()&&<button className="btn btn-ghost btn-full" data-section="io-show-downloads" style={{marginTop:8}} onClick={()=>{ Promise.resolve(nativeDownloadsHook()()).catch(()=>{}); }}><Icon name="list" size={16}/>{t("io2.showDownloads")}</button>}
         {onExportEncrypted&&<EncryptedBackup onExportEncrypted={onExportEncrypted}/>}
       </div>
 

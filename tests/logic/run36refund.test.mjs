@@ -64,7 +64,7 @@ globalThis.__store.set("expense_ledger_v5", JSON.stringify({ transactions: [r(30
 ok(migrateAndLoad().transactions[0].refundFor === "u_abc123", "a user's own category id survives a reload");
 const csv = buildCsv([r(30, "2026-10-10", "food")]);
 const lines = csv.replace(/^﻿/, "").split("\r\n");
-ok(/"DebtRepayment","RefundOf"$/.test(lines[0]) && /"Food & Dining"$|"Food"$/.test(lines[1]), "CSV: RefundOf is the last column and names the category", lines);
+ok(/"DebtRepayment","RefundOf","PaidAmount","PaidCurrency","Rate"$/.test(lines[0]) && /"Food & Dining","","",""$|"Food","","",""$/.test(lines[1]), "CSV: RefundOf is the last column and names the category", lines);
 section("R36-7b. A refund dated in the future lowers nothing until its day");
 setNow(2026, 9, 13);   // today = 13 Oct 2026
 L = [e("food", 100, "2026-10-03"), r(30, "2026-10-20", "food")];
