@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
-import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, revealFocus, storageUsage, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
+import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIRST LAUNCH — choose the interface language. Native radio buttons: nothing is preselected, arrow keys move between
@@ -505,11 +505,53 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         <ListRow id="safe" icon="safe" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
         <ListRow id="privacy" icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
       </div>
+      <ScreenSecurity showToast={showToast}/>
+      <WidgetSettings showToast={showToast}/>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupApp")}</div>
       <div className="card list-card" data-section="more-app">
         <ListRow id="how" icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
       </div>
       {version&&<div className="list-sub app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:version})}</div>}
+    </div>
+  );
+}
+
+// Run 33 (Android app only): hide the app's content in the phone's recent-apps list and block screenshots (Android FLAG_SECURE, ScreenSecurePlugin.java).
+// Shown only inside the Android app; the choice is kept by the shell so it is already in force when the app starts.
+function ScreenSecurity({ showToast }) {
+  const n=screenSecureNative();
+  const [on,setOn]=useState(null);
+  useEffect(()=>{ if (!n) return; let alive=true; Promise.resolve(n.get()).then(v=>{ if (alive) setOn(v===true); }).catch(()=>{ if (alive) setOn(false); }); return ()=>{ alive=false; }; },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!n || on===null) return null;
+  const flip=async ()=>{ try { const v=await n.set(!on); setOn(v===true); } catch { showToast&&showToast(t("scr.fail")); } };
+  return (
+    <div className="card st-card" data-section="screen-secure">
+      <div className="settings-row">
+        <div><div className="settings-row-title" id="set-scr-lbl">{t("scr.title")}</div><div className="settings-row-sub">{t("scr.sub")}</div></div>
+        <div className={`toggle-track${on?" on":""}`} data-section="screen-secure-toggle" onClick={flip} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(); } }} role="switch" aria-checked={on} aria-labelledby="set-scr-lbl" tabIndex={0}><div className="toggle-knob"/></div>
+      </div>
+    </div>
+  );
+}
+
+// Run 33 (Android app only): the home-screen widget (two quick-add buttons). Adding it is asked from here; its optional safe-to-spend line is off by default.
+function WidgetSettings({ showToast }) {
+  const w=widgetNative();
+  const [can,setCan]=useState(false), [p,setP]=useState(()=>readWidgetPrefs());
+  useEffect(()=>{ if (!w || typeof w.canPin!=="function") return; let alive=true; Promise.resolve(w.canPin()).then(v=>{ if (alive) setCan(v===true); }).catch(()=>{}); return ()=>{ alive=false; }; },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!w) return null;
+  const add=async ()=>{ let ok=false; try { ok=(await w.requestPin())===true; } catch { ok=false; } showToast&&showToast(t(ok?"wdg.asked":"wdg.manual"),6000); };
+  const flip=()=>{ const n={ showSafe:!p.showSafe }; if (writeWidgetPrefs(n)) setP(n); else showToast&&showToast(t("scr.fail")); };
+  return (
+    <div className="card st-card" data-section="widget">
+      <div className="list-title">{t("wdg.title")}</div>
+      <div className="list-sub" style={{lineHeight:1.5}}>{t("wdg.sub")}</div>
+      {can&&<button className="btn btn-ghost btn-full" data-section="widget-add" onClick={add} style={{marginTop:10}}>{t("wdg.add")}</button>}
+      {!can&&<div className="list-sub" data-section="widget-manual" style={{marginTop:8,lineHeight:1.5}}>{t("wdg.manual")}</div>}
+      <div className="settings-row" style={{marginTop:10}}>
+        <div><div className="settings-row-title" id="set-wdg-lbl">{t("wdg.show")}</div><div className="settings-row-sub">{t("wdg.showSub")}</div></div>
+        <div className={`toggle-track${p.showSafe?" on":""}`} data-section="widget-show" onClick={flip} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(); } }} role="switch" aria-checked={p.showSafe} aria-labelledby="set-wdg-lbl" tabIndex={0}><div className="toggle-knob"/></div>
+      </div>
     </div>
   );
 }

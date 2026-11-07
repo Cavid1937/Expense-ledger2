@@ -31,6 +31,40 @@ const KEYS_LEGACY = [
 
 function writeRaw(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); return true; } catch { return false; } }
 
+// Run 33 (APK level): text shared INTO the app from another app (a bank message, a notification, a note) becomes a suggestion for the add form.
+// Nothing is ever saved from here: the user sees the form filled in and must press Save. The wording of real bank messages in Azerbaijan has not been
+// sampled yet (needs the owner's examples), so this only looks for the generic shapes below and says so when it is unsure. The message text itself is
+// NOT stored (it can hold card digits and balances); only the amount, the kind, the date and a short merchant name are suggested.
+const SHARE_CUR="(?:AZN|₼|man\\.?|manat|USD|EUR|RUB|₽|TRY|\\$|€)";
+const SHARE_BAL=/balans|balance|qalıq|qaliq|остаток|баланс|limit|лимит|available|mövcud/i;
+const SHARE_INC=/mədaxil|medaxil|daxil\s+old|maaş|maas|пополнени|зачислен|поступлен|credited|deposit|received|salary|refund|geri\s+qaytar|возврат/i;
+const SHARE_EXP=/alış|alis|ödəniş|odenis|çıxarış|cixaris|покупк|оплат|списани|purchase|payment|debit|withdraw|spent|nağdlaşdır|nagdlasdir|atm|xərc|xerc/i;
+export function shareAmount(numText) {
+  let s=String(numText).replace(/[\s  ]/g,"");
+  if (!/^\d[\d.,]*$/.test(s)) return null;
+  const dot=s.lastIndexOf("."), com=s.lastIndexOf(",");
+  if (dot>=0 && com>=0) { const dec=Math.max(dot,com), th=dot>com?",":"."; s=s.slice(0,dec).split(th).join("").replace(/[.,]/g,"")+"."+s.slice(dec+1); }
+  else if (dot>=0||com>=0) { const sep=dot>=0?".":",", parts=s.split(sep); if (parts.length>2 || (parts.length===2 && parts[1].length===3 && parts[0].length<=3)) s=parts.join(""); else s=parts.join("."); }
+  const n=Number(s); return Number.isFinite(n) && n>0 && n<1e9 ? Math.round(n*100)/100 : null;
+}
+export function parseSharedText(text, now=new Date()) {
+  const raw=String(text==null?"":text).slice(0,2000);
+  const out={ amount:"", type:"expense", merchant:"", date:"", found:false, unsure:false };
+  // amounts that carry a currency, before or after the number; amounts after a balance word are skipped
+  const re=new RegExp(`(?:(${SHARE_CUR})\\s*(\\d[\\d\\s\\u00A0.,]*\\d|\\d))|(?:(\\d[\\d\\s\\u00A0.,]*\\d|\\d)\\s*(${SHARE_CUR}))`,"gi");
+  const cands=[]; let m;
+  while ((m=re.exec(raw))) { const num=m[2]||m[3]; const v=shareAmount(num); if (v===null) continue; const before=raw.slice(Math.max(0,m.index-18),m.index); if (SHARE_BAL.test(before)) continue; cands.push(v); }
+  if (cands.length) { out.amount=String(cands[0]); out.found=true; if (new Set(cands).size>1) out.unsure=true; }
+  const inc=SHARE_INC.test(raw), exp=SHARE_EXP.test(raw);
+  if (inc && !exp) out.type="income";
+  if (inc && exp) out.unsure=true;
+  const dm=raw.match(/\b(\d{1,2})[./-](\d{1,2})[./-](\d{4}|\d{2})\b/);
+  if (dm) { const y=dm[3].length===2?2000+Number(dm[3]):Number(dm[3]); const ds=`${y}-${String(dm[2]).padStart(2,"0")}-${String(dm[1]).padStart(2,"0")}`; if (isValidDateStr(ds) && ds<=localDateStr(now)) out.date=ds; }
+  const mm=raw.match(/(?:merchant|mağaza|magaza|məkan|yer|место|магазин|terminal)\s*[:\-]\s*([^\n,;|]{2,40}?)(?=\.\s|\.$|[\n,;|]|$)/i) || raw.match(/\b(?:at|в)\s+([A-ZА-ЯƏÖÜŞÇĞİ][^\n,;|.\d]{1,38})/);
+  if (mm) out.merchant=mm[1].replace(/\s+/g," ").trim().replace(/[\s.:-]+$/,"");
+  return out;
+}
+
 // Run 32 (backlog item 17): how full the browser's per-app storage is. Browsers allow about 5 million characters of localStorage per site (Chrome and Firefox;
 // Safari is similar); there is no exact way to ask, so this is an estimate: every key and value of this site counted in characters. Measured with synthetic data:
 // one typical entry is ~240 characters, so ~20,000 entries already use ~4.8 million. Warn at 80%, "almost full" at 95%.
@@ -989,14 +1023,24 @@ export function lockShouldEngage(timeoutMin, event, ms) {
 }
 // Fingerprint through the phone's own prompt (WebAuthn "platform" authenticator, user verification required). The app has no server
 // to check the result against, so this is a convenience in front of the PIN, never a replacement for it.
-export async function bioAvailable() { try { return typeof PublicKeyCredential!=="undefined" && !!navigator.credentials && lockSupported() && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch { return false; } }
+// Run 33 (Android app only): inside the Android app the web engine has no fingerprint prompt, so the shell offers the phone's own BiometricPrompt
+// (window.LedgerNative.biometric, BiometricPlugin.java; strong biometrics only, no device-PIN fallback because this app's own PIN is the fallback).
+// The lock record stores the marker below instead of a WebAuthn credential id. A marker with no shell (a backup opened in a browser) never unlocks; the PIN does.
+export const screenSecureNative=()=>{ try { const n=window.LedgerNative; return n && n.screenSecure && typeof n.screenSecure.set==="function" && typeof n.screenSecure.get==="function" ? n.screenSecure : null; } catch { return null; } };
+export const NATIVE_BIO="native-biometric-v1";
+const nativeBio=()=>{ try { const n=window.LedgerNative; return n && n.biometric && typeof n.biometric.authenticate==="function" ? n.biometric : null; } catch { return null; } };
+const bioPrompt=()=>({ title:t("lock.useBio"), cancel:t("common.cancel") });
+export async function bioAvailable() { const nb=nativeBio(); if (nb) { try { return lockSupported() && (await nb.available())===true; } catch { return false; } }
+  try { return typeof PublicKeyCredential!=="undefined" && !!navigator.credentials && lockSupported() && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); } catch { return false; } }
 export async function bioRegister() {
+  const nb=nativeBio(); if (nb) { if ((await nb.authenticate(bioPrompt()))===true) return NATIVE_BIO; throw new Error("bio-cancelled"); }
   const cred=await navigator.credentials.create({ publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), rp:{ name:"Expense Ledger" },
     user:{ id:crypto.getRandomValues(new Uint8Array(16)), name:"ledger", displayName:"Expense Ledger" }, pubKeyCredParams:[{ type:"public-key", alg:-7 },{ type:"public-key", alg:-257 }],
     authenticatorSelection:{ authenticatorAttachment:"platform", userVerification:"required", residentKey:"discouraged" }, timeout:60000 } });
   return cred ? toB64(cred.rawId) : null;
 }
 export async function bioCheck(idB64) {
+  if (idB64===NATIVE_BIO) { const nb=nativeBio(); return !!nb && (await nb.authenticate(bioPrompt()))===true; }
   const r=await navigator.credentials.get({ publicKey:{ challenge:crypto.getRandomValues(new Uint8Array(32)), allowCredentials:[{ type:"public-key", id:fromB64(idB64) }], userVerification:"required", timeout:30000 } });
   return !!r;
 }
@@ -2613,6 +2657,22 @@ export function restoreCheck(stored, current) {
 // reminderPlan() is a pure function: from the bills / recurring payments and the entries already recorded, it lists the notifications that
 // should exist in the next days. The shell cancels what it had and schedules exactly this list, so a paid bill, an edited date or a deleted
 // bill can never leave a stale reminder behind. Bills: on the due day. Recurring payments found from entries: the day before. Daily nudge: 21:00.
+// Run 33 (Android app only): home-screen widget. Its one optional line (safe to spend) is OFF by default because a home screen is visible to others.
+const WIDGET_KEY=KEY+"__widget";
+const WIDGET_EVENT="ledger-widget-changed";
+export const widgetNative=()=>{ try { const n=window.LedgerNative; return n && n.widget && typeof n.widget.set==="function" ? n.widget : null; } catch { return null; } };
+export function readWidgetPrefs() { try { const p=JSON.parse(localStorage.getItem(WIDGET_KEY)||"null"); return { showSafe:!!(p && p.showSafe===true) }; } catch { return { showSafe:false }; } }
+export function writeWidgetPrefs(p) { try { localStorage.setItem(WIDGET_KEY,JSON.stringify({ showSafe:!!(p && p.showSafe) })); if (typeof window!=="undefined") window.dispatchEvent(new Event(WIDGET_EVENT)); return true; } catch { return false; } }
+// The widget's line: the safe-to-spend amount, only when switched on, Safe to Spend itself is on and can be worked out, and privacy mode is off. "" hides the line.
+export function widgetLine(state, spendTxns, prefs, now=new Date()) {
+  try {
+    if (!prefs || !prefs.showSafe || !state || !state.safeToSpend || !state.safeToSpend.enabled) return { label:"", amount:"" };
+    if (maskText("x")!=="x") return { label:"", amount:"" };
+    const info=calcSafeToSpend(spendTxns,state.safeToSpend,state.goals||[],now,state.bills||[]);
+    if (!info || !info.feasible) return { label:"", amount:"" };
+    return { label:t("safe.title"), amount:(info.remaining<0?"−":"")+fmt(Math.abs(info.remaining),state.currency) };
+  } catch { return { label:"", amount:"" }; }
+}
 const REMIND_KEY=KEY+"__reminders";
 const REMIND_EVENT="ledger-reminders-changed";
 export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", hideAmount:false });
@@ -3246,6 +3306,26 @@ function AppInner() {
     } catch { /* same */ }
     return ()=>{ try { if (typeof off==="function") off(); } catch { /* same */ } };
   },[openAdd]);
+  // Run 33 (Android app only): keep the home-screen widget's optional line in step with the ledger and the setting.
+  const [widgetTick,setWidgetTick]=useState(0);
+  useEffect(()=>{ const f=()=>setWidgetTick(n=>n+1); window.addEventListener(WIDGET_EVENT,f); return ()=>window.removeEventListener(WIDGET_EVENT,f); },[]);
+  useEffect(()=>{
+    const w=widgetNative(); if (!w) return;
+    try { Promise.resolve(w.set(widgetLine(state,forSpending(state.transactions||[]),readWidgetPrefs()))).catch(()=>{ /* the shell is unavailable: the ledger is not affected */ }); } catch { /* same */ }
+  },[state.transactions,state.bills,state.goals,state.safeToSpend,state.currency,state.language,widgetTick,privacy]);
+  // Run 33 (Android app only): text shared into the app from another app opens the add form with what could be read from it. Never saved by itself.
+  useEffect(()=>{
+    const nat=window.LedgerNative; if (!nat || typeof nat.onSharedText!=="function") return;
+    let off=null;
+    try {
+      off=nat.onSharedText(txt=>{
+        const p=parseSharedText(txt);
+        openAdd({ type:p.type, amount:p.amount, category:p.type==="income"?"salary":"food", subcategory:"", merchant:p.merchant, note:"", ...(p.date?{date:p.date}:{}), recurring:false, recurFreq:null });
+        showToast(t(p.found ? (p.unsure?"share.unsure":"share.check") : "share.none"),6000);
+      });
+    } catch { /* same */ }
+    return ()=>{ try { if (typeof off==="function") off(); } catch { /* same */ } };
+  },[openAdd,showToast]);
 
   // Run 10: storage protection (asked once at start; again from Import / Export, where a tap counts as a user gesture) and
   // the browser's own "install" offer, kept for the Install button. Neither is stored in the ledger data.
