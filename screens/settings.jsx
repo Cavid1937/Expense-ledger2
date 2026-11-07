@@ -665,11 +665,12 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
       <div className="section-title" style={{marginTop:0}}>{t("io2.moveTitle")}</div>
       <div className="card" data-section="io-backup-card">
         <div className="list-sub" style={{lineHeight:1.55}}>{t("io2.moveSub")}</div>
-        <div className="io-backup" data-section="io-last" style={{marginTop:10}}>
+        {/* one status line; a confirmed backup gets a small tick in front of it (not a separate badge) */}
+        <div data-section="io-last" style={{marginTop:10,display:"flex",alignItems:"flex-start",gap:8}}>
+          {confirmed&&<span aria-hidden="true" style={{color:"var(--pos)",flexShrink:0,marginTop:2}}><Icon name="check" size={14}/></span>}
           {lastBackup
-            ? <div className="list-sub">{t(confirmed?"io2.lastConfirmed":"io2.last",{date:fmtLongDate(lastBackup),n:transactions.length})}</div>
+            ? <div className="list-sub" style={{lineHeight:1.5}}>{t(confirmed?"io2.lastConfirmed":"io2.last",{date:fmtLongDate(lastBackup),n:transactions.length})}</div>
             : <div className="list-title" style={{color:"var(--neg)"}}>{t("set.noBackup")}</div>}
-          {confirmed&&<span className="io-status ok"><Icon name="check" size={12}/></span>}
         </div>
         <button className="btn btn-primary btn-full" data-section="io-save" onClick={onExportJSON} style={{marginTop:12}}><Icon name={saveToPhone?"download":"backup"} size={16}/>{t(saveToPhone?"io2.saveDownloads":"io.createBackup")}</button>
         {canShareFiles&&onShareBackup&&<button className="btn btn-ghost btn-full io-share" onClick={onShareBackup} style={{marginTop:8}}><Icon name="upload" size={16}/>{t("io2.share")}</button>}

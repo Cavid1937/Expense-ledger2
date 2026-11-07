@@ -1396,7 +1396,7 @@ export const MESSAGES = {
   "set.deleteGoal":    { en: "Delete goal {name}", az: "{name} məqsədini sil", ru: "Удалить цель «{name}»" },
   "set.atRate":        { en: "At {amount}/mo → est. {date}", az: "Ayda {amount} ilə → təxminən {date}", ru: "При {amount} в месяц → ориентир: {date}" },
   "set.months":        { en: { one: "{n} month", other: "{n} months" }, az: "{n} ay", ru: { one: "{n} месяц", few: "{n} месяца", many: "{n} месяцев", other: "{n} месяца" } },
-  "set.noBackup":      { en: "No backup yet — export one above", az: "Hələ ehtiyat nüsxə yoxdur — yuxarıda ixrac edin", ru: "Резервной копии пока нет — сделайте её выше" },
+  "set.noBackup":      { en: "No backup yet — save one below", az: "Hələ ehtiyat nüsxə yoxdur — aşağıda saxlayın", ru: "Резервной копии пока нет — сохраните её ниже" },
 
   // ── Monthly
   "month.plannedExp":   { en: "+{amount} in expenses dated later this month (not counted yet)", az: "+{amount} xərc bu ayın sonrakı tarixlərinə yazılıb (hələ hesablanmayıb)", ru: "+{amount} расходов записано на более поздние даты месяца (пока не учтено)" },
