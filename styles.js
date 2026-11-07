@@ -510,6 +510,11 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 @media (prefers-reduced-motion:reduce){.toggle-knob,.toggle-track,.txn-row{transition:none}}
 .txn-row{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}   /* press-and-hold selects rows, not text */
 .toast{animation:toastIn 280ms cubic-bezier(0.22,1,0.36,1),toastOut 200ms ease-in var(--toast-out,1500ms) forwards;border-radius:16px}   /* it fades out just before it is removed */
+/* Run 39b (owner: the "saved" message did not fit the screen): messages wrap onto more lines and never run past the screen edges */
+.toast{white-space:normal;max-width:calc(100vw - 32px);width:max-content;text-align:center;line-height:1.4;overflow-wrap:anywhere}
+.snackbar{white-space:normal;max-width:min(calc(100vw - 24px),420px);width:max-content;line-height:1.4;overflow-wrap:anywhere}
+.snackbar>span{min-width:0}
+.snackbar-undo{flex-shrink:0}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(-8px)}}
 .snackbar{animation:snackIn 300ms cubic-bezier(0.22,1,0.36,1),snackOut 200ms ease-in var(--snack-out,3800ms) forwards;border-radius:16px}   /* in-app notices rise from the bottom edge, no scale, and ease out before they go */

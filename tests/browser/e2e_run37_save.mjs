@@ -6,7 +6,7 @@ const browser = await launch();
 const fake = (mode) => `(() => {
   window.__saves = [];
   window.__ledgerNativeShare = async () => "shared";
-  window.__ledgerNativeSave = async (name, text, mime) => { window.__saves.push({ name, text, mime });
+  window.__ledgerNativeSave = async (name, text, mime, pick) => { window.__saves.push({ name, text, mime, pick });
     if ("${mode}" === "fail") throw new Error("disk"); if ("${mode}" === "cancel") return { status: "cancelled" };
     return { status: "saved", where: "Download/" + name }; };
 })()`;
@@ -26,10 +26,15 @@ section("R37-S1. Save to Downloads: the whole backup goes to the shell; saved me
   ok(j.version >= 10 && j.transactions.length === 1, "it is a complete backup (version and entries)");
   const st = await state(page);
   ok(!!st.lastBackup && !!st.backupConfirmedAt && Date.parse(st.backupConfirmedAt) >= Date.parse(st.lastBackup), "recorded as created AND confirmed (the shell checked the file), so no 'do you have it?' question");
-  ok(/Saved to Download\/ledger-backup/.test(await page.evaluate(() => document.body.innerText)), "the message says where the file is");
+  ok(/Saved: Download\/ledger-backup/.test(await page.evaluate(() => document.body.innerText)), "the message says where the file is");
+  const fits = await page.evaluate(() => { const e = document.querySelector(".snackbar"); if (!e) return null; const b = e.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth; });
+  ok(fits === true, "the message fits on the screen (Run 39b: it used to run past the edge)", fits);
   await clickText(page, ".io-page .btn-sm", /Export CSV/); await wait(500);
   const s2 = await saves(page);
   ok(s2.length === 2 && /\.csv$/.test(s2[1].name) && s2[1].mime === "text/csv" && /^﻿?"?Date/.test(s2[1].text), "Export CSV also saves into Downloads", s2.map((x) => x.name));
+  await page.evaluate(() => document.querySelector('[data-section="io-save-choose"]').click()); await wait(500);
+  const s3 = await saves(page);
+  ok(s3.length === 3 && s3[2].pick === true && s3[0].pick !== true, "'Save to a folder I choose…' asks for the system Save-as screen; the main button does not", s3.map((x) => x.pick));
   await page.close();
 }
 section("R37-S2. Cancel and failure record nothing");

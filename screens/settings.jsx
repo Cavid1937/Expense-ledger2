@@ -692,6 +692,7 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
             : <div className="list-title" style={{color:"var(--neg)"}}>{t("set.noBackup")}</div>}
         </div>
         <button className="btn btn-primary btn-full" data-section="io-save" onClick={onExportJSON} style={{marginTop:12}}><Icon name={saveToPhone?"download":"backup"} size={16}/>{t(saveToPhone?"io2.saveDownloads":"io.createBackup")}</button>
+        {saveToPhone&&<button className="btn btn-ghost btn-full" data-section="io-save-choose" onClick={()=>onExportJSON({ pick:true })} style={{marginTop:8}}><Icon name="list" size={16}/>{t("io2.saveChoose")}</button>}
         {canShareFiles&&onShareBackup&&<button className="btn btn-ghost btn-full io-share" onClick={onShareBackup} style={{marginTop:8}}><Icon name="upload" size={16}/>{t("io2.share")}</button>}
         <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t(saveToPhone?"io2.whereApp":canShareFiles?"io2.whereShare":"io2.whereWeb")}</div>
         {/* Run 37b (owner could not find the saved files): opens the phone's own Downloads screen */}

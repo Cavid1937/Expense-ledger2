@@ -1535,8 +1535,8 @@ async function checkForUpdate(currentVersion, fetchHtml) {
 // after it wrote the file AND read it back byte for byte; { status:"cancelled" } when the user closed the "Save as" picker (older Android);
 // rejects on any failure. Only "saved" is ever reported as saved.
 export const nativeSaveHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeSave==="function") ? window.__ledgerNativeSave : null;
-async function saveViaNative(native, filename, text, mime) {
-  try { const r=await native(filename, text, mime); return r && r.status==="saved" ? { status:"saved", where:typeof r.where==="string" ? r.where.slice(0,200) : "", uri:typeof r.uri==="string" && /^content:\/\//.test(r.uri) ? r.uri : "", mime } : r && r.status==="cancelled" ? { status:"cancelled" } : { status:"failed" }; }
+async function saveViaNative(native, filename, text, mime, pick=false) {
+  try { const r=await native(filename, text, mime, pick===true); return r && r.status==="saved" ? { status:"saved", where:typeof r.where==="string" ? r.where.slice(0,200) : "", uri:typeof r.uri==="string" && /^content:\/\//.test(r.uri) ? r.uri : "", mime } : r && r.status==="cancelled" ? { status:"cancelled" } : { status:"failed" }; }
   catch { return { status:"failed" }; }
 }
 // Run 37b (owner: "I still can't see downloaded files anywhere"): after a save the message offers "Open" (the file itself, through the phone),
@@ -3723,13 +3723,14 @@ function AppInner() {
   },[state.transactions,showToast]);
 
   const shareBackupRef=useRef(null);
-  const exportJSON=useCallback(async ()=>{
+  const exportJSON=useCallback(async (opts)=>{
+    const pick=!!(opts && opts.pick===true);   // Run 39b: "Save to a folder I choose…" (system Save-as screen)
     const save=nativeSaveHook();
     if (save) {
       // Run 37: the Android app writes the file into Downloads and reads it back. Because the app itself checked the file, this backup is
       // recorded as created AND confirmed (no "do you have the file?" question afterwards).
       const now=new Date().toISOString();
-      const r=await saveViaNative(save,`ledger-backup-${today()}.json`,backupText(now),"application/json");
+      const r=await saveViaNative(save,`ledger-backup-${today()}.json`,backupText(now),"application/json",pick);
       if (r.status==="failed") { showToast(t("io.saveFailed"),6000); return; }
       if (r.status!=="saved") return;
       setState(s=>({...s,lastBackup:now,backupConfirmedAt:new Date().toISOString()}));
