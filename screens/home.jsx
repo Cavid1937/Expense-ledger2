@@ -56,7 +56,46 @@ export function LedgerArt() {
 
 // Run 26 (designed in Figma, frame "Home - Accounts strip"): balances of the person's own accounts as a row of cards, shown only when
 // at least one visible account exists. Balances are derived (opening + entries + transfers), the same numbers as in Settings.
-export function HomeAccounts({ transactions, currency, onManage }) {
+// Run 38 (owner: tapping an account "panics"): an account opens its own calm sheet here, on Home: balance, how it is made up, and the latest
+// entries and transfers of that account. "Manage accounts" opens the Accounts page. Read only; the numbers are the same as everywhere else.
+export function AccountSheet({ id, transactions, currency, onClose, onManage, onView }) {
+  const data=readAccounts(), a=data.accounts.find(x=>x.id===id);
+  if (!a) return null;
+  const bal=accountBalances(data,transactions)[a.id]||0;
+  const mine=(transactions||[]).filter(x=>x && x.account===a.id).sort((p,q)=>String(q.date).localeCompare(String(p.date))).slice(0,12);
+  const moves=data.transfers.filter(x=>x.from===a.id||x.to===a.id).sort((p,q)=>q.date.localeCompare(p.date)).slice(0,6);
+  const name=(i)=>(data.accounts.find(x=>x.id===i)||{}).name||"—";
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={a.name} data-section="acc-sheet">
+        <div className="sheet-grip"><div className="sheet-handle"/></div>
+        <div className="sheet-title" style={{overflowWrap:"anywhere"}}>{a.name}</div>
+        <div className="list-sub">{t("acc.kind."+(["cash","card","wallet","bank"].includes(a.kind)?a.kind:"other"))}</div>
+        <div className="hero-amount" data-section="acc-sheet-balance" style={{margin:"10px 0 4px"}}><MoneyText v={fmt(bal,currency)}/></div>
+        <div className="list-sub" style={{lineHeight:1.5,marginBottom:12}}>{t("acc.sheetHow",{ opening:fmt(a.opening.amount||0,currency) })}</div>
+        <div className="section-title" style={{marginTop:6}}>{t("acc.sheetLatest")}</div>
+        {mine.length ? mine.map(x=>(
+          <button key={x.id} type="button" className="settings-row" data-acc-txn={String(x.id)} onClick={()=>onView(x)} style={{width:"100%",background:"none",border:"none",borderBottom:"1px solid var(--rule)",padding:"10px 0",textAlign:"left",cursor:"pointer"}}>
+            <span style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}><CatIcon catId={x.category} size={16}/><span style={{minWidth:0}}><span className="settings-row-title" style={{display:"block",overflowWrap:"anywhere"}}>{maskText(x.merchant)||catName(x.category)}</span><span className="settings-row-sub">{fmtDate(x.date)}</span></span></span>
+            <span style={{fontWeight:600,color:x.type==="income"?"var(--pos)":"var(--ink)",flexShrink:0}}>{x.type==="income"?"+":"−"}<MoneyText v={fmt(x.amount,currency)}/></span>
+          </button>
+        )) : <div className="list-sub" style={{padding:"6px 0"}}>{t("acc.sheetNone")}</div>}
+        {moves.length>0&&<>
+          <div className="section-title">{t("acc.transferTitle")}</div>
+          {moves.map(m=>(
+            <div key={m.id} className="settings-row" style={{padding:"8px 0",borderBottom:"1px solid var(--rule)"}}>
+              <span className="settings-row-sub" style={{overflowWrap:"anywhere"}}>{fmtDate(m.date)} · {name(m.from)} → {name(m.to)}</span>
+              <span style={{fontWeight:600,flexShrink:0}}><MoneyText v={fmt(m.amount,currency)}/></span>
+            </div>
+          ))}
+        </>}
+        <button className="btn btn-primary btn-full" data-section="acc-sheet-manage" style={{marginTop:16}} onClick={onManage}>{t("acc.manage")}</button>
+        <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose}>{t("common.close")}</button>
+      </div>
+    </div>
+  );
+}
+export function HomeAccounts({ transactions, currency, onManage, onAccount }) {
   const data=readAccounts(), shown=data.accounts.filter(a=>!a.hidden);
   if (!shown.length) return null;
   const bal=accountBalances(data,transactions);
@@ -69,7 +108,7 @@ export function HomeAccounts({ transactions, currency, onManage }) {
       <div className="card-head" style={{padding:"0 2px",marginBottom:8}}><span className="card-title">{t("acc.homeTitle")}</span><button className="btn btn-sm" data-section="home-accounts-manage" onClick={onManage}>{t("acc.manage")}</button></div>
       <div className="acc-strip">
         {shown.map(a=>(
-          <button key={a.id} className="acc-card" data-acc-card={a.id} onClick={onManage} aria-label={a.name+", "+kindName[a.kind]+", "+fmt(bal[a.id]||0,currency)}>
+          <button key={a.id} className="acc-card" data-acc-card={a.id} onClick={()=>(onAccount?onAccount(a.id):onManage())} aria-label={a.name+", "+kindName[a.kind]+", "+fmt(bal[a.id]||0,currency)}>
             <span className="acc-ico" aria-hidden="true"><Icon name={kindIcon[a.kind]||"list"} size={16} color="var(--accent)"/></span>
             <span className="acc-name">{a.name}</span>
             <span className="acc-bal"><MoneyText v={fmt(bal[a.id]||0,currency)}/></span>
@@ -81,7 +120,7 @@ export function HomeAccounts({ transactions, currency, onManage }) {
     </div>
   );
 }
-export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts }) {
+export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,curIn,curOther,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -138,7 +177,7 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
         <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
       </div>
 
-      <HomeAccounts transactions={accountTxns||transactions} currency={currency} onManage={onAccounts}/>
+      <HomeAccounts transactions={accountTxns||transactions} currency={currency} onManage={onAccounts} onAccount={onAccount}/>
 
       {/* Due within 7 days */}
       {upcomingSchedules.length>0&&(

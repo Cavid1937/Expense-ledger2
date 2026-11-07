@@ -33,7 +33,8 @@ section("R26-M2. Editing a goal: the form appears where the goal was, with an ea
   const right = await page.evaluate(() => { const f = document.querySelector('[data-section="goal-form"]'); return { y: window.scrollY, anim: f ? getComputedStyle(f).animationName : "", cards: document.querySelectorAll('[data-section="goal-card"]').length, formIdx: f ? [...f.parentElement.children].indexOf(f) : -1 }; });
   ok(right.y === before.y, "the page has not jumped at the moment of the tap", { before: before.y, right: right.y });
   ok(right.anim === "revealIn", "the form eases in", right.anim);
-  ok(right.cards === before.n - 1, "the edited goal's card is replaced by the form (the other goal stays)", right);
+  await wait(400); const settled = await page.evaluate(() => document.querySelectorAll('[data-section="goal-card"]').length);
+  ok(settled === before.n - 1 && !!(await page.$('[data-section="goal-form"]')), "after the motion, the edited goal's card is replaced by the form (the other goal stays; Run 38: they trade places smoothly)", { settled, before: before.n });
   await wait(600);
   ok(await page.evaluate(() => document.getElementById("goal-name").value === "Laptop"), "the form holds the second goal's data");
   ok(await page.evaluate(() => document.activeElement && document.activeElement.id === "goal-name"), "the name box is focused");
@@ -62,7 +63,7 @@ section("R26-M4. Home shows the accounts as a row of cards (designed in Figma); 
   const h = await page.evaluate(() => Math.min(...[...document.querySelectorAll("[data-acc-card]")].map((e) => e.getBoundingClientRect().height)));
   ok(h >= 44, "each card is a tappable button at least 44 high", h);
   await click(page, '[data-section="home-accounts-manage"]'); await wait(900);
-  ok(await page.evaluate(() => !document.querySelector(".sheet") && !!document.querySelector(".more-page") && !!document.querySelector('[data-section="my-accounts"]')), "Manage opens the Settings page at the accounts section");
+  ok(await page.evaluate(() => !document.querySelector(".sheet") && !document.querySelector(".more-page") && !!document.querySelector('[data-section="accounts-page"] [data-section="my-accounts"]')), "Manage opens the Accounts page of its own (Run 38: no jump into Settings)");
   await page.close();
   const p2 = await openPage(browser, { seed: baseSeed({ language: "en" }), fresh: true }); await settle(p2); await wait(400);
   ok(await p2.evaluate(() => !document.querySelector('[data-section="home-accounts"]')), "without accounts Home shows no accounts block");

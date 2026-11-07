@@ -4,7 +4,7 @@ import { locale, t } from "../i18n.js";
 import { pickerCats, readCatPrefs } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
-import { Collapse, Swap } from "./motion.jsx";
+import { Collapse, Reveal, Swap } from "./motion.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
 export const LEDGER_PAGE=150;   // Run 32: rows drawn at first and per "Show more" (a throttled phone froze for seconds drawing 300+ rows at once). Whole days only.
@@ -197,41 +197,42 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
             onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");setTripFilter("all");setAccFilter("all");}}>{t("ledger.clear")} ×</button>
         )}
       </div>
-      {moreOpen&&trips.length>0&&(
+      {/* Run 38: the tucked-away filters, the category totals and the subcategory chips ease in and out like every other fold */}
+      <Collapse open={moreOpen&&trips.length>0}>
         <div className="filter-bar" role="group" aria-label={t("trip.filterLabel")} data-section="tx-trip-filter">
           {["all",...trips.map(x=>x.name)].map(n=>(
             <button key={n} className={`chip${tripFilter===n?" on":""}`} aria-pressed={tripFilter===n} onClick={()=>setTripFilter(n)}>{n==="all"?t("trip.filterAll"):n}</button>
           ))}
         </div>
-      )}
-      {catSel&&catSel.n>0&&(
+      </Collapse>
+      <Reveal when={catSel&&catSel.n>0?catSel:null}>{cs=>(
         <div className="list-sub" data-section="tx-cat-totals" style={{margin:"2px 2px 8px"}}>
-          <div style={{fontWeight:600}}>{t("cat.allTime",{total:fmt(catSel.total),n:catSel.n})}</div>
-          {catSel.months.slice(0,12).map(m=><div key={m.month} data-month={m.month}>{t("cat.month",{month:monthName(m.month),total:fmt(m.total)})}</div>)}
+          <div style={{fontWeight:600}}>{t("cat.allTime",{total:fmt(cs.total),n:cs.n})}</div>
+          {cs.months.slice(0,12).map(m=><div key={m.month} data-month={m.month}>{t("cat.month",{month:monthName(m.month),total:fmt(m.total)})}</div>)}
         </div>
-      )}
-      {usedSubs.length>0&&(
+      )}</Reveal>
+      <Collapse open={usedSubs.length>0}>
         <div className="filter-bar" role="group" aria-label={t("ledger.subFilter")} data-section="tx-sub-filter">
           {[["all",""],...usedSubs].map(([k,s])=>(
             <button key={k} className={`chip${subFilter===k?" on":""}`} aria-pressed={subFilter===k} onClick={()=>setSubFilter(k)}>{k==="all"?t("ledger.subAll"):k==="none"?t("ledger.subNone"):subName(s)}</button>
           ))}
         </div>
-      )}
+      </Collapse>
       {tripSel&&<div className="list-sub" data-section="tx-trip-total" style={{margin:"2px 2px 8px"}}>{t("trip.total",{name:tripSel.name,total:fmt(tripSel.total),n:tripSel.n})}</div>}
-      {moreOpen&&usedWallets.length>0&&(
+      <Collapse open={moreOpen&&usedWallets.length>0}>
         <div className="filter-bar" role="group" aria-label={t("wallet.filterLabel")} data-section="tx-wallet-filter">
           {["all",...usedWallets,...(hasUnsetWallet?["none"]:[])].map(w=>(
             <button key={w} className={`chip${walletFilter===w?" on":""}`} aria-pressed={walletFilter===w} onClick={()=>setWalletFilter(w)}>{w==="all"?t("wallet.filterAll"):w==="none"?t("wallet.none"):walletName(w)}</button>
           ))}
         </div>
-      )}
-      {moreOpen&&usedAccs.length>0&&(
+      </Collapse>
+      <Collapse open={moreOpen&&usedAccs.length>0}>
         <div className="filter-bar" role="group" aria-label={t("ledger.accFilter")} data-section="tx-acc-filter">
           {["all",...usedAccs,...(hasUnsetAcc?["none"]:[])].map(a=>(
             <button key={a} className={`chip${accFilter===a?" on":""}`} aria-pressed={accFilter===a} onClick={()=>setAccFilter(a)}>{a==="all"?t("ledger.accAll"):a==="none"?t("ledger.accNone"):accountName(a)}</button>
           ))}
         </div>
-      )}
+      </Collapse>
       <Collapse open={!!showDates} id="tx-dates">
         <div className="date-inputs">
           <label className="date-input-wrap"><span className="date-lbl">{t("ledger.from")}</span><input type="date" lang={locale()} className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
@@ -331,7 +332,7 @@ export function SplitPanel({ txn, currency, onSplit }) {
   return (
     <div style={{marginBottom:8}} data-section="split">
       <button className="btn btn-ghost btn-full" data-section="split-open" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>{t("split.btn")}</button>
-      {open&&(
+      <Collapse open={open}>
         <div style={{marginTop:8}}>
           <div className="list-sub" style={{marginBottom:8}}>{t("split.sub",{ total:fmt(txn.amount,currency) })}</div>
           {parts.map((p,i)=>(
@@ -348,7 +349,7 @@ export function SplitPanel({ txn, currency, onSplit }) {
             <button className="btn btn-primary" style={{flex:1}} data-section="split-save" disabled={!check.ok} onClick={()=>onSplit(parsed)}>{t("split.save")}</button>
           </div>
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }
@@ -506,7 +507,7 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
             <button className="btn btn-ghost btn-full link-bill" style={{marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} aria-expanded={showLink} onClick={()=>setShowLink(s=>!s)}>
               <Icon name="repeat" size={14}/>{t(myBill?"bill.change":txn.type==="income"?"detail.linkIncome":"detail.linkBill")}
             </button>
-            {showLink&&(
+            <Collapse open={!!showLink}>
               <div className="card" style={{marginTop:8,padding:"8px 14px"}}>
                 <div className="list-sub" style={{margin:"4px 0 6px",lineHeight:1.5}}>{t(explicit?"bill.linkHint":"detail.linkHint")}</div>
                 {bills.map(x=>(
@@ -521,7 +522,7 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
                   <span className="list-body"><span className="list-title">{t("bill.newFromThis")}</span><span className="list-sub">{fmt(txn.amount,currency)} · {t("freq."+(txn.recurFreq||"monthly"))}</span></span>
                 </button>}
               </div>
-            )}
+            </Collapse>
           </div>
         )}
         <button className="btn btn-ghost btn-full" style={{color:"var(--neg)",borderColor:"var(--neg-bg)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:0}} onClick={onDelete}><Icon name="trash" size={14}/>{t("common.delete")}</button>

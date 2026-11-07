@@ -52,6 +52,26 @@ export function Swap({ k, dir=0, className="", children, ...rest }) {
   return <div key={n} className={"swap"+(n>0?" swap-in":"")+(dir>0?" swap-next":dir<0?" swap-prev":"")+(className?" "+className:"")} {...rest}>{children}</div>;
 }
 
+// Run 38 (owner: "touching edit, then cancel, it closes immediately" — templates, goals, categories, accounts): a list row and its inline editor
+// trade places with the same height + fade as Collapse, both ways. form is a function so the editor is only built while it is open; its last
+// look is kept while it closes, so Cancel does not blank it mid-motion.
+export function EditSwap({ editing, row, form }) {
+  const keep=useRef(null);
+  if (editing) keep.current=form();
+  return (<>
+    <Collapse open={!editing}>{row}</Collapse>
+    <Collapse open={!!editing}>{keep.current}</Collapse>
+  </>);
+}
+
+// Run 38: Collapse for a block that is drawn from a value (an edit draft, a question): `when` is the value (falsy = closed). The last value is kept
+// while it closes, so the block does not crash or go blank when its value is cleared by Cancel.
+export function Reveal({ when, children, id }) {
+  const keep=useRef(null);
+  if (when) keep.current=when;
+  return <Collapse open={!!when} id={id}>{keep.current?children(keep.current):null}</Collapse>;
+}
+
 // A row/chip that leaves smoothly before it is removed from its list (the owner's template delete: it vanished at once).
 // Call leave(() => actuallyRemove()). The row gets class "row-leaving" for MOTION_MS.
 export function useLeave() {

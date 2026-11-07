@@ -3,6 +3,7 @@ import { useState } from "react";
 import { locale, t, tn } from "../i18n.js";
 import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
+import { Collapse, Reveal, Swap } from "./motion.jsx";   // Run 38: forms, edits and the Debts / Loans switch ease in and out
 
 // ─── Debts & loans page (Run 17) ──────────────────────────────────────────────
 // Settings → Debts & loans. Debts are person-to-person (no interest); loans have a rate and a schedule (an ESTIMATE from the typed terms).
@@ -136,11 +137,12 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
         ))}
       </div>
 
+      <Swap k={seg} dir={seg==="loans"?1:-1}>
       {seg==="debts"&&(<>
         <div style={{display:"flex",justifyContent:"flex-end",margin:"4px 2px 10px"}}>
           <button className="btn btn-sm" data-section="debt-add-btn" onClick={()=>setShowDebt(s=>!s)}>{showDebt?t("common.cancel"):t("set.add")}</button>
         </div>
-        {showDebt&&(
+        <Collapse open={showDebt}>
           <div className="card" data-section="debt-form">
             <fieldset className="lang-switch" style={{marginBottom:10}} aria-label={t("debt.dirLabel")}>
               {[["owe",t("debt.dirOwe")],["owed",t("debt.dirOwed")]].map(([v,lbl])=>(
@@ -155,7 +157,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
             {dMsg&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginBottom:8}}>{dMsg}</div>}
             <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="debt-save" onClick={addDebt}>{t("common.save")}</button>
           </div>
-        )}
+        </Collapse>
         {data.debts.length===0&&!showDebt&&<div className="empty" style={{padding:"28px 0"}} data-section="debts-empty"><div className="empty-icon"><LedgerArt/></div><div className="empty-body">{t("debt.none")}</div></div>}
         {data.debts.map(d=>{ const left=debtRemaining(d); return (
           <div key={d.id} className="card" data-section="debt-card" data-id={d.id}>
@@ -169,19 +171,19 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
                 <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delDebt(d)} aria-label={t("debt.delete",{name:maskText(d.name)})}><Icon name="trash" size={15}/></button>
               </div>
             </div>
-            {dEdit&&dEdit.id===d.id&&(
+            <Reveal when={dEdit&&dEdit.id===d.id?dEdit:null}>{de=>(
               <div data-section="debt-edit-form" style={{marginTop:10}}>
                 <div className="field-row" style={{marginBottom:10}}>
-                  <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-name">{t("debt.person")}</label><input id="debt-edit-name" className="field-input" value={dEdit.name} maxLength={60} onChange={e=>setDEdit({...dEdit,name:e.target.value})}/></div>
-                  <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-amt">{t("debt.amount")}</label><input id="debt-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={dEdit.amt} onChange={e=>setDEdit({...dEdit,amt:cleanMoneyText(e.target.value)})}/></div>
+                  <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-name">{t("debt.person")}</label><input id="debt-edit-name" className="field-input" value={de.name} maxLength={60} onChange={e=>setDEdit({...de,name:e.target.value})}/></div>
+                  <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-amt">{t("debt.amount")}</label><input id="debt-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={de.amt} onChange={e=>setDEdit({...de,amt:cleanMoneyText(e.target.value)})}/></div>
                 </div>
-                <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-edit-due">{t("debt.due")}</label><input id="debt-edit-due" className="field-input" lang={locale()} type="date" value={dEdit.due} onChange={e=>setDEdit({...dEdit,due:e.target.value})}/></div>
+                <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-edit-due">{t("debt.due")}</label><input id="debt-edit-due" className="field-input" lang={locale()} type="date" value={de.due} onChange={e=>setDEdit({...de,due:e.target.value})}/></div>
                 <div style={{display:"flex",gap:8}}>
                   <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setDEdit(null)}>{t("common.cancel")}</button>
                   <button className="btn btn-primary" style={{flex:1}} data-section="debt-edit-save" onClick={saveDebtEdit}>{t("common.save")}</button>
                 </div>
               </div>
-            )}
+            )}</Reveal>
             <div style={{marginTop:8}}>
               <div className="list-sub">{t("debt.remaining")}</div>
               {left>0 ? <div className="big-num debt-remaining">{q(left)} <span className="list-sub">{t("debt.of",{total:q(d.principal)})}</span></div> : <div className="big-num debt-remaining" style={{color:"var(--pos)"}}>{t("debt.settled")}</div>}
@@ -193,9 +195,9 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
                 <button className="btn btn-sm btn-sm-primary debt-pay-btn" onClick={()=>addPayment(d)}>{t("debt.pay")}</button>
               </div>
             )}
-            {ask&&ask.id===d.id&&(
+            <Reveal when={ask&&ask.id===d.id?ask:null}>{ak=>(
               <div className="card debt-ask" role="group" aria-label={t("debt.askTitle")} data-section="debt-ask" style={{marginTop:8}}>
-                <div style={{fontSize:13,fontWeight:600}}>{t(d.direction==="owe"?"debt.askOwe":"debt.askOwed",{amount:q(ask.amt)})}</div>
+                <div style={{fontSize:13,fontWeight:600}}>{t(d.direction==="owe"?"debt.askOwe":"debt.askOwed",{amount:q(ak.amt)})}</div>
                 <div className="list-sub" style={{margin:"4px 0 8px"}}>{t("debt.askHint")}</div>
                 <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                   <button className="btn btn-sm btn-sm-primary debt-ask-yes" onClick={()=>recordPayment(d,true)}>{t("debt.askYes")}</button>
@@ -203,7 +205,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
                   <button className="btn btn-sm debt-ask-cancel" onClick={()=>setAsk(null)}>{t("common.cancel")}</button>
                 </div>
               </div>
-            )}
+            )}</Reveal>
             {payMsg[d.id]&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginTop:6}}>{payMsg[d.id]}</div>}
             {d.payments.map(p=>(
               <div key={p.id} className="debt-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
@@ -219,7 +221,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
         <div style={{display:"flex",justifyContent:"flex-end",margin:"4px 2px 10px"}}>
           <button className="btn btn-sm" data-section="loan-add-btn" onClick={()=>setShowLoan(s=>!s)}>{showLoan?t("common.cancel"):t("set.add")}</button>
         </div>
-        {showLoan&&(
+        <Collapse open={showLoan}>
           <div className="card" data-section="loan-form">
             <div className="field-row" style={{marginBottom:10}}>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-lender">{t("loan.lender")}</label><input id="loan-lender" name="lender" className="field-input" value={lForm.lender} maxLength={60} onChange={upd(setLForm)}/></div>
@@ -238,7 +240,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
             {lMsg&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginBottom:8}}>{lMsg}</div>}
             <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="loan-save" onClick={addLoan}>{t("common.save")}</button>
           </div>
-        )}
+        </Collapse>
         {data.loans.length===0&&!showLoan&&<div className="empty" style={{padding:"28px 0"}} data-section="loans-empty"><div className="empty-icon"><LedgerArt/></div><div className="empty-body">{t("loan.none")}</div></div>}
         {data.loans.map(l=>{
           const sc=loanSchedule(l); if (!sc) return null;
@@ -253,20 +255,20 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
                   <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>delLoan(l)} aria-label={t("debt.delete",{name:maskText(l.lender)})}><Icon name="trash" size={15}/></button>
                 </div>
               </div>
-              {lEdit&&lEdit.id===l.id&&(
+              <Reveal when={lEdit&&lEdit.id===l.id?lEdit:null}>{le=>(
                 <div data-section="loan-edit-form" style={{marginTop:10}}>
-                  <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-lender">{t("loan.lender")}</label><input id="loan-edit-lender" className="field-input" value={lEdit.lender} maxLength={60} onChange={e=>setLEdit({...lEdit,lender:e.target.value})}/></div>
+                  <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-lender">{t("loan.lender")}</label><input id="loan-edit-lender" className="field-input" value={le.lender} maxLength={60} onChange={e=>setLEdit({...le,lender:e.target.value})}/></div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                    <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-edit-amt">{t("loan.amount")}</label><input id="loan-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={lEdit.amt} onChange={e=>setLEdit({...lEdit,amt:cleanMoneyText(e.target.value)})}/></div>
-                    <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-edit-months">{t("loan.months")}</label><input id="loan-edit-months" className="field-input" type="text" inputMode="numeric" autoComplete="off" value={lEdit.months} onChange={e=>setLEdit({...lEdit,months:e.target.value.replace(/[^0-9]/g,"")})}/></div>
+                    <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-edit-amt">{t("loan.amount")}</label><input id="loan-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={le.amt} onChange={e=>setLEdit({...le,amt:cleanMoneyText(e.target.value)})}/></div>
+                    <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-edit-months">{t("loan.months")}</label><input id="loan-edit-months" className="field-input" type="text" inputMode="numeric" autoComplete="off" value={le.months} onChange={e=>setLEdit({...le,months:e.target.value.replace(/[^0-9]/g,"")})}/></div>
                   </div>
-                  {l.rateType!=="none"&&<div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-rate">{t("loan.rate")}</label><input id="loan-edit-rate" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={lEdit.rate} onChange={e=>setLEdit({...lEdit,rate:cleanMoneyText(e.target.value)})}/></div>}
+                  {l.rateType!=="none"&&<div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-edit-rate">{t("loan.rate")}</label><input id="loan-edit-rate" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={le.rate} onChange={e=>setLEdit({...le,rate:cleanMoneyText(e.target.value)})}/></div>}
                   <div style={{display:"flex",gap:8}}>
                     <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setLEdit(null)}>{t("common.cancel")}</button>
                     <button className="btn btn-primary" style={{flex:1}} data-section="loan-edit-save" onClick={saveLoanEdit}>{t("common.save")}</button>
                   </div>
                 </div>
-              )}
+              )}</Reveal>
               <div style={{marginTop:8}}>
                 <div className="list-sub">{t("loan.monthly")}</div>
                 <div className="big-num loan-monthly">{q(sc.payments[0].payment)}</div>
@@ -313,7 +315,8 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
           );
         })}
       </>)}
+      </Swap>
     </div>
   );
 }
-
+

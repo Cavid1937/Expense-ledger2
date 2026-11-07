@@ -3,11 +3,11 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
 import { pickerCats, readCatPrefs } from "../App.jsx";
 import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
-import { SavingsFloorCard, TemplatesSection } from "./settings.jsx";
-import { Collapse, useLeave } from "./motion.jsx";
+import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
+import { Collapse, EditSwap, useLeave } from "./motion.jsx";
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
-export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange }) {
+export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange }) {
   const { transactions, budgets={}, goals=[], currency, templates=[], safeToSpend={} }=state;
   const setSeg=onSeg;
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
@@ -158,10 +158,10 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
         {goals.length===0&&!showNewGoal&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noGoals")}</div>}
         {goals.map(goal=>{
           const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion}=gp; const req=goalRequiredMonthly(goal);
-          if (showNewGoal && editGoalId===goal.id) return <Fragment key={goal.id}>{renderGoalForm()}</Fragment>;
           const ug=(updGoal&&updGoal.id===goal.id)?updGoal:(updKeep.current&&updKeep.current.id===goal.id?updKeep.current:null);
-          return (
-            <div key={goal.id} className={"card goal-card"+(isLeaving(goal.id)?" row-leaving":"")} data-section="goal-card">
+          // Run 38: the card and its edit form trade places smoothly (Edit and Cancel used to switch in one frame)
+          return (<EditSwap key={goal.id} editing={showNewGoal && editGoalId===goal.id} form={renderGoalForm} row={
+            <div className={"card goal-card"+(isLeaving(goal.id)?" row-leaving":"")} data-section="goal-card">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 <div style={{display:"flex",gap:10,alignItems:"center",minWidth:0,flex:"1 1 150px"}}>
                   <span className="cat-dot" style={{background:"var(--pos-bg)"}}><Icon name="goal" size={16} color="var(--pos)"/></span>
@@ -208,10 +208,17 @@ export function BudgetsGoalsPage({ state, showToast, seg, onSeg, addSignal, onSe
               {estCompletion&&<div className="list-sub" style={{marginTop:4}}>{t("set.atRate",{amount:fmt(goal.monthlyTarget||0,currency),date:estCompletion})}</div>}
               {!gp.complete&&<GoalScenario goal={goal} currency={currency}/>}
             </div>
-          );
+          }/>);
         })}
         <SavingsFloorCard safeToSpend={safeToSpend} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>
         <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} onUpdateTemplate={onUpdateTemplate} showToast={showToast}/>
+        {/* Run 38 (owner): your own categories and the order / visibility of all of them live here, next to the quick-add templates.
+            The "in use" check reads the full ledger (rawState), not the spending view, so a category used by any entry is never removable. */}
+        <div data-section="gl-categories">
+          <div className="section-title" style={{margin:"18px 2px 10px"}}>{t("mycat.title")}</div>
+          <MyCategories state={rawState||state} onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
+          <CategoryOrder onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
+        </div>
       </>)}
     </div>
   );

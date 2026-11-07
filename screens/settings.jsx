@@ -1,6 +1,6 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Collapse, useLeave } from "./motion.jsx";
+import { Collapse, EditSwap, useLeave } from "./motion.jsx";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
@@ -99,8 +99,8 @@ export function MyCategories({ state, onChanged, showToast }) {
   return (
     <div className="card prefs-card" data-section="my-categories">
       <div className="list-sub" style={{marginBottom:8}}>{t("mycat.sub")}</div>
-      {list.map(c=>editing&&editing.id===c.id ? (
-        <div key={c.id} data-cat-edit={c.id} style={{padding:"8px 0"}}>
+      {list.map(c=><EditSwap key={c.id} editing={!!(editing&&editing.id===c.id)} form={()=>(
+        <div data-cat-edit={c.id} style={{padding:"8px 0"}}>
           <div className="field"><label className="field-lbl" htmlFor="mycat-edit-name">{t("mycat.name")}</label>
             <input id="mycat-edit-name" className="field-input" value={editing.name} maxLength={CCAT_LEN} onChange={e=>setEditing({...editing,name:e.target.value})}/></div>
           <div className="filter-bar" role="group" aria-label={t("mycat.color")}>
@@ -111,8 +111,8 @@ export function MyCategories({ state, onChanged, showToast }) {
             <button className="btn btn-primary" style={{flex:1}} data-section="mycat-edit-save" disabled={!editing.name.trim()} onClick={saveEdit}>{t("common.save")}</button>
           </div>
         </div>
-      ) : (
-        <div key={c.id} className="settings-row" data-cat={c.id}>
+      )} row={
+        <div className="settings-row" data-cat={c.id}>
           <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
             <span aria-hidden="true" style={{width:14,height:14,borderRadius:99,background:c.color,flex:"none"}}/>
             <div style={{minWidth:0}}><div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{c.name}</div><div className="settings-row-sub">{t(c.income?"add.income":"add.expense")}</div></div>
@@ -122,7 +122,7 @@ export function MyCategories({ state, onChanged, showToast }) {
             <button className="chip" data-section="mycat-edit" aria-label={t("common.edit")+": "+c.name} onClick={()=>setEditing({ id:c.id, name:c.name, color:c.color })}>{t("common.edit")}</button>
           </div>
         </div>
-      ))}
+      }/>)}
       <div className="field"><label className="field-lbl" htmlFor="mycat-name">{t("mycat.name")}</label>
         <input id="mycat-name" className="field-input" value={name} maxLength={CCAT_LEN} onChange={e=>setName(e.target.value)} onKeyDown={e=>{ if (e.key==="Enter") add(); }}/></div>
       <div className="filter-bar" role="group" aria-label={t("mycat.type")}>
@@ -181,8 +181,8 @@ export function MyAccounts({ state, currency, showToast }) {
   return (
     <div className="card prefs-card" data-section="my-accounts" style={{marginTop:14}}>
       <div className="list-sub" style={{marginBottom:8}}>{t("acc.sub")}</div>
-      {data.accounts.map(a=>editing&&editing.id===a.id ? (
-        <div key={a.id} className="reveal" data-account-edit={a.id} style={{padding:"8px 0"}}>
+      {data.accounts.map(a=><EditSwap key={a.id} editing={!!(editing&&editing.id===a.id)} form={()=>(
+        <div data-account-edit={a.id} style={{padding:"8px 0"}}>
           <div className="field"><label className="field-lbl" htmlFor="acc-edit-name">{t("acc.name")}</label>
             <input id="acc-edit-name" className="field-input" value={editing.name} maxLength={40} onChange={e=>setEditing({...editing,name:e.target.value})}/></div>
           <div className="field"><label className="field-lbl" htmlFor="acc-edit-bal">{t("acc.opening")}</label>
@@ -192,8 +192,8 @@ export function MyAccounts({ state, currency, showToast }) {
             <button className="btn btn-primary" style={{flex:1}} data-section="acc-edit-save" disabled={!editing.name.trim()} onClick={saveEdit}>{t("common.save")}</button>
           </div>
         </div>
-      ) : (
-        <div key={a.id} className="settings-row" data-account={a.id} style={{flexDirection:"column",alignItems:"stretch",gap:10,padding:"14px 0",...(a.hidden?{opacity:0.7}:null)}}>
+      )} row={
+        <div className="settings-row" data-account={a.id} style={{flexDirection:"column",alignItems:"stretch",gap:10,padding:"14px 0",...(a.hidden?{opacity:0.7}:null)}}>
           <div style={{minWidth:0}}>
             <div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{a.name}{a.hidden?" · "+t("acc.hidden"):""}</div>
             <div className="settings-row-sub">{kindName[a.kind]} · <strong data-balance={a.id}>{fmt(bal[a.id]||0,currency)}</strong></div>
@@ -204,7 +204,7 @@ export function MyAccounts({ state, currency, showToast }) {
             <button className="chip" data-section="acc-edit" aria-label={t("acc.edit")+": "+a.name} onClick={()=>setEditing({ id:a.id, name:a.name, bal:String(bal[a.id]||0) })}>{t("acc.edit")}</button>
           </div>
         </div>
-      ))}
+      }/>)}
       {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
       {np&&(<div className="list-sub" data-section="acc-net" style={{margin:"4px 2px 8px"}}><strong>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</strong><br/>{t("acc.netNote")}</div>)}
       {PRESETS.length>0&&(<div data-section="acc-presets"><div className="list-sub" style={{margin:"6px 2px"}}>{t("acc.presetHint")}</div>
@@ -262,20 +262,19 @@ export function Fold({ id, icon, title, sub, open, onToggle, children }) {
 }
 // Run 27b: Preferences is no longer a sheet behind a row. Its contents sit directly on the Settings tab, in two parts:
 // MoneySettings (accounts, categories, Safe to Spend switch, currency) and LookSettings (colour theme, reduce effects).
-export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, open, toggle }) {
+export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, open, toggle, onOpen=()=>{} }) {
   const { currency,safeToSpend={} }=state;
   const [curSym, setCurSym]=useState(currency);
   // One-line summaries for the closed rows, read from what is saved now (they are rebuilt each time a row closes).
   const accData=readAccounts(), shownAcc=accData.accounts.filter(a=>!a.hidden);
   const accBal=shownAcc.length?accountBalances(accData,state.transactions):{};
   const accSum=shownAcc.length?t("st.sumAcc",{amount:fmt(shownAcc.reduce((s,a)=>s+Math.round((accBal[a.id]||0)*100),0)/100,currency)}):t("st.sumAccNone");
-  const catN=readCustomCats().length;
-  const catSum=catN>0?t("st.sumCat",{n:catN}):t("st.sumCatNone");
   const moneySum=t(safeToSpend.enabled?"st.sumMoneyOn":"st.sumMoneyOff",{c:currency});
   return (
     <>
       <Fold id="accounts" icon="wallet" title={t("acc.title")} sub={accSum} open={open.accounts} onToggle={()=>toggle("accounts")}><MyAccounts state={state} currency={state.currency} showToast={showToast}/></Fold>
-      <Fold id="categories" icon="list" title={t("mycat.title")} sub={catSum} open={open.categories} onToggle={()=>toggle("categories")}><MyCategories state={state} onChanged={onCatsChanged} showToast={showToast}/><CategoryOrder onChanged={onCatsChanged} showToast={showToast}/></Fold>
+      {/* Run 38: categories moved to Budgets & Goals (next to the quick-add templates); this row takes you there */}
+      <ListRow id="categories" icon="list" title={t("mycat.title")} sub={t("st.catMoved")} onClick={()=>onOpen("goals")}/>
       <Fold id="money" icon="settings" title={t("st.foldMoney")} sub={moneySum} open={open.money} onToggle={()=>toggle("money")}>
       <div className="card st-card" data-section="st-money-options">
         {/* Safe to Spend: the switch only. The monthly savings floor is on Goals. */}
@@ -337,7 +336,15 @@ export function LookSettings({ showToast, open, toggle }) {
 export function RemindersSettings({ showToast, open, toggle }) {
   const [p, setP]=useState(()=>readReminders());
   const [blocked, setBlocked]=useState(false);
+  const [exactMsg, setExactMsg]=useState("");
   if (!remindersAvailable()) return null;
+  // Run 38: switching "exact time" ON asks Android (settings page "Alarms & reminders"); it stays off if the user does not allow it there.
+  const flipExact=async ()=>{
+    if (readReminders().exact) { save({ exact:false }); setExactMsg(""); return; }
+    const R=window.LedgerNative.reminders;
+    let ok=false; try { ok=(await R.exactState())===true || (await R.requestExact())===true; } catch { ok=false; }
+    if (ok) { save({ exact:true }); setExactMsg("remind.exactOn"); } else setExactMsg("remind.exactDenied");
+  };
   // Always build the new value from what is saved NOW, not from the copy this render closed over: the permission question below takes a moment
   // and the user may change another switch or the time meanwhile (found on an emulator: the time change was overwritten by a late "Allow").
   const save=(patch)=>{ if (!writeReminders({ ...readReminders(), ...patch })) { showToast(t("theme.saveFailed"),5000); return; } setP(readReminders()); };
@@ -365,6 +372,13 @@ export function RemindersSettings({ showToast, open, toggle }) {
           <input className="field-input" type="time" value={p.time} aria-labelledby="set-rem-time" data-section="rem-time" onChange={e=>{ if (e.target.value) save({ time:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
         </div>
         <Row k="hideAmount" title={t("remind.hide")} sub={t("remind.hideSub")}/>
+        {/* Run 38 (owner: the 21:00 reminder came 13 minutes late). Optional: exact timing needs Android's "Alarms & reminders" permission. */}
+        {typeof (window.LedgerNative.reminders||{}).requestExact==="function"&&(
+          <div className="settings-row">
+            <div><div className="settings-row-title" id="set-rem-exact">{t("remind.exact")}</div><div className="settings-row-sub">{t(exactMsg||"remind.exactSub")}</div></div>
+            <div className={`toggle-track${p.exact?" on":""}`} data-section="rem-exact" onClick={flipExact} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flipExact(); } }} role="switch" aria-checked={!!p.exact} aria-labelledby="set-rem-exact" tabIndex={0}><div className="toggle-knob"/></div>
+          </div>
+        )}
         {blocked && <div className="list-sub" role="alert" data-section="rem-denied" style={{marginTop:8}}>{t("remind.denied")}</div>}
         <div className="list-sub" style={{marginTop:8}}>{t("remind.battery")}</div>
       </div>
@@ -440,8 +454,8 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
       {templates.length===0&&!showNewTpl&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noTemplates")}</div>}
       {templates.length>0&&(
         <div className="card list-card">
-          {templates.map((tpl,ti)=>showNewTpl&&editTplId===tpl.id ? <Fragment key={tpl.id}>{tplForm(true)}</Fragment> : (
-            <div key={tpl.id} className={isLeaving(tpl.id)?"row-leaving":""} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:ti<templates.length-1?"1px solid var(--rule)":"none"}}>
+          {templates.map((tpl,ti)=><EditSwap key={tpl.id} editing={showNewTpl&&editTplId===tpl.id} form={()=>tplForm(true)} row={(
+            <div className={isLeaving(tpl.id)?"row-leaving":""} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 14px",borderBottom:ti<templates.length-1?"1px solid var(--rule)":"none"}}>
               <CatIcon catId={tpl.catId} size={14}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:13,fontWeight:600,color:"var(--ink)"}}>{tpl.name}</div>
@@ -450,7 +464,7 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
               <button className="chip" data-section="tpl-edit" aria-label={t("common.edit")+": "+tpl.name} onClick={()=>startEdit(tpl)}>{t("common.edit")}</button>
               <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>leave(tpl.id,()=>onDeleteTemplate(tpl.id))} aria-label={t("set.deleteTemplate",{name:tpl.name})}><Icon name="trash" size={14}/></button>
             </div>
-          ))}
+          )}/>)}
         </div>
       )}
     </div>
@@ -517,7 +531,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
       </div>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
-      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} open={open} toggle={toggle}/>
+      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} open={open} toggle={toggle} onOpen={onOpen}/>
       <div className="card list-card" data-section="more-money">
         {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
         <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>

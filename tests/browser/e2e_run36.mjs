@@ -1,5 +1,5 @@
 // Run 36 (2026-11-07): refund of a category, hide / reorder categories, search in the picker, subcategory filter. Synthetic data only.
-import { launch, openPage, openSettings, openAdd, tab, wait, ok, section, finish, baseSeed, tx, settle, state, TODAY } from "./lib.mjs";
+import { launch, openPage, openCategories, openSettings, openAdd, tab, wait, ok, section, finish, baseSeed, tx, settle, state, TODAY } from "./lib.mjs";
 const browser = await launch();
 const PK = "expense_ledger_v5__catprefs";
 const phone = (page) => page.setViewport({ width: 400, height: 860, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
@@ -33,8 +33,8 @@ section("R36-B1. Refund of a category: lowers that spending, not counted as mone
 section("R36-B2. Hide and reorder in Settings; the add form follows; nothing else changes");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [tx({ category: "pets", amount: 12, date: TODAY })] }) }); await phone(page); await settle(page);
-  await openSettings(page);
-  ok(!!(await page.$('[data-section="cat-order"]')), "the order and visibility list is in Settings");
+  await openCategories(page);
+  ok(!!(await page.$('[data-section="cat-order"]')), "the order and visibility list is on Budgets & Goals (Run 38)");
   ok(await page.evaluate(() => !document.querySelector('[data-catord="other"] [data-section="catord-toggle"]')), "Other has no Hide button");
   await page.evaluate(() => document.querySelector('[data-catord="pets"] [data-section="catord-toggle"]').click()); await wait(300);
   await page.evaluate(() => document.querySelector('[data-catord="transport"] [data-section="catord-up"]').click()); await wait(300);

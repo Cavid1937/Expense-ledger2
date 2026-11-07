@@ -1,5 +1,5 @@
 // Run 24: user-made things can be edited — custom category, quick-add template, goal, debt, loan. Synthetic data only.
-import { launch, openPage, openSettings, wait, ok, section, finish, baseSeed, settle } from "./lib.mjs";
+import { launch, openPage, openCategories, openSettings, wait, ok, section, finish, baseSeed, settle } from "./lib.mjs";
 const browser = await launch();
 const type = (page, sel, v) => page.$eval(sel, (el, val) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(el, val); el.dispatchEvent(new Event("input", { bubbles: true })); }, v);
 const click = (page, sel) => page.evaluate((s) => document.querySelector(s).click(), sel);
@@ -9,7 +9,7 @@ const seedKeys = (obj) => () => { try { if (!sessionStorage.getItem("__e")) { se
 section("R24-ED1. Custom category: rename and recolour");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }), pre: () => { try { if (!sessionStorage.getItem("__e")) { sessionStorage.setItem("__e", "1"); localStorage.setItem("expense_ledger_v5__cats", JSON.stringify({ version: 1, cats: [{ id: "u_pets01", name: "Pets", income: false, color: "#F28B82" }] })); } } catch {} } });
-  await settle(page); await openSettings(page);
+  await settle(page); await openCategories(page);
   await click(page, '[data-cat="u_pets01"] [data-section="mycat-edit"]'); await wait(250);
   await type(page, "#mycat-edit-name", "Pet care"); await click(page, '[data-section="mycat-edit-save"]'); await wait(350);
   const s = await page.evaluate(() => JSON.parse(localStorage.getItem("expense_ledger_v5__cats")));

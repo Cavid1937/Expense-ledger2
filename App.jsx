@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef, Fragment, Component } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Fragment, Component } from "react";
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
 import { CSS } from "./styles.js";
 import { LockGate, LockSheet } from "./screens/lock.jsx";
@@ -6,7 +6,8 @@ import { HomePage } from "./screens/home.jsx";
 import { LedgerPage, TxnDetailSheet, TxnRow } from "./screens/ledger.jsx";
 import { AddEditOverlay, BillSheet } from "./screens/add.jsx";
 import { RecurringHub } from "./screens/recurring.jsx";
-import { ImportExportPage, ImportUnlock, InfoSheet, LanguageChooser, MorePage } from "./screens/settings.jsx";
+import { ImportExportPage, ImportUnlock, InfoSheet, LanguageChooser, MorePage, MyAccounts } from "./screens/settings.jsx";
+import { AccountSheet } from "./screens/home.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
@@ -314,6 +315,10 @@ export const CATEGORIES = [
   // Run 35: more everyday life. New ids only; every older id, name and subcategory is unchanged, so no stored entry moves.
   { id:"family",   name:"Family & Children",     tile:"Family",    color:"#F2A3B3", income:false,
     subs:["Childcare","Children's needs","Family support","School items","Toys & games","Other"] },
+  // Run 38 (owner: "people who have a car, why was it not thought of?"): everything a car costs in one place. Transport keeps its own subcategories
+  // (Fuel, Parking, Car Maintenance) so entries already recorded there do not change.
+  { id:"car",      name:"Car",                   tile:"Car",       color:"#7FA7C9", income:false,
+    subs:["Fuel","Car insurance","Car Maintenance","Tyres & parts","Parking","Fines","Car wash","Car tax & inspection","Other"] },
   { id:"pets",     name:"Pets",                  tile:"Pets",      color:"#D7B98E", income:false,
     subs:["Pet food","Vet","Pet supplies","Pet grooming","Other"] },
   { id:"work",     name:"Work & Business",       tile:"Work",      color:"#8FA8D8", income:false,
@@ -372,6 +377,7 @@ const CATEGORY_MAP = {
   "side income":"freelance","commission":"freelance","consulting":"freelance","gig":"freelance",
   "groceries & cafes":"food","cafes":"food",
   // Run 35: aliases for the newer categories (exact words only, same rule as above)
+  "car":"car","vehicle":"car","auto":"car","car wash":"car","car insurance":"car","fines":"car",   // Run 38 (fuel/petrol keep meaning Transport, as before)
   "kids":"family","children":"family","childcare":"family","baby":"family","family":"family","pet":"pets","pet food":"pets","vet":"pets",
   "scholarship":"stipend","scholarships":"stipend","stipend":"stipend","grant":"stipend","grants":"stipend",
   "pensions":"pension","retirement":"pension","benefit":"benefits","benefits":"benefits","social support":"benefits","social benefit":"benefits",
@@ -477,6 +483,14 @@ export function pickerCats(income, prefs, keep=[]) {
   const p=cleanCatPrefs(prefs), hid=new Set(p.hidden), k=new Set((Array.isArray(keep)?keep:[keep]).filter(Boolean));
   return orderedCats(income,p).filter(c=>!hid.has(c.id) || k.has(c.id));
 }
+// Run 38 (owner: "put the most used categories at the front desk?"): plain counting, no guessing. Categories used in the last 90 days come first,
+// most used first; ties and unused ones keep their normal order. Applied only when the user has not arranged this type's order by hand.
+export function frequentFirst(list, transactions, now=new Date(), days=90) {
+  const to=localDateStr(now), from=localDateStr(new Date(now.getFullYear(),now.getMonth(),now.getDate()-days)), n={};
+  (Array.isArray(transactions)?transactions:[]).forEach(x=>{ if (x && typeof x.date==="string" && x.date>=from && x.date<=to) n[x.category]=(n[x.category]||0)+1; });
+  return (list||[]).map((c,i)=>({ c, i, k:n[c.id]||0 })).sort((a,b)=>b.k-a.k || a.i-b.i).map(x=>x.c);
+}
+export function hasManualOrder(prefs, income) { const p=cleanCatPrefs(prefs); return p.order.some(id=>CATEGORIES.some(c=>c.id===id && !!c.income===!!income)); }
 export function moveCat(prefs, income, id, dir) {
   const p=cleanCatPrefs(prefs), ids=orderedCats(income,p).map(c=>c.id), i=ids.indexOf(id), j=i+(dir<0?-1:1);
   if (i<0 || j<0 || j>=ids.length) return p;
@@ -2860,11 +2874,11 @@ export function widgetLine(state, spendTxns, prefs, now=new Date()) {
 }
 const REMIND_KEY=KEY+"__reminders";
 const REMIND_EVENT="ledger-reminders-changed";
-export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", hideAmount:false });
+export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", hideAmount:false, exact:false });   // Run 38: exact = "remind at the exact time"
 export function cleanReminderPrefs(raw) {
   const r=raw && typeof raw==="object" ? raw : {};
   const time=typeof r.time==="string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) ? r.time : REMIND_DEFAULT.time;
-  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, hideAmount:r.hideAmount===true };
+  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, hideAmount:r.hideAmount===true, exact:r.exact===true };
 }
 export function readReminders() { try { return cleanReminderPrefs(JSON.parse(localStorage.getItem(REMIND_KEY)||"null")); } catch { return { ...REMIND_DEFAULT }; } }
 export function writeReminders(p) {
@@ -2927,6 +2941,7 @@ const ICONS = {
   salary:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>`,
   freelance:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/><path d="M10 12v2h4v-2"/></svg>`,
   income:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>`,
+  car:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v-4.5l-1.6-4.3A2 2 0 0 0 15.5 7h-7a2 2 0 0 0-1.9 1.2L5 12.5V17z"/><path d="M5 12.5h14"/><circle cx="8" cy="17" r="1.8"/><circle cx="16" cy="17" r="1.8"/></svg>`,   // Run 38
   // Run 35: icons for the new categories (same 24px line style)
   family:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M16 14.2a4 4 0 0 1 5 3.8v2"/></svg>`,
   pets:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="10" r="1.8"/><circle cx="10" cy="5.8" r="1.8"/><circle cx="14.5" cy="5.8" r="1.8"/><circle cx="18.5" cy="10" r="1.8"/><path d="M12.2 11c-3 0-5.6 3-5.6 5.4 0 1.7 1.5 2.4 3 2 1-.3 1.6-.5 2.6-.5s1.6.2 2.6.5c1.5.4 3-.3 3-2 0-2.4-2.6-5.4-5.6-5.4z"/></svg>`,
@@ -2983,7 +2998,8 @@ const ICONS = {
 // More tab stays selected, Back (or the title's back arrow) returns to More, and a sideways swipe moves from More's position.
 const TABS = [{id:"home",icon:"home"},{id:"ledger",icon:"list"},{id:"monthly",icon:"chart"},{id:"goals",icon:"goal"},{id:"more",icon:"menu"}];
 const TAB_ORDER = TABS.map(x=>x.id);
-const SUBPAGE_PARENT = { recurring:"more", io:"more", debts:"more" };
+// Run 38: "accounts" is a page of its own opened from Home (it used to jump into the Settings tab, open a fold and scroll at the same time).
+const SUBPAGE_PARENT = { recurring:"more", io:"more", debts:"more", accounts:"home" };
 
 export function Icon({ name, size=16, color="currentColor", style={} }) {
   return (
@@ -3147,6 +3163,7 @@ function AppInner() {
   const [goalsAdd, setGoalsAdd] = useState(0);
   const [showAdd,  setShowAdd]  = useState(false);
   const [addLeaving, setAddLeaving] = useState(false), addTok=useRef(0);
+  const [viewAcc, setViewAcc] = useState(null);   // Run 38: the account whose details sheet is open (tapped on Home)
   const [moreScroll, setMoreScroll] = useState("");   // Run 27b: section the Settings tab should glide to when opened from Home
   
   const [,setCatVer] = useState(0);   // Run 24: bumped when the user's own categories change, so every screen redraws with them
@@ -3252,8 +3269,15 @@ function AppInner() {
 
   // Run 34: going back out of a sub-page (Recurring, Import / Export, Debts) slides the page away first (~0.19 s) instead of cutting; every other switch is as before.
   const [pageOut,setPageOut]=useState(false), pageOutBusy=useRef(false);
+  // Run 38 (owner: "switching pages always looks like it is refreshing"): each tab remembers where it was scrolled, so coming back shows the
+  // same place instead of a fresh page from the top. A sub-page (Recurring, Import / Export, Debts, Accounts) always opens at its top.
+  const scrollMem=useRef({});
+  // Saved relative to the page itself (not the window): a banner easing shut above the page must not shift where the list comes back.
+  const pageDocTop=()=>{ const el=document.querySelector("main.page"); return el ? el.getBoundingClientRect().top+(window.scrollY||0) : 0; };
+  const saveScroll=(from)=>{ try { const el=document.querySelector("main.page"); scrollMem.current[from]={ w:(window.scrollY||0)-pageDocTop(), p:el?el.scrollTop:0 }; } catch {} };
   const switchTab=useCallback((t)=>{
     const from=tabRef.current;
+    if (!SUBPAGE_PARENT[from]) saveScroll(from);
     if (SUBPAGE_PARENT[from] && SUBPAGE_PARENT[from]===t && !motionOff()) {
       if (pageOutBusy.current) return;
       pageOutBusy.current=true; setPageOut(true);
@@ -3262,7 +3286,21 @@ function AppInner() {
     }
     setTab(t); setTabKey(k=>k+1);
   },[]);
-  const pfCount=useRef(0), pfPrev=useRef(privacy); if (pfPrev.current!==privacy) { pfPrev.current=privacy; pfCount.current++; }   // the page softly re-draws when "Hide amounts" changes
+  useLayoutEffect(()=>{   // Run 38: put the tab back where it was (instantly, before it is painted)
+    const m=SUBPAGE_PARENT[tab] ? null : scrollMem.current[tab];
+    const target=()=>m ? Math.max(0,pageDocTop()+m.w) : 0;
+    const go=()=>{ try { const el=document.querySelector("main.page"); if (el) el.scrollTop=m?m.p:0; window.scrollTo({ top:target(), behavior:"instant" }); } catch { try { window.scrollTo(0,target()); } catch {} } };
+    go();
+    if (!m || !(m.w>0 || m.p>0)) return undefined;
+    // The page may still be growing (lists, charts) and a banner above may still be easing shut when it is first painted. Try again for a few
+    // frames until the remembered place is reached; stop at once if the person scrolls by themselves meanwhile.
+    let tries=0, timer=0, lastW=window.scrollY;
+    const again=()=>{ tries++; if (Math.abs(window.scrollY-lastW)>2) return; if (Math.abs(window.scrollY-target())<=2 || tries>10) return; go(); lastW=window.scrollY; timer=setTimeout(again,60); };
+    timer=setTimeout(again,30);
+    return ()=>clearTimeout(timer);
+  },[tabKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // the page softly re-draws when "Hide amounts" changes; Run 38: and when the language changes (the words cross-fade instead of snapping)
+  const pfCount=useRef(0), pfPrev=useRef(privacy+"|"+state.language); if (pfPrev.current!==privacy+"|"+state.language) { pfPrev.current=privacy+"|"+state.language; pfCount.current++; }
   const [debtsStart,setDebtsStart]=useState("debts");   // Run 18: the add form can send you straight to the Debts or Loans list
   const tabRef=useRef(tab); tabRef.current=tab;
 
@@ -3326,7 +3364,7 @@ function AppInner() {
       if (Math.abs(dx)<70 || Math.abs(dx)<Math.abs(dy)*1.8 || e.timeStamp-t0>700) return;
       const i=ORDER.indexOf(SUBPAGE_PARENT[tabRef.current]||tabRef.current), j=i+(dx<0?1:-1);
       if (i<0 || j<0 || j>=ORDER.length) return;
-      switchTab(ORDER[j]); window.scrollTo(0,0);
+      switchTab(ORDER[j]);   // Run 38: the tab restores its own scroll position (no jump to the top)
     };
     const reset=()=>{ s=null; };
     document.addEventListener("touchstart",onStart,{ passive:true }); document.addEventListener("touchmove",onMove,{ passive:true });
@@ -3520,7 +3558,7 @@ function AppInner() {
     try {
       const prefs=readReminders(), tx=state.transactions||[], bl=state.bills||[], cur=state.currency;
       const items=(prefs.bills||prefs.recurring||prefs.daily) ? reminderPlan(buildSchedules(tx,bl),tx,prefs,new Date()).map(i=>({ ...i, ...reminderMessage(i,prefs,cur) })) : [];
-      Promise.resolve(window.LedgerNative.reminders.sync({ items })).catch(()=>{ /* the shell is unavailable: the ledger is not affected */ });
+      Promise.resolve(window.LedgerNative.reminders.sync({ items, exact:readReminders().exact })).catch(()=>{ /* the shell is unavailable: the ledger is not affected */ });
     } catch { /* same */ }
   },[state.transactions,state.bills,state.currency,state.language,remindTick]);
   // Run 30 (Android app only): long-press shortcuts on the app icon ("Add expense" / "Add income") open the add form.
@@ -3836,7 +3874,7 @@ function AppInner() {
           {SUBPAGE_PARENT[tab]
             ? <div className="topbar-back">
                 <button className="topbar-btn" onClick={()=>switchTab(SUBPAGE_PARENT[tab])} aria-label={t("common.back")} title={t("common.back")}><Icon name="chevLeft" size={22}/></button>
-                <h1 className="wordmark">{t(tab==="io"?"io.title":tab==="debts"?"debt.title":"rec.title")}</h1>
+                <h1 className="wordmark">{t(tab==="io"?"io.title":tab==="debts"?"debt.title":tab==="accounts"?"acc.title":"rec.title")}</h1>
               </div>
             : <h1 className="wordmark">{tab==="home"?t(greetingKey())+(state.profileName?", "+state.profileName:""):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
@@ -3846,12 +3884,12 @@ function AppInner() {
         </header>
 
         <main className={(SUBPAGE_PARENT[tab]?"page page-sub":"page")+(pageOut?" page-out":"")+(pfCount.current>0?(pfCount.current%2?" pf-a":" pf-b"):"")} key={tabKey}>
-          {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>{ setMoreScroll("my-accounts"); switchTab("more"); }} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+          {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onGroupMany={groupMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
-          {tab==="goals"     && <BudgetsGoalsPage state={spendState} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
+          {tab==="goals"     && <BudgetsGoalsPage state={spendState} rawState={state} onCatsChanged={()=>setCatVer(v=>v+1)} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
@@ -3868,10 +3906,11 @@ function AppInner() {
             }}
             onUpdateTemplate={(id,patch)=>setState(s=>({...s,templates:s.templates.map(x=>x.id===id?{...x,...patch}:x)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
-          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={switchTab} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
+          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={tb=>{ if (tb==="goals") setGoalsSeg("goals"); switchTab(tb); }} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill} onAddBill={()=>setEditBill(null)}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
+          {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast}/></div>}
           {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} onExportEncrypted={exportEncrypted} protection={protection} onProtect={()=>askProtection(true)}
@@ -3904,6 +3943,7 @@ function AppInner() {
         )}
         <ConfirmHost/>
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
+        {viewAcc&&<AccountSheet id={viewAcc} transactions={transactions} currency={currency} onClose={()=>setViewAcc(null)} onManage={()=>{ setViewAcc(null); switchTab("accounts"); }} onView={txn=>{ setViewAcc(null); setViewTxn(txn); }}/>}
         {showLock&&<LockSheet onClose={()=>setShowLock(false)} showToast={showToast}/>}
         
         {importPending&&(

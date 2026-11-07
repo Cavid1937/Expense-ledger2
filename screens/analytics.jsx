@@ -42,6 +42,7 @@ export function SpendDonut({ catSpend, total, currency }) {
 
 // Analytics "Spending trend": this month's running total, with the previous month's as a faint line for comparison.
 export function SpendingTrend({ transactions, mon, prv, currency }) {
+  const [sel,setSel]=useState(null);   // Run 38: the day (0-based) picked on the chart, or null
   const cur=cumulativeByDay(transactions,mon), prev=cumulativeByDay(transactions,prv);
   const curLast=[...cur].reverse().find(v=>v!==null)??0, prevLast=prev[prev.length-1]??0;
   if (!(curLast>0) && !(prevLast>0)) return null;
@@ -50,12 +51,28 @@ export function SpendingTrend({ transactions, mon, prv, currency }) {
   const path=arr=>arr.map((v,i)=>v===null?null:`${x(i).toFixed(1)},${y(v).toFixed(1)}`).filter(Boolean);
   const cp=path(cur), pp=path(prev);
   const ticks=[1,8,15,22,n];
+  // Run 38 (owner: "the user moves his finger along the line and sees what he spent on that date"): touch / drag / arrow keys pick a day.
+  // Horizontal drags only (touch-action: pan-y), so scrolling the page still works. The readout stays after the finger lifts.
+  const lastIdx=Math.max(0,cur.reduce((m,v,i)=>v!==null?i:m,-1));
+  const pick=(e)=>{ const r=e.currentTarget.getBoundingClientRect(); if (!r.width) return; const i=Math.round(((e.clientX-r.left)/r.width)*(n-1)); setSel(Math.max(0,Math.min(n-1,i))); };
+  const onKey=(e)=>{ if (e.key==="ArrowRight"||e.key==="ArrowLeft") { e.preventDefault(); setSel(s=>{ const b=s===null?lastIdx:s; return Math.max(0,Math.min(n-1,b+(e.key==="ArrowRight"?1:-1))); }); } else if (e.key==="Escape") setSel(null); };
+  const si=sel!==null&&sel<n?sel:null;
+  const curV=si!==null&&si<cur.length?cur[si]:null, prevV=si!==null&&si<prev.length?prev[si]:null;
+  const dayV=curV!==null ? Math.round((curV-(si>0&&cur[si-1]!==null?cur[si-1]:0))*100)/100 : null;
+  const dayDate=si!==null?`${mon}-${String(si+1).padStart(2,"0")}`:"";
   return (
     <div className="card trend-card">
       <div className="card-head"><span className="card-title">{t("an.trendTitle")}</span></div>
       <div className="big-num" style={{marginBottom:2}}>{fmt(curLast,currency)}</div>
-      <div className="list-sub" style={{marginBottom:10}}>{t("an.trendSub",{month:monthName(prv)})}</div>
-      <svg viewBox={`0 0 ${W} ${H+18}`} width="100%" role="img" aria-label={t("an.trendAria",{amount:fmt(curLast,currency),prev:fmt(prevLast,currency)})}>
+      <div className="list-sub" style={{marginBottom:6}}>{t("an.trendSub",{month:monthName(prv)})}</div>
+      <div className="list-sub" data-section="trend-readout" aria-live="polite" style={{minHeight:36,marginBottom:4,lineHeight:1.45,color:si!==null?"var(--ink)":"var(--ink-3)"}}>
+        {si===null ? t("an.scrubHint")
+          : <>{curV!==null ? t("an.scrubDay",{ date:fmtDate(dayDate), day:fmt(dayV,currency), total:fmt(curV,currency) }) : t("an.scrubFuture",{ date:fmtDate(dayDate) })}
+              {prevV!==null&&<><br/>{t("an.scrubPrev",{ total:fmt(prevV,currency) })}</>}</>}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H+18}`} width="100%" role="img" data-section="trend-chart" tabIndex={0} aria-label={t("an.trendAria",{amount:fmt(curLast,currency),prev:fmt(prevLast,currency)})+" "+t("an.scrubHint")}
+        style={{touchAction:"pan-y",cursor:"crosshair",outline:"none"}}
+        onPointerDown={e=>{ try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} pick(e); }} onPointerMove={e=>{ if (e.buttons || e.pointerType==="touch") pick(e); }} onKeyDown={onKey}>
         {[0.5,1].map(f=><line key={f} x1="0" x2={W} y1={y(max*f)} y2={y(max*f)} stroke="var(--rule)" strokeWidth="1"/>)}
         <line x1="0" x2={W} y1={H} y2={H} stroke="var(--rule-2)" strokeWidth="1"/>
         {pp.length>1&&<polyline points={pp.join(" ")} fill="none" stroke="var(--ink-4)" strokeWidth="1.5" strokeDasharray="4 4"/>}
@@ -64,6 +81,11 @@ export function SpendingTrend({ transactions, mon, prv, currency }) {
           <polyline points={cp.join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round"/>
         </>}
         {ticks.map(d=><text key={d} x={Math.min(Math.max(x(d-1),8),W-8)} y={H+15} textAnchor="middle" fontSize="11" fill="var(--ink-3)">{d}</text>)}
+        {si!==null&&<g data-section="trend-cursor" pointerEvents="none">
+          <line x1={x(si)} x2={x(si)} y1="0" y2={H} stroke="var(--ink-3)" strokeWidth="1"/>
+          {prevV!==null&&<circle cx={x(si)} cy={y(prevV)} r="3.5" fill="var(--bg-card)" stroke="var(--ink-4)" strokeWidth="1.5"/>}
+          {curV!==null&&<circle cx={x(si)} cy={y(curV)} r="4.5" fill="var(--accent)" stroke="var(--bg-card)" strokeWidth="2"/>}
+        </g>}
       </svg>
       <div className="trend-legend"><span><i style={{background:"var(--accent)"}}/>{monthName(mon)}</span><span><i className="dash"/>{monthName(prv)}</span></div>
     </div>

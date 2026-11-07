@@ -36,7 +36,7 @@ section("R24-ACB2. Use an account in the add form; in-use account cannot be remo
   const page = await openPage(browser, { seed, pre: () => { try { if (!sessionStorage.getItem("__a")) { sessionStorage.setItem("__a", "1"); localStorage.setItem("expense_ledger_v5__accounts", JSON.stringify({ version: 1, accounts: [{ id: "a_card01", name: "My card", kind: "card", opening: { amount: 10, date: "" }, hidden: false }], transfers: [] })); } } catch {} } });
   await settle(page);
   await openAdd(page);
-  ok(await page.evaluate(() => !!document.querySelector('[data-section="add-account"] select')), "the add form offers an Account choice");
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="add-account"] [data-acc-pick="a_card01"]') && !document.querySelector('[data-section="add-wallet"]')), "the add form offers the account as a one-tap 'Paid from' choice, and no cash/card/mobile chips (Run 38)");
   await page.evaluate(() => { document.querySelector(".add-overlay .icon-btn, .add-overlay [aria-label='Close']")?.click(); }); await page.reload(); await settle(page); await openSettings(page);
   await page.evaluate(() => document.querySelectorAll('[data-section="my-accounts"] [data-account] button')[1].click()); await wait(300);
   ok((await store(page)).accounts.length === 1, "an account used by an entry is not removed");

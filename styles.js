@@ -54,7 +54,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .page{flex:1;overflow-y:auto;padding:20px 20px calc(148px + env(safe-area-inset-bottom,0px));animation:pageIn 240ms cubic-bezier(0.22,1,0.36,1) backwards}
 /* "backwards", not "both": a transform kept after the animation makes .page the box that position:fixed sheets are placed in,
    so a sheet opened from a long list landed thousands of pixels below the screen, under the tab bar. */
-@keyframes pageIn{from{opacity:0}to{opacity:1}}   /* Run 14: a short fade only; sliding every screen in made the numbers move while being read */
+@keyframes pageIn{from{opacity:.4}to{opacity:1}}   /* Run 14: a short fade only; sliding every screen in made the numbers move while being read. Run 38: from 0.4, not 0 — starting from blank looked like a refresh */
 .label-sm{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3)}
 /* Hero */
 .hero{padding:16px 0 18px;border-bottom:1px solid var(--rule);margin-bottom:18px}
@@ -779,8 +779,20 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--sat);ba
 .fold-chev.r90.open{transform:rotate(90deg)}
 .privacy-toggle svg{animation:eyeSwap 220ms var(--ease-out)}
 @keyframes eyeSwap{from{opacity:0;transform:scale(0.7)}to{opacity:1;transform:none}}
-.an-seg{position:sticky;top:calc(var(--sat) + 60px);z-index:5;background:var(--bg);padding:4px 0 8px;margin-bottom:4px}
+/* Run 38 (owner screenshot): a sticky element's offset counts from its scroll box, which is the page (.page scrolls), not the screen. The old
+   "safe area + 60px" pushed the tab bar down inside the page: an empty gap above it and the first card hidden under it. 0 = the top of the page box,
+   which already sits under the top bar; -20px cancels the page's 20px top padding (sticky offsets count inside the padding). */
+.an-seg{position:sticky;top:-20px;z-index:5;background:var(--bg);padding:4px 0 8px;margin-bottom:4px}
 .an-seg .seg{margin-bottom:0;flex-wrap:wrap}
+/* Run 38: like .collapse, but the content stays in the page while closed (form fields keep what was typed and stay reachable for the app). */
+.keep-collapse{display:grid;grid-template-rows:0fr;grid-template-columns:minmax(0,1fr);opacity:0;visibility:hidden;transition:grid-template-rows 260ms cubic-bezier(0.22,1,0.36,1),opacity 200ms ease,visibility 0s linear 260ms}
+.keep-collapse.is-open{grid-template-rows:1fr;opacity:1;visibility:visible;transition:grid-template-rows 260ms cubic-bezier(0.22,1,0.36,1),opacity 220ms ease 40ms,visibility 0s}
+.keep-collapse-in{min-height:0;overflow:hidden}
+/* closed = not drawn at all once the motion has ended (display waits 260ms, then "none"; engines without allow-discrete simply close at once) */
+.keep-collapse:not(.is-open) .keep-collapse-in{display:none;transition:display 0s linear 260ms allow-discrete}
+.keep-collapse.is-open .keep-collapse-in{overflow:visible}
+[data-fx="off"] .keep-collapse,[data-fx="off"] .keep-collapse.is-open{transition:none}
+@media (prefers-reduced-motion:reduce){.keep-collapse,.keep-collapse.is-open{transition:none}}
 .an-seg .seg-btn{flex:1 1 64px;min-width:0;padding:0 6px;overflow-wrap:anywhere}
 .tab-fade{animation:swapIn 240ms var(--ease-out) backwards}
 @media (prefers-reduced-motion:reduce){.tab-fade,.sel-bar,.privacy-toggle svg{animation:none}}

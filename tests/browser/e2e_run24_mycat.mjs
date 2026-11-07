@@ -1,5 +1,5 @@
 // Run 24: add an own category in Settings; it shows in the add form, survives a reload, and cannot be removed while an entry uses it.
-import { launch, openPage, openSettings, openAdd, wait, ok, section, finish, baseSeed, tx, settle, state, bodyText } from "./lib.mjs";
+import { launch, openPage, openCategories, openSettings, openAdd, wait, ok, section, finish, baseSeed, tx, settle, state, bodyText } from "./lib.mjs";
 const browser = await launch();
 const CK = "expense_ledger_v5__cats";
 const type = (page, sel, v) => page.$eval(sel, (el, val) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(el, val); el.dispatchEvent(new Event("input", { bubbles: true })); }, v);
@@ -7,8 +7,8 @@ const type = (page, sel, v) => page.$eval(sel, (el, val) => { const set = Object
 section("R24-MCB1. Add, use, reload, refuse removal");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [tx({ merchant: "A", amount: 5 })] }) }); await settle(page);
-  await openSettings(page);
-  ok(await page.evaluate(() => !!document.querySelector('[data-section="my-categories"]')), "the My categories section is in Settings");
+  await openCategories(page);
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="my-categories"]')), "the My categories section is on Budgets & Goals (Run 38)");
   ok(await page.evaluate(() => document.querySelector('[data-section="mycat-add"]').disabled), "Add is disabled while the name is empty");
   await type(page, "#mycat-name", "Pets food"); await wait(150);
   await page.evaluate(() => document.querySelector('[data-section="mycat-add"]').click()); await wait(400);
@@ -28,13 +28,13 @@ section("R24-MCB2. In use cannot be removed; az and ru labels");
 {
   const id = "u_abc123";
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [tx({ merchant: "A", amount: 5, category: id })] }), pre: () => { try { if (!sessionStorage.getItem("__s")) { sessionStorage.setItem("__s", "1"); localStorage.setItem("expense_ledger_v5__cats", JSON.stringify({ version: 1, cats: [{ id: "u_abc123", name: "Pets food", income: false, color: "#68D391" }] })); } } catch {} } });
-  await settle(page); await openSettings(page);
+  await settle(page); await openCategories(page);
   await page.evaluate(() => document.querySelector('[data-section="my-categories"] [data-cat] button').click()); await wait(300);
   ok((await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).cats.length, CK)) === 1, "an entry uses it, so Remove does nothing");
   await page.close();
   for (const [l, re] of [["az", /Mənim kateqoriyalarım/], ["ru", /Мои категории/]]) {
-    const p = await openPage(browser, { seed: baseSeed({ language: l }) }); await settle(p); await openSettings(p);
-    ok(re.test(await p.evaluate(() => document.querySelector('[data-fold-head="categories"]').innerText)), `${l}: section title`);
+    const p = await openPage(browser, { seed: baseSeed({ language: l }) }); await settle(p); await openCategories(p);
+    ok(re.test(await p.evaluate(() => document.querySelector('[data-section="gl-categories"] .section-title').innerText)), `${l}: section title`);
     await p.close();
   }
 }

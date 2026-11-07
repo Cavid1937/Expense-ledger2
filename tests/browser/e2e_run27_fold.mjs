@@ -9,11 +9,11 @@ section("R27C-1. Everything starts closed; each section opens and closes on its 
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page);
   await tab(page, "More"); await wait(300);
   const s0 = await state(page);
-  ok(Object.keys(s0).join() === "accounts,categories,money,look" && Object.values(s0).every((v) => v === "false"), "four sections, all closed to start", s0);
+  ok(Object.keys(s0).join() === "accounts,money,look" && Object.values(s0).every((v) => v === "false"), "three sections, all closed to start (Run 38: categories moved to Budgets & Goals)", s0);
   ok(await page.evaluate(() => !document.querySelector('[data-section="my-accounts"]') && !document.querySelector('[data-section="theme-chips"]')), "closed means their contents are not on the page");
   await page.click(sel("accounts")); await wait(300);
   const s1 = await state(page);
-  ok(s1.accounts === "true" && s1.categories === "false", "opening Accounts leaves the others closed", s1);
+  ok(s1.accounts === "true" && s1.money === "false", "opening Accounts leaves the others closed", s1);
   ok(await page.evaluate(() => !!document.querySelector('[data-section="my-accounts"]')), "the accounts card is shown");
   await page.focus(sel("look")); await page.keyboard.press("Enter"); await wait(300);
   ok(await page.evaluate(() => !!document.querySelector('[data-section="theme-chips"]') && document.querySelector('[data-fold-head="look"]').getAttribute("aria-expanded") === "true"), "the keyboard (Enter) opens Appearance");
@@ -29,8 +29,7 @@ section("R27C-2. Home > Accounts > Manage opens the Settings tab with Accounts e
   const accs = { version: 1, accounts: [{ id: "a_cash01", name: "Cash", kind: "cash", opening: { amount: 120, date: "" }, hidden: false }], transfers: [] };
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }), pre: () => { try { if (!sessionStorage.getItem("__a")) { sessionStorage.setItem("__a", "1"); localStorage.setItem("expense_ledger_v5__accounts", JSON.stringify({ version: 1, accounts: [{ id: "a_cash01", name: "Cash", kind: "cash", opening: { amount: 120, date: "" }, hidden: false }], transfers: [] })); } } catch (e) {} } }); await settle(page); await wait(400);
   await page.evaluate(() => document.querySelector('[data-section="home-accounts-manage"]').click()); await wait(1000);   // Run 31: Home is taller now (balance note), so a mouse click could land on the floating + button
-  const s = await state(page);
-  ok(s.accounts === "true" && s.categories === "false", "Accounts is open, the rest closed", s);
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="accounts-page"] [data-section="my-accounts"]') && !document.querySelector(".more-page")), "Run 38: Manage opens the Accounts page (no Settings fold opening and scrolling at the same time)");
   ok(await page.evaluate(() => !!document.querySelector('[data-section="my-accounts"]') && !document.querySelector(".sheet")), "the accounts card is on the page (no sheet)");
   await page.close();
 }

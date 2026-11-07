@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
-import { pickerCats, readCatPrefs, searchCats } from "../App.jsx";
+import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // ─── Recurring Hub ────────────────────────────────────────────────────────────
@@ -69,8 +69,11 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [type,     setType]     = useState(prefill?.type||"expense");
   const [amount,   setAmount]   = useState(prefill?.amount?String(prefill.amount):"");
   // Run 36: a new entry starts on the first category the user shows (Food / Salary unless they reordered or hid them).
-  const firstCat=(ty)=>{ const l=pickerCats(ty==="income",readCatPrefs()); return (l[0]&&l[0].id)||(ty==="income"?"salary":"food"); };
-  const [catId,    setCatId]    = useState(prefill?.category||firstCat(prefill?.type||"expense"));
+  // Run 38: the picker order = the user's own order if they arranged one, otherwise most used in the last 90 days first (fixed while the form is open).
+  const deskOrder=(ty,keep)=>{ const prefs=readCatPrefs(), inc=ty==="income", l=pickerCats(inc,prefs,keep); return hasManualOrder(prefs,inc) ? l : frequentFirst(l,transactions); };
+  const deskIds=useMemo(()=>({ expense:deskOrder("expense",[]).map(c=>c.id), income:deskOrder("income",[]).map(c=>c.id) }),[]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const firstCat=(ty)=>deskIds[ty==="income"?"income":"expense"][0]||(ty==="income"?"salary":"food");
+  const [catId,    setCatId]    = useState(()=>prefill?.category||firstCat(prefill?.type||"expense"));
   const [subcat,   setSubcat]   = useState(prefill?.subcategory||"");
   const [merchant, setMerchant] = useState(prefill?.merchant||"");
   const [note,     setNote]     = useState(prefill?.note||"");
@@ -123,8 +126,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
 
   const expCats=CATEGORIES.filter(c=>!c.income);
   // Run 36: the pickers follow the user's order and hide what they hid; the entry's own category (when editing) is always offered.
-  const catPrefs=useMemo(()=>readCatPrefs(),[]);
-  const pickList=pickerCats(type==="income",catPrefs,[prefill?.category,catId]);
+  const pickList=(()=>{ const l=pickerCats(type==="income",readCatPrefs(),[prefill?.category,catId]), pos=new Map(deskIds[type==="income"?"income":"expense"].map((id,i)=>[id,i])); return l.map((c,i)=>({c,k:pos.has(c.id)?pos.get(c.id):1e6+i})).sort((a,b)=>a.k-b.k).map(x=>x.c); })();
   const [catQ,setCatQ]=useState("");
   const catHits=searchCats(pickList,catQ,mySubs);
   const displayCats=catHits.map(h=>h.cat);
@@ -293,7 +295,44 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           <span className="more-toggle-sub">{moreSummary||t("add.moreHint")}</span>
           <Icon name={more?"chevUp":"chevDown"} size={16}/>
         </button>
-        <div id="add-more-body" data-section="add-more" style={more?undefined:{display:"none"}}>        <div className="field merchant-wrap">
+        {/* Run 38 (owner: "More details opens and closes instantly, and there's chaos"): the details ease open and closed (kept in the page, so
+            what was typed stays), in a calm order: when, paid from, who, note, repeats, trip. */}
+        <div id="add-more-body" data-section="add-more" className={"keep-collapse"+(more?" is-open":"")} aria-hidden={more?undefined:true}><div className="keep-collapse-in">
+        <div className="field">
+          <label className="field-lbl" htmlFor="txn-date">{t("add.date")}</label>
+          <input id="txn-date" className="field-input" lang={locale()} type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+          {/* Run 7, V3: the date box is the phone's own control and follows the phone's language, not the app's, so the chosen date is
+              repeated here in the interface language. Display only: the stored value stays YYYY-MM-DD. */}
+          {isValidDateStr(date)&&<div className="date-readout" style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmtLongDate(parseLocalDate(date))}</div>}
+        </div>
+
+        {/* Run 38 (owner: why offer cash / card / wallet when I added my own accounts?): with accounts, "Paid from" lists them (one tap);
+            the plain cash / card / mobile choice is offered only to people without accounts. An entry's old payment tag is kept and shown. */}
+        {accData.accounts.length>0 ? (
+          <div className="field" role="radiogroup" aria-labelledby="txn-acc-lbl" data-section="add-account">
+            <div className="field-lbl" id="txn-acc-lbl">{t(type==="income"?"wallet.labelIn":"acc.paidFrom")} {optional}</div>
+            <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
+              {accData.accounts.filter(a=>!a.hidden||a.id===account).map(a=>(
+                <button key={a.id} type="button" role="radio" aria-checked={account===a.id} data-acc-pick={a.id} className={`sub-chip${account===a.id?" sel":""}`} onClick={()=>setAccount(account===a.id?"":a.id)}>{a.name}</button>
+              ))}
+              {wallet&&<button type="button" role="radio" aria-checked="true" className="sub-chip sel" data-section="add-old-wallet" title={t("wallet.label")} onClick={()=>setWallet("")}>{walletName(wallet)} ×</button>}
+            </div>
+          </div>
+        ) : (
+          <div className="field" role="radiogroup" aria-labelledby="txn-wal-lbl" data-section="add-wallet">
+            <div className="field-lbl" id="txn-wal-lbl">{t(type==="income"?"wallet.labelIn":"wallet.label")} {optional}</div>
+            <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
+              {WALLET_IDS.map(id=>(
+                <button key={id} type="button" role="radio" aria-checked={wallet===id} className={`sub-chip${wallet===id?" sel":""}`} onClick={()=>setWallet(wallet===id?"":id)}>{t("wallet."+id)}</button>
+              ))}
+              {wallet&&!WALLET_IDS.includes(wallet)&&(
+                <button type="button" role="radio" aria-checked="true" className="sub-chip sel" onClick={()=>setWallet("")}>{walletName(wallet)}</button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="field merchant-wrap">
           <label className="field-lbl" htmlFor="txn-merchant">{t("add.merchant")} {optional}</label>
           <input id="txn-merchant" className="field-input" placeholder={t("add.merchantPh")} autoComplete="off"
             value={merchant}
@@ -331,62 +370,30 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           )}
         </div>
 
-        {/* Run 16: how it was paid (cash, bank card, mobile wallet, other). One tap; tapping the chosen one again clears it. */}
-        <div className="field" role="radiogroup" aria-labelledby="txn-wal-lbl" data-section="add-wallet">
-          <div className="field-lbl" id="txn-wal-lbl">{t(type==="income"?"wallet.labelIn":"wallet.label")} {optional}</div>
-          <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
-            {WALLET_IDS.map(id=>(
-              <button key={id} type="button" role="radio" aria-checked={wallet===id} className={`sub-chip${wallet===id?" sel":""}`} onClick={()=>setWallet(wallet===id?"":id)}>{t("wallet."+id)}</button>
-            ))}
-            {wallet&&!WALLET_IDS.includes(wallet)&&(
-              <button type="button" role="radio" aria-checked="true" className="sub-chip sel" onClick={()=>setWallet("")}>{walletName(wallet)}</button>
-            )}
-          </div>
-        </div>
-
-        {/* Run 22: optional trip / group, e.g. "Baku trip". Suggestions are the names already used. */}
-        <div className="field" data-section="add-trip">
-          <label className="field-lbl" htmlFor="txn-trip">{t("trip.label")} {optional}</label>
-          <input id="txn-trip" className="field-input" list="txn-trip-list" value={trip} maxLength={40} autoComplete="off" placeholder={t("trip.placeholder")} onChange={e=>setTrip(e.target.value)}/>
-          <datalist id="txn-trip-list">{knownTrips.map(n=><option key={n} value={n}/>)}</datalist>
-        </div>
-        {accData.accounts.length>0&&(<div className="field" data-section="add-account">
-          <label className="field-lbl" htmlFor="txn-account">{t("acc.field")} {optional}</label>
-          <select id="txn-account" className="field-input" value={account} onChange={e=>setAccount(e.target.value)}>
-            <option value="">{t("acc.none")}</option>
-            {accData.accounts.filter(a=>!a.hidden||a.id===account).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        </div>)}
-
         <div className="field">
           <label className="field-lbl" htmlFor="txn-note">{t("add.note")} {optional}</label>
           <input id="txn-note" className="field-input" placeholder={t("add.notePh")}
             value={note} onChange={e=>setNote(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
         </div>
 
-        <div className="field-row" style={{marginBottom:14}}>
-          <div className="field" style={{marginBottom:0}}>
-            <label className="field-lbl" htmlFor="txn-date">{t("add.date")}</label>
-            <input id="txn-date" className="field-input" lang={locale()} type="date" value={date} onChange={e=>setDate(e.target.value)}/>
-            {/* Run 7, V3: the date box is the phone's own control and follows the phone's language, not the app's (Chrome on
-                Android ignores lang), so it can read 10/27/2026 in the Azerbaijani interface. The chosen date is repeated
-                here in the interface language. Display only: the stored value stays YYYY-MM-DD. */}
-            {isValidDateStr(date)&&<div className="date-readout" style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmtLongDate(parseLocalDate(date))}</div>}
+        {/* Repeats: one row with its switch; the choices for a repeating entry slide open underneath (full width, no squeezing) */}
+        <div className="field" style={{marginBottom:14}}>
+          <div className="settings-row" style={{padding:"4px 0"}}>
+            <div className="field-lbl" id="txn-rec-lbl" style={{margin:0}}>{t("add.recurring")}</div>
+            <div className={`toggle-track${recur?" on":""}`} onClick={()=>setRecur(r=>!r)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setRecur(r=>!r); } }} role="switch" aria-checked={recur} aria-label={t("add.recurring")} tabIndex={0}>
+              <div className="toggle-knob"/>
+            </div>
           </div>
-          <div className="field" style={{marginBottom:0}}>
-            <div className="field-lbl" id="txn-rec-lbl">{t("add.recurring")}</div>
-            <div style={{display:"flex",alignItems:"center",gap:9,marginTop:9}}>
-              <div className={`toggle-track${recur?" on":""}`} onClick={()=>setRecur(r=>!r)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setRecur(r=>!r); } }} role="switch" aria-checked={recur} aria-label={t("add.recurring")} tabIndex={0}>
-                <div className="toggle-knob"/>
-              </div>
-              {recur&&!bills.some(b=>b.id===billChoice&&b.type===type)&&(
-                <select className="field-select" value={freq} onChange={e=>setFreq(e.target.value)} aria-label={t("add.frequency")}
-                  style={{fontSize:12,color:"var(--ink)",background:"transparent",border:"none",outline:"none",cursor:"pointer"}}>
+          <div className={"keep-collapse"+(recur?" is-open":"")} aria-hidden={recur?undefined:true}><div className="keep-collapse-in">
+            {!bills.some(b=>b.id===billChoice&&b.type===type)&&(
+              <div className="field" style={{marginTop:8,marginBottom:0}}>
+                <label className="field-lbl" htmlFor="txn-freq">{t("add.frequency")}</label>
+                <select id="txn-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)} aria-label={t("add.frequency")}>
                   {["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}
                 </select>
-              )}
-            </div>
-            {recur&&(!hasInferred||bills.some(b=>b.type===type))&&(
+              </div>
+            )}
+            {(!hasInferred||bills.some(b=>b.type===type))&&(
               <div className="field" style={{marginTop:10,marginBottom:0}}>
                 <label className="field-lbl" htmlFor="txn-bill">{t("bill.which")}</label>
                 <select id="txn-bill" className="field-input field-select bill-choice" value={bills.some(b=>b.id===billChoice&&b.type===type)?billChoice:(hasInferred?"auto":"new")} onChange={e=>setBillChoice(e.target.value)}>
@@ -404,10 +411,17 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
                 <button className="btn btn-ghost btn-full bill-ask-new" onClick={()=>submit("new")}>{t("bill.askNew")}</button>
               </div>
             )}
-          </div>
+          </div></div>
         </div>
 
+        {/* Run 22: optional trip / group, e.g. "Baku trip". Suggestions are the names already used. (Run 38: last, the rarest detail) */}
+        <div className="field" data-section="add-trip">
+          <label className="field-lbl" htmlFor="txn-trip">{t("trip.label")} {optional}</label>
+          <input id="txn-trip" className="field-input" list="txn-trip-list" value={trip} maxLength={40} autoComplete="off" placeholder={t("trip.placeholder")} onChange={e=>setTrip(e.target.value)}/>
+          <datalist id="txn-trip-list">{knownTrips.map(n=><option key={n} value={n}/>)}</datalist>
         </div>
+
+        </div></div>
         <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
       </div>
       <div className="add-foot">
