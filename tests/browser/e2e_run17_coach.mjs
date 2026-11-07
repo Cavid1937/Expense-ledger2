@@ -13,7 +13,7 @@ section("R17-CO1. Enough data: spent and kept, with the window and a note that i
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: full() }) }); await settle(page); await page.evaluate((k) => localStorage.removeItem(k), DKEY); await tab(page, "Analytics"); await wait(500);
   const c = await card(page);
   ok(!!c && /Your numbers/.test(c), "the card is there", c);
-  ok(/spent 50% of the income you recorded and kept 50%/.test(c || ""), "200 of 400 recorded: spent 50%, kept 50%", c);
+  ok(/spent 50% of the money you recorded coming in and kept 50%/.test(c || ""), "200 of 400 recorded: spent 50%, kept 50%", c);
   ok(/last 30 days/.test(c || "") && /Not advice/.test(c || ""), "it names its window and says it is not advice", c);
   await page.close();
 }

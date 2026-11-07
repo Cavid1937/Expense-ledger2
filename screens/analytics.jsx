@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Collapse, Swap, useLeave } from "./motion.jsx";
 import { locale, t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, KEY, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
+import { CAT, CatIcon, Icon, KEY, isEarnedCat, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
 import { LedgerArt, MoneyText, PlannedNote, cmpPrev, cmpText, cmpTitle } from "./home.jsx";
 
 // ─── Redesign pages (2026-10-27) ─────────────────────────────────────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
   const nextM = () => { if (idx > 0) { setDir(1); setSelectedMon(allMonths[idx - 1]); } };
   const prv = useMemo(() => { const [y,m]=selectedMon.split("-").map(Number); return localMonthStr(new Date(y,m-2,1)); }, [selectedMon]);
 
-  const { curExp, curInc, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
+  const { curExp, curInc, curIn, curOther, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
   const catSpend    = calcCategorySpend(transactions, selectedMon);
   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
@@ -188,13 +188,14 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         <div className="month-stat">
           <div className="month-stat-val" style={{color:"var(--pos)"}}><MoneyText v={fmt(curInc,currency)}/></div>
           <div className="month-stat-lbl">{t("home.income")}</div>
-          {curInc>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
-            {fmtPct(Math.round(((curInc-curExp)/curInc)*100))} {t("surplus."+surplusLabel(curInc,curExp)).toLowerCase()}
+          {curIn>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
+            {fmtPct(Math.round(((curIn-curExp)/curIn)*100))} {t("surplus."+surplusLabel(curIn,curExp)).toLowerCase()}
           </div>}
         </div>
         <div className="month-stat" style={{gridColumn:"1 / -1"}}>
-          <div className="month-stat-val" style={{color:surplusColor(curInc,curExp)}}><MoneyText v={fmt(Math.abs(curInc-curExp),currency)}/></div>
-          <div className="month-stat-lbl">{t("month.net."+(curInc>curExp?"Net surplus":curInc<curExp?"Net deficit":"Break-even"))}</div>
+          <div className="month-stat-val" style={{color:surplusColor(curIn,curExp)}}><MoneyText v={fmt(Math.abs(curIn-curExp),currency)}/></div>
+          <div className="month-stat-lbl">{t("month.net."+(curIn>curExp?"Net surplus":curIn<curExp?"Net deficit":"Break-even"))}</div>
+          {curOther>0&&<div className="list-sub" data-section="an-other-in" style={{marginTop:4}}>{t("month.otherIn",{amount:fmt(curOther,currency)})}</div>}
           {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
           {momDiff!==null&&cmpKind==="same"&&<div className="cmp-window" style={{fontSize:11,color:"var(--ink-3)",marginTop:2}}>{t("cmp.window",{d:cmpDays})}</div>}
         </div>
@@ -422,11 +423,11 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
       {/* Run 27d: the all-time overview sits with the other not-month-specific part (Trends), below the selected month, so the page starts with the month the picker shows */}
       <AnPanel id="trends" seg={seg}>
         {transactions.length>0&&(()=>{
-          const totalInc=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
+          const allIn=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalInc=transactions.filter(x=>x.type==="income"&&isEarnedCat(x.category)).reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
           return (
             <div className="a-card" data-section="an-overview">
               <div className="a-card-title">{t("set.overview")}</div>
-              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(totalInc>totalExp?"Net surplus":totalInc<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(totalInc-totalExp),currency),surplusColor(totalInc,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
+              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(allIn>totalExp?"Net surplus":allIn<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(allIn-totalExp),currency),surplusColor(allIn,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
                 <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
                   <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
                   <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>

@@ -2,7 +2,7 @@
 // persona's list below, independent of the code. Synthetic data only.
 // Rule under test: money that merely moves (refund, withdrawal from savings) counts in the balance but not in "income".
 import { H, ok, section, eq, reset, T, finish } from "./lib.mjs";
-const { CATEGORIES, forSpending, calcMonthSummary, isEarnedCat, migrateAndLoad, planImport, resolveCategory, addCustomCat, applyCustomCats, readCustomCats, catName, CAT } = H;
+const { CATEGORIES, forSpending, calcMonthSummary, calcSafeToSpend, isEarnedCat, migrateAndLoad, planImport, resolveCategory, addCustomCat, applyCustomCats, readCustomCats, catName, CAT } = H;
 reset();
 const now = new Date(2026, 9, 31);
 let n = 1;
@@ -36,16 +36,20 @@ const personas = [
   ["person with no income living on savings and gifts", [inc("giftin", 120), inc("savout", 300), inc("familyin", 80), exp("food", 200)], 200, 200, 300],
 ];
 for (const [label, list, wantInc, wantExp, wantBalance] of personas) {
-  const s = month(list), raw = calcMonthSummary(list, "2026-10", "2026-09", now);
+  const s = month(list);
   ok(s.curInc === wantInc && s.curExp === wantExp, `${label}: income ${wantInc}, spending ${wantExp}`, [s.curInc, s.curExp]);
-  ok(raw.curInc - raw.curExp === wantBalance, `${label}: the balance (raw) is ${wantBalance}`, raw.curInc - raw.curExp);
+  ok(s.curIn - s.curExp === wantBalance, `${label}: the month net (all money in minus spending) is ${wantBalance}`, s.curIn - s.curExp);
 }
 
-section("R35-4. A refund or savings withdrawal never inflates income, and the original lens is untouched");
+section("R35-4. Run 35b: refunds and savings withdrawals are money in (net, Safe-to-Spend) but not income");
 const mixed = [inc("salary", 100), inc("refund", 50), inc("savout", 25), exp("food", 10)];
-ok(forSpending(mixed).filter((x) => x.type === "income").length === 1, "only the salary row survives the income lens");
-ok(forSpending(mixed).filter((x) => x.type === "expense").length === 1, "expenses pass through");
-ok(mixed.length === 4 && mixed[1].category === "refund", "the stored list itself is not changed");
+const ms = month(mixed);
+ok(ms.curInc === 100 && ms.curIn === 175 && ms.curOther === 75, "income 100; money in 175; 75 of it refunds or savings", [ms.curInc, ms.curIn, ms.curOther]);
+ok(forSpending(mixed).filter((x) => x.type === "income").length === 3 && mixed.length === 4, "the screens' list keeps all three money-in rows; the stored list is not changed");
+const living = [inc("giftin", 120), inc("savout", 300), inc("familyin", 80), exp("food", 200)];
+const safe = calcSafeToSpend(forSpending(living), { enabled: true, savingsTarget: 0 }, [], now);
+ok(safe.curInc === 500, "living on savings: Safe-to-Spend counts the 300 taken from savings as money available (120 + 300 + 80)", safe.curInc);
+ok(month(living).surplusRate === 60, "and the kept share is (500 - 200) / 500 = 60%, not a false deficit", month(living).surplusRate);
 
 section("R35-5. Saved data with the new ids loads unchanged");
 globalThis.__store.set("expense_ledger_v5", JSON.stringify({ transactions: [T({ id: 1, type: "income", category: "pension", amount: 300 }), T({ id: 2, category: "pets", amount: 20 }), T({ id: 3, type: "income", category: "savout", amount: 5 })], language: "en" }));

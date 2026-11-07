@@ -552,7 +552,8 @@ export function debtCashFlow(list, mon) {
 function forSpending(list) {
   return (Array.isArray(list)?list:[]).flatMap(t=>{
     if (t && t.debtLink && debtLinkRef(t.debtLink)) return [];
-    if (t && t.type==="income" && !isEarnedCat(t.category)) return [];   // Run 35: refunds and withdrawals from savings are money in, not earnings: balances count them, income totals do not
+    // Run 35b: refunds and withdrawals from savings stay in this list (they are real money in: month net, Safe-to-Spend and the coach count them).
+    // Only figures LABELLED income leave them out, via isEarnedCat in calcMonthSummary (curInc vs curIn).
     const r=t&&t.loan?loanRef(t.loan):null;
     if (!r) return [t];
     const part=r.interest===null ? 0 : Math.min(r.interest,Number(t.amount)||0);
@@ -910,7 +911,7 @@ export function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
   }
   const monKey=(d)=>d.getFullYear()*12+d.getMonth(), curK=monKey(now);
   const incBy={}; let firstK=null;
-  past.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); if (firstK===null||k<firstK) firstK=k; if (x.type==="income") incBy[k]=Math.round(((incBy[k]||0)+(Number(x.amount)||0))*100)/100; });
+  past.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); const k=y*12+(m-1); if (firstK===null||k<firstK) firstK=k; if (x.type==="income" && isEarnedCat(x.category)) incBy[k]=Math.round(((incBy[k]||0)+(Number(x.amount)||0))*100)/100; });
   if (firstK!==null) {
     const from=Math.max(firstK,curK-6), months=[]; for (let k=from;k<curK;k++) months.push(k);
     if (months.length>=4) {
@@ -1846,7 +1847,8 @@ function comparisonWindow(mon, prv, now=new Date()) {
 export const addAmt=(s,t)=>Math.round((s+(Number(t&&t.amount)||0))*100)/100;
 function sumCents(list) { return (list||[]).reduce((s,t)=>s+Math.round((Number(t.amount)||0)*100),0)/100; }
 export function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
-  const isExp=t=>t.type==="expense", isInc=t=>t.type==="income", inMon=t=>t.date.startsWith(mon);
+  // Run 35b: "Inc" figures are income (earnings); "In" figures are all money in, incl. refunds and withdrawals from savings. Net uses In.
+  const isExp=t=>t.type==="expense", isIn=t=>t.type==="income", isInc=t=>isIn(t)&&isEarnedCat(t.category), inMon=t=>t.date.startsWith(mon);
   const cw=comparisonWindow(mon,prv,now);
   const done=happenedIn(mon,now), donePrv=cw.inPrev, sum=sumCents;   // Run 22 audit: whole cents, so ten entries of 0.10 are exactly 1.00
   const curExp =sum(transactions.filter(t=>isExp(t)&&done(t)));
@@ -1858,9 +1860,10 @@ export function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=
   const prevInc=sum(transactions.filter(t=>isInc(t)&&donePrv(t)));
   const prevFullExp=sum(transactions.filter(t=>isExp(t)&&happenedIn(prv,now)(t)));
   const momDiff=cw.kind&&prevExp>0?curExp-prevExp:null;
-  // Negative when expenses exceed income — don't clamp, show the deficit
-  const surplusRate=curInc>0?Math.round(((curInc-curExp)/curInc)*100):null;
-  return { curExp,curInc,plannedExp,plannedInc,totalExp,totalInc,prevExp,prevInc,prevFullExp,momDiff,surplusRate,cmpKind:cw.kind,cmpDays:cw.days };
+  const curIn=sum(transactions.filter(t=>isIn(t)&&done(t))), curOther=Math.round((curIn-curInc)*100)/100;
+  // Negative when expenses exceed money in — don't clamp, show the deficit (money in, as before Run 35: a refund or savings withdrawal is spendable)
+  const surplusRate=curIn>0?Math.round(((curIn-curExp)/curIn)*100):null;
+  return { curExp,curInc,curIn,curOther,plannedExp,plannedInc,totalExp,totalInc,prevExp,prevInc,prevFullExp,momDiff,surplusRate,cmpKind:cw.kind,cmpDays:cw.days };
 }
 
 export function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {

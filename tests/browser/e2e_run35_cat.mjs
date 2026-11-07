@@ -1,6 +1,6 @@
 // Run 35 (2026-11-07): the add form offers the broader income and expense categories in all three languages, and says so when an
 // income kind is not earnings (refund, withdrawal from savings). Synthetic data only.
-import { launch, openPage, openAdd, wait, ok, section, finish, baseSeed, settle } from "./lib.mjs";
+import { launch, openPage, openAdd, tab, wait, ok, section, finish, baseSeed, settle, tx, TODAY } from "./lib.mjs";
 const browser = await launch();
 const labels = (page) => page.evaluate(() => [...document.querySelectorAll(".cat-scroll .cat-tile")].map((b) => b.getAttribute("aria-label")));
 const toIncome = (page) => page.evaluate(() => [...document.querySelectorAll(".type-pick")][1].click());
@@ -25,6 +25,19 @@ for (const [lang, w] of Object.entries(langs)) {
   ok(w.note.test(await hint(page)), `${lang}: choosing Refunds explains it counts in the balance but not in income`, await hint(page));
   ok(await pick(page, w.pension), `${lang}: Pension can be chosen`); await wait(200);
   ok((await hint(page)) === "", `${lang}: an earnings category shows no note`, await hint(page));
+  await page.close();
+}
+section("R35-B2. Run 35b: on screen, income is earnings only; the net and Balance count every money-in entry");
+{
+  const seed = baseSeed({ language: "en", transactions: [tx({ type: "income", category: "salary", amount: 100, date: TODAY }), tx({ type: "income", category: "refund", amount: 50, date: TODAY }), tx({ type: "income", category: "savout", amount: 25, date: TODAY }), tx({ category: "food", amount: 10, date: TODAY })] });
+  const page = await openPage(browser, { seed }); await page.setViewport({ width: 400, height: 860, deviceScaleFactor: 1, isMobile: true, hasTouch: true }); await settle(page);
+  const home = await page.evaluate(() => { const h = document.querySelector('[data-section="home-month"]'); return { stats: [...h.querySelectorAll(".hero-stat")].map((s) => s.innerText.replace(/\s+/g, " ").trim()), note: (h.querySelector('[data-section="home-other-in"]') || {}).innerText || "" }; });
+  ok(/100/.test(home.stats[0]) && /Income/i.test(home.stats[0]) && !/175/.test(home.stats[0]), "Home: Income shows 100, not 175", home.stats);
+  ok(/94%/.test(home.stats[2]), "Home: the kept share uses all money in: (175 - 10) / 175 = 94%", home.stats);
+  ok(/75\.00/.test(home.note), "Home: a note says 75.00 of refunds or savings is included, not counted as income", home.note);
+  await tab(page, "Monthly"); await wait(400);
+  const an = await page.evaluate(() => (document.querySelector('[data-section="an-summary"]') || {}).innerText || "");
+  ok(/100\.00/.test(an) && /165\.00/.test(an) && /Net surplus/.test(an) && /75\.00/.test(an), "Analytics: income 100.00, net surplus 165.00, and the 75.00 note", an);
   await page.close();
 }
 await browser.close();

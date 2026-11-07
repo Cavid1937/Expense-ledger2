@@ -83,14 +83,14 @@ export function HomeAccounts({ transactions, currency, onManage }) {
 }
 export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts }) {
   const now=curMon(), prv=prevMon();
-  const { curExp,curInc,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
+  const { curExp,curInc,curIn,curOther,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
   const budgetTotal =Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const spentToDate =calcSpentToDate(transactions,now);
   const paceInfo    =calcSpendingPace(spentToDate,now,budgetTotal);
   const safeInfo   =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills);
   const wc          =calcWhatChanged(transactions,now,prv);
-  const hasIncome   =curInc>0;
+  const hasIncome   =curIn>0;   // Run 35b: any money in (a refund or savings withdrawal is spendable too); the Income figure itself is earnings only
 
   // Upcoming recurring (due within 7 days)
   const upcomingSchedules=useMemo(()=>{
@@ -128,12 +128,13 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
           </div>
           <div className="hero-stat">
             {hasIncome?(
-              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":(surplusRate||0)<0?" neg":""}`}>{fmtPct(surplusRate??0)}</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curInc,curExp))}</div></>
+              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":(surplusRate||0)<0?" neg":""}`}>{fmtPct(surplusRate??0)}</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curIn,curExp))}</div></>
             ):(
-              <><div className={`hero-stat-val${curInc>curExp?" pos":curInc<curExp?" neg":""}`}>{curInc<curExp?"−":""}{fmtShort(Math.abs(curInc-curExp),currency)}</div><div className="hero-stat-lbl">{t("home.balance")}</div></>
+              <><div className={`hero-stat-val${curIn>curExp?" pos":curIn<curExp?" neg":""}`}>{curIn<curExp?"−":""}{fmtShort(Math.abs(curIn-curExp),currency)}</div><div className="hero-stat-lbl">{t("home.balance")}</div></>
             )}
           </div>
         </div>
+        {curOther>0&&<div className="list-sub" data-section="home-other-in" style={{marginTop:8}}>{t("month.otherIn",{amount:fmt(curOther,currency)})}</div>}
         <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
       </div>
 
