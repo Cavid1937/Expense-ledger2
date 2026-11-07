@@ -9,11 +9,11 @@ ok([cleanSubcats, addUserSubcat, removeUserSubcat, mergeSubcats, readSubcats, wr
 if (typeof cleanSubcats !== "function") { console.log("  (remaining checks skipped: not written yet)"); finish("run16sub"); }
 
 section("R16S-2. Cleaning what is read from storage or a file");
-const dirty = { food: ["  Lunch  ", "lunch", "X".repeat(31), "", 5, "Pizza", "  two   spaces "], nope: ["a"], salary: ["Bonus"] };
+const dirty = { food: ["  Lunch  ", "lunch", "X".repeat(31), "", 5, "Pizza", "  two   spaces "], nope: ["a"], salary: ["Side gig"] };
 const c = cleanSubcats(dirty);
 ok(eq(c.food, ["Lunch", "Pizza", "two spaces"]), "trimmed, inner spaces collapsed, duplicates ignoring case removed, too long / empty / non-text dropped", c.food);
 ok(!("nope" in c), "an unknown category id is dropped");
-ok(eq(c.salary, ["Bonus"]), "income categories can have their own subcategories too");
+ok(eq(c.salary, ["Side gig"]), "income categories can have their own subcategories too");
 ok(eq(cleanSubcats({ version: 1, byCategory: { food: ["A"] } }).food, ["A"]), "the stored shape {version, byCategory} is accepted");
 for (const bad of [null, undefined, 5, "x", [], { food: "Lunch" }, { food: { a: 1 } }]) ok(typeof cleanSubcats(bad) === "object" && !Array.isArray(cleanSubcats(bad)) && !JSON.stringify(cleanSubcats(bad)).includes("Lunch"), `${JSON.stringify(bad)} gives an empty map, never an error`);
 ok(eq(cleanSubcats({ food: ["Groceries", "Coffee"] }), {}), "text equal to a built-in subcategory of that category (any case) is not stored a second time");

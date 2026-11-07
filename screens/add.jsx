@@ -227,6 +227,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
               </button>
             ))}
           </div>
+          {type==="income"&&CAT(catId).earned===false&&<div className="list-sub" data-section="add-not-income" style={{marginTop:6}}>{t("add.notIncome")}</div>}
           {(selectedCat?.subs?.length>0 || (mySubs[catId]||[]).length>0 || selectedCat)&&(
             <div data-section="add-subcat">
               <div className="field-lbl" style={{marginBottom:5,marginTop:4}}>{t("add.subcategory")} {optional}</div>

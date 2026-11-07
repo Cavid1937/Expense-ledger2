@@ -311,12 +311,34 @@ export const CATEGORIES = [
     subs:["Rent","Utilities","Household","Repairs","Gas","Electricity","Water","Building fees","Other"] },
   { id:"finance",  name:"Finance",               tile:"Finance",   color:"#85D9D0", income:false,
     subs:["Bank Fees","Transfers","Taxes","Insurance","Investments","Loan payment","Interest","Other"] },
+  // Run 35: more everyday life. New ids only; every older id, name and subcategory is unchanged, so no stored entry moves.
+  { id:"family",   name:"Family & Children",     tile:"Family",    color:"#F2A3B3", income:false,
+    subs:["Childcare","Children's needs","Family support","School items","Toys & games","Other"] },
+  { id:"pets",     name:"Pets",                  tile:"Pets",      color:"#D7B98E", income:false,
+    subs:["Pet food","Vet","Pet supplies","Pet grooming","Other"] },
+  { id:"work",     name:"Work & Business",       tile:"Work",      color:"#8FA8D8", income:false,
+    subs:["Tools & supplies","Business travel","Business services","Professional fees","Other"] },
   { id:"other",    name:"Other",                 tile:"Other",     color:"#A5B7B8", income:false,
     subs:["Miscellaneous","Pets","Children"] },
-  { id:"salary",   name:"Salary",                tile:"Salary",    color:"#8BD97A", income:true, subs:[] },
-  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#7CCB9A", income:true, subs:[] },
-  { id:"income",   name:"Other Income",          tile:"Other income",    color:"#9FDDA0", income:true, subs:[] },
+  // Income. "earned" is false for money that arrives but is not earnings (refunds, withdrawals from savings): it counts in account balances
+  // but not in income totals, the same way loan money already works (see forSpending).
+  { id:"salary",   name:"Salary",                tile:"Salary",    color:"#8BD97A", income:true, subs:["Wages","Bonus","Overtime","Commission"] },
+  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#7CCB9A", income:true, subs:["Consulting","Gig work","Temporary work"] },
+  { id:"business", name:"Business Income",       tile:"Business",  color:"#6FCF97", income:true, subs:["Business revenue","Business profit","Other business"] },
+  { id:"stipend",  name:"Scholarship & Grants",  tile:"Scholarship", color:"#9BD6A6", income:true, subs:["Scholarship","Student stipend","Educational grant"] },
+  { id:"pension",  name:"Pension",               tile:"Pension",   color:"#A5DC86", income:true, subs:["Retirement benefit"] },
+  { id:"benefits", name:"Social Support",        tile:"Social support", color:"#86D4B5", income:true, subs:["Social benefit","Allowance","Unemployment support","Other assistance"] },
+  { id:"familyin", name:"Family Support",        tile:"From family", color:"#B6E08A", income:true, subs:["From family","Regular contribution","Remittance"] },
+  { id:"alimony",  name:"Child Support & Alimony", tile:"Support",  color:"#8ED9C4", income:true, subs:["Child support","Alimony"] },
+  { id:"rental",   name:"Rental Income",         tile:"Rental",    color:"#79CDB0", income:true, subs:["Rent received","Other property income"] },
+  { id:"investin", name:"Investment Income",     tile:"Investments", color:"#7FD6C2", income:true, subs:["Interest","Dividends","Investment return"] },
+  { id:"sales",    name:"Sales & Side Work",     tile:"Sales",     color:"#A3D98F", income:true, subs:["Selling goods","Occasional work"] },
+  { id:"giftin",   name:"Gifts Received",        tile:"Gifts",     color:"#C5E29A", income:true, subs:["Money gift"] },
+  { id:"income",   name:"Other Income",          tile:"Other income",    color:"#9FDDA0", income:true, subs:["One-time income","Unexpected income"] },
+  { id:"refund",   name:"Refunds & Reimbursements", tile:"Refunds", color:"#9DB8C9", income:true, earned:false, subs:["Refund","Reimbursement","Cashback"] },
+  { id:"savout",   name:"From Savings",          tile:"From savings", color:"#A7BFC9", income:true, earned:false, subs:["Savings withdrawal","Investment withdrawal","Asset sale"] },
 ];
+export const isEarnedCat = (id) => { const c=CATEGORIES.find(x=>x.id===id); return !c || c.earned!==false; };
 export const CAT = (id) => CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==="other");
 // Display names in the interface language. The English `name` above stays the stored/CSV identifier and is never translated.
 export const catName = (id) => MESSAGES["cat."+CAT(id).id] ? t("cat."+CAT(id).id) : CAT(id).name;
@@ -349,6 +371,14 @@ const CATEGORY_MAP = {
   "wage":"salary","wages":"salary","paycheck":"salary","pay":"salary",
   "side income":"freelance","commission":"freelance","consulting":"freelance","gig":"freelance",
   "groceries & cafes":"food","cafes":"food",
+  // Run 35: aliases for the newer categories (exact words only, same rule as above)
+  "kids":"family","children":"family","childcare":"family","baby":"family","family":"family","pet":"pets","pet food":"pets","vet":"pets",
+  "scholarship":"stipend","scholarships":"stipend","stipend":"stipend","grant":"stipend","grants":"stipend",
+  "pensions":"pension","retirement":"pension","benefit":"benefits","benefits":"benefits","social support":"benefits","social benefit":"benefits",
+  "unemployment":"benefits","allowance":"familyin","child support":"alimony","aliment":"alimony","rental income":"rental","rent received":"rental",
+  "dividends":"investin","dividend":"investin","business":"business","business income":"business","sales":"sales","side work":"sales",
+  "gift received":"giftin","gifts received":"giftin","refund":"refund","refunds":"refund","reimbursement":"refund","cashback":"refund",
+  "from savings":"savout","savings withdrawal":"savout",
 };
 
 // Exact matches only (Run 8): an id, a category's English name or an alias, compared after lower-casing, collapsing spaces
@@ -375,9 +405,12 @@ function resolveCategory(raw, keepUnknownId=false) {
 // sees them. An entry keeps only the category's id ("u_…"); the ledger shape is unchanged. A phone or older version that does not
 // know an id shows the entry as "Other" and keeps the id (see resolveCategory), and the backup file carries the list.
 export const CCAT_KEY=KEY+"__cats", CCAT_MAX=30, CCAT_LEN=24, CCAT_COLORS=["#F28B82","#F6AD55","#ECC94B","#68D391","#4FD1C5","#63B3ED","#A78BFA","#F687B3"];
+// Run 35: a stored custom category is NEVER dropped because a later version added a built-in with the same name (e.g. the user's own "Pets" when "Pets" became built-in).
+// Names are only compared with the built-ins when a category is being created or renamed (builtinNameTaken); stored lists keep every entry.
+const builtinNameTaken=(n)=>{ const k=catKey(n); return CATEGORIES.some(c=>!c.custom && (catKey(c.name)===k || catKey(c.id)===k || catKey(catName(c.id))===k)); };
 function cleanCustomCats(raw) {
   const src=Array.isArray(raw) ? raw : (raw && Array.isArray(raw.cats) ? raw.cats : []);
-  const ids=new Set(), names=new Set(CATEGORIES.filter(c=>!c.custom).map(c=>catKey(c.name)).concat(CATEGORIES.filter(c=>!c.custom).map(c=>catKey(c.id)))), out=[];
+  const ids=new Set(), names=new Set(), out=[];
   src.forEach(v=>{
     if (!isPlainObject(v) || out.length>=CCAT_MAX) return;
     const id=typeof v.id==="string" && /^u_[a-z0-9]{3,12}$/.test(v.id) ? v.id : null;
@@ -390,8 +423,8 @@ function cleanCustomCats(raw) {
 }
 const currentCustomCats=()=>CATEGORIES.filter(c=>c.custom).map(c=>({ id:c.id, name:c.name, income:c.income, color:c.color }));
 export function applyCustomCats(list) {   // replaces the custom entries of CATEGORIES in place (same array, so every reader sees the change)
-  for (let i=CATEGORIES.length-1;i>=0;i--) if (CATEGORIES[i].custom) { const c=CATEGORIES.splice(i,1)[0]; delete CATEGORY_LOOKUP[c.id]; delete CATEGORY_LOOKUP[catKey(c.name)]; }
-  cleanCustomCats(list).forEach(c=>{ CATEGORIES.push({ id:c.id, name:c.name, tile:c.name, color:c.color, income:c.income, subs:[], custom:true }); CATEGORY_LOOKUP[c.id]=c.id; CATEGORY_LOOKUP[catKey(c.name)]=c.id; });
+  for (let i=CATEGORIES.length-1;i>=0;i--) if (CATEGORIES[i].custom) { const c=CATEGORIES.splice(i,1)[0]; delete CATEGORY_LOOKUP[c.id]; if (CATEGORY_LOOKUP[catKey(c.name)]===c.id) delete CATEGORY_LOOKUP[catKey(c.name)]; }
+  cleanCustomCats(list).forEach(c=>{ CATEGORIES.push({ id:c.id, name:c.name, tile:c.name, color:c.color, income:c.income, subs:[], custom:true }); CATEGORY_LOOKUP[c.id]=c.id; if (!CATEGORY_LOOKUP[catKey(c.name)]) CATEGORY_LOOKUP[catKey(c.name)]=c.id; });
 }
 function mergeCustomCats(a, b) { return cleanCustomCats([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])]); }
 export function readCustomCats() { try { const r=localStorage.getItem(CCAT_KEY); return r ? cleanCustomCats(JSON.parse(r)) : []; } catch { return []; } }
@@ -405,6 +438,7 @@ export function addCustomCat(list, name, income, color) {
   if (!n) return { list, added:false, reason:"empty" };
   if (n.length>CCAT_LEN) return { list, added:false, reason:"long" };
   if ((list||[]).length>=CCAT_MAX) return { list, added:false, reason:"full" };
+  if (builtinNameTaken(n)) return { list, added:false, reason:"dup" };
   const next=cleanCustomCats([...(list||[]),{ id:newCustomCatId(list), name:n, income:!!income, color }]);
   return next.length>(list||[]).length ? { list:next, added:true, reason:"" } : { list, added:false, reason:"dup" };
 }
@@ -415,6 +449,7 @@ export function editCustomCat(list, id, name, color) {
   const n=typeof name==="string" ? name.trim().replace(/\s+/g," ") : "";
   if (!n) return { list, edited:false, reason:"empty" };
   if (n.length>CCAT_LEN) return { list, edited:false, reason:"long" };
+  if (n!==cur.name && builtinNameTaken(n)) return { list, edited:false, reason:"dup" };
   const next=cleanCustomCats(list.map(c=>c.id===id ? { ...c, name:n, color:color||c.color } : c));
   return next.length===list.length && next.some(c=>c.id===id) ? { list:next, edited:true, reason:"" } : { list, edited:false, reason:"dup" };
 }
@@ -517,6 +552,7 @@ export function debtCashFlow(list, mon) {
 function forSpending(list) {
   return (Array.isArray(list)?list:[]).flatMap(t=>{
     if (t && t.debtLink && debtLinkRef(t.debtLink)) return [];
+    if (t && t.type==="income" && !isEarnedCat(t.category)) return [];   // Run 35: refunds and withdrawals from savings are money in, not earnings: balances count them, income totals do not
     const r=t&&t.loan?loanRef(t.loan):null;
     if (!r) return [t];
     const part=r.interest===null ? 0 : Math.min(r.interest,Number(t.amount)||0);
@@ -2743,6 +2779,22 @@ const ICONS = {
   salary:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>`,
   freelance:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/><path d="M10 12v2h4v-2"/></svg>`,
   income:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>`,
+  // Run 35: icons for the new categories (same 24px line style)
+  family:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M16 14.2a4 4 0 0 1 5 3.8v2"/></svg>`,
+  pets:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="10" r="1.8"/><circle cx="10" cy="5.8" r="1.8"/><circle cx="14.5" cy="5.8" r="1.8"/><circle cx="18.5" cy="10" r="1.8"/><path d="M12.2 11c-3 0-5.6 3-5.6 5.4 0 1.7 1.5 2.4 3 2 1-.3 1.6-.5 2.6-.5s1.6.2 2.6.5c1.5.4 3-.3 3-2 0-2.4-2.6-5.4-5.6-5.4z"/></svg>`,
+  work:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></svg>`,
+  business:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/><path d="M9 11h.01M15 11h.01"/></svg>`,
+  stipend:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 9 12 4 2 9l10 5 10-5z"/><path d="M6 11v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5"/><path d="M22 9v6"/></svg>`,
+  pension:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M4 10h16L12 4z"/><path d="M6 10v8M10 10v8M14 10v8M18 10v8"/></svg>`,
+  benefits:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z"/></svg>`,
+  familyin:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="7" r="3"/><path d="M2 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M17 4v8"/><path d="M14 9l3 3 3-3"/></svg>`,
+  alimony:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="3"/><path d="M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1"/><path d="M9 3.5 12 1l3 2.5"/></svg>`,
+  rental:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><circle cx="14.5" cy="14" r="2.5"/><path d="M8.5 20v-4.5"/></svg>`,
+  investin:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/></svg>`,
+  sales:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.2"/></svg>`,
+  giftin:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M5 12v9h14v-9"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></svg>`,
+  refund:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>`,
+  savout:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 8.5V7a2 2 0 0 0-2-2H6a3 3 0 0 0 0 6h13v7a2 2 0 0 1-2 2H6a3 3 0 0 1-3-3V8"/><path d="M16 14h.01"/></svg>`,
   add:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   close:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
   search:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
