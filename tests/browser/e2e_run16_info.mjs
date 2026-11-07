@@ -10,7 +10,7 @@ section("R16-I1. More lists the two new rows after the first three, and each ope
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await tab(page, "More"); await settle(page);
   const r = await rows(page); ok(r.length === 7 && /Recurring|payments/i.test(r[0]) && /Debts/i.test(r[1]) && /Import/i.test(r[2]) && /App lock/i.test(r[3]) && /Keep your data safe/i.test(r[4]) && /Privacy/i.test(r[5]) && /How Expense Ledger/i.test(r[6]), "seven rows (Run 27: Accounts and Preferences are expandable sections now, not rows): Recurring, Debts, Import / Export, App lock, Keep your data safe, Privacy, How it works", r);
   await openRow(page, "how"); const how = await sheet(page, "how");
-  ok(!!how && how.heads.length === 4 && /Add what you spend/.test(how.heads[0]) && /Safe to Spend/.test(how.heads[1]), "How it works: four steps, the second explains Safe to Spend", how && how.heads);
+  ok(!!how && how.heads.length === 5 && /Add what you spend/.test(how.heads[0]) && /Safe to Spend/.test(how.heads[1]) && /Income, money in and refunds/.test(how.heads[4]), "How it works: five parts (Run 36 added income, money in and refunds), the second explains Safe to Spend", how && how.heads);
   ok(/no account/i.test(how.text) && /backup/i.test(how.text), "it tells the user there is no account and to keep a backup file");
   await page.evaluate(() => document.querySelector('[data-section="info-how"] .btn-primary').click()); await wait(300); ok(!(await sheet(page, "how")), "Close closes it");
   await openRow(page, "privacy"); const pr = await sheet(page, "privacy");

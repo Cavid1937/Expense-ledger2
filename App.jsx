@@ -507,8 +507,8 @@ try { applyCustomCats(readCustomCats()); } catch {}
 
 // planImport reads a backup's own categories first, so its entries keep their category instead of becoming "Other"; nothing is stored here.
 function planImportWithCats(raw, filename="") {
-  let inc=[], prefs=null; try { const p=JSON.parse(String(raw).replace(/^﻿/,"")); if (isPlainObject(p)) { inc=cleanCustomCats(p.customCategories); if (isPlainObject(p.categoryPrefs)) { const c=cleanCatPrefs(p.categoryPrefs); if (c.hidden.length || c.order.length) prefs=c; } } } catch {}
-  const withPrefs=(r)=>{ if (r && r.ok && prefs) r.catPrefs=prefs; return r; };   // Run 36
+  let inc=[], prefs=null, upref=null; try { const p=JSON.parse(String(raw).replace(/^﻿/,"")); if (isPlainObject(p)) { inc=cleanCustomCats(p.customCategories); if (isPlainObject(p.categoryPrefs)) { const c=cleanCatPrefs(p.categoryPrefs); if (c.hidden.length || c.order.length) prefs=c; } const u=cleanPrefs(p.preferences); if (Object.keys(u).length) upref=u; } } catch {}
+  const withPrefs=(r)=>{ if (r && r.ok && prefs) r.catPrefs=prefs; if (r && r.ok && upref) r.prefs=upref; return r; };   // Run 36 / Run 37
   if (!inc.length) return withPrefs(planImport(raw,filename));
   const had=currentCustomCats();
   applyCustomCats(mergeCustomCats(had,inc));
@@ -1459,6 +1459,15 @@ async function checkForUpdate(currentVersion, fetchHtml) {
   catch { return "unknown"; }
 }
 
+// Run 37 (owner: exported from the app to WhatsApp / Drive, but the file never showed up in Downloads): the Android app now saves a file
+// straight into the phone's Downloads folder. The shell defines window.__ledgerNativeSave(filename, text, mime) -> { status:"saved", where }
+// after it wrote the file AND read it back byte for byte; { status:"cancelled" } when the user closed the "Save as" picker (older Android);
+// rejects on any failure. Only "saved" is ever reported as saved.
+export const nativeSaveHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeSave==="function") ? window.__ledgerNativeSave : null;
+async function saveViaNative(native, filename, text, mime) {
+  try { const r=await native(filename, text, mime); return r && r.status==="saved" ? { status:"saved", where:typeof r.where==="string" ? r.where.slice(0,200) : "" } : r && r.status==="cancelled" ? { status:"cancelled" } : { status:"failed" }; }
+  catch { return { status:"failed" }; }
+}
 export function downloadFile(content, mime, filename) {
   const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const a=document.createElement("a"); a.href=url; a.download=filename;
@@ -1651,8 +1660,14 @@ function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
     const keep=!plan.transactions.length || (plan.skippedCount||0)>0;
     const next={ ...state, transactions:keep ? state.transactions : sortDesc(plan.transactions) };
     ["budgets","templates","currency","goals","safeToSpend","bills"].forEach(k=>{ if (S[k]!==undefined) next[k]=S[k]; });
+    const P=plan.prefs||{};   // Run 37: same rule in Replace: only where this phone has none of its own
+    if (P.profileName && !state.profileName) next.profileName=P.profileName;
+    if (P.setupHidden && !state.setupHidden) next.setupHidden=true;
     return next;
   }
+  // Run 37: on a phone that has nothing recorded yet (a new install, or the browser copy being set up), "Merge" also takes the file's
+  // currency and Safe to Spend setting; otherwise a fresh phone silently lost them. A phone with its own data keeps its own, as before.
+  const emptyHere=!state.transactions.length && !(state.bills||[]).length && !(state.goals||[]).length && !Object.keys(state.budgets||{}).length;
   const ids=new Set(state.transactions.map(t=>String(t.id)));
   const fps=new Set(state.transactions.map(txnFingerprint));
   const add=plan.transactions.filter(t=>!ids.has(String(t.id)) && !(skipDuplicates && fps.has(txnFingerprint(t))));
@@ -1670,6 +1685,11 @@ function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
   // Run 12: bills are added when their id is not on the device yet (a backup's bill is the same bill as the device's one
   // with that id, so payments linked to it in either place stay linked).
   if (S.bills) { const have=new Set((state.bills||[]).map(b=>b.id)); next.bills=[...(state.bills||[]), ...S.bills.filter(b=>!have.has(b.id))]; }
+  if (emptyHere) { if (S.currency!==undefined) next.currency=S.currency; if (S.safeToSpend!==undefined) next.safeToSpend=S.safeToSpend; }
+  // Run 37: the name and "set-up list hidden" from the file are used only where this phone has none of its own.
+  const P=plan.prefs||{};
+  if (P.profileName && !state.profileName) next.profileName=P.profileName;
+  if (P.setupHidden && !state.setupHidden) next.setupHidden=true;
   return next;
 }
 
@@ -1687,6 +1707,37 @@ function backupReminderDue(s, now=new Date()) {
   return recent(confirmed) ? "none" : "due";
 }
 
+// Run 37 (owner: "I want to see all my data when I import"): personal preferences travel in the backup too. Only what the user chose is
+// written (nothing when everything is default). Never the app-lock PIN record, never this phone's notification or widget set-up.
+export const COACH_MUTE_KEY=KEY+"__coachmute", PAT_MUTE_KEY=KEY+"__patmute";
+const muteList=(v)=>[...new Set((Array.isArray(v)?v:[]).filter(x=>typeof x==="string" && /^[A-Za-z0-9_.:-]{1,60}$/.test(x)))].slice(0,100);
+export function readMuteList(key) { try { return muteList(JSON.parse(localStorage.getItem(key)||"[]")); } catch { return []; } }
+export function writeMuteList(key, list) { try { const l=muteList(list); if (l.length) localStorage.setItem(key,JSON.stringify(l)); else localStorage.removeItem(key); return true; } catch { return false; } }
+export function cleanPrefs(raw) {
+  const s=isPlainObject(raw) ? raw : {}, out={};
+  const n=cleanProfileName(s.profileName); if (n) out.profileName=n;
+  if (s.setupHidden===true) out.setupHidden=true;
+  if (typeof s.theme==="string" && s.theme!=="sea" && THEME_IDS.includes(s.theme)) out.theme=s.theme;
+  if (s.reduceEffects===true) out.reduceEffects=true;
+  const cm=muteList(s.coachMute), pm=muteList(s.patternMute); if (cm.length) out.coachMute=cm; if (pm.length) out.patternMute=pm;
+  return out;
+}
+// Run 37: what an import plan carries, part by part ([key, count] or [key, null] for a part without a count). Shown in the import sheet.
+export const IMPORT_PART_KEY={ entries:"import.part.entries", accounts:"import.part.accounts", transfers:"import.part.transfers", bills:"import.part.bills", budgets:"import.part.budgets", goals:"import.part.goals", templates:"import.part.templates",
+  debts:"import.part.debts", loans:"import.part.loans", cats:"import.part.cats", subcats:"import.part.subcats", catprefs:"import.part.catprefs", safe:"import.part.safe", prefs:"import.part.prefs" };
+export function fileParts(plan) {
+  const p=plan||{}, S=p.settings||{}, A=p.accountData||{}, D=p.debtData||{}, out=[];
+  const add=(k,n)=>{ if (n>0) out.push([k,n]); };
+  add("entries",(p.transactions||[]).length); add("accounts",(A.accounts||[]).length); add("transfers",(A.transfers||[]).length);
+  add("bills",(S.bills||[]).length); add("budgets",Object.keys(S.budgets||{}).length); add("goals",(S.goals||[]).length); add("templates",(S.templates||[]).length);
+  add("debts",(D.debts||[]).length); add("loans",(D.loans||[]).length); add("cats",(p.customCats||[]).length);
+  add("subcats",Object.values(p.subcategories||{}).reduce((s,l)=>s+(Array.isArray(l)?l.length:0),0));
+  if (p.catPrefs) out.push(["catprefs",null]);
+  if (S.safeToSpend && S.safeToSpend.enabled) out.push(["safe",null]);
+  if (p.prefs && Object.keys(p.prefs).length) out.push(["prefs",null]);
+  return out;
+}
+export function collectPrefs(state) { return cleanPrefs({ profileName:state&&state.profileName, setupHidden:state&&state.setupHidden, theme:readTheme(), reduceEffects:readFxOff(), coachMute:readMuteList(COACH_MUTE_KEY), patternMute:readMuteList(PAT_MUTE_KEY) }); }
 function buildBackup(state, now=new Date().toISOString()) {
   const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
   const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
@@ -1694,10 +1745,12 @@ function buildBackup(state, now=new Date().toISOString()) {
   const acc=cleanAccountData(state.accountData);   // Run 24: accounts and transfers, optional in the same way
   const ccats=cleanCustomCats(state.customCats);   // Run 24: the user's own categories, optional in the same way
   const cprefs=cleanCatPrefs(state.catPrefs);       // Run 36: hidden / reordered categories, optional in the same way
+  const prefs=cleanPrefs(state.preferences);          // Run 37: name, theme, hidden tips..., optional in the same way
   return { version:BACKUP_VERSION, exportedAt:now, meta:{ app:"expense-ledger", transactionCount:transactions.length },
     transactions, budgets, templates, currency, goals, safeToSpend, bills, ...(Object.keys(subs).length ? { subcategories:subs } : {}),
     ...(ccats.length ? { customCategories:ccats } : {}),
     ...(cprefs.hidden.length || cprefs.order.length ? { categoryPrefs:cprefs } : {}),
+    ...(Object.keys(prefs).length ? { preferences:prefs } : {}),
     ...(acc.accounts.length ? { accounts:acc.accounts, ...(acc.transfers.length ? { transfers:acc.transfers } : {}) } : {}),
     ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
 }
@@ -3534,7 +3587,16 @@ function AppInner() {
     return ()=>{ window.removeEventListener("beforeinstallprompt",onBip); window.removeEventListener("appinstalled",onInstalled); };
   },[askProtection]);
 
+  // Run 37: one complete backup text for every way of saving it (download, Downloads folder, share, encrypted).
+  const backupText=(now)=>JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),preferences:collectPrefs(state),accountData:readAccounts()},now),null,2);
   const exportCSV=useCallback(async ()=>{
+    const save=nativeSaveHook();
+    if (save) {   // Run 37: the Android app saves the spreadsheet into Downloads
+      const r=await saveViaNative(save,`ledger-${today()}.csv`,buildCsv(state.transactions),"text/csv");
+      if (r.status==="saved") showToast(t("io.savedTo",{where:r.where||"Downloads"}),6000);
+      else if (r.status==="failed") showToast(t("io.saveFailed"),6000);
+      return;
+    }
     const native=nativeShareHook();
     if (native) {   // Run 13: in the native shell a download link does nothing; success is claimed only after the hand-over says so
       const r=await shareViaNative(native,`ledger-${today()}.csv`,buildCsv(state.transactions),"text/csv;charset=utf-8;");
@@ -3547,10 +3609,23 @@ function AppInner() {
   },[state.transactions,showToast]);
 
   const shareBackupRef=useRef(null);
-  const exportJSON=useCallback(()=>{
-    if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: native shell → the hand-over, never a dead download link
+  const exportJSON=useCallback(async ()=>{
+    const save=nativeSaveHook();
+    if (save) {
+      // Run 37: the Android app writes the file into Downloads and reads it back. Because the app itself checked the file, this backup is
+      // recorded as created AND confirmed (no "do you have the file?" question afterwards).
+      const now=new Date().toISOString();
+      const r=await saveViaNative(save,`ledger-backup-${today()}.json`,backupText(now),"application/json");
+      if (r.status==="failed") { showToast(t("io.saveFailed"),6000); return; }
+      if (r.status!=="saved") return;
+      setState(s=>({...s,lastBackup:now,backupConfirmedAt:new Date().toISOString()}));
+      setBackupDismissed(false);
+      showToast(t("io.savedTo",{where:r.where||"Downloads"}),7000);
+      return;
+    }
+    if (nativeShareHook()) { shareBackupRef.current?.(); return; }   // Run 13: an older native shell without the save hook → the hand-over, never a dead download link
     const now=new Date().toISOString();
-    downloadFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),accountData:readAccounts()},now),null,2),"application/json",`ledger-backup-${today()}.json`);
+    downloadFile(backupText(now),"application/json",`ledger-backup-${today()}.json`);
     // lastBackup records when the file was CREATED. The app cannot know whether the browser actually kept it.
     // It is not a confirmed backup until the user says they have the file (see backupReminderDue).
     setState(s=>({...s,lastBackup:now}));
@@ -3562,7 +3637,7 @@ function AppInner() {
   // the phone. Cancelled → nothing changes. No file sharing on this device → falls back to the download above.
   const shareBackup=useCallback(async ()=>{
     const now=new Date().toISOString();
-    const r=await shareBackupFile(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),accountData:readAccounts()},now),null,2),`ledger-backup-${today()}.json`);
+    const r=await shareBackupFile(backupText(now),`ledger-backup-${today()}.json`);
     if (r==="unsupported") { exportJSON(); return; }
     if (r==="failed") { showToast(t("io.shareFailed"),6000); return; }   // Run 13: told, and nothing is recorded
     if (r!=="shared") return;
@@ -3601,9 +3676,18 @@ function AppInner() {
 
   const exportEncrypted=useCallback(async (pass)=>{
     const now=new Date().toISOString();
-    const r=await encryptBackupText(JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),accountData:readAccounts()},now),null,2),pass);
+    const r=await encryptBackupText(backupText(now),pass);
     if (!r.ok) return r.reason;
-    const name=`ledger-backup-encrypted-${today()}.json`, native=nativeShareHook();
+    const name=`ledger-backup-encrypted-${today()}.json`, native=nativeShareHook(), save=nativeSaveHook();
+    if (save) {   // Run 37: into Downloads, checked by reading it back
+      const s=await saveViaNative(save,name,r.text,"application/json");
+      if (s.status==="failed") { showToast(t("io.saveFailed"),6000); return "shown"; }
+      if (s.status!=="saved") return "shown";
+      setState(st=>({...st,lastBackup:now,backupConfirmedAt:new Date().toISOString()}));
+      setBackupDismissed(false);
+      showToast(t("io.savedTo",{where:s.where||"Downloads"}),7000);
+      return "ok";
+    }
     if (native) {
       const s=await shareViaNative(native,name,r.text,"application/json");
       if (s==="failed") { showToast(t("io.shareFailed"),6000); return "shown"; }
@@ -3633,14 +3717,24 @@ function AppInner() {
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
     const restore=(k,raw)=>{ try { if (raw===undefined) return; if (raw===null) localStorage.removeItem(k); else localStorage.setItem(k,raw); } catch {} };
-    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY) };
+    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY), [THEME_KEY]:snap(THEME_KEY), [FX_KEY]:snap(FX_KEY), [COACH_MUTE_KEY]:snap(COACH_MUTE_KEY), [PAT_MUTE_KEY]:snap(PAT_MUTE_KEY) };
     const catsHad=currentCustomCats();
-    const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); applyCustomCats(catsHad); };
+    const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); applyCustomCats(catsHad); applyTheme(readTheme()); applyFx(readFxOff()); };
     // Run 24: the file's own categories are added to the ones on this phone (by id; a name already in use is skipped, never renamed).
     if (plan.customCats && plan.customCats.length) {
       const merged=mergeCustomCats(readCustomCats(),plan.customCats);
       if (!writeCustomCats(merged)) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
       applyCustomCats(merged); setCatVer(v=>v+1);
+    }
+    // Run 37: theme, "reduce effects" and hidden tips from the file are used only where this phone still has the default (never overwritten).
+    if (plan.prefs) {
+      const P=plan.prefs; let okp=true;
+      if (P.theme && readTheme()==="sea") okp=writeTheme(P.theme) && okp;
+      if (P.reduceEffects && !readFxOff()) okp=writeFxOff(true) && okp;
+      if (P.coachMute && !readMuteList(COACH_MUTE_KEY).length) okp=writeMuteList(COACH_MUTE_KEY,P.coachMute) && okp;
+      if (P.patternMute && !readMuteList(PAT_MUTE_KEY).length) okp=writeMuteList(PAT_MUTE_KEY,P.patternMute) && okp;
+      if (!okp) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
+      applyTheme(readTheme()); applyFx(readFxOff());
     }
     // Run 36: the file's hidden / ordered categories are used only when this phone has none of its own (they are never mixed or overwritten).
     if (plan.catPrefs) { const mine=readCatPrefs(); if (!mine.hidden.length && !mine.order.length && !writeCatPrefs(plan.catPrefs)) { undoAux(); showToast(t("import.auxFailed"),6000); return; } }
@@ -3833,6 +3927,12 @@ function AppInner() {
                       const ds=importPending.transactions.map(x=>String(x.date).slice(0,10)).filter(isValidDateStr).sort();
                       return t("import.compare",{ n:importPending.transactions.length, m:state.transactions.length, range:ds.length ? ` (${fmtDate(ds[0])} – ${fmtDate(ds[ds.length-1])})` : "" });
                     })()}</div>
+                    {/* Run 37: everything the file holds, part by part, so nothing is a guess (owner: "I want to see all my data") */}
+                    {(()=>{ const parts=fileParts(importPending); return parts.length>0&&(
+                      <div data-section="import-parts" style={{fontSize:12,color:"var(--ink-2)",marginTop:8}}>
+                        <div style={{fontWeight:600,marginBottom:2}}>{t("import.hasTitle")}</div>
+                        <ul style={{margin:0,paddingLeft:18,lineHeight:1.55}}>{parts.map(([k,n])=><li key={k} data-part={k}>{n===null?t(IMPORT_PART_KEY[k]):t(IMPORT_PART_KEY[k],{n})}</li>)}</ul>
+                      </div>); })()}
                     {importPending.skippedCount>0&&<div style={{fontSize:12,color:"var(--warn)",marginTop:4}}>{tn("import.skipped",importPending.skippedCount,{summary:importPending.skippedSummary})}</div>}
                     {importPending.problems.map((m,i)=><div key={"p"+i} style={{fontSize:12,color:"var(--warn)",marginTop:4}}>{m}</div>)}
                     {importPending.warnings.map((m,i)=><div key={"w"+i} style={{fontSize:12,color:"var(--ink-3)",marginTop:4}}>{m}</div>)}

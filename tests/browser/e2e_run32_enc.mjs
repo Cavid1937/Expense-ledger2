@@ -17,6 +17,7 @@ section("R32-N1. Creating the encrypted file");
 let file;
 {
   const page = await openPage(browser, { seed: A("en") }); await openData(page); const lb0 = (await state(page)).lastBackup;
+  await page.evaluate(() => document.querySelector('[data-section="enc-toggle"]').click()); await wait(400);   // Run 37: the optional form starts folded
   ok(await page.evaluate(() => !!document.querySelector('[data-section="enc-backup"]')), "the Data page offers the encrypted backup form");
   await fill(page, "abc", "abc"); await press(page);
   ok(/at least 8/.test(await alertText(page, '[data-section="enc-backup"]') || ""), "a 3-character passphrase is refused with a message", await alertText(page, '[data-section="enc-backup"]'));
@@ -66,6 +67,8 @@ section("R32-N3. Cancel leaves everything as it was");
 section("R32-N4. az and ru");
 for (const [l, title, unlockBtn, wrong] of [["az", "Bu ehtiyat nüsxə şifrəlidir", "Aç", "yanlışdır"], ["ru", "Эта копия зашифрована", "Открыть", "Неверная"]]) {
   const page = await openPage(browser, { seed: B(l) }); await openData(page);
+  ok(await page.evaluate(() => !/Lock the file|passphrase/i.test(document.querySelector('[data-section="enc-toggle"]').textContent)), `${l}: the fold button is translated`);
+  await page.evaluate(() => document.querySelector('[data-section="enc-toggle"]').click()); await wait(400);
   ok(await page.evaluate(() => document.querySelector('[data-section="enc-backup"]').textContent.length > 20 && !/Encrypted backup|passphrase/i.test(document.querySelector('[data-section="enc-backup"]').textContent)), `${l}: the form is translated`);
   await upload(page, file);
   const got = await page.evaluate(() => ({ t: document.querySelector(".sheet-title").textContent, b: document.querySelector('[data-section="import-unlock"] button[type=submit]').textContent }));

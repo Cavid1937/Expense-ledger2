@@ -36,7 +36,7 @@ section("R10-2. Backup through the share menu");
   const seed = baseSeed({ lastBackup: null, backupConfirmedAt: null });
   let page = await openPage(browser, { seed, pre: fakeStorage(true, true) + fakeShare("ok") });
   await goIO(page); const before = await state(page);
-  ok(/Save a backup to Google Drive, Telegram/.test(await ioText(page)), "the share button is offered where files can be shared");
+  ok(/Send or share \(Google Drive, Telegram/.test(await ioText(page)), "the share button is offered where files can be shared (Run 37 wording)");
   await page.evaluate(() => document.querySelector(".io-share").click()); await wait(500);
   const sent = await page.evaluate(() => window.__shared);
   const file = sent[0] && JSON.parse(sent[0].text), after = await state(page);

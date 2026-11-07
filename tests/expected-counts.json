@@ -71,6 +71,7 @@
     "run36refund.test.mjs": 25,
     "run36catprefs.test.mjs": 24,
     "run36ids.test.mjs": 6,
+    "run37io.test.mjs": 13,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -167,12 +168,14 @@
     "e2e_run32_restore.mjs": 8,
     "e2e_run32_paging.mjs": 11,
     "e2e_run32_a11y.mjs": 8,
-    "e2e_run32_enc.mjs": 26,
+    "e2e_run32_enc.mjs": 28,
     "e2e_run32_storage.mjs": 10,
     "e2e_run33_native.mjs": 33,
     "e2e_run34_motion.mjs": 41,
     "e2e_run35_cat.mjs": 25,
-    "e2e_run36.mjs": 22
+    "e2e_run36.mjs": 22,
+    "e2e_run37_roundtrip.mjs": 13,
+    "e2e_run37_save.mjs": 11
   }
 }
 

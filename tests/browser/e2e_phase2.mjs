@@ -71,7 +71,7 @@ ok(/next reminder is in 7 days/.test(await toast(page, 50)), "…with a short co
 await page.reload(); await page.waitForSelector(".tabbar"); await wait(400);
 ok(!(await banners(page)).some((t) => /backup/i.test(t)), "after a reload the confirmed backup still suppresses the reminder (persisted)");
 await openData(page); txt = await bodyText(page);
-ok(/Last backup file created/.test(txt) && /You confirmed you have it on/.test(txt), "Import / Export shows the file's creation date and that the user confirmed it");
+ok(/Last backup: [^\n]*and you have the file/.test(txt), "Import / Export shows the file's date and that the user confirmed it (Run 37 wording)");
 await clickText(page, ".io-page .btn", /backup file/); await wait(300);
 st = await state(page);
 ok(Date.parse(st.lastBackup) > Date.parse(st.backupConfirmedAt), "a new export records a newer file date; the earlier confirmation is not carried over to it");

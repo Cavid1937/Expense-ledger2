@@ -103,7 +103,7 @@ const bj = JSON.parse(fs.readFileSync(jf, "utf8"));
 ok(bj.version === 10 && /* Run 12: backup format 10 */ bj.meta.transactionCount === pre6.transactions.length && eq2(bj.transactions, pre6.transactions) && eq2(bj.budgets, pre6.budgets) && eq2(bj.goals, pre6.goals) && bj.currency === "₼", "…its content equals the saved state (transactions, budgets, goals, currency) and carries version and count");
 const bt = await bodyText(page);
 ok(/Backup file created/.test(bt) && /can't confirm it was saved/.test(bt), "message says the file was CREATED and that the app can't confirm it was saved (no 'backup saved')", bt.match(/Backup[^\n]*/)?.[0]);
-ok(/Last backup file created/.test(await bodyText(page)), "Import / Export labels the date 'Last backup file created'");
+ok(/Last backup: [^\n]*Check that you still have that file/.test(await bodyText(page)), "Import / Export shows the date and asks to check the file is still there (Run 37 wording; never claims it was saved)");
 await upload(page, jf); sh = await sheetText(page);
 // Run 7: on failure, report what the import sheet showed (this failed once inside a full suite run and passed 5/5 alone).
 ok(/skip \d+ that look like/.test(sh), "importing the same backup back → every transaction is recognised as already present", { sheet: sh.slice(0, 400), file: path.basename(jf), bytes: fs.statSync(jf).size });

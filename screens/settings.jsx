@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Collapse, useLeave } from "./motion.jsx";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
+import { nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
@@ -58,12 +59,13 @@ export function CategoryOrder({ onChanged, showToast }) {
       <ul style={{listStyle:"none",margin:0,padding:0}}>
         {list.map((c,i)=>{ const off=hidden.has(c.id), fixed=CPREF_UNHIDEABLE.has(c.id), nm=catName(c.id);
           return (
-            <li key={c.id} className="settings-row" data-catord={c.id} data-hidden={off?"1":"0"} style={{opacity:off?0.55:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <li key={c.id} className="settings-row" data-catord={c.id} data-hidden={off?"1":"0"} style={{opacity:off?0.55:1,flexWrap:"wrap",rowGap:6}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:"1 1 140px"}}>
                 <CatIcon catId={c.id} size={16}/>
                 <div style={{minWidth:0}}><div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{nm}</div>{off&&<div className="settings-row-sub">{t("catord.hiddenNote")}</div>}</div>
               </div>
-              <div style={{display:"flex",gap:4,flexShrink:0}}>
+              {/* Run 36: the buttons move under the name when the text is large (200% zoom, long Russian words), never past the edge */}
+              <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end",marginLeft:"auto",maxWidth:"100%"}}>
                 <button className="chip" data-section="catord-up" aria-label={t("catord.up",{name:nm})} disabled={i===0} onClick={()=>save(moveCat(prefs,income,c.id,-1))} style={{minWidth:44,minHeight:44}}>↑</button>
                 <button className="chip" data-section="catord-down" aria-label={t("catord.down",{name:nm})} disabled={i===list.length-1} onClick={()=>save(moveCat(prefs,income,c.id,1))} style={{minWidth:44,minHeight:44}}>↓</button>
                 {!fixed&&<button className="chip" data-section="catord-toggle" aria-pressed={!off} aria-label={t(off?"catord.showName":"catord.hideName",{name:nm})} onClick={()=>save(toggleHiddenCat(prefs,c.id))} style={{minHeight:44}}>{t(off?"catord.show":"catord.hide")}</button>}
@@ -627,8 +629,13 @@ function EncryptedBackup({ onExportEncrypted }) {
     else if (r==="short") setErr(t("enc.errShort"));
     else if (r==="failed") setErr(t("enc.errFail"));
   };
+  // Run 37: optional, so it starts folded behind one button; the everyday "Save" and "Send or share" come first.
+  const [open,setOpen]=useState(false);
   return (
-    <form onSubmit={go} data-section="enc-backup" style={{marginTop:14,paddingTop:14,borderTop:"1px solid var(--rule)"}}>
+    <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
+    <button type="button" className="btn btn-ghost btn-full" data-section="enc-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{marginTop:0}}><Icon name="backup" size={16}/>{t("io2.encToggle")}<Icon name={open?"chevUp":"chevDown"} size={12}/></button>
+    <Collapse open={open} id="enc-form">
+    <form onSubmit={go} data-section="enc-backup" style={{marginTop:10}}>
       <div className="list-title">{t("enc.title")}</div>
       <div className="list-sub" style={{lineHeight:1.5,marginBottom:8}}>{t("enc.sub")}</div>
       <input className="field-input" type="password" autoComplete="new-password" aria-label={t("enc.pass")} placeholder={t("enc.pass")} value={p1} onChange={e=>setP1(e.target.value)} style={{marginBottom:8}}/>
@@ -636,6 +643,8 @@ function EncryptedBackup({ onExportEncrypted }) {
       {err&&<div role="alert" style={{color:"var(--neg)",fontSize:13,marginTop:8,lineHeight:1.5}}>{err}</div>}
       <button type="submit" className="btn btn-ghost btn-full" disabled={busy||!p1} style={{marginTop:10}}><Icon name="backup" size={16}/>{busy?"…":t("enc.create")}</button>
     </form>
+    </Collapse>
+    </div>
   );
 }
 
@@ -647,11 +656,51 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
   const canShareFiles=useMemo(()=>{ try { if (nativeShareHook()) return true; return typeof navigator.canShare==="function" && typeof File!=="undefined" && navigator.canShare({files:[new File(["{}"],"x.json",{type:"application/json"})]}); } catch { return false; } },[]);
   const usage=useMemo(()=>storageUsage(),[transactions.length]);   // Run 32: measured when the page opens and when the number of entries changes
   const standalone=typeof window!=="undefined" && ((window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone===true);
+  const inApp=!!nativeShareHook();   // the Android app: no "install" advice, and saving goes to the phone's Downloads
+  const saveToPhone=!!nativeSaveHook();
+  // Run 37 (owner: "recurring things in Import/export"): one place per job, nothing said twice. 1) back up or move everything, 2) bring a file
+  // in, 3) a spreadsheet copy, 4) how safe the data is on this device. The "do you have the file?" question lives only in the top banner.
   return (
     <div className="io-page">
-      {/* Run 10: how safe the data is on this phone, and what makes it safer */}
-      <div className="section-title" style={{marginTop:0}}>{t("io.safety")}</div>
+      <div className="section-title" style={{marginTop:0}}>{t("io2.moveTitle")}</div>
+      <div className="card" data-section="io-backup-card">
+        <div className="list-sub" style={{lineHeight:1.55}}>{t("io2.moveSub")}</div>
+        <div className="io-backup" data-section="io-last" style={{marginTop:10}}>
+          {lastBackup
+            ? <div className="list-sub">{t(confirmed?"io2.lastConfirmed":"io2.last",{date:fmtLongDate(lastBackup),n:transactions.length})}</div>
+            : <div className="list-title" style={{color:"var(--neg)"}}>{t("set.noBackup")}</div>}
+          {confirmed&&<span className="io-status ok"><Icon name="check" size={12}/></span>}
+        </div>
+        <button className="btn btn-primary btn-full" data-section="io-save" onClick={onExportJSON} style={{marginTop:12}}><Icon name={saveToPhone?"download":"backup"} size={16}/>{t(saveToPhone?"io2.saveDownloads":"io.createBackup")}</button>
+        {canShareFiles&&onShareBackup&&<button className="btn btn-ghost btn-full io-share" onClick={onShareBackup} style={{marginTop:8}}><Icon name="upload" size={16}/>{t("io2.share")}</button>}
+        <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t(saveToPhone?"io2.whereApp":canShareFiles?"io2.whereShare":"io2.whereWeb")}</div>
+        {onExportEncrypted&&<EncryptedBackup onExportEncrypted={onExportEncrypted}/>}
+      </div>
+
+      <div className="section-title">{t("io2.importTitle")}</div>
+      <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io2.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}} style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
+        <input ref={fileRef} type="file" accept={inApp?undefined:".json,.csv,application/json,text/csv"} aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
+        <span className="io-ico" style={{color:"var(--accent-text)",flexShrink:0}}><Icon name="upload" size={24}/></span>
+        <div style={{minWidth:0}}>
+          <div className="list-title">{t("io.import")}</div>
+          <div className="list-sub" style={{lineHeight:1.5}}>{t("io2.importSub")}</div>
+        </div>
+      </div>
+
+      <div className="section-title">{t("io2.sheetTitle")}</div>
+      <div className="card io-card" data-section="io-csv" style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
+        <span className="io-ico" style={{color:"var(--violet)",flexShrink:0}}><Icon name="download" size={24}/></span>
+        <div style={{minWidth:0,flex:1}}>
+          <div className="list-sub" style={{lineHeight:1.5}}>{t("io2.csvSub")}</div>
+          <button className="btn btn-sm" onClick={onExportCSV} style={{marginTop:8}}><Icon name="download" size={12}/>{t("io.exportCsv")}</button>
+        </div>
+      </div>
+
+      {/* Run 10: how safe the data is on this device, and what makes it safer (last: it is about the device, not about a file) */}
+      <div className="section-title">{t("io.safety")}</div>
       <div className="card io-safety">
+        {/* Run 37: the browser's "storage protection" does not apply inside the Android app; say what is true there instead */}
+        {inApp ? <div className="list-sub" data-section="io-app-safety" style={{lineHeight:1.55}}>{t("io2.appSafety")}</div> : <>
         <div className="io-backup">
           <div style={{minWidth:0}}>
             <div className="list-title">{t("io.protectTitle")}</div>
@@ -660,6 +709,7 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
           <span className={`io-status${protection==="on"?" ok":""}`}>{protection==="on"?<><Icon name="check" size={12}/>{t("io.on")}</>:protection==="off"?t("io.off"):"—"}</span>
         </div>
         {protection==="off"&&<button className="btn btn-ghost btn-full io-protect" onClick={onProtect}>{t("io.protectBtn")}</button>}
+        </>}
         {usage&&(
           <div data-section="storage-usage" data-level={usage.level} style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
             <div className="list-title">{t("io.storage")}</div>
@@ -667,52 +717,13 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
             {usage.level!=="ok"&&<div role="alert" style={{color:usage.level==="full"?"var(--neg)":"var(--warn)",fontSize:13,marginTop:6,lineHeight:1.5}}>{t(usage.level==="full"?"io.storageFull":"io.storageWarn")}</div>}
           </div>
         )}
-        {!standalone&&(
+        {!standalone&&!inApp&&(
           <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
             <div className="list-title">{t("io.installTitle")}</div>
             <div className="list-sub" style={{lineHeight:1.5}}>{t("io.installHow")}</div>
             {onInstall&&<button className="btn btn-ghost btn-full io-install" onClick={onInstall}>{t("io.installBtn")}</button>}
           </div>
         )}
-      </div>
-      <div className="io-grid">
-        <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}}>
-          <input ref={fileRef} type="file" accept={nativeShareHook()?undefined:".json,.csv,application/json,text/csv"} aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
-          <span className="io-ico" style={{color:"var(--accent-text)"}}><Icon name="upload" size={24}/></span>
-          <div className="list-title">{t("io.import")}</div>
-          <div className="list-sub">{t("io.importSub")}</div>
-        </div>
-        <div className="card io-card">
-          <span className="io-ico" style={{color:"var(--violet)"}}><Icon name="download" size={24}/></span>
-          <div className="list-title">{t("io.export")}</div>
-          <div className="list-sub">{t("set.exportCsvSub")}</div>
-          <button className="btn btn-sm" onClick={onExportCSV} style={{marginTop:10}}><Icon name="download" size={12}/>{t("io.exportCsv")}</button>
-        </div>
-      </div>
-      <div className="section-title">{t("io.backups")}</div>
-      <div className="card">
-        {lastBackup?(
-          <div className="io-backup">
-            <div style={{minWidth:0}}>
-              <div className="list-sub">{t("set.lastBackup")}</div>
-              <div className="list-title">{fmtLongDate(lastBackup)}</div>
-            </div>
-            <span className={`io-status${confirmed?" ok":""}`}>{confirmed?<><Icon name="check" size={12}/>{t("io.confirmed")}</>:t("io.unconfirmed")}</span>
-          </div>
-        ):(
-          <div className="list-title" style={{color:"var(--neg)"}}>{t("set.noBackup")}</div>
-        )}
-        <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>
-          {lastBackup && (confirmed ? t("set.confirmedOn",{date:fmtLongDate(backupConfirmedAt)}) : t("set.notConfirmed"))}{lastBackup?" ":""}{t("set.cantTell")}
-        </div>
-        {canShareFiles&&onShareBackup&&<>
-          <button className="btn btn-primary btn-full io-share" onClick={onShareBackup} style={{marginTop:12}}><Icon name="upload" size={16}/>{t("io.shareBackup")}</button>
-          <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("io.shareHint")}</div>
-        </>}
-        <button className={`btn ${canShareFiles&&onShareBackup?"btn-ghost":"btn-primary"} btn-full`} onClick={onExportJSON} style={{marginTop:canShareFiles&&onShareBackup?8:12}}><Icon name="backup" size={16}/>{t("io.createBackup")}</button>
-        {lastBackup && !confirmed && <button className="btn btn-ghost btn-full" onClick={onConfirmBackup}>{t("banner.haveFile")}</button>}
-        <div className="list-sub" style={{marginTop:8}}>{tn("set.jsonBackupSub",transactions.length)}</div>
-        {onExportEncrypted&&<EncryptedBackup onExportEncrypted={onExportEncrypted}/>}
       </div>
     </div>
   );
