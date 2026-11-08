@@ -421,6 +421,19 @@ html.launch-first .lang-hint{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 460
 .lang-pill input{position:absolute;opacity:0;width:1px;height:1px;margin:0;pointer-events:none}
 .lang-pill.sel{border-color:var(--accent-fill);background:var(--accent-fill);color:var(--on-accent)}
 .lang-pill:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+.calc-row{display:flex;justify-content:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.calc-key{flex:0 1 52px;min-width:36px;min-height:36px;padding:4px 6px;border:1px solid var(--rule-2);border-radius:18px;background:var(--bg-card);color:var(--ink-2);font-size:16px;font-weight:600;font-family:inherit;line-height:1;cursor:pointer;transition:transform 90ms,background 90ms}
+.calc-key:active:not(:disabled){transform:scale(.94);background:var(--bg-warm)}
+.calc-key:disabled{opacity:.4;cursor:default}
+.calc-key:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.calc-key{transition:none}.calc-key:active:not(:disabled){transform:none}}
+.settings-section-lbl.no-rule{border-bottom:0;padding-bottom:6px}
+.lang-opt,.lang-pill{touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:border-color 90ms,background 90ms,color 90ms,transform 90ms cubic-bezier(.2,.8,.2,1)}
+.lang-opt:active,.lang-pill:active{transform:scale(.97)}
+.lang-swap{display:inline-block;animation:langSwap 200ms cubic-bezier(.2,.8,.2,1) both}
+@keyframes langSwap{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.lang-opt,.lang-pill{transition:none}.lang-opt:active,.lang-pill:active{transform:none}.lang-swap{animation:none}}
+[data-fx="off"] .lang-swap{animation:none}
 .fab-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* Run 14: rows, bars, the import tile and switches are keyboard-reachable now; they get the same visible ring (inside the edge for rows, which sit in clipped cards) */
 .txn-row:focus-visible,.bill-row:focus-visible,.drop-zone:focus-visible,.list-row:focus-visible,.toggle-track:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
@@ -675,7 +688,7 @@ html.launch-first .lang-hint{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 460
   --lit-edge:inset 0 1px 0 color-mix(in srgb,var(--ink) 7%,transparent);
   --shadow-card:0 0 0 0 transparent;
   --shadow-float:0 12px 32px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3)}
-:root[data-theme="mist"]{--sunken-pct:5%;--raise-mix:#fff;--raise-pct:55%;--float-pct:85%;--lit-edge:0 0 0 0 transparent;
+:root[data-theme="mist"],:root[data-theme="sand"]{--sunken-pct:5%;--raise-mix:#fff;--raise-pct:55%;--float-pct:85%;--lit-edge:0 0 0 0 transparent;
   --shadow-card:0 1px 2px rgba(25,29,35,0.10);--shadow-float:0 12px 32px rgba(25,29,35,0.20),0 2px 8px rgba(25,29,35,0.12)}
 :root[data-fx="off"]{--lit-edge:0 0 0 0 transparent;--shadow-card:0 0 0 0 transparent;--shadow-float:0 0 0 0 transparent}
 .card,.safe-card,.a-card,.pace-card,.helper-card,.month-stat,.stat-cell,.goal-card{box-shadow:var(--lit-edge),var(--shadow-card)}

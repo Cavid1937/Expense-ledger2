@@ -8,7 +8,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
 const SEA = { "--bg": "#07151A", "--bg-card": "#0E2229", "--bg-warm": "#153039", "--ink": "#F3F7F6", "--ink-2": "#D3DFDE", "--ink-3": "#A5B7B8", "--ink-4": "#93A7A8", "--accent-text": "#4CC9C4", "--accent-fill": "#4CC9C4", "--on-accent": "#07151A", "--pos": "#8BD97A", "--neg": "#FF8188", "--warn": "#F0C46F", "--info": "#83B9F5" };
 
 section("R25-TH1. The themes");
-ok(THEME_IDS.join("|") === "sea|nordic|mist|dusk|sapphire|cocoa", "six themes: the original plus the five palettes", THEME_IDS);
+ok(THEME_IDS.join("|") === "sea|nordic|mist|dusk|graphite|sand", "six themes: the original plus the five palettes (Sapphire and Cocoa were replaced by Graphite and Sand in Run 42)", THEME_IDS);
 ok(Object.keys(THEMES.sea.vars).length === 0, "the original look has no overrides");
 ok(THEME_IDS.slice(1).every((id) => /^#[0-9A-F]{6}$/i.test(THEMES[id].vars["--bg"]) && /^#[0-9A-F]{6}$/i.test(THEMES[id].vars["--accent-fill"])), "every other theme sets a background and an accent as 6-digit colours");
 ok(new Set(THEME_IDS.slice(1).map((id) => Object.keys(THEMES[id].vars).sort().join())).size === 1, "every theme sets the same list of variables (none forgotten)");
@@ -28,7 +28,8 @@ ok(writeTheme("dusk") && readTheme() === "dusk" && localStorage.getItem(THEME_KE
 ok(themeId("nope") === "sea" && themeId(undefined) === "sea" && themeId("__proto__") === "sea" && themeId("constructor") === "sea", "unknown or hostile values fall back to the original look");
 localStorage.setItem(THEME_KEY, "junk"); ok(readTheme() === "sea", "a damaged saved value reads as the original look");
 writeTheme("sea"); ok(localStorage.getItem(THEME_KEY) === null, "choosing the original look removes the key");
-globalThis.__failKeys = ["__theme"]; ok(writeTheme("cocoa") === false, "a storage failure is reported, not hidden"); globalThis.__failKeys = [];
+ok(themeId("sapphire") === "dusk" && themeId("cocoa") === "nordic", "a removed theme (saved earlier, or named in a backup) maps to its closest remaining one");
+globalThis.__failKeys = ["__theme"]; ok(writeTheme("graphite") === false, "a storage failure is reported, not hidden"); globalThis.__failKeys = [];
 section("R25-TH4. Income and expense colours stay apart for colour-blind users (simulated)");
 {
   const lin = (hex) => [1, 3, 5].map((i) => { const v = parseInt(hex.slice(i, i + 2), 16) / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });

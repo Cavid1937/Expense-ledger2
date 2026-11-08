@@ -155,6 +155,22 @@ export function revealFocus(el) {
   requestAnimationFrame(()=>{ try { el.scrollIntoView({ behavior:"smooth", block:"center" }); const i=el.matches("input,select,textarea") ? el : el.querySelector("input,select,textarea"); if (i) i.focus({ preventScroll:true }); } catch {} });
 }
 export function formMoney(v, opts) { return parseMoney(typeof v==="string" ? v.trim().replace(/\.$/,"") : v, opts); }
+// Run 42 (owner's wishlist: "the amount field should accept basic math: 45.00 - 20"): a tiny arithmetic parser (+, -, *, /, x, parentheses, unary minus).
+// No eval and no Function: it reads the text itself. Numbers have at most 2 decimals (so "1,234" is refused, never read as 1.234), the result is rounded to
+// 2 decimals and must be above 0 and within the largest amount; anything else gives null and the form says the amount is not valid.
+export function evalAmountExpr(text) {
+  const s=String(text??"").replace(/[\s\u00a0\u202f]/g,"").replace(/×/g,"*").replace(/÷/g,"/").replace(/−/g,"-");
+  if (!s || s.length>40 || !/^[0-9.,+\-*/()]+$/.test(s)) return null;
+  let i=0, depth=0;
+  const num=()=>{ const m=/^(\d+(?:[.,]\d{1,2})?|[.,]\d{1,2})/.exec(s.slice(i)); if (!m) return NaN; i+=m[0].length; return Number(m[0].replace(",",".")); };
+  const factor=()=>{ if (s[i]==="(") { if (++depth>6) return NaN; i++; const v=expr(); if (s[i]!==")") return NaN; i++; depth--; return v; } if (s[i]==="-") { i++; return -factor(); } return num(); };
+  const term=()=>{ let v=factor(); while (s[i]==="*"||s[i]==="/") { const o=s[i++], r=factor(); v=o==="*" ? v*r : (r===0 ? NaN : v/r); } return v; };
+  const expr=()=>{ let v=term(); while (s[i]==="+"||s[i]==="-") { const o=s[i++], r=term(); v=o==="+" ? v+r : v-r; } return v; };
+  const v=expr();
+  if (i!==s.length || !Number.isFinite(v)) return null;
+  const r=Math.round(v*100)/100;
+  return r>0 && r<=MAX_AMOUNT ? r : null;
+}
 
 function isPlainObject(x) { return x!==null && typeof x==="object" && !Array.isArray(x); }
 // Run 14: a clickable <div> that acts as a button must answer Enter and Space too. Only when the key was pressed ON the element
@@ -490,6 +506,22 @@ export function frequentFirst(list, transactions, now=new Date(), days=90) {
   const to=localDateStr(now), from=localDateStr(new Date(now.getFullYear(),now.getMonth(),now.getDate()-days)), n={};
   (Array.isArray(transactions)?transactions:[]).forEach(x=>{ if (x && typeof x.date==="string" && x.date>=from && x.date<=to) n[x.category]=(n[x.category]||0)+1; });
   return (list||[]).map((c,i)=>({ c, i, k:n[c.id]||0 })).sort((a,b)=>b.k-a.k || a.i-b.i).map(x=>x.c);
+}
+// Run 42 (owner's wishlist: "the category should default to what I usually buy at this time of day"). Learned from the person's own entries, never a fixed guess:
+// among expenses of the last 90 days that were entered on the day they happened (so the entry time is when it was spent), those entered in the same part of the day
+// as now (05-11 / 11-16 / 16-22 / night), the top category is suggested when there are at least 5 such entries, it has more than half of them, and they fall on
+// at least 3 different days. Otherwise null (the usual first category stays). Only the pre-selected category changes; the picker order never moves.
+export function slotCategory(transactions, now=new Date(), days=90) {
+  const slot=(h)=>h>=5&&h<11 ? 0 : h>=11&&h<16 ? 1 : h>=16&&h<22 ? 2 : 3;
+  const cur=slot(now.getHours()), from=localDateStr(new Date(now.getFullYear(),now.getMonth(),now.getDate()-days)), n={}, ds={}; let total=0;
+  (Array.isArray(transactions)?transactions:[]).forEach(x=>{
+    if (!x || x.type!=="expense" || x.recurring || x.billId || typeof x.date!=="string" || x.date<from || typeof x.category!=="string") return;
+    const d=new Date(x.createdAt); if (isNaN(d.getTime()) || localDateStr(d)!==x.date || slot(d.getHours())!==cur) return;
+    n[x.category]=(n[x.category]||0)+1; (ds[x.category]||(ds[x.category]=new Set())).add(x.date); total++;
+  });
+  if (total<5) return null;
+  const top=Object.keys(n).sort((a,b)=>n[b]-n[a] || (a<b?-1:1))[0];
+  return top && n[top]*2>total && ds[top].size>=3 ? top : null;
 }
 export function hasManualOrder(prefs, income) { const p=cleanCatPrefs(prefs); return p.order.some(id=>CATEGORIES.some(c=>c.id===id && !!c.income===!!income)); }
 export function moveCat(prefs, income, id, dir) {
@@ -1229,15 +1261,20 @@ export const THEMES={
   dusk:{ swatch:["#0B132B","#D97706"], dark:true, vars:{ ...DARK_MEANING,
     "--bg":"#0B132B","--bg-card":"#1C2541","--bg-warm":"#26365A","--bg-inset":"#16203D","--ink":"#FBF1E3","--ink-2":"#EAD9C0","--ink-3":"#B7C3D9","--ink-4":"#A3B0C8","--ink-5":"#3A506B",
     "--rule":"#2C3A5E","--rule-2":"#46608A","--accent":"#F0A44B","--accent-light":"#38281A","--accent-mid":"#F4D6B0","--accent-text":"#F0A44B","--accent-fill":"#D97706","--on-accent":"#0B132B" } },
-  sapphire:{ swatch:["#000926","#0F52BA"], dark:true, vars:{ ...DARK_MEANING,
-    "--bg":"#000926","--bg-card":"#08143A","--bg-warm":"#10276A","--bg-inset":"#0B1B4D","--ink":"#E4EEF7","--ink-2":"#D6E6F3","--ink-3":"#A6C5D7","--ink-4":"#93B2C6","--ink-5":"#1E3A7A",
-    "--rule":"#16295F","--rule-2":"#2D4FA0","--accent":"#6FA3F5","--accent-light":"#0F2A63","--accent-mid":"#A6C5D7","--accent-text":"#6FA3F5","--accent-fill":"#0F52BA","--on-accent":"#FFFFFF" } },
-  cocoa:{ swatch:["#1A120E","#A88462"], dark:true, vars:{ ...DARK_MEANING,
-    "--bg":"#1A120E","--bg-card":"#261A13","--bg-warm":"#3A2418","--bg-inset":"#2E1F16","--ink":"#F2E8DA","--ink-2":"#D5C4AE","--ink-3":"#B9A58B","--ink-4":"#A8947B","--ink-5":"#4A3426",
-    "--rule":"#3A2A1F","--rule-2":"#5A4130","--accent":"#C9A882","--accent-light":"#3A2A1C","--accent-mid":"#D5C4AE","--accent-text":"#C9A882","--accent-fill":"#A88462","--on-accent":"#1A120E" } },
+  // Run 42 (owner: "Sapphire and Cocoa are too much, I don't like them"): replaced by two quieter palettes. Graphite is a neutral near-black with a
+  // warm-white accent (calm, easy on the eyes at night); Sand is a warm light theme (the only other light theme, Mist, is cool grey).
+  graphite:{ swatch:["#121315","#CFC9B8"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#121315","--bg-card":"#1B1D20","--bg-warm":"#272A2F","--bg-inset":"#202327","--ink":"#F4F5F6","--ink-2":"#DEE0E3","--ink-3":"#B0B5BC","--ink-4":"#9EA4AC","--ink-5":"#3C4148",
+    "--rule":"#2D3036","--rule-2":"#4A4F57","--accent":"#D9D4C7","--accent-light":"#2B2A26","--accent-mid":"#E6E2D6","--accent-text":"#D9D4C7","--accent-fill":"#BDB7A6","--on-accent":"#121315" } },
+  sand:{ swatch:["#EFE8DB","#8A4B14"], dark:false, vars:{
+    "--bg":"#EFE8DB","--bg-card":"#F8F4EA","--bg-warm":"#E6DECE","--bg-inset":"#F1EBDF","--ink":"#231F18","--ink-2":"#3A342A","--ink-3":"#554D3F","--ink-4":"#5A5244","--ink-5":"#C4BAA7",
+    "--rule":"#DCD3C1","--rule-2":"#BDB29C","--accent":"#7A4410","--accent-light":"#EAD9BF","--accent-mid":"#A8691F","--accent-text":"#7A4410","--accent-fill":"#8A4B14","--on-accent":"#FFFFFF",
+    "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1B6B3A","--pos-bg":"#D9E6D0","--neg":"#A8360A","--neg-bg":"#F0D9D0","--warn":"#7A5200","--warn-bg":"#EBDDB9" } },
 };
 export const THEME_IDS=Object.keys(THEMES);
-const themeId=(v)=>typeof v==="string" && Object.prototype.hasOwnProperty.call(THEMES,v) ? v : "sea";
+// Anyone who had picked a removed theme (or a backup that names one) lands on the closest remaining one instead of the default.
+const LEGACY_THEMES={ sapphire:"dusk", cocoa:"nordic" };
+const themeId=(v)=>typeof v==="string" && Object.prototype.hasOwnProperty.call(THEMES,v) ? v : (typeof v==="string" && Object.prototype.hasOwnProperty.call(LEGACY_THEMES,v) ? LEGACY_THEMES[v] : "sea");
 export function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return "sea"; } }
 export function writeTheme(id) { try { if (themeId(id)==="sea") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY,themeId(id)); return true; } catch { return false; } }
 export function applyTheme(id) {   // sets (or clears) the colour variables on the page root; safe to call before the app renders
@@ -1938,7 +1975,7 @@ export function cleanPrefs(raw) {
   const wh=cleanWorkHours(s.workHours); if (wh!==null) out.workHours=wh;
   const n=cleanProfileName(s.profileName); if (n) out.profileName=n;
   if (s.setupHidden===true) out.setupHidden=true;
-  if (typeof s.theme==="string" && s.theme!=="sea" && THEME_IDS.includes(s.theme)) out.theme=s.theme;
+  if (typeof s.theme==="string") { const th=themeId(s.theme); if (th!=="sea" && THEME_IDS.includes(th)) out.theme=th; }   // Run 42: a backup that names a removed theme (Sapphire, Cocoa) keeps its closest one
   if (s.reduceEffects===true) out.reduceEffects=true;
   const cm=muteList(s.coachMute), pm=muteList(s.patternMute); if (cm.length) out.coachMute=cm; if (pm.length) out.patternMute=pm;
   return out;
@@ -2063,6 +2100,39 @@ function merchantSuggest(merchant, memory, type="expense") {
   return Object.values(memory).find(v=>v.type===(type==="income"?"income":"expense")&&lc(v.merchant).startsWith(q))||null;
 }
 
+// Run 42 (owner's wishlist: "Netflix, Spotify, Uber... the app should just know"): a built-in list of common places and services, with Azerbaijan first, that suggests
+// a category while typing a merchant. A person's OWN history always comes first and is never overridden; these only fill the gap. Expenses only. Brands I was not sure of
+// are left out on purpose; the list is data and easy to extend.
+export const KNOWN_MERCHANTS=[
+  ["Netflix","digital","Streaming"],["Spotify","digital","Streaming"],["YouTube Premium","digital","Streaming"],["Disney+","digital","Streaming"],["HBO Max","digital","Streaming"],["Apple Music","digital","Streaming"],["Amazon Prime","digital","Streaming"],
+  ["iCloud","digital","Cloud Storage"],["Google One","digital","Cloud Storage"],["Dropbox","digital","Cloud Storage"],
+  ["ChatGPT","digital","Software"],["Claude","digital","Software"],["Microsoft 365","digital","Software"],["Adobe","digital","Software"],["Canva","digital","Software"],
+  ["Azercell","digital","Mobile"],["Bakcell","digital","Mobile"],["Nar","digital","Mobile"],["Naxtel","digital","Mobile"],
+  ["Aztelekom","digital","Internet"],["Delta Telecom","digital","Internet"],["Baktelekom","digital","Internet"],["Super Online","digital","Internet"],
+  ["Bolt","transport","Taxi / Ride-hailing"],["Uber","transport","Taxi / Ride-hailing"],["Yango","transport","Taxi / Ride-hailing"],["BakıKart","transport","Metro"],["BakiKart","transport","Metro"],
+  ["SOCAR","car","Fuel"],["Azpetrol","car","Fuel"],["Lukoil","car","Fuel"],["Shell","car","Fuel"],
+  ["Bravo","food","Groceries"],["Araz","food","Groceries"],["Bazarstore","food","Groceries"],["Rahat Market","food","Groceries"],["Neptun","food","Groceries"],["Oba Market","food","Groceries"],
+  ["Wolt","food","Delivery"],["Bolt Food","food","Delivery"],["Glovo","food","Delivery"],
+  ["Starbucks","food","Coffee"],["Coffeemania","food","Coffee"],["Gloria Jeans","food","Coffee"],
+  ["McDonald's","food","Fast Food"],["KFC","food","Fast Food"],["Burger King","food","Fast Food"],["Papa John's","food","Fast Food"],["Domino's","food","Fast Food"],["Pizza Hut","food","Fast Food"],["Subway","food","Fast Food"],
+  ["Zeytun Pharm","health","Pharmacy"],
+  ["Azərişıq","housing","Electricity"],["Azerishiq","housing","Electricity"],["Azersu","housing","Water"],["Azəriqaz","housing","Gas"],["Azerigaz","housing","Gas"],
+  ["Kontakt","shopping","Electronics"],["Baku Electronics","shopping","Electronics"],["Irshad","shopping","Electronics"],
+  ["Amazon","shopping","Online Shopping"],["AliExpress","shopping","Online Shopping"],["Trendyol","shopping","Online Shopping"],["Temu","shopping","Online Shopping"],["Umico","shopping","Online Shopping"],
+  ["CinemaPlus","entertain","Cinema"],["Park Cinema","entertain","Cinema"],
+];
+// Matches what is typed against the start of the name or of any word in it (at least 2 letters). Returns suggestion objects shaped like merchant-memory entries.
+export function knownMerchants(query, type="expense", limit=4) {
+  const q=lc(String(query||"").trim()); if (type==="income" || q.length<2) return [];
+  const out=[];
+  for (const [name,category,subcategory] of KNOWN_MERCHANTS) {
+    const n=lc(name); if (n.startsWith(q) || n.split(/[\s'’./-]+/).some(w=>w.length>0 && w.startsWith(q))) out.push({ type:"expense", merchant:name, category, subcategory, count:0, totalSpent:0, builtin:true });
+    if (out.length>=limit) break;
+  }
+  return out;
+}
+// The one exact match (whole name, any letter case) or null.
+export function knownMerchantExact(name) { const q=lc(String(name||"").trim()); if (!q) return null; const m=KNOWN_MERCHANTS.find(x=>lc(x[0])===q); return m ? { merchant:m[0], category:m[1], subcategory:m[2] } : null; }
 // S6: Full merchant profile per spec — frequency, timing, recurrence detection, forecasting
 function detectRecurrence(txns) {
   if (txns.length < 3) return { isRecurring: false, recurringFreq: "irregular", recurringConfidence: 0, avgDaysBetween: null };
@@ -4012,7 +4082,7 @@ function AppInner() {
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
     const restore=(k,raw)=>{ try { if (raw===undefined) return; if (raw===null) localStorage.removeItem(k); else localStorage.setItem(k,raw); } catch {} };
-    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY), [THEME_KEY]:snap(THEME_KEY), [FX_KEY]:snap(FX_KEY), [COACH_MUTE_KEY]:snap(COACH_MUTE_KEY), [PAT_MUTE_KEY]:snap(PAT_MUTE_KEY) };
+    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY), [THEME_KEY]:snap(THEME_KEY), [FX_KEY]:snap(FX_KEY), [WORKHOURS_KEY]:snap(WORKHOURS_KEY), [COACH_MUTE_KEY]:snap(COACH_MUTE_KEY), [PAT_MUTE_KEY]:snap(PAT_MUTE_KEY) };
     const catsHad=currentCustomCats();
     const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); applyCustomCats(catsHad); applyTheme(readTheme()); applyFx(readFxOff()); };
     // Run 24: the file's own categories are added to the ones on this phone (by id; a name already in use is skipped, never renamed).

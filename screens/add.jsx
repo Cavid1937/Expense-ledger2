@@ -1,10 +1,15 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths } from "../App.jsx";
+import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
+// Run 42: the amount box also takes simple arithmetic ("45 - 20", "12.5 x 3"); amountOf gives the number either way (null when not valid).
+const EXPR_TEXT=/[+*\/×÷]|[0-9.,)]\s*[-−]\s*[0-9.,(]/;
+export const isExprText=(s)=>EXPR_TEXT.test(String(s||""));
+const cleanExprText=(s)=>String(s||"").replace(/[^0-9.,+\-−*\/×÷() ]/g,"").slice(0,40);
+const amountOf=(txt)=>isExprText(txt) ? evalAmountExpr(txt) : formMoney(txt,{positive:true});
 // ─── Recurring Hub ────────────────────────────────────────────────────────────
 // Run 12: the bill form — add a bill, or edit / pause / delete one. The due date is the user's: the bill is expected on it
 // and then every week / two weeks / month / year (a day past a month's end falls on that month's last day).
@@ -82,7 +87,9 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   // Run 38: the picker order = the user's own order if they arranged one, otherwise most used in the last 90 days first (fixed while the form is open).
   const deskOrder=(ty,keep)=>{ const prefs=readCatPrefs(), inc=ty==="income", l=pickerCats(inc,prefs,keep); return hasManualOrder(prefs,inc) ? l : frequentFirst(l,transactions); };
   const deskIds=useMemo(()=>({ expense:deskOrder("expense",[]).map(c=>c.id), income:deskOrder("income",[]).map(c=>c.id) }),[]);   // eslint-disable-line react-hooks/exhaustive-deps
-  const firstCat=(ty)=>deskIds[ty==="income"?"income":"expense"][0]||(ty==="income"?"salary":"food");
+  // Run 42: with no order of their own, a new expense starts on what this person usually spends on at this time of day (slotCategory); an own order always wins.
+  const slotCat=useMemo(()=>prefill||editId||hasManualOrder(readCatPrefs(),false) ? null : slotCategory(transactions),[]);   // eslint-disable-line react-hooks/exhaustive-deps
+  const firstCat=(ty)=>{ const ids=deskIds[ty==="income"?"income":"expense"]; return (ty!=="income" && slotCat && ids.includes(slotCat)) ? slotCat : (ids[0]||(ty==="income"?"salary":"food")); };
   const [catId,    setCatId]    = useState(()=>prefill?.category||firstCat(prefill?.type||"expense"));
   const [subcat,   setSubcat]   = useState(prefill?.subcategory||"");
   const [merchant, setMerchant] = useState(prefill?.merchant||"");
@@ -152,11 +159,17 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
     const q=lc(merchant);
     // Only suggest what the user previously recorded as this same transaction type
     const wantType=type==="income"?"income":"expense";
-    return Object.values(merchantMemory)
-      .filter(m=>m.type===wantType&&lc(m.merchant).startsWith(q))
-      .slice(0,4);
+    // the person's own history first; the built-in list (Run 42) only fills what is left
+    const own=Object.values(merchantMemory).filter(m=>m.type===wantType&&lc(m.merchant).startsWith(q)).slice(0,4), seen=new Set(own.map(m=>lc(m.merchant)));
+    return [...own, ...knownMerchants(merchant,wantType).filter(m=>!seen.has(lc(m.merchant)))].slice(0,4);
   },[merchant,merchantMemory,type]);
 
+  // Run 42: when the whole merchant name is one this person has used before (or a well-known place) and the category is still the untouched default, the category follows at once.
+  const autoCategory=()=>{
+    if (isEditing || prefill || catId!==defaultCat || subcat || !merchant.trim()) return;
+    const hit=merchantMemory[memKey(type,merchant)] || (type!=="income" ? knownMerchantExact(merchant) : null);
+    if (hit && hit.category && hit.category!==catId && CAT(hit.category)) { setCatId(hit.category); setSubcat(hit.subcategory||""); }
+  };
   const applySuggestion=(sug)=>{
     setMerchant(sug.merchant);
     setCatId(sug.category||catId);
@@ -166,7 +179,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
 
   // S0: Duplicate detection uses createdAt, not date
   const isDupe=useMemo(()=>{
-    const amt=formMoney(amount,{positive:true});
+    const amt=amountOf(amount);
     if (isEditing||amt===null) return false;
     const tenMinAgo=Date.now()-10*60*1000;
     return transactions.some(t=>
@@ -188,14 +201,14 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   },[fxCur,date]);   // eslint-disable-line react-hooks/exhaustive-deps
   const fxManualRate=(()=>{ const s=String(fxManual||"").trim().replace(",","."); if (!/^\d{1,6}(\.\d{1,6})?$/.test(s)) return null; const n=Number(s); return n>0 ? n : null; })();   // a rate may have up to 6 decimals
   const fxEff=!fxCur ? null : (fxOwn||fxState==="fail") ? (fxManualRate>0 && fxManualRate<=1e5 ? { rate:Number(fxManualRate.toPrecision(6)), on:isValidDateStr(date)?date:today(), src:"manual" } : null) : (fxState==="ok" ? fxRate : null);
-  const fxAmt=fxCur ? formMoney(amount,{positive:true}) : null;
+  const fxAmt=fxCur ? amountOf(amount) : null;
   const fxBase=fxEff && fxAmt!==null ? fxToBase(fxAmt,fxEff.rate) : null;
   // Run 41: "how many hours of my work is this?" Only for expenses, only when the user set their monthly hours and has earned income on record.
   const perHour=useMemo(()=>incomePerHour(transactions,readWorkHours()),[transactions]);
-  const hoursTxt=(()=>{ if (type!=="expense" || !perHour) return ""; const b=fxCur ? fxBase : formMoney(amount,{positive:true}); const h=hoursOfWork(b,perHour); return h===null ? "" : t("work.line",{ hours:String(h) }); })();
+  const hoursTxt=(()=>{ if (type!=="expense" || !perHour) return ""; const b=fxCur ? fxBase : amountOf(amount); const h=hoursOfWork(b,perHour); return h===null ? "" : t("work.line",{ hours:String(h) }); })();
 
   const submit=(override)=>{
-    const typed=formMoney(amount,{positive:true});
+    const typed=amountOf(amount);
     if (typed===null) { setErr(t("add.errAmount")); return; }
     if (!isValidDateStr(String(date||""))) { setErr(t("add.errDate")); return; }
     // Run 39: in another currency the ledger keeps the manat amount and remembers what was paid and at which rate
@@ -237,13 +250,21 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
         <div className="amount-zone" onClick={()=>amtRef.current?.focus()}>
           <div className="amount-line">
             <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off" autoFocus={!editId}
-              placeholder="0.00" value={amount} onChange={e=>{setAmount(cleanMoneyText(e.target.value));setErr("");}}
-              onPaste={e=>{ const p=(e.clipboardData&&e.clipboardData.getData("text"))||""; if (!p) return; e.preventDefault(); setAmount(cleanMoneyText(p,{paste:true})); setErr(""); }}
+              placeholder="0.00" value={amount} onChange={e=>{ const v=e.target.value; setAmount(isExprText(v) ? cleanExprText(v) : cleanMoneyText(v)); setErr(""); }}
+              onPaste={e=>{ const p=(e.clipboardData&&e.clipboardData.getData("text"))||""; if (!p) return; e.preventDefault(); setAmount(isExprText(p) ? cleanExprText(p) : cleanMoneyText(p,{paste:true})); setErr(""); }}
               min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}
               style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
             {fxOk
               ? <button type="button" className="amount-cur amount-cur-btn" data-section="fx-cur" aria-expanded={fxPick} aria-label={t("fx.choose")+": "+(fxCur||currency)} onClick={e=>{ e.stopPropagation(); setFxPick(p=>!p); }}>{fxCur||currency} <Icon name={fxPick?"chevUp":"chevDown"} size={11}/></button>
               : <span className="amount-cur">{currency}</span>}
+          </div>
+          {/* Run 42: simple arithmetic in the amount (45 - 20): the four sign buttons add to the text, the line under it shows the result as you type */}
+          {isExprText(amount) && <div className="list-sub" data-section="amt-expr" role="status" style={{textAlign:"center",marginTop:2}}>{(()=>{ const v=evalAmountExpr(amount); return v===null ? t("calc.bad") : "= "+fmt(v,fxCur||currency); })()}</div>}
+          <div className="calc-row" data-section="amt-ops" role="group" aria-label={t("calc.group")} onClick={e=>e.stopPropagation()}>
+            {[["+","calc.plus"],["−","calc.minus"],["×","calc.times"],["÷","calc.divide"]].map(([sym,k])=>(
+              <button key={sym} type="button" className="calc-key" data-op={sym} aria-label={t(k)} disabled={!/[0-9)]$/.test(String(amount).trim())}
+                onClick={()=>{ setAmount(a=>cleanExprText(String(a).trim()+sym)); setErr(""); amtRef.current?.focus(); }}>{sym}</button>
+            ))}
           </div>
         </div>
         {/* Run 39: paid in another currency — choose it; the official rate of that day turns it into manat */}
@@ -394,7 +415,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           <input id="txn-merchant" className="field-input" placeholder={t("add.merchantPh")} autoComplete="off"
             value={merchant}
             onChange={e=>{setMerchant(e.target.value);setShowMerchantSugs(true);}}
-            onBlur={()=>setTimeout(()=>setShowMerchantSugs(false),150)}
+            onBlur={()=>setTimeout(()=>{ setShowMerchantSugs(false); autoCategory(); },150)}
             onFocus={()=>setShowMerchantSugs(true)}/>
           {/* Merchant intelligence hint — shown when merchant is recognised */}
           {merchant.trim()&&!showMerchantSugs&&(()=>{
@@ -420,7 +441,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
               {merchantMatches.map((m,i)=>(
                 <div key={i} className="merchant-sug-item" onMouseDown={()=>applySuggestion(m)}>
                   <div>{m.merchant}</div>
-                  <div className="merchant-sug-sub">{catName(m.category)}{m.subcategory?` / ${subName(m.subcategory)}`:""} · {t("add.usedTimes",{n:m.count})}</div>
+                  <div className="merchant-sug-sub">{catName(m.category)}{m.subcategory?` / ${subName(m.subcategory)}`:""} · {m.builtin?t("add.knownPlace"):t("add.usedTimes",{n:m.count})}</div>
                 </div>
               ))}
             </div>
@@ -484,7 +505,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
             <div className="filter-bar" role="group" aria-labelledby="txn-spread-lbl" style={{flexWrap:"wrap",overflowX:"visible"}}>
               {[...new Set([0,3,6,12,spread])].sort((a,b)=>a-b).map(n=>(<button key={n} type="button" className={`chip${spread===n?" on":""}`} aria-pressed={spread===n} data-spread={n} onClick={()=>setSpread(n)}>{n===0?t("spread.off"):tn("spread.months",n)}</button>))}
             </div>
-            <div className="list-sub" style={{lineHeight:1.5,marginTop:6}}>{spread>0 ? t("spread.on",{ months:spread, each:fmt(Math.floor(Math.round((formMoney(amount,{positive:true})||0)*100)/spread)/100,currency) }) : t("spread.hint")}</div>
+            <div className="list-sub" style={{lineHeight:1.5,marginTop:6}}>{spread>0 ? t("spread.on",{ months:spread, each:fmt(Math.floor(Math.round((amountOf(amount)||0)*100)/spread)/100,currency) }) : t("spread.hint")}</div>
           </div>
         </Collapse>
 

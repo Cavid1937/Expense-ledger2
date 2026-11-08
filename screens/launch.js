@@ -10,7 +10,7 @@
 // Never blocks: a tap skips it, it removes itself after MAX_MS even if the app never reports ready, and reduced motion / "Reduce effects" get a short fade.
 // Automated test browsers (navigator.webdriver) skip it unless a test sets window.__forceLaunch, so other tests are not slowed or blocked.
 export const LAUNCH_ID = "launch";
-export const HOLD_MS = 520, OUT_MS = 560, MAX_MS = 2600;
+export const HOLD_MS = 900, OUT_MS = 560, MAX_MS = 3200;   // Run 42 (owner: "the opening can be a little longer, just a bit"): hold 520 -> 900 ms
 
 // The mark is the app icon's glyph (public/icon.svg without its rounded background), 102 px tall: the size Android draws the launcher icon's
 // glyph on its launch screen (46 of 108 units of a 240 dp adaptive icon), so the hand-over lines up.
@@ -81,13 +81,17 @@ function firstRun(el, target) {
 }
 
 // Called when the first screen has been drawn. Waits out the rest of the hold, then plays the hand-over and removes the layer.
+let pending = 0;   // the timer of a hand-over that is still waiting out the hold; a tap replaces it (the hold is longer now, so a tap during it must still skip at once)
 export function finishLaunch(now = false) {
-  if (typeof document === "undefined" || finishing) return;
+  if (typeof document === "undefined") return;
+  if (finishing && !(now && pending)) return;
+  if (pending) { clearTimeout(pending); pending = 0; }
   const el = document.getElementById(LAUNCH_ID); if (!el) return;
   finishing = true;
   const t = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
   const wait = now || quiet() ? 0 : Math.max(0, HOLD_MS - (t - started));
-  setTimeout(() => {
+  pending = setTimeout(() => {
+    pending = 0;
     const target = !now && !quiet() && document.querySelector("[data-launch-target]");
     if (target && firstRun(el, target)) return;
     try { document.documentElement.classList.add("launch-rise"); } catch { /* ignore */ }

@@ -5,7 +5,8 @@ const browser = await launch();
 const labels = (page) => page.evaluate(() => [...document.querySelectorAll(".cat-scroll .cat-tile")].map((b) => b.getAttribute("aria-label")));
 const toIncome = (page) => page.evaluate(() => [...document.querySelectorAll(".type-pick")][1].click());
 const pick = (page, label) => page.evaluate((l) => { const b = [...document.querySelectorAll(".cat-scroll .cat-tile")].find((x) => x.getAttribute("aria-label") === l); if (b) b.click(); return !!b; }, label);
-const hint = (page) => page.evaluate(() => { const e = document.querySelector('[data-section="add-not-income"]'); return e ? e.innerText : ""; });
+// Run 42: since Run 40 the note sits in a Collapse that stays in the page while closed (height 0, invisible); "shown" now means its Collapse is open.
+const hint = (page) => page.evaluate(() => { const e = document.querySelector('[data-section="add-not-income"]'); const c = e && e.closest(".collapse"); return e && (!c || c.classList.contains("is-open")) ? e.innerText : ""; });
 
 const langs = {
   en: { pension: "Pension", refund: "Refunds & Reimbursements", scholarship: "Scholarship & Grants", pets: "Pets", note: /not in your income totals/i },

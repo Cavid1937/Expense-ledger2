@@ -2,7 +2,7 @@
 import { launch, openPage, openSettings, wait, ok, section, finish, baseSeed, settle, tx } from "./lib.mjs";
 const browser = await launch();
 const seed = baseSeed({ language: "en", transactions: [tx({ id: 1790001000001, merchant: "Shop", amount: 12 })] });
-const THEMES = ["sea", "nordic", "mist", "dusk", "sapphire", "cocoa"];
+const THEMES = ["sea", "nordic", "mist", "dusk", "graphite", "sand"];
 
 // Reads the real, resolved colours (color-mix included) by painting them onto a canvas pixel.
 const probe = (page) => page.evaluate(() => {

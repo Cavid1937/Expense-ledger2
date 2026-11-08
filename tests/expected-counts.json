@@ -64,7 +64,7 @@
     "run24accedit.test.mjs": 10,
     "run24catedit.test.mjs": 8,
     "run25subrename.test.mjs": 13,
-    "run25themes.test.mjs": 18,
+    "run25themes.test.mjs": 19,
      "run28networth.test.mjs": 11,
     "run30reminders.test.mjs": 25,
     "run35cat.test.mjs": 35,
@@ -83,6 +83,10 @@
     "run41work.test.mjs": 21,
     "run41spread.test.mjs": 24,
     "run41coach3.test.mjs": 17,
+    "run42math.test.mjs": 23,
+    "run42io.test.mjs": 13,
+    "run42slot.test.mjs": 17,
+    "run42merch.test.mjs": 15,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -190,7 +194,8 @@
     "e2e_run38.mjs": 29,
     "e2e_run39_fx.mjs": 15,
     "e2e_run40.mjs": 42,
-    "e2e_run41.mjs": 21
+    "e2e_run41.mjs": 21,
+    "e2e_run42.mjs": 25
   }
 }
 

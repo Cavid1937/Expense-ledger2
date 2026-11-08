@@ -28,7 +28,7 @@ section("R25-TB1. Choosing a theme changes the colours at once and is remembered
   await page.close();
 }
 section("R25-TB2. Every theme: no horizontal scroll, accent applied, no errors");
-for (const id of ["nordic", "mist", "dusk", "sapphire", "cocoa"]) {
+for (const id of ["nordic", "mist", "dusk", "graphite", "sand"]) {
   const page = await openPage(browser, { seed }); await settle(page); await openSettings(page); await wait(300);
   await pick(page, id); await wait(350);
   const info = await page.evaluate(() => ({ ov: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, scheme: getComputedStyle(document.documentElement).colorScheme, th: document.documentElement.getAttribute("data-theme") }));

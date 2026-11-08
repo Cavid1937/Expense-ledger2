@@ -26,7 +26,7 @@ export function LanguageChooser({ onChoose }) {
           <div className="wordmark lang-mark">Expense Ledger</div>
         </div>
         <fieldset className="lang-set">
-          <legend className="lang-title">{sel ? <span lang={sel}>{tIn(sel,"lang.title")}</span> : inEach("lang.title")}</legend>
+          <legend className="lang-title">{sel ? <span key={sel} lang={sel} className="lang-swap">{tIn(sel,"lang.title")}</span> : inEach("lang.title")}</legend>
           {LANGS.map(l=>(
             <label key={l} className={`lang-opt${sel===l?" sel":""}`} lang={l}>
               <input type="radio" name="ui-language" value={l} checked={sel===l} onChange={()=>setSel(l)}/>
@@ -36,9 +36,9 @@ export function LanguageChooser({ onChoose }) {
           ))}
         </fieldset>
         <button type="submit" className="btn btn-primary btn-full lang-continue" disabled={!sel} lang={sel||undefined}>
-          {sel ? tIn(sel,"lang.continue") : LANGS.map(l=>tIn(l,"lang.continue")).join(" · ")}
+          {sel ? <span key={sel} className="lang-swap">{tIn(sel,"lang.continue")}</span> : LANGS.map(l=>tIn(l,"lang.continue")).join(" · ")}
         </button>
-        <p className="lang-hint">{sel ? <span lang={sel}>{tIn(sel,"lang.hint")}</span> : inEach("lang.hint")}</p>
+        <p className="lang-hint">{sel ? <span key={sel} lang={sel} className="lang-swap">{tIn(sel,"lang.hint")}</span> : inEach("lang.hint")}</p>
       </form>
     </div>
   );
@@ -339,7 +339,7 @@ export function LookSettings({ showToast, open, toggle }) {
     <Fold id="look" icon="eye" title={t("st.foldLook")} sub={fxOff?t("st.sumLookFx",{theme:t("theme."+theme)}):t("theme."+theme)} open={open.look} onToggle={()=>toggle("look")}>
     <div className="card st-card" data-section="st-look">
       {/* Colour theme (Run 25): palettes supplied by the owner; a plain preference, separate from the ledger */}
-      <div className="settings-section-lbl" style={{marginTop:0}}>{t("theme.title")}</div>
+      <div className="settings-section-lbl no-rule" style={{marginTop:0}}>{t("theme.title")}</div>
       <div className="filter-bar" role="radiogroup" aria-label={t("theme.title")} data-section="theme-chips" style={{flexWrap:"wrap"}}>
         {THEME_IDS.map(id=>(
           <button key={id} role="radio" aria-checked={theme===id} data-theme-id={id} className={`chip${theme===id?" on":""}`} style={{display:"inline-flex",alignItems:"center",gap:7}}
@@ -544,6 +544,10 @@ export function InfoSheet({ kind, onClose }) {
 }
 
 export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, scrollTo="", onScrolled }) {
+  // Run 42: the pill answers the touch at once (cheap local state, painted first); the whole app switches language one frame later.
+  const [picked, setPicked]=useState(null);
+  useEffect(()=>{ if (picked && picked===language) setPicked(null); },[picked,language]);
+  const pickLang=(l)=>{ if (l===language) return; setPicked(l); const go=()=>setTimeout(()=>onLanguageChange(l),0); if (typeof requestAnimationFrame==="function") requestAnimationFrame(go); else go(); };
   const [name,setName]=useState(profileName);
   // Opened from Home (Accounts > Manage): glide down to that section once the page has settled (never a jump).
   const [open,setOpen]=useState({});   // which Settings sections are expanded (all closed to start)
@@ -575,11 +579,11 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       {/* Run 31: language moved next to Appearance: both are about how the app looks and reads, not about money. */}
       <div className="settings-section-lbl more-group-lbl">{t("st.groupLook")}</div>
       <div className="card st-card st-lang" data-section="st-language">
-        <div className="settings-section-lbl" id="set-lang-lbl" style={{marginTop:0}}>{t("lang.setting")}</div>
+        <div className="settings-section-lbl no-rule" id="set-lang-lbl" style={{marginTop:0}}>{t("lang.setting")}</div>
         <fieldset className="lang-switch" aria-labelledby="set-lang-lbl">
           {LANGS.map(l=>(
-            <label key={l} className={`lang-pill${language===l?" sel":""}`} lang={l}>
-              <input type="radio" name="settings-language" value={l} checked={language===l} onChange={()=>onLanguageChange(l)}/>
+            <label key={l} className={`lang-pill${(picked||language)===l?" sel":""}`} lang={l}>
+              <input type="radio" name="settings-language" value={l} checked={(picked||language)===l} onChange={()=>pickLang(l)}/>
               {LANG_NAMES[l]}
             </label>
           ))}
