@@ -286,7 +286,7 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
               {tn("safe.daysLeft",safeInfo.daysRemaining,{month:monthShort(now)})}
             </div>
           )}
-          {runOut&&runOut.show&&<div className="list-sub" data-section="safe-runout" style={{marginTop:4,color:"var(--warn)",fontWeight:600}}>{t("safe.runOut",{ day:runOut.day, month:monthShort(now), daily:fmt(runOut.usualDaily,currency) })}</div>}
+          {runOut&&runOut.show&&<div className="list-sub" data-section="safe-runout" style={{marginTop:4,color:"var(--warn)",fontWeight:600}}>{t("safe.runOut",{ day:runOut.day, month:t("monGen."+Number(now.slice(5,7))), daily:fmt(runOut.usualDaily,currency) })}</div>}
           {safeInfo.daysRemaining>0&&(()=>{ const t0=new Date(), dim=new Date(t0.getFullYear(),t0.getMonth()+1,0).getDate(), left=Math.min(safeInfo.daysRemaining,dim), gone=dim-left; return (   /* Run 27d: the month as a row of day-ticks: days gone are filled, today is taller, days ahead are faint */
             <div className="runway" aria-hidden="true">{Array.from({length:dim},(_,i)=><i key={i} className={i<gone?"on":i===gone?"now":""}/>)}</div>
           ); })()}
