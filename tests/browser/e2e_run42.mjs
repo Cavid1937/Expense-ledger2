@@ -65,7 +65,7 @@ section("R42-B3. Language: the answer to a touch is immediate");
   const t0 = await page.evaluate(() => { const l = document.querySelector('.lang-pill input[value="az"]'); const lab = l.closest("label"); const s = performance.now(); l.click(); return { sel: lab.classList.contains("sel"), ms: performance.now() - s }; });
   ok(t0.sel && t0.ms < 50, "the pill is selected in the same instant as the touch (under 50 ms)", t0);
   await wait(700);
-  ok(await page.evaluate(() => document.documentElement.lang === "az" || /Dil|Azərbaycan/.test(document.body.innerText)), "and the whole app is in Azerbaijani a moment later");
+  ok(await page.evaluate(() => (document.getElementById("set-lang-lbl") || {}).textContent === "Dil" && JSON.parse(localStorage.getItem("expense_ledger_v5")).language === "az"), "and the whole app is in Azerbaijani a moment later (label reads Dil, saved language is az)");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
@@ -100,5 +100,6 @@ section("R42-B4. Known places suggest a category");
   await page.evaluate(() => document.querySelector('[data-section="add-more-toggle"]').click()); await wait(300);
   await page.focus("#txn-merchant"); await page.type("#txn-merchant", "Uber"); await page.evaluate(() => document.querySelector("#txn-merchant").blur()); await wait(500);
   ok(await page.evaluate(() => !!document.querySelector('.cat-tile.sel[aria-label^="Transport"]')), "a whole known name typed and left: the category follows by itself (Transport)");
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="auto-cat-note"]')), "and a note says the category was set from the name");
   await page.close();
 }finish();

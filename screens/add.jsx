@@ -165,10 +165,11 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   },[merchant,merchantMemory,type]);
 
   // Run 42: when the whole merchant name is one this person has used before (or a well-known place) and the category is still the untouched default, the category follows at once.
+  const [autoNote,setAutoNote]=useState("");   // the category that was set from the name; the note below the field shows only while it is still the chosen one
   const autoCategory=()=>{
     if (isEditing || prefill || catId!==defaultCat || subcat || !merchant.trim()) return;
     const hit=merchantMemory[memKey(type,merchant)] || (type!=="income" ? knownMerchantExact(merchant) : null);
-    if (hit && hit.category && hit.category!==catId && CAT(hit.category)) { setCatId(hit.category); setSubcat(hit.subcategory||""); }
+    if (hit && hit.category && hit.category!==catId && CAT(hit.category)) { setCatId(hit.category); setSubcat(hit.subcategory||""); setAutoNote(hit.category); }
   };
   const applySuggestion=(sug)=>{
     setMerchant(sug.merchant);
@@ -436,6 +437,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
               </div>
             );
           })()}
+          {autoNote&&autoNote===catId&&!showMerchantSugs&&<div className="list-sub" data-section="auto-cat-note" role="status" style={{marginTop:4}}>{t("add.autoCat",{ cat:catName(catId) })}</div>}
           {showMerchantSugs&&merchantMatches.length>0&&(
             <div className="merchant-suggestions">
               {merchantMatches.map((m,i)=>(
