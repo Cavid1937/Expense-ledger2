@@ -35,7 +35,7 @@ export function LockGate({ children }) {
     </>
   );
 }
-const BIO_DELAY_MS=650;
+const BIO_DELAY_MS=1400;
 // The app's own mark (the ledger page from the launcher icon) with a padlock where the tick normally sits: the first thing seen is the app, and the
 // padlock says why. Colours come from the theme so it suits every palette.
 function LockMark() {
@@ -80,7 +80,7 @@ export function LockScreen({ lock, onUnlock, onRemoved }) {
     const onKey=(e)=>{ if (forgot) return; if (/^[0-9]$/.test(e.key)) press(e.key); else if (e.key==="Backspace") back(); else if (e.key==="Enter") submit(); };
     window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey);
   });
-  // Opens by itself, but not at once: the PIN screen rises first (about 0.45 s) and the phone's fingerprint prompt follows it, so the two arrive
+  // Opens by itself, but not at once: the PIN screen rises first (about 0.45 s), is left alone for a moment (1.4 s in all), and the phone's fingerprint prompt follows it, so the two arrive
   // together instead of the prompt landing on a blank or half-drawn screen. A PIN of the saved length is checked the moment its last digit is typed.
   // Locks saved before the length was stored still use the button until their first unlock.
   useEffect(()=>{ if (!(cur&&cur.bio&&!forgot)) return; const id=setTimeout(()=>{ if (document.visibilityState!=="hidden") bio(); },BIO_DELAY_MS); return ()=>clearTimeout(id); },[]); // eslint-disable-line react-hooks/exhaustive-deps

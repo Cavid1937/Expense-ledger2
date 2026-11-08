@@ -1,4 +1,4 @@
-﻿// Run 45 (2026-11-08): lock screen polish from the owner's phone recording. The phone's fingerprint prompt used to open instantly over a blank
+// Run 45 (2026-11-08): lock screen polish from the owner's phone recording. The phone's fingerprint prompt used to open instantly over a blank
 // screen; now the PIN screen draws first and the prompt follows about 0.65 s later. Cancelling the prompt is a quiet hint, not red error text.
 // A wrong PIN shakes the dots. Synthetic data only; the fingerprint call is a stub that records when it was made and then refuses.
 import { launch, openPage, wait, ok, section, finish, baseSeed, settle } from "./lib.mjs";
@@ -23,9 +23,9 @@ section("R45-L1. The fingerprint prompt waits for the PIN screen, then a cancel 
   await page.reload(); await page.waitForSelector(".lock-screen");
   const early = await page.evaluate(() => window.__bioAt);
   ok(early === 0, "the fingerprint prompt has not been asked for the moment the lock screen appears");
-  await wait(1100);
+  await wait(2000);
   const at = await page.evaluate(() => ({ t: window.__bioAt, pad: window.__padThen, t0: window.__t0 }));
-  ok(at.t > 0 && at.t - at.t0 >= 500, "it is asked for about half a second or more after the page starts", String(Math.round(at.t - at.t0)));
+  ok(at.t > 0 && at.t - at.t0 >= 1200, "it is asked for well over a second after the page starts", String(Math.round(at.t - at.t0)));
   ok(at.pad === true, "the PIN keys were already on screen when the prompt was requested");
   const hint = await page.evaluate(() => { const m = document.querySelector('[data-section="lock-msg"]'); return { txt: m.innerText, soft: m.classList.contains("soft") }; });
   ok(/Fingerprint not confirmed/.test(hint.txt) && hint.soft, "cancelling gives a quiet hint (not the red error style)", JSON.stringify(hint));
