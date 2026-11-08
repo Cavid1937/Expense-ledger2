@@ -1,5 +1,8 @@
 # What we can add (8 Nov 2026) - defined, NOT started
 
+OWNER RULE (8 Nov, later): nothing here is built until the owner gives the order; every addition must keep the app simple, understandable and reachable for everyone. A first-run welcome idea exists as unreleased code on local branch wip/first-run-welcome (see Run 49 first-run idea (kept, not built).md).
+
+
 Owner rule (8 Nov): wait for further instructions before starting; once started, every item below must still be done even if the owner's instructions do not mention it. Nothing here is built. Sources: competitor note (research_notes/Competitors Budcem and Cashera.md), Run 44 designs, owner requests.
 
 | # | Item | Why (evidence) | Needs from owner | Effort |
