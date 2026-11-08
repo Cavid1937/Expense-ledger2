@@ -2102,23 +2102,23 @@ function merchantSuggest(merchant, memory, type="expense") {
 
 // Run 42 (owner's wishlist: "Netflix, Spotify, Uber... the app should just know"): a built-in list of common places and services, with Azerbaijan first, that suggests
 // a category while typing a merchant. A person's OWN history always comes first and is never overridden; these only fill the gap. Expenses only. Brands I was not sure of
-// are left out on purpose; the list is data and easy to extend.
+// are left out on purpose; the list is data and easy to extend. Checked against research 8 Nov 2026: removed entries with no evidence (Glovo, Super Online, Irshad, Zeytun Pharm, Rahat, Neptun, Delta Telecom, Naxtel, Lukoil); Umico is now Birmarket (both kept).
 export const KNOWN_MERCHANTS=[
   ["Netflix","digital","Streaming"],["Spotify","digital","Streaming"],["YouTube Premium","digital","Streaming"],["Disney+","digital","Streaming"],["HBO Max","digital","Streaming"],["Apple Music","digital","Streaming"],["Amazon Prime","digital","Streaming"],
   ["iCloud","digital","Cloud Storage"],["Google One","digital","Cloud Storage"],["Dropbox","digital","Cloud Storage"],
   ["ChatGPT","digital","Software"],["Claude","digital","Software"],["Microsoft 365","digital","Software"],["Adobe","digital","Software"],["Canva","digital","Software"],
-  ["Azercell","digital","Mobile"],["Bakcell","digital","Mobile"],["Nar","digital","Mobile"],["Naxtel","digital","Mobile"],
-  ["Aztelekom","digital","Internet"],["Delta Telecom","digital","Internet"],["Baktelekom","digital","Internet"],["Super Online","digital","Internet"],
+  ["Azercell","digital","Mobile"],["Bakcell","digital","Mobile"],["Nar","digital","Mobile"],
+  ["Aztelekom","digital","Internet"],["Baktelekom","digital","Internet"],
   ["Bolt","transport","Taxi / Ride-hailing"],["Uber","transport","Taxi / Ride-hailing"],["Yango","transport","Taxi / Ride-hailing"],["BakıKart","transport","Metro"],["BakiKart","transport","Metro"],
-  ["SOCAR","car","Fuel"],["Azpetrol","car","Fuel"],["Lukoil","car","Fuel"],["Shell","car","Fuel"],
-  ["Bravo","food","Groceries"],["Araz","food","Groceries"],["Bazarstore","food","Groceries"],["Rahat Market","food","Groceries"],["Neptun","food","Groceries"],["Oba Market","food","Groceries"],
-  ["Wolt","food","Delivery"],["Bolt Food","food","Delivery"],["Glovo","food","Delivery"],
+  ["SOCAR","car","Fuel"],["Azpetrol","car","Fuel"],["Shell","car","Fuel"],
+  ["Bravo","food","Groceries"],["Araz","food","Groceries"],["Bazarstore","food","Groceries"],["Oba Market","food","Groceries"],
+  ["Wolt","food","Delivery"],["Bolt Food","food","Delivery"],
   ["Starbucks","food","Coffee"],["Coffeemania","food","Coffee"],["Gloria Jeans","food","Coffee"],
   ["McDonald's","food","Fast Food"],["KFC","food","Fast Food"],["Burger King","food","Fast Food"],["Papa John's","food","Fast Food"],["Domino's","food","Fast Food"],["Pizza Hut","food","Fast Food"],["Subway","food","Fast Food"],
-  ["Zeytun Pharm","health","Pharmacy"],
+  
   ["Azərişıq","housing","Electricity"],["Azerishiq","housing","Electricity"],["Azersu","housing","Water"],["Azəriqaz","housing","Gas"],["Azerigaz","housing","Gas"],
-  ["Kontakt","shopping","Electronics"],["Baku Electronics","shopping","Electronics"],["Irshad","shopping","Electronics"],
-  ["Amazon","shopping","Online Shopping"],["AliExpress","shopping","Online Shopping"],["Trendyol","shopping","Online Shopping"],["Temu","shopping","Online Shopping"],["Umico","shopping","Online Shopping"],
+  ["Kontakt","shopping","Electronics"],["Baku Electronics","shopping","Electronics"],
+  ["Amazon","shopping","Online Shopping"],["AliExpress","shopping","Online Shopping"],["Trendyol","shopping","Online Shopping"],["Temu","shopping","Online Shopping"],["Birmarket","shopping","Online Shopping"],["Umico","shopping","Online Shopping"],["Rossmann","gifts","Cosmetics"],["Avromed","health","Pharmacy"],["Gapgo","transport","Taxi / Ride-hailing"],["Azeronline","digital","Internet"],["iTicket","entertain","Events"],
   ["CinemaPlus","entertain","Cinema"],["Park Cinema","entertain","Cinema"],
 ];
 // Matches what is typed against the start of the name or of any word in it (at least 2 letters). Returns suggestion objects shaped like merchant-memory entries.
