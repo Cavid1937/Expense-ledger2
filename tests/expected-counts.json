@@ -79,6 +79,8 @@
     "run41coach.test.mjs": 17,
     "run41coach2.test.mjs": 11,
     "run41rebalance.test.mjs": 16,
+    "run41credit.test.mjs": 11,
+    "run41work.test.mjs": 21,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -186,7 +188,7 @@
     "e2e_run38.mjs": 29,
     "e2e_run39_fx.mjs": 15,
     "e2e_run40.mjs": 42,
-    "e2e_run41.mjs": 8
+    "e2e_run41.mjs": 13
   }
 }
 

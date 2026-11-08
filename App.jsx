@@ -799,7 +799,7 @@ export function writeSubcats(map) {   // an empty list removes the key instead o
 // Accounts (a card, cash, a bank account) live in their own storage key with the transfers between them. An ordinary entry may carry
 // an optional `account` id. A balance is never stored: opening balance + income − expenses (entries with that account) + transfers in −
 // transfers out, all in whole cents. A transfer is its own record, so it can never count as income or spending.
-export const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","wallet","bank","other"];
+export const ACC_KEY=KEY+"__accounts", ACC_MAX=30, TRANSFER_MAX=2000, ACC_KINDS=["cash","card","wallet","bank","credit","other"];   // Run 41: "credit" = a credit card; what is spent on it is owed until a transfer pays it off. An older app reads the type as "other".
 export const accId=(v)=>typeof v==="string" && /^a_[a-z0-9]{3,12}$/.test(v) ? v : "";
 const centsOf=(v)=>{ const n=Number(v); return Number.isFinite(n) ? Math.round(n*100) : 0; };
 function cleanAccountData(raw) {
@@ -849,6 +849,12 @@ export function accountBalances(data, transactions, asOf) {
   d.transfers.forEach(x=>{ if (!happened(x.date)) return; out[x.from]-=centsOf(x.amount); out[x.to]+=centsOf(x.amount); });
   Object.keys(out).forEach(k=>{ out[k]=out[k]/100; });
   return out;
+}
+// Run 41: what is still owed on credit-card accounts today, in money (exact to the cent): for each account of kind "credit" whose balance is below zero, that amount.
+// Spending on the card is already counted as spending on its day; this only shows the bill that is still to be paid (a transfer to the card pays it off).
+export function creditOwed(data, transactions, asOf) {
+  const d=cleanAccountData(data), bal=accountBalances(d,transactions,asOf);
+  return d.accounts.filter(a=>a.kind==="credit").reduce((s,a)=>s+Math.max(0,-Math.round((bal[a.id]||0)*100)),0)/100;
 }
 function newAccId(prefix, used) { let id; do { id=prefix+Math.random().toString(36).slice(2,8).replace(/[^a-z0-9]/g,"a").padEnd(6,"a"); } while (used.has(id)); return id; }
 export function addAccount(data, name, kind, openingAmount, openingDate) {
@@ -1868,8 +1874,29 @@ export const COACH_MUTE_KEY=KEY+"__coachmute", PAT_MUTE_KEY=KEY+"__patmute";
 const muteList=(v)=>[...new Set((Array.isArray(v)?v:[]).filter(x=>typeof x==="string" && /^[A-Za-z0-9_.:-]{1,60}$/.test(x)))].slice(0,100);
 export function readMuteList(key) { try { return muteList(JSON.parse(localStorage.getItem(key)||"[]")); } catch { return []; } }
 export function writeMuteList(key, list) { try { const l=muteList(list); if (l.length) localStorage.setItem(key,JSON.stringify(l)); else localStorage.removeItem(key); return true; } catch { return false; } }
+// Run 41 (owner wishlist, "true hourly wage"): hours worked in a month, one optional number (1 to 744, steps of 0.5). A preference that travels in the backup.
+export const WORKHOURS_KEY=KEY+"__workhours";
+export function cleanWorkHours(v) { const n=typeof v==="string" ? Number(v.replace(",",".").trim()) : v; return typeof n==="number" && Number.isFinite(n) && n>=1 && n<=744 ? Math.round(n*2)/2 : null; }
+export function readWorkHours() { try { const r=localStorage.getItem(WORKHOURS_KEY); return r===null ? null : cleanWorkHours(JSON.parse(r)); } catch { return null; } }
+export function writeWorkHours(v) { try { const n=cleanWorkHours(v); if (n===null) localStorage.removeItem(WORKHOURS_KEY); else localStorage.setItem(WORKHOURS_KEY,JSON.stringify(n)); return true; } catch { return false; } }
+// Earned income per hour, in whole qapik: the average earned income of up to the last three completed months that had any, divided by the monthly hours.
+// null when hours are not set or no completed month has earned income. Refunds, savings withdrawals and other non-earned income are not counted.
+export function incomePerHour(transactions, hours, now=new Date()) {
+  const h=cleanWorkHours(hours); if (h===null) return null;
+  const cur=now.getFullYear()*12+now.getMonth(), by={};
+  (Array.isArray(transactions)?transactions:[]).forEach(x=>{
+    if (!x || x.type!=="income" || !isEarnedCat(x.category) || !/^\d{4}-\d{2}/.test(String(x.date))) return;
+    const [y,m]=String(x.date).split("-").map(Number), k=y*12+(m-1); if (k>=cur || k<cur-3) return;
+    by[k]=(by[k]||0)+Math.round((Number(x.amount)||0)*100);
+  });
+  const vals=Object.values(by).filter(v=>v>0); if (!vals.length) return null;
+  return Math.round(vals.reduce((a,b)=>a+b,0)/vals.length/h);
+}
+// Hours of work an amount represents, to one decimal; null when there is no hourly figure or the amount is not positive.
+export function hoursOfWork(amount, perHourQapik) { const c=Math.round((Number(amount)||0)*100); return perHourQapik>0 && c>0 ? Math.round(c/perHourQapik*10)/10 : null; }
 export function cleanPrefs(raw) {
   const s=isPlainObject(raw) ? raw : {}, out={};
+  const wh=cleanWorkHours(s.workHours); if (wh!==null) out.workHours=wh;
   const n=cleanProfileName(s.profileName); if (n) out.profileName=n;
   if (s.setupHidden===true) out.setupHidden=true;
   if (typeof s.theme==="string" && s.theme!=="sea" && THEME_IDS.includes(s.theme)) out.theme=s.theme;
@@ -1892,7 +1919,7 @@ export function fileParts(plan) {
   if (p.prefs && Object.keys(p.prefs).length) out.push(["prefs",null]);
   return out;
 }
-export function collectPrefs(state) { return cleanPrefs({ profileName:state&&state.profileName, setupHidden:state&&state.setupHidden, theme:readTheme(), reduceEffects:readFxOff(), coachMute:readMuteList(COACH_MUTE_KEY), patternMute:readMuteList(PAT_MUTE_KEY) }); }
+export function collectPrefs(state) { return cleanPrefs({ profileName:state&&state.profileName, setupHidden:state&&state.setupHidden, theme:readTheme(), reduceEffects:readFxOff(), workHours:readWorkHours(), coachMute:readMuteList(COACH_MUTE_KEY), patternMute:readMuteList(PAT_MUTE_KEY) }); }
 function buildBackup(state, now=new Date().toISOString()) {
   const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
   const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
@@ -3958,6 +3985,7 @@ function AppInner() {
       const P=plan.prefs; let okp=true;
       if (P.theme && readTheme()==="sea") okp=writeTheme(P.theme) && okp;
       if (P.reduceEffects && !readFxOff()) okp=writeFxOff(true) && okp;
+      if (P.workHours && readWorkHours()===null) okp=writeWorkHours(P.workHours) && okp;
       if (P.coachMute && !readMuteList(COACH_MUTE_KEY).length) okp=writeMuteList(COACH_MUTE_KEY,P.coachMute) && okp;
       if (P.patternMute && !readMuteList(PAT_MUTE_KEY).length) okp=writeMuteList(PAT_MUTE_KEY,P.patternMute) && okp;
       if (!okp) { undoAux(); showToast(t("import.auxFailed"),6000); return; }

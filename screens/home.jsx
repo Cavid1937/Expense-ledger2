@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useState } from "react";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcSpendingPace, calcSpentToDate, calcWhatChanged, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcSpendingPace, calcSpentToDate, calcWhatChanged, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse } from "./motion.jsx";
@@ -70,7 +70,7 @@ export function AccountSheet({ id, transactions, currency, onClose, onManage, on
       <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={a.name} data-section="acc-sheet">
         <div className="sheet-grip"><div className="sheet-handle"/></div>
         <div className="sheet-title" style={{overflowWrap:"anywhere"}}>{a.name}</div>
-        <div className="list-sub">{t("acc.kind."+(["cash","card","wallet","bank"].includes(a.kind)?a.kind:"other"))}</div>
+        <div className="list-sub">{t("acc.kind."+(["cash","card","wallet","bank","credit"].includes(a.kind)?a.kind:"other"))}</div>
         <div className="hero-amount" data-section="acc-sheet-balance" style={{margin:"10px 0 4px"}}><MoneyText v={fmt(bal,currency)}/></div>
         <div className="list-sub" style={{lineHeight:1.5,marginBottom:12}}>{t("acc.sheetHow",{ opening:fmt(a.opening.amount||0,currency) })}</div>
         <div className="section-title" style={{marginTop:6}}>{t("acc.sheetLatest")}</div>
@@ -100,8 +100,9 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount }) {
   if (!shown.length) return null;
   const bal=accountBalances(data,transactions);
   const np=netPosition(data,transactions,readDebts());   // Run 28: null unless some debt or loan exists
-  const kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
-  const kindIcon={ cash:"finance", card:"card", wallet:"wallet", bank:"safe", other:"list" };
+  const kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), credit:t("acc.kind.credit"), other:t("acc.kind.other") };
+  const kindIcon={ cash:"finance", card:"card", wallet:"wallet", bank:"safe", credit:"card", other:"list" };
+  const owedCredit=creditOwed(data,transactions);   // Run 41
   const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
   return (
     <div className="section-enter section-enter-1" data-section="home-accounts" style={{marginBottom:14}}>
@@ -116,6 +117,7 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount }) {
         ))}
       </div>
       {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</div>}
+      {owedCredit>0&&<div className="list-sub" data-section="home-credit-owed" style={{margin:"4px 2px 0"}}>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</div>}
       {np&&<div className="list-sub" data-section="home-netpos" style={{margin:"4px 2px 0"}}>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</div>}
     </div>
   );

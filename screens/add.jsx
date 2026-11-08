@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
-import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase } from "../App.jsx";
+import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
@@ -189,6 +189,9 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const fxEff=!fxCur ? null : (fxOwn||fxState==="fail") ? (fxManualRate>0 && fxManualRate<=1e5 ? { rate:Number(fxManualRate.toPrecision(6)), on:isValidDateStr(date)?date:today(), src:"manual" } : null) : (fxState==="ok" ? fxRate : null);
   const fxAmt=fxCur ? formMoney(amount,{positive:true}) : null;
   const fxBase=fxEff && fxAmt!==null ? fxToBase(fxAmt,fxEff.rate) : null;
+  // Run 41: "how many hours of my work is this?" Only for expenses, only when the user set their monthly hours and has earned income on record.
+  const perHour=useMemo(()=>incomePerHour(transactions,readWorkHours()),[transactions]);
+  const hoursTxt=(()=>{ if (type!=="expense" || !perHour) return ""; const b=fxCur ? fxBase : formMoney(amount,{positive:true}); const h=hoursOfWork(b,perHour); return h===null ? "" : t("work.line",{ hours:String(h) }); })();
 
   const submit=(override)=>{
     const typed=formMoney(amount,{positive:true});
@@ -263,6 +266,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
             ) : fxState==="ok"&&<button type="button" className="chip" data-section="fx-own" style={{marginTop:6}} onClick={()=>{ setFxOwn(true); setFxManual(String(fxRate.rate)); }}>{t("fx.useOwn")}</button>}
           </div>
         )}</Reveal>
+        <Reveal when={hoursTxt} id="work-line-wrap">{(txt)=>(<div className="list-sub" data-section="work-line" style={{textAlign:"center",marginBottom:10}}>{txt}</div>)}</Reveal>
         {err&&<div role="alert" style={{color:"var(--neg)",fontSize:12,textAlign:"center",marginBottom:10,fontWeight:600}}>{err}</div>}
         {isDupe&&<div className="dupe-warn" role="status"><Icon name="other" size={13}/>{t("add.dupe")}</div>}
 

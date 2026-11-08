@@ -1,5 +1,5 @@
 // Run 41 (2026-11-08), owner wishlist: budget rebalance card, yearly cost on recurring rows, coach cards on screen. Synthetic data only.
-import { launch, openPage, openGoals, tab, wait, ok, section, finish, baseSeed, tx, settle, state, TODAY } from "./lib.mjs";
+import { launch, openPage, openGoals, openAdd, openSettings, tab, wait, ok, section, finish, baseSeed, tx, settle, state, TODAY } from "./lib.mjs";
 const browser = await launch();
 const phone = (page) => page.setViewport({ width: 400, height: 860, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
 
@@ -39,5 +39,28 @@ section("R41-2. Yearly cost on a bill row");
   const y = await page.evaluate(() => [...document.querySelectorAll('[data-yearly="1"]')].map((e) => e.textContent));
   ok(y.length >= 1 && y.some((s) => /180/.test(s)), "15 a month shows about 180 a year", { found, y });
   await page.close();
+}
+section("R41-3. Hours of work");
+{
+  const m = (n) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-02"; };
+  const seed = baseSeed({ language: "en", transactions: [tx({ type: "income", category: "salary", amount: 1600, date: m(1), merchant: "Employer" }), tx({ type: "income", category: "salary", amount: 1600, date: m(2), merchant: "Employer" })] });
+  const page = await openPage(browser, { seed }); await phone(page); await settle(page);
+  await openAdd(page);
+  await page.type(".amount-input", "95"); await wait(500);
+  ok(await page.evaluate(() => !document.querySelector('[data-section="work-line"]')), "no hours set: no line");
+  await page.close();
+  const p2 = await openPage(browser, { seed }); await phone(p2); await settle(p2);
+  await openSettings(p2);
+  const saved = await p2.evaluate(() => { const i = document.querySelector('[data-section="work-hours"] input'); if (!i) return false; return true; });
+  ok(saved, "the hours box is in Settings");
+  await p2.focus('[data-section="work-hours"] input'); await p2.type('[data-section="work-hours"] input', "160");
+  await p2.evaluate(() => document.querySelector('[data-section="work-hours"] button').click()); await wait(300);
+  ok(await p2.evaluate(() => localStorage.getItem("expense_ledger_v5__workhours")) === "160", "160 is saved");
+  await openAdd(p2);
+  await p2.type(".amount-input", "95"); await wait(600);
+  const line = await p2.evaluate(() => (document.querySelector('[data-section="work-line"]') || {}).textContent || "");
+  ok(/9\.5/.test(line), "95 at 1600/160 = 10 an hour shows 9.5 hours", line);
+  ok(p2.errors.length === 0, "no JavaScript errors", p2.errors[0]);
+  await p2.close();
 }
 finish();

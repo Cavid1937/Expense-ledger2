@@ -5,7 +5,7 @@ import { LAUNCH_GLYPH } from "./launch.js";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
-import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
+import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, creditOwed, cleanWorkHours, readWorkHours, writeWorkHours, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIRST LAUNCH — choose the interface language. Native radio buttons: nothing is preselected, arrow keys move between
@@ -152,7 +152,8 @@ export function MyAccounts({ state, currency, showToast }) {
   const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState(""), [editing,setEditing]=useState(null);
   useBackStep(!!editing,()=>setEditing(null));   // Run 40: phone Back = Cancel
   const bal=useMemo(()=>accountBalances(data,state.transactions),[data,state.transactions]);
-  const shown=data.accounts.filter(a=>!a.hidden), kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
+  const shown=data.accounts.filter(a=>!a.hidden), kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), credit:t("acc.kind.credit"), other:t("acc.kind.other") };
+  const owedCredit=useMemo(()=>creditOwed(data,state.transactions),[data,state.transactions]);   // Run 41
   const presetName={ cash:t("acc.preset.cash"), card:t("acc.preset.card"), wallet:t("acc.preset.wallet"), savings:t("acc.preset.savings") };
   const PRESETS=[["cash","cash"],["card","card"],["wallet","wallet"],["savings","bank"]].filter(([k])=>!data.accounts.some(a=>a.name.toLowerCase()===presetName[k].toLowerCase()));
   const totalCents=shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0);
@@ -216,6 +217,7 @@ export function MyAccounts({ state, currency, showToast }) {
         </div>
       }/>)}
       {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
+      {owedCredit>0&&<div className="list-sub" data-section="acc-credit-owed" style={{margin:"4px 2px 8px"}}><strong>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</strong><br/>{t("acc.creditNote")}</div>}
       {np&&(<div className="list-sub" data-section="acc-net" style={{margin:"4px 2px 8px"}}><strong>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</strong><br/>{t("acc.netNote")}</div>)}
       {PRESETS.length>0&&(<div data-section="acc-presets"><div className="list-sub" style={{margin:"6px 2px"}}>{t("acc.presetHint")}</div>
         <div className="filter-bar" role="group" aria-label={t("acc.presetHint")}>
@@ -275,6 +277,7 @@ export function Fold({ id, icon, title, sub, open, onToggle, children }) {
 export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, open, toggle, onOpen=()=>{} }) {
   const { currency,safeToSpend={} }=state;
   const [curSym, setCurSym]=useState(currency);
+  const [workHrs, setWorkHrs]=useState(()=>{ const h=readWorkHours(); return h===null ? "" : String(h); });   // Run 41
   // One-line summaries for the closed rows, read from what is saved now (they are rebuilt each time a row closes).
   const accData=readAccounts(), shownAcc=accData.accounts.filter(a=>!a.hidden);
   const accBal=shownAcc.length?accountBalances(accData,state.transactions):{};
@@ -291,6 +294,16 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
         <div className="settings-row">
           <div><div className="settings-row-title" id="set-safe-lbl">{t("set.safeEnable")}</div><div className="settings-row-sub">{t("set.safeEnableSub")}</div></div>
           <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-label={t("safe.title")} tabIndex={0}><div className="toggle-knob"/></div>
+        </div>
+        {/* Run 41: monthly working hours, so an expense can be shown as hours of work */}
+        <div className="settings-section-lbl" style={{marginTop:14}}>{t("work.title")}</div>
+        <div className="list-sub" style={{lineHeight:1.5}}>{t("work.sub")}</div>
+        <div className="settings-row" data-section="work-hours">
+          <div className="settings-row-title" id="set-work-lbl">{t("work.label")}</div>
+          <div style={{display:"flex",gap:7,alignItems:"center"}}>
+            <input className="field-input" inputMode="decimal" autoComplete="off" value={workHrs} onChange={e=>setWorkHrs(e.target.value.replace(/[^0-9.,]/g,""))} maxLength={6} aria-labelledby="set-work-lbl" placeholder="160" style={{width:78,minHeight:38,textAlign:"center",padding:"7px 8px"}}/>
+            <button className="btn btn-sm btn-sm-primary" onClick={()=>{ if (workHrs.trim()==="") { writeWorkHours(null); showToast(t("set.saved")); return; } const n=cleanWorkHours(workHrs); if (n===null) { showToast(t("work.invalid"),4000); return; } if (!writeWorkHours(n)) { showToast(t("acc.saveFailed"),5000); return; } setWorkHrs(String(n)); showToast(t("set.saved")); }}>{t("common.save")}</button>
+          </div>
         </div>
         {/* Currency */}
         <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
