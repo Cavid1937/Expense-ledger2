@@ -25,3 +25,10 @@ Evidence labels: SITE = read from the company's own page today; OWNER = screensh
 6. Suggested order if the owner agrees (not started): onboarding questionnaire; local sentence entry ("bolt 12"); gift ledger; notification review list (after samples); sync only with end-to-end encryption.
 
 Open questions: real-phone behaviour of both apps (I did not run them); whether Cashera lists supported banks inside the app; exact Büdcəm annual price; actual user numbers (neither site states any).
+
+## Büdcəm Settings and Home screens (owner's 4 screenshots, 8 Nov 2026, new empty account)
+- OWNER: Settings has a menu entry "Bank bildirişlərini avtomatik əlavə et" (add bank notifications automatically) under the finance section, next to Categories, Loans (Kreditlər), Receivables and Debts (Alacaq & Borclar), Goals, Subscriptions. => the notification feature EXISTS in the app (confirms what the privacy text implied). Contents of that screen not seen.
+- Other settings: "Update budget details - change your first-run answers", "Daily spending limit - calculated automatically", Notifications, Dark mode (off), Language (az flag), "Customize your home screen", "Card appearance", "AI image reading" toggle (receipts/debts, consent), face-recognition login (off), subscription block, Campaigns, Write to us, Documents, Log out, Delete account (red).
+- Home: a dark balance card (month + day, "Start your budget", edit pencil, carousel dots = swipeable cards), Income / Expense / Balance row, a "You started your budget - add your first transaction" prompt, latest transactions, centre green + button, 4 tabs (Home, Transactions, AI Analysis, Settings).
+- Offline: a yellow banner "No internet - changes will be sent later" and "Subscription could not be checked - retry" => the app needs a server connection and queues edits; our local-first design has no such state.
+- OPINION: useful ideas to consider: editing first-run answers later; a customisable home; swipeable summary cards. Their onboarding answers are the inputs to a "daily limit" - equivalent to our Safe to Spend.
