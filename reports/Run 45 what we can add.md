@@ -24,3 +24,7 @@ Earlier rule (8 Nov, replaced by the OWNER RULE above): the list was to be done 
 | 15 | Keep "data never leaves the phone" true and visible (privacy screen, no network calls test) | our main differentiator vs two server-based rivals | none | small |
 
 Suggested order: 15 and 1 first (small, differentiating), then 5, 6, 2, 3, 9, 10; then 7 (sync S1+S2); then 8 with the next APK; 4 when samples and go-ahead exist; 11-14 last.
+
+## Question raised 8 Nov (owner): should money held in goals count in the 'Total in shown accounts' figure? - NOT decided, NOT built
+Facts (CONFIRMED in code): a goal's 'saved' is a number the user types (goals.jsx); it is not linked to any account or entry. 'Total in shown accounts' (netPosition / accountBalances, App.jsx) comes only from account opening balances, entries and transfers. Safe to Spend deducts each goal's monthly target, not the saved amount.
+So: if the goal money sits in a tracked account and was never recorded as leaving it, it is ALREDY inside the total (adding it would double count); if it sits somewhere not tracked (cash at home, an untracked bank), it is not in the total. Options: leave as is; or add a separate line 'Set aside in goals: X' beside the total (display only); or let each goal say which account holds it. Needs the owner's answer on where goal money really lives before any change.
