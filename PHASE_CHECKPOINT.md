@@ -614,11 +614,26 @@ Evidence before gate: logic 1200/1200 (unchanged), vite build ok, walker 129, e2
 - Verification (owner 8 Nov: no full gate, no APK every change - see memory feedback-lighter-verification): logic 1543/0, e2e_run40 42/42 twice, 25 affected browser files pass individually; gate91 stopped part-way (logic, build, az audit had passed). Live check: app-open.html 200 with the analytics script; live index has the launch mark.
 - NOT in the phone yet: app-open counting, the opening animation and the new icon only reach the Android app with the next APK (built from 1972031 earlier but not sent; needs a rebuild for 40b). Real-phone counting not observed.
 
+## Run 41 wishlist build (8 Nov 2026, Sonnet 5.5) - LIVE at 8b32291 (rollback 99723fe)
+- 41a 62e95ed coach microSpill + priceUp; 41b a93caba coach lifestyle + incomeHill, budget rebalance card (planRebalance/applyRebalance, Undo), yearly cost per bill row;
+  41c c1a10cb account kind "credit" + creditOwed (Home + Accounts), hours-of-work setting (pref carried in backups, cleanPrefs.workHours) + "about N hours" line in Add;
+  41d 04d36e9 spread (amortize): optional txn field `spread` 2-24, expandSpreads inside forSpending (after refund netting), collapseSpreads inside calcSafeToSpend, add/edit chips, row label, JSON + CSV (last column SpreadMonths; run16/32/36/39 CSV tests updated for one trailing cell);
+  41e 8b32291 coach windfall + monthLeft, 10 ms save tick (off with reduce effects).
+- Tests (no full gate, owner rule): logic 83 files 1660/0; e2e_run41 21; walk 133; run12 35; ux 30; import 53; lang 57; ux_lang 8; bigtext 25 (caught a clipped Russian Save button, fixed); a11y 8; accounts 13/7/8; run37 13/14; split 12; edits 10.
+- NOT built, with reason: tags (single trip/group label already filters; a second system adds clutter - decide with owner), free-trial alerts (needs a trial date on bills + native push), receipt OCR (no offline engine fit for low-end Android), live-rate changes (CBAR rate already exists since Run 39), cross-device sync (needs backend + accounts = owner approval), biometric (lock + bioCheck exist; APK-only), regret "Would you buy again" profiling (needs stored answers; tone risk), windfall/waterfall as interactive sheets (done as coach facts instead), push for category pace (APK-only).
+- Not seen on a real phone. az/ru drafts. Older APK reads credit account type as "other" and drops `spread` (unknown field) on save.
+- Gotchas: never `git add -A`; harness names list is one long line in tests/harness.mjs (check duplicates before adding); expected-counts.json needs every new test file.
+
+## Run 41 (8 Nov 2026, Sonnet 5.5) - LIVE at 62e95ed
+- Owner wishlist triaged; built two read-only coach cards (microSpill, priceUp) in calcCoach, text in i18n coach.microSpill/priceUp, tests/logic/run41coach.test.mjs (17). Logic 1560/0, e2e_run26_walk 133/133. Pushed to main (rollback 99723fe). Notion report filed.
+- Lesson: never `git add -A` here (node_modules and test evidence files show as changed); add files by name.
+- Next: subscription annual-cost view, price-creep actions, then tags/amortize/credit-paid with schema + import/export tests.
+
 ## HANDOFF (8 Nov 2026, Opus -> Sonnet 5.5 medium)
 - State: main 99723fe LIVE (Runs 40 + 40b); worktree branch fix/financial-correctness-2026-10-26 = 99723fe + b8d7c49 (checkpoint only, not pushed - fine). Rollback f0edf4a.
 - Owner rules now in force (memory folder): report EVERY run to Notion (report page + top of living Checkpoint page) - feedback-report-to-notion; no full clean-room gate / no APK each change, targeted tests then push - feedback-lighter-verification; push to main allowed when tests are green - feedback-push-live-when-no-known-risk.
 - How to test: logic `node tests/run-logic.mjs`; one browser file: set CANDIDATE=<worktree>\App.jsx, PAGE_OUT=%TEMP%\r40\page, run `node tests/browser/build.mjs`, then PAGE_URL=file:///.../page/index.html, E2E_DL_DIR, E2E_IMP_DIR and `node tests/browser/<file>.mjs`. New check count must be added to tests/expected-counts.json.
 - Git: C:\Users\cavid\AppData\Local\GitHubDesktop\app-3.6.10\resources\app\git\cmd\git.exe; commit with -F <file> (PowerShell splits quoted args); push `git push origin HEAD:main` (fast-forward only).
-- APK (only when asked): scratchpad build-apk-run40.ps1 copies App.jsx, i18n.js, styles.js, index.html, screens/* into ..\Expense-ledger2-capacitor, vite build, cap sync, gradle with C:\ExpenseLedgerBuild\outside-onedrive.init.gradle; output C:\ExpenseLedgerBuild\android\_app\outputs\apk\debug\app-debug.apk. Capacitor repo has UNCOMMITTED Run 40 changes (new launcher icons in res/mipmap-*, ic_launcher_background #07151A, styles.xml launch theme) - commit them there.
+- APK (only when asked): scratchpad build-apk-run40.ps1 copies App.jsx, i18n.js, styles.js, index.html, screens/* into ..\Expense-ledger2-capacitor, vite build, cap sync, gradle with C:\ExpenseLedgerBuild\outside-onedrive.init.gradle; output C:\ExpenseLedgerBuild\android\_app\outputs\apk\debug\app-debug.apk. Capacitor repo: Run 40 icons + launch theme committed there as afb6584 (local, not pushed); its web copy is from 1972031, so the next APK build must copy the current worktree files first (the script does).
 - Do not repeat: Run 40/40b work, the Notion catch-up report, icon generation.
 - Open: owner may say "build the APK" (carries opening, icon, app-open counting). ABB notification texts still awaited. ChatGPT coordination review of 2026-11-07 in Notion not yet acted on - read it.
