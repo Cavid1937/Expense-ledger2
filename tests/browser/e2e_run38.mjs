@@ -147,12 +147,11 @@ section("R38-9. Reminders: 'exact time' asks Android once and is kept only when 
   await page.close();
 }
 
-section("R38-10. Settings 'Categories' row leads to Budgets & Goals");
+section("R38-10. Categories live in Budgets & Goals (Run 40: the Settings pointer row was removed at the owner's request)");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page);
-  await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(300);
-  await page.evaluate(() => document.querySelector('[data-more="categories"]').click()); await wait(600);
-  ok(await page.evaluate(() => !!document.querySelector('[data-section="gl-categories"] [data-section="my-categories"]') && !!document.querySelector('[data-section="cat-order"]')), "the row opens Goals with My categories and Order and visibility");
+  await openCategories(page);
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="gl-categories"] [data-section="my-categories"]') && !!document.querySelector('[data-section="cat-order"]')), "Goals has My categories and Order and visibility");
   await page.close();
 }
 await browser.close();

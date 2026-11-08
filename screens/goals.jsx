@@ -4,7 +4,7 @@ import { locale, t, tn } from "../i18n.js";
 import { pickerCats, readCatPrefs } from "../App.jsx";
 import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
-import { Collapse, EditSwap, useLeave } from "./motion.jsx";
+import { Collapse, EditSwap, useBackStep, useLeave } from "./motion.jsx";
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
 export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange }) {
@@ -47,6 +47,11 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
     if (editGoalId) onUpdateGoal(editGoalId,g); else onAddGoal(g);
     setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);setEditGoalId(null);
   };
+  // Run 40: phone Back cancels whichever of these is open (newest first), exactly like its Cancel button, before leaving the page.
+  useBackStep(showNewGoal,()=>{ setEditGoalId(null); setGoalName(""); setGoalTarget(""); setGoalSaved(""); setGoalMonthly(""); setGoalDate(""); setShowNewGoal(false); });
+  useBackStep(!!newBudget,()=>setNewBudget(null));
+  useBackStep(editBudget!==null,()=>setEditBudget(null));
+  useBackStep(!!updGoal,()=>setUpdGoal(null));
   const startEditGoal=(g)=>{ setEditGoalId(g.id); setGoalName(g.name||""); setGoalTarget(String(g.target||"")); setGoalSaved(String(g.saved||"")); setGoalMonthly(g.monthlyTarget?String(g.monthlyTarget):""); setGoalDate(g.targetDate||""); setShowNewGoal(true); };   // Run 26: the form opens in the goal's own place and eases in; no jump to the top
   // The form eases in, then the view glides to it and the first box is focused without a jump.
   const formShown=revealFocus;

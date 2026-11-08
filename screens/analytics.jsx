@@ -40,16 +40,45 @@ export function SpendDonut({ catSpend, total, currency }) {
   );
 }
 
+// Run 40 (owner: "smoother and more understandable chart"): a smooth curve through the daily points that never dips below a day it has
+// passed (monotone cubic, Fritsch–Carlson), so a running total never looks as if it went down.
+export function smoothPath(pts) {
+  if (pts.length<2) return "";
+  const n=pts.length, dx=[], m=[], tg=new Array(n).fill(0);
+  for (let i=0;i<n-1;i++) { dx[i]=pts[i+1][0]-pts[i][0]; m[i]=dx[i]?(pts[i+1][1]-pts[i][1])/dx[i]:0; }
+  tg[0]=m[0]; tg[n-1]=m[n-2];
+  for (let i=1;i<n-1;i++) tg[i]=m[i-1]*m[i]<=0 ? 0 : (m[i-1]+m[i])/2;
+  for (let i=0;i<n-1;i++) {
+    if (m[i]===0) { tg[i]=0; tg[i+1]=0; continue; }
+    const a=tg[i]/m[i], b=tg[i+1]/m[i], s=a*a+b*b;
+    if (s>9) { const k=3/Math.sqrt(s); tg[i]=k*a*m[i]; tg[i+1]=k*b*m[i]; }
+  }
+  const f=(v)=>v.toFixed(1);
+  let d=`M${f(pts[0][0])},${f(pts[0][1])}`;
+  for (let i=0;i<n-1;i++) { const h=dx[i]/3; d+=` C${f(pts[i][0]+h)},${f(pts[i][1]+tg[i]*h)} ${f(pts[i+1][0]-h)},${f(pts[i+1][1]-tg[i+1]*h)} ${f(pts[i+1][0])},${f(pts[i+1][1])}`; }
+  return d;
+}
+// Run 40: the one-line answer above the chart: this month so far against the same day of last month (cents compared, so 0.1+0.2 is not "more").
+export function trendCompare(cur, prev) {
+  const li=cur.reduce((m,v,i)=>v!==null?i:m,-1); if (li<0 || !prev.length) return null;
+  const a=cur[li], b=prev[Math.min(li,prev.length-1)]; if (!(b>0) && !(a>0)) return null;
+  const diff=Math.round(a*100)-Math.round((b||0)*100);
+  return { kind:diff<0?"less":diff>0?"more":"same", amount:Math.abs(diff)/100, day:li+1 };
+}
+const axisMoney=(v,sym)=>PRIVACY ? fmt(v,sym) : fmtShort(Math.round(v),sym).replace(/[.,]00(?=\D|$)/,"");
+
 // Analytics "Spending trend": this month's running total, with the previous month's as a faint line for comparison.
 export function SpendingTrend({ transactions, mon, prv, currency }) {
   const [sel,setSel]=useState(null);   // Run 38: the day (0-based) picked on the chart, or null
   const cur=cumulativeByDay(transactions,mon), prev=cumulativeByDay(transactions,prv);
   const curLast=[...cur].reverse().find(v=>v!==null)??0, prevLast=prev[prev.length-1]??0;
   if (!(curLast>0) && !(prevLast>0)) return null;
-  const W=320, H=120, n=Math.max(cur.length,prev.length), max=Math.max(curLast,prevLast,1);
+  const W=320, H=120, n=Math.max(cur.length,prev.length), max=Math.max(curLast,prevLast,1)*1.08;   // 8% headroom so the top label never touches the line
   const x=i=>(i/(n-1))*W, y=v=>H-(v/max)*(H-8);
-  const path=arr=>arr.map((v,i)=>v===null?null:`${x(i).toFixed(1)},${y(v).toFixed(1)}`).filter(Boolean);
-  const cp=path(cur), pp=path(prev);
+  const pts=arr=>arr.map((v,i)=>v===null?null:[x(i),y(v)]).filter(Boolean);
+  const cpt=pts(cur), ppt=pts(prev);
+  const curD=smoothPath(cpt), prevD=smoothPath(ppt);
+  const cmp=trendCompare(cur,prev);
   const ticks=[1,8,15,22,n];
   // Run 38 (owner: "the user moves his finger along the line and sees what he spent on that date"): touch / drag / arrow keys pick a day.
   // Horizontal drags only (touch-action: pan-y), so scrolling the page still works. The readout stays after the finger lifts.
@@ -64,8 +93,9 @@ export function SpendingTrend({ transactions, mon, prv, currency }) {
     <div className="card trend-card">
       <div className="card-head"><span className="card-title">{t("an.trendTitle")}</span></div>
       <div className="big-num" style={{marginBottom:2}}>{fmt(curLast,currency)}</div>
+      {cmp&&<div className={"trend-cmp trend-cmp-"+cmp.kind} data-section="trend-cmp">{cmp.kind==="same" ? t("an.trendSame") : t(cmp.kind==="less"?"an.trendLess":"an.trendMore",{ amount:fmt(cmp.amount,currency) })}</div>}
       <div className="list-sub" style={{marginBottom:6}}>{t("an.trendSub",{month:monthName(prv)})}</div>
-      <div className="list-sub" data-section="trend-readout" aria-live="polite" style={{minHeight:36,marginBottom:4,lineHeight:1.45,color:si!==null?"var(--ink)":"var(--ink-3)"}}>
+      <div className="list-sub" data-section="trend-readout" aria-live="polite" style={{minHeight:58,marginBottom:4,lineHeight:1.45,color:si!==null?"var(--ink)":"var(--ink-3)"}}>
         {si===null ? t("an.scrubHint")
           : <>{curV!==null ? t("an.scrubDay",{ date:fmtDate(dayDate), day:fmt(dayV,currency), total:fmt(curV,currency) }) : t("an.scrubFuture",{ date:fmtDate(dayDate) })}
               {prevV!==null&&<><br/>{t("an.scrubPrev",{ total:fmt(prevV,currency) })}</>}</>}
@@ -73,18 +103,24 @@ export function SpendingTrend({ transactions, mon, prv, currency }) {
       <svg viewBox={`0 0 ${W} ${H+18}`} width="100%" role="img" data-section="trend-chart" tabIndex={0} aria-label={t("an.trendAria",{amount:fmt(curLast,currency),prev:fmt(prevLast,currency)})+" "+t("an.scrubHint")}
         style={{touchAction:"pan-y",cursor:"crosshair",outline:"none"}}
         onPointerDown={e=>{ try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} pick(e); }} onPointerMove={e=>{ if (e.buttons || e.pointerType==="touch") pick(e); }} onKeyDown={onKey}>
-        {[0.5,1].map(f=><line key={f} x1="0" x2={W} y1={y(max*f)} y2={y(max*f)} stroke="var(--rule)" strokeWidth="1"/>)}
+        <defs><linearGradient id={"trend-fill-"+mon} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--accent)" stopOpacity="0.28"/><stop offset="1" stopColor="var(--accent)" stopOpacity="0.02"/></linearGradient></defs>
+        {[0.5,1].map(f=><g key={f}><line x1="0" x2={W} y1={y(max*f/1.08)} y2={y(max*f/1.08)} stroke="var(--rule)" strokeWidth="1" strokeDasharray={f<1?"2 4":undefined}/>
+          <text className="trend-axis" x={W-2} y={y(max*f/1.08)-4} textAnchor="end" fontSize="10" fill="var(--ink-3)">{axisMoney(max*f/1.08,currency)}</text></g>)}
         <line x1="0" x2={W} y1={H} y2={H} stroke="var(--rule-2)" strokeWidth="1"/>
-        {pp.length>1&&<polyline points={pp.join(" ")} fill="none" stroke="var(--ink-4)" strokeWidth="1.5" strokeDasharray="4 4"/>}
-        {cp.length>1&&<>
-          <polygon points={`0,${H} ${cp.join(" ")} ${cp[cp.length-1].split(",")[0]},${H}`} fill="var(--accent)" opacity="0.18"/>
-          <polyline points={cp.join(" ")} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round"/>
-        </>}
+        {/* keyed by month: a new month draws itself in again (CSS .trend-draw; instant with reduced motion) */}
+        <g key={mon} className="trend-draw">
+          {ppt.length>1&&<path className="trend-prev" d={prevD} fill="none" stroke="var(--ink-4)" strokeWidth="1.5" strokeDasharray="4 4" strokeLinecap="round"/>}
+          {cpt.length>1&&<>
+            <path className="trend-area" d={`${curD} L${cpt[cpt.length-1][0].toFixed(1)},${H} L${cpt[0][0].toFixed(1)},${H} Z`} fill={`url(#trend-fill-${mon})`}/>
+            <path className="trend-line" d={curD} pathLength="1" fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+            {si===null&&<circle className="trend-end" cx={cpt[cpt.length-1][0]} cy={cpt[cpt.length-1][1]} r="4" fill="var(--accent)" stroke="var(--bg-card)" strokeWidth="2"/>}
+          </>}
+        </g>
         {ticks.map(d=><text key={d} x={Math.min(Math.max(x(d-1),8),W-8)} y={H+15} textAnchor="middle" fontSize="11" fill="var(--ink-3)">{d}</text>)}
         {si!==null&&<g data-section="trend-cursor" pointerEvents="none">
-          <line x1={x(si)} x2={x(si)} y1="0" y2={H} stroke="var(--ink-3)" strokeWidth="1"/>
-          {prevV!==null&&<circle cx={x(si)} cy={y(prevV)} r="3.5" fill="var(--bg-card)" stroke="var(--ink-4)" strokeWidth="1.5"/>}
-          {curV!==null&&<circle cx={x(si)} cy={y(curV)} r="4.5" fill="var(--accent)" stroke="var(--bg-card)" strokeWidth="2"/>}
+          <line className="trend-glide" x1="0" x2="0" y1="0" y2={H} stroke="var(--ink-3)" strokeWidth="1" style={{transform:`translateX(${x(si)}px)`}}/>
+          {prevV!==null&&<circle className="trend-glide" cx="0" cy="0" r="3.5" fill="var(--bg-card)" stroke="var(--ink-4)" strokeWidth="1.5" style={{transform:`translate(${x(si)}px,${y(prevV)}px)`}}/>}
+          {curV!==null&&<circle className="trend-glide" cx="0" cy="0" r="4.5" fill="var(--accent)" stroke="var(--bg-card)" strokeWidth="2" style={{transform:`translate(${x(si)}px,${y(curV)}px)`}}/>}
         </g>}
       </svg>
       <div className="trend-legend"><span><i style={{background:"var(--accent)"}}/>{monthName(mon)}</span><span><i className="dash"/>{monthName(prv)}</span></div>

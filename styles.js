@@ -581,6 +581,20 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .trend-legend span{display:inline-flex;align-items:center;gap:6px}
 .trend-legend i{display:inline-block;width:14px;height:3px;border-radius:2px}
 .trend-legend i.dash{background:repeating-linear-gradient(90deg,var(--ink-4) 0 4px,transparent 4px 7px)}
+/* Run 40: the chart draws itself in (line traced left to right, the fill and last month's line fade up), the cursor glides between days,
+   and the one-line comparison says plainly whether this month is ahead of last month. Reduced motion / Reduce effects: no animation. */
+.trend-cmp{font-size:13.5px;font-weight:600;line-height:1.4;margin:2px 0 4px;color:var(--ink-2)}
+.trend-cmp-less{color:var(--pos,var(--accent-text))}
+.trend-cmp-more{color:var(--warn,var(--ink))}
+.trend-draw .trend-line{stroke-dasharray:1;stroke-dashoffset:0;animation:trendTrace 900ms cubic-bezier(.22,.8,.24,1) both}
+.trend-draw .trend-area,.trend-draw .trend-prev{animation:trendFade 700ms ease-out 120ms both}
+.trend-draw .trend-end{animation:trendFade 300ms ease-out 760ms both}
+.trend-glide{transition:transform 140ms cubic-bezier(.2,.8,.2,1)}
+@keyframes trendTrace{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes trendFade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion: reduce){.trend-draw .trend-line,.trend-draw .trend-area,.trend-draw .trend-prev,.trend-draw .trend-end{animation:none}.trend-glide{transition:none}}
+[data-fx="off"] .trend-draw .trend-line,[data-fx="off"] .trend-draw .trend-area,[data-fx="off"] .trend-draw .trend-prev,[data-fx="off"] .trend-draw .trend-end{animation:none}
+[data-fx="off"] .trend-glide{transition:none}
 .month-name{font-size:20px;font-weight:700}
 /* Import / Export */
 .io-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}

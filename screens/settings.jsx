@@ -1,6 +1,6 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Collapse, EditSwap, useLeave } from "./motion.jsx";
+import { Collapse, EditSwap, useBackStep, useFlip, useLeave } from "./motion.jsx";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
@@ -48,6 +48,7 @@ export function CategoryOrder({ onChanged, showToast }) {
   const save=(next)=>{ if (!writeCatPrefs(next)) { showToast(t("mycat.saveFailed"),5000); return; } setPrefs(readCatPrefs()); onChanged(); };
   const list=orderedCats(income,prefs), hidden=new Set(prefs.hidden);
   const shownN=list.filter(c=>!hidden.has(c.id)).length;
+  const listRef=useRef(null); useFlip(listRef,"data-catord",(income?"i:":"e:")+list.map(c=>c.id).join(","));   // Run 40: a moved row glides
   return (
     <div className="card prefs-card" data-section="cat-order" style={{marginTop:10}}>
       <div className="settings-row-title">{t("catord.title")}</div>
@@ -56,10 +57,10 @@ export function CategoryOrder({ onChanged, showToast }) {
         {[false,true].map(v=>(<button key={String(v)} className={`chip${income===v?" on":""}`} aria-pressed={income===v} data-section={v?"catord-income":"catord-expense"} onClick={()=>setIncome(v)}>{t(v?"add.income":"add.expense")}</button>))}
       </div>
       <div className="list-sub" aria-live="polite" style={{margin:"4px 0 6px"}}>{t("catord.count",{shown:shownN,all:list.length})}</div>
-      <ul style={{listStyle:"none",margin:0,padding:0}}>
+      <ul ref={listRef} style={{listStyle:"none",margin:0,padding:0,position:"relative"}}>
         {list.map((c,i)=>{ const off=hidden.has(c.id), fixed=CPREF_UNHIDEABLE.has(c.id), nm=catName(c.id);
           return (
-            <li key={c.id} className="settings-row" data-catord={c.id} data-hidden={off?"1":"0"} style={{opacity:off?0.55:1,flexWrap:"wrap",rowGap:6}}>
+            <li key={c.id} className="settings-row" data-catord={c.id} data-hidden={off?"1":"0"} style={{opacity:off?0.55:1,flexWrap:"wrap",rowGap:6,transition:"opacity 260ms ease-out"}}>
               <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:"1 1 140px"}}>
                 <CatIcon catId={c.id} size={16}/>
                 <div style={{minWidth:0}}><div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{nm}</div>{off&&<div className="settings-row-sub">{t("catord.hiddenNote")}</div>}</div>
@@ -81,6 +82,7 @@ export function CategoryOrder({ onChanged, showToast }) {
 export function MyCategories({ state, onChanged, showToast }) {
   const [list,setList]=useState(()=>readCustomCats());
   const [name,setName]=useState(""), [income,setIncome]=useState(false), [color,setColor]=useState(CCAT_COLORS[5]), [editing,setEditing]=useState(null);
+  useBackStep(!!editing,()=>setEditing(null));   // Run 40: phone Back = Cancel
   const commit=(next)=>{ if (!writeCustomCats(next)) { showToast(t("mycat.saveFailed"),5000); return false; } applyCustomCats(next); setList(readCustomCats()); onChanged(); return true; };
   const add=()=>{
     const r=addCustomCat(list,name,income,color);
@@ -141,6 +143,7 @@ export function MyAccounts({ state, currency, showToast }) {
   const [data,setData]=useState(()=>readAccounts());
   const [name,setName]=useState(""), [kind,setKind]=useState("card"), [opening,setOpening]=useState("");
   const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState(""), [editing,setEditing]=useState(null);
+  useBackStep(!!editing,()=>setEditing(null));   // Run 40: phone Back = Cancel
   const bal=useMemo(()=>accountBalances(data,state.transactions),[data,state.transactions]);
   const shown=data.accounts.filter(a=>!a.hidden), kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), other:t("acc.kind.other") };
   const presetName={ cash:t("acc.preset.cash"), card:t("acc.preset.card"), wallet:t("acc.preset.wallet"), savings:t("acc.preset.savings") };
@@ -273,8 +276,7 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
   return (
     <>
       <Fold id="accounts" icon="wallet" title={t("acc.title")} sub={accSum} open={open.accounts} onToggle={()=>toggle("accounts")}><MyAccounts state={state} currency={state.currency} showToast={showToast}/></Fold>
-      {/* Run 38: categories moved to Budgets & Goals (next to the quick-add templates); this row takes you there */}
-      <ListRow id="categories" icon="list" title={t("mycat.title")} sub={t("st.catMoved")} onClick={()=>onOpen("goals")}/>
+      {/* Run 38 moved categories to Budgets & Goals; Run 40 (owner): no reminder row here any more. */}
       <Fold id="money" icon="settings" title={t("st.foldMoney")} sub={moneySum} open={open.money} onToggle={()=>toggle("money")}>
       <div className="card st-card" data-section="st-money-options">
         {/* Safe to Spend: the switch only. The monthly savings floor is on Goals. */}
@@ -371,11 +373,18 @@ export function RemindersSettings({ showToast, open, toggle }) {
         <div className="list-sub" style={{marginBottom:8}}>{t("remind.sub")}</div>
         <Row k="bills" title={t("remind.bills")} sub={t("remind.billsSub")}/>
         <Row k="recurring" title={t("remind.recurring")} sub={t("remind.recurringSub")}/>
-        <Row k="daily" title={t("remind.daily")} sub={t("remind.dailySub")}/>
+        {/* Run 40: the bill/recurring time sits with those two switches; the daily check-in has its own time, shown when it is on. */}
         <div className="settings-row">
           <div><div className="settings-row-title" id="set-rem-time">{t("remind.time")}</div></div>
           <input className="field-input" type="time" value={p.time} aria-labelledby="set-rem-time" data-section="rem-time" onChange={e=>{ if (e.target.value) save({ time:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
         </div>
+        <Row k="daily" title={t("remind.daily")} sub={t("remind.dailySub",{ time:p.dailyTime })}/>
+        <Collapse open={p.daily} id="rem-dtime-wrap">
+          <div className="settings-row">
+            <div><div className="settings-row-title" id="set-rem-dtime">{t("remind.dailyTime")}</div></div>
+            <input className="field-input" type="time" value={p.dailyTime} aria-labelledby="set-rem-dtime" data-section="rem-dtime" onChange={e=>{ if (e.target.value) save({ dailyTime:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
+          </div>
+        </Collapse>
         <Row k="hideAmount" title={t("remind.hide")} sub={t("remind.hideSub")}/>
         {/* Run 38 (owner: the 21:00 reminder came 13 minutes late). Optional: exact timing needs Android's "Alarms & reminders" permission. */}
         {typeof (window.LedgerNative.reminders||{}).requestExact==="function"&&(
@@ -426,6 +435,7 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
     if (editTplId) onUpdateTemplate(editTplId,data); else onAddTemplate(data);
     setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);setEditTplId(null);
   };
+  useBackStep(showNewTpl,()=>{ setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); setShowNewTpl(false); });   // Run 40: Back = the Cancel button
   const startEdit=(tpl)=>{ setEditTplId(tpl.id); setTplName(tpl.name||""); setTplAmt(String(tpl.amount)); setTplCatId(tpl.catId||"food"); setTplSubcat(tpl.subcat||""); setTplMerchant(tpl.merchant||""); setTplNote(tpl.note||""); setShowNewTpl(true); };
   const tplForm=(inList)=>(
         <div className={"reveal"+(inList?"":" card")} ref={revealFocus} data-section="tpl-form" style={inList?{padding:"12px 14px",borderBottom:"1px solid var(--rule)"}:undefined}>

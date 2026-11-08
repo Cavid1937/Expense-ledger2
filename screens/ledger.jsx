@@ -4,7 +4,7 @@ import { locale, t } from "../i18n.js";
 import { pickerCats, readCatPrefs } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
-import { Collapse, Reveal, Swap } from "./motion.jsx";
+import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
 export const LEDGER_PAGE=150;   // Run 32: rows drawn at first and per "Show more" (a throttled phone froze for seconds drawing 300+ rows at once). Whole days only.
@@ -89,6 +89,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const [selMode, setSelMode] = useState(false);          // Run 24: select several entries, then delete them together (undo stays available)
   const [picked,  setPicked]  = useState(()=>new Set());
   const [onlySel, setOnlySel] = useState(false);          // Run 29: show only the selected entries, whatever the filters say
+  useBackStep(selMode,()=>{ setSelMode(false); setPicked(new Set()); setOnlySel(false); setGrpOpen(false); });   // Run 40: Back leaves select mode (same as "Done")
+  useBackStep(grpOpen,()=>setGrpOpen(false));
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [catFilter,  setCatFilter]  = useState("all");

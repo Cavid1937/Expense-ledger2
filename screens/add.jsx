@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
 import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase } from "../App.jsx";
-import { Collapse } from "./motion.jsx";
+import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // ─── Recurring Hub ────────────────────────────────────────────────────────────
@@ -248,7 +248,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
             {["",...FX_CODES].map(c=>(<button key={c||"base"} type="button" role="radio" aria-checked={fxCur===c} data-fx={c||"base"} className={`sub-chip${fxCur===c?" sel":""}`} onClick={()=>{ setFxCur(c); setFxPick(false); if (!c) { setFxOwn(false); setFxState("idle"); } }}>{c||currency}</button>))}
           </div>
         </Collapse>
-        {fxCur&&(
+        {/* Run 40: the conversion line eases open and closed with the currency (it used to pop in and vanish) */}
+        <Reveal when={fxCur} id="fx-line-wrap">{(fxCur)=>(
           <div className="list-sub" data-section="fx-line" role="status" style={{textAlign:"center",marginBottom:10,lineHeight:1.5}}>
             {fxBase!==null ? t("fx.line",{ base:fmt(fxBase,currency), cur:fxCur, rate:String(fxEff.rate), date:fxEff.on?fmtDate(fxEff.on):"" }) : fxState==="loading" ? t("fx.loading") : fxState==="ok"&&!fxOwn ? t("fx.rateOnly",{ cur:fxCur, rate:String(fxRate.rate), date:fxRate.on?fmtDate(fxRate.on):"" }) : ""}
             {fxEff&&<div style={{fontSize:11}}>{t(fxEff.src==="manual"?"fx.srcOwn":"fx.srcCbar")}</div>}
@@ -261,7 +262,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
               </div>
             ) : fxState==="ok"&&<button type="button" className="chip" data-section="fx-own" style={{marginTop:6}} onClick={()=>{ setFxOwn(true); setFxManual(String(fxRate.rate)); }}>{t("fx.useOwn")}</button>}
           </div>
-        )}
+        )}</Reveal>
         {err&&<div role="alert" style={{color:"var(--neg)",fontSize:12,textAlign:"center",marginBottom:10,fontWeight:600}}>{err}</div>}
         {isDupe&&<div className="dupe-warn" role="status"><Icon name="other" size={13}/>{t("add.dupe")}</div>}
 
@@ -292,9 +293,10 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
               </button>
             ))}
           </div>
-          {catQ.trim()&&!catHits.length&&<div className="list-sub" role="status" data-section="add-cat-none" style={{marginTop:6}}>{t("cat.searchNone")}</div>}
-          {type==="income"&&CAT(catId).earned===false&&<div className="list-sub" data-section="add-not-income" style={{marginTop:6}}>{t(catId==="refund"&&refundFor?"add.refundNets":"add.notIncome")}</div>}
-          {type==="income"&&catId==="refund"&&(
+          {/* Run 40: these notes and the refund link ease in and out (they used to pop) */}
+          <Collapse open={!!catQ.trim()&&!catHits.length}><div className="list-sub" role="status" data-section="add-cat-none" style={{marginTop:6}}>{t("cat.searchNone")}</div></Collapse>
+          <Collapse open={type==="income"&&CAT(catId).earned===false}><div className="list-sub" data-section="add-not-income" style={{marginTop:6}}>{t(catId==="refund"&&refundFor?"add.refundNets":"add.notIncome")}</div></Collapse>
+          <Collapse open={type==="income"&&catId==="refund"}>
             <div className="field" data-section="add-refund-for" style={{marginTop:8,marginBottom:0}}>
               <label className="field-lbl" htmlFor="txn-refund-for">{t("add.refundFor")} {optional}</label>
               <select id="txn-refund-for" className="field-input field-select" value={expCats.some(c=>c.id===refundFor)?refundFor:""} onChange={e=>setRefundFor(e.target.value)}>
@@ -302,7 +304,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
                 {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}
               </select>
             </div>
-          )}
+          </Collapse>
           {(selectedCat?.subs?.length>0 || (mySubs[catId]||[]).length>0 || selectedCat)&&(
             <div data-section="add-subcat">
               <div className="field-lbl" style={{marginBottom:5,marginTop:4}}>{t("add.subcategory")} {optional}</div>
@@ -320,21 +322,21 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
                   <button key={s} className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{subName(s)}</button>
                 ))}
               </div>
-              {renSub&&(
+              <Reveal when={renSub}>{(r)=>(
                 <div style={{display:"flex",gap:7,marginTop:8}} data-section="add-subcat-rename-form">
-                  <input className="field-input" ref={revealFocus} aria-label={t("subcat.rename",{name:renSub.from})} maxLength={SUBCAT_LEN} value={renSub.text} onChange={e=>{ setRenSub({...renSub,text:e.target.value}); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); renameMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                  <input className="field-input" ref={revealFocus} aria-label={t("subcat.rename",{name:r.from})} maxLength={SUBCAT_LEN} value={r.text} onChange={e=>{ setRenSub({...r,text:e.target.value}); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); renameMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
                   <button type="button" className="btn btn-sm btn-sm-primary" data-section="add-subcat-rename-save" onClick={renameMySub}>{t("common.save")}</button>
                   <button type="button" className="btn btn-sm" onClick={()=>{ setRenSub(null); setSubMsg(""); }} aria-label={t("common.cancel")}>✕</button>
                 </div>
-              )}
-              {newSub!==null&&(
+              )}</Reveal>
+              <Collapse open={newSub!==null}>
                 <div style={{display:"flex",gap:7,marginTop:8}}>
-                  <input className="field-input" ref={revealFocus} aria-label={t("subcat.mine")} placeholder={t("subcat.ph")} maxLength={SUBCAT_LEN} value={newSub} onChange={e=>{ setNewSub(e.target.value); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); addMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                  <input className="field-input" ref={revealFocus} aria-label={t("subcat.mine")} placeholder={t("subcat.ph")} maxLength={SUBCAT_LEN} value={newSub||""} onChange={e=>{ setNewSub(e.target.value); setSubMsg(""); }} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); addMySub(); } }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
                   <button type="button" className="btn btn-sm btn-sm-primary" onClick={addMySub}>{t("common.save")}</button>
                   <button type="button" className="btn btn-sm" onClick={()=>{ setNewSub(null); setSubMsg(""); }} aria-label={t("common.cancel")}>✕</button>
                 </div>
-              )}
-              {subMsg&&<div role="alert" className="list-sub" style={{marginTop:6,color:"var(--neg)"}}>{subMsg}</div>}
+              </Collapse>
+              <Collapse open={!!subMsg}><div role="alert" className="list-sub" style={{marginTop:6,color:"var(--neg)"}}>{subMsg}</div></Collapse>
             </div>
           )}
         </div>

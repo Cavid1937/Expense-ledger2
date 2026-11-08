@@ -2,7 +2,7 @@
 // Before this, they were drawn with `{open && ...}`: they appeared with a fade but vanished in one frame when closed.
 // Rules (from the owner's recordings of the Claude Android app, design-refs/claude-app-feel): about 0.25 s, fast start and soft landing, no bounce,
 // the close is as smooth as the open, and nothing jumps. Reduced motion / "Reduce effects" users get the plain instant behaviour.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export const MOTION_MS=260;   // how long a closing element stays drawn (must match the CSS transition below, see styles.js ".collapse")
 
@@ -71,6 +71,47 @@ export function Reveal({ when, children, id }) {
   if (when) keep.current=when;
   return <Collapse open={!!when} id={id}>{keep.current?children(keep.current):null}</Collapse>;
 }
+
+// Run 40: rows that change place (category order ↑ / ↓) glide to their new place instead of jumping. ref = the list; attr = the attribute
+// that names each row; dep = anything that changes when the order changes. Positions are measured inside the list (offsetTop), so a page
+// scroll between two renders does not look like a move.
+export function useFlip(ref, attr, dep) {
+  const prev=useRef(null);
+  useLayoutEffect(()=>{
+    const el=ref.current; if (!el) return;
+    const items=[...el.querySelectorAll(`[${attr}]`)];
+    const now=new Map(items.map(n=>[n.getAttribute(attr),n.offsetTop]));
+    if (prev.current && !motionOff()) items.forEach(n=>{
+      const was=prev.current.get(n.getAttribute(attr)); if (was===undefined) return;
+      const d=was-n.offsetTop;
+      if (Math.abs(d)>1 && n.animate) n.animate([{ transform:`translateY(${d}px)` },{ transform:"none" }],{ duration:MOTION_MS, easing:"cubic-bezier(.2,.8,.2,1)" });
+    });
+    prev.current=now;
+  },[dep]);   // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+// Run 40 (owner: "improve how the back button works"): Back used to know only sheets, the add form and tabs, so with an editor open inside a page
+// (a goal, a template, an account, a category, a "new …" form, selecting entries) it left the page and the edit was lost. A component that has such
+// a step open registers how to cancel it; Back (and Escape) cancels the most recent one first, before leaving the page. The cancel is the same
+// one the on-screen Cancel button runs, so it closes with the same motion and saves nothing.
+const backSteps=[];
+export function useBackStep(active, cancel) {
+  const fn=useRef(cancel); fn.current=cancel;
+  useEffect(()=>{
+    if (!active) return undefined;
+    const step={ run:()=>fn.current() };
+    backSteps.push(step);
+    return ()=>{ const i=backSteps.lastIndexOf(step); if (i>=0) backSteps.splice(i,1); };
+  },[active]);
+}
+// true = a step was cancelled (Back is used up).
+export function runBackStep() {
+  const step=backSteps[backSteps.length-1]; if (!step) return false;
+  backSteps.pop();   // removed at once, so a quick second Back goes on to the next step even before React re-renders
+  try { step.run(); } catch { /* the cancel failed: Back still counts as used, nothing is saved */ }
+  return true;
+}
+export const backStepCount=()=>backSteps.length;
 
 // A row/chip that leaves smoothly before it is removed from its list (the owner's template delete: it vanished at once).
 // Call leave(() => actuallyRemove()). The row gets class "row-leaving" for MOTION_MS.

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { locale, t, tn } from "../i18n.js";
 import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
-import { Collapse, Reveal, Swap } from "./motion.jsx";   // Run 38: forms, edits and the Debts / Loans switch ease in and out
+import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";   // Run 38: forms, edits and the Debts / Loans switch ease in and out
 
 // ─── Debts & loans page (Run 17) ──────────────────────────────────────────────
 // Settings → Debts & loans. Debts are person-to-person (no interest); loans have a rate and a schedule (an ESTIMATE from the typed terms).
@@ -68,6 +68,12 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
   };
   // Edit a debt's name, amount and due date. The amount can never drop below what has already been repaid.
   const [dEdit,setDEdit]=useState(null), [lEdit,setLEdit]=useState(null);
+  // Run 40: phone Back cancels an open form, edit or question first (newest first), the same as its Cancel button; nothing is saved.
+  useBackStep(showDebt,()=>{ setShowDebt(false); setDMsg(""); });
+  useBackStep(showLoan,()=>{ setShowLoan(false); setLMsg(""); });
+  useBackStep(!!dEdit,()=>setDEdit(null));
+  useBackStep(!!lEdit,()=>setLEdit(null));
+  useBackStep(!!ask,()=>setAsk(null));
   const saveDebtEdit=()=>{
     const d=data.debts.find(x=>x.id===dEdit.id); if (!d) { setDEdit(null); return; }
     const principal=toQ(dEdit.amt,{positive:true}), name=dEdit.name.trim(), paid=d.principal-debtRemaining(d);

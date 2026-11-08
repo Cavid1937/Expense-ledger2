@@ -8,7 +8,7 @@ section("R31-S1. Summaries on closed rows (en)");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en", profileName: "Javid" }), pre: new Function(ACC) }); await settle(page); await tab(page, "More"); await wait(400);
   ok(/120/.test(await sub(page, "accounts")) && /Total/.test(await sub(page, "accounts")), "Accounts row: total of the accounts (120)", await sub(page, "accounts"));
-  ok(/Budgets & Goals/.test(await page.evaluate(() => (document.querySelector('[data-more="categories"]') || {}).innerText || "")), "Categories row: says they are now in Budgets & Goals (Run 38)", await page.evaluate(() => (document.querySelector('[data-more="categories"]') || {}).innerText || null));
+  ok(await page.evaluate(() => !document.querySelector('[data-more="categories"]') && !/Now in Budgets/.test(document.body.innerText)), "no 'categories moved' reminder row any more (Run 40, owner's request)");
   ok(/Safe to Spend on/.test(await sub(page, "money")), "Currency row: currency and Safe to Spend on", await sub(page, "money"));
   ok(/Sea glass/.test(await sub(page, "look")), "Appearance row: the current theme", await sub(page, "look"));
   ok((await sub(page, "reminders")) === null, "no Reminders row on the website");

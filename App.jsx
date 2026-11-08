@@ -11,7 +11,8 @@ import { AccountSheet } from "./screens/home.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
-import { Collapse, motionOff } from "./screens/motion.jsx";
+import { Collapse, motionOff, runBackStep } from "./screens/motion.jsx";
+import { finishLaunch, startLaunch } from "./screens/launch.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PERSONAL FINANCIAL OS v9
@@ -1163,6 +1164,7 @@ export function applyTheme(id) {   // sets (or clears) the colour variables on t
   const m=document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content",th.vars["--bg"]||th.swatch[0]);
 }
 if (typeof document!=="undefined") applyTheme(readTheme());
+if (typeof document!=="undefined") startLaunch();   // Run 40: the opening mark (screens/launch.js); after the theme, so it takes the theme's colours
 
 // Run 25: "Reduce effects" - a plain preference (own key). Turns off shadows and highlights; tone and hairline edges stay, so layers remain readable.
 const FX_KEY=KEY+"__fx";
@@ -1655,6 +1657,22 @@ function parseCsvImport(raw, _bank=false) {
   return { records };
 }
 
+// Run 40 (8 Nov 2026), owner: a backup picked from Google Drive on the website was refused with "not valid JSON or CSV".
+// The app's own files always parse, so the website was handed something else. Instead of one vague sentence, say what
+// the file actually is, so the person knows what to do. Nothing is ever partly imported from a broken file.
+export function badFileReason(raw) {
+  const s=String(raw==null?"":raw).replace(/^﻿/,"");
+  const head=s.trimStart().slice(0,400);
+  if (!s.trim()) return "import.bad.empty";                                                   // 0 bytes: upload/download did not finish
+  if (/^%PDF/.test(head)) return "import.bad.pdf";
+  if (/^PK\u0003\u0004/.test(s)) return "import.bad.zip";                                      // .xlsx / .docx / .zip
+  if (/^</.test(head) && /<(!doctype|html|head|body|\?xml|svg)/i.test(head)) return "import.bad.web";   // a web or sign-in page saved instead of the file
+  const odd=(s.slice(0,2000).match(/[\u0000-\u0008\u000E-\u001F�]/g)||[]).length;
+  if (odd>8) return "import.bad.binary";                                                       // a picture or other non-text file
+  if (/^[{[]/.test(head)) return "import.bad.cut";                                             // starts like a backup but breaks off: incomplete or damaged
+  return "import.notJsonCsv";
+}
+
 // Reads a file's text into a plan. Nothing is applied here; the user reviews the plan first.
 function planImport(raw, filename="") {
   const text=String(raw).replace(/^\uFEFF/,"");
@@ -1667,7 +1685,7 @@ function planImport(raw, filename="") {
     if (r.bankSkipped) warnings.push(t("import.bankSkipped",{ n:r.bankSkipped }));
   } else {
     let parsed;
-    try { parsed=JSON.parse(text); } catch { return { ok:false, error:t("import.notJsonCsv") }; }
+    try { parsed=JSON.parse(text); } catch { return { ok:false, error:t(badFileReason(text)) }; }
     if (Array.isArray(parsed)) list=parsed;
     else if (isPlainObject(parsed)) {
       if (parsed.version!==undefined) {
@@ -2935,11 +2953,15 @@ export function widgetLine(state, spendTxns, prefs, now=new Date()) {
 }
 const REMIND_KEY=KEY+"__reminders";
 const REMIND_EVENT="ledger-reminders-changed";
-export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", hideAmount:false, exact:false });   // Run 38: exact = "remind at the exact time"
+// Run 40 (owner: "it strictly sends at 21:00; I set the time and it didn't come then"): the daily check-in has its own time (dailyTime);
+// "time" stays the time for bill and recurring reminders. A saved file without dailyTime keeps 21:00, exactly as before.
+export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", dailyTime:"21:00", hideAmount:false, exact:false });   // Run 38: exact = "remind at the exact time"
+const HHMM=/^([01]\d|2[0-3]):[0-5]\d$/;
 export function cleanReminderPrefs(raw) {
   const r=raw && typeof raw==="object" ? raw : {};
-  const time=typeof r.time==="string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) ? r.time : REMIND_DEFAULT.time;
-  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, hideAmount:r.hideAmount===true, exact:r.exact===true };
+  const time=typeof r.time==="string" && HHMM.test(r.time) ? r.time : REMIND_DEFAULT.time;
+  const dailyTime=typeof r.dailyTime==="string" && HHMM.test(r.dailyTime) ? r.dailyTime : REMIND_DEFAULT.dailyTime;
+  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, dailyTime, hideAmount:r.hideAmount===true, exact:r.exact===true };
 }
 export function readReminders() { try { return cleanReminderPrefs(JSON.parse(localStorage.getItem(REMIND_KEY)||"null")); } catch { return { ...REMIND_DEFAULT }; } }
 export function writeReminders(p) {
@@ -2970,10 +2992,11 @@ export function reminderPlan(schedules, transactions, prefs, now=new Date(), opt
   }
   if (p.daily) {
     const spentToday=(Array.isArray(transactions)?transactions:[]).some(x=>x && x.date===todayStr);
+    const [dh,dm]=p.dailyTime.split(":").map(Number);
     for (let i=0;i<14;i++) {
       const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()+i), ds=localDateStr(d);
       if (i===0 && spentToday) continue;
-      push("daily","d",ds,new Date(d.getFullYear(),d.getMonth(),d.getDate(),21,0,0,0),{});
+      push("daily","d",ds,new Date(d.getFullYear(),d.getMonth(),d.getDate(),dh,dm,0,0),{});
     }
   }
   return out.sort((a,b)=>a.atMs-b.atMs || a.id-b.id).slice(0,cap);
@@ -3087,7 +3110,8 @@ function closeTopLayer() {
   const keep=document.querySelector(".discard-overlay .discard-keep"); if (keep) { keep.click(); return true; }   // "unsaved" question: Back/Escape = keep editing
   const add=document.querySelector(".add-overlay .add-close"); if (add) { add.click(); return true; }
   const sheets=document.querySelectorAll(".sheet-overlay"); if (sheets.length) { sheets[sheets.length-1].click(); return true; }
-  return false;
+  if (document.querySelector(".lock-screen")) return false;   // never reach behind the lock screen
+  return runBackStep();   // Run 40: an editor or "new …" form open inside the page is cancelled before the page is left
 }
 function useSheetGestures() {
   useEffect(()=>{
@@ -3206,7 +3230,11 @@ class ErrorBoundary extends Component {
     );
   }
 }
-export default function App() { return <ErrorBoundary><LockGate><AppInner/></LockGate></ErrorBoundary>; }
+export default function App() {
+  // Run 40: the launch mark hands over once the first screen (Home, the lock screen or the language choice) has been painted.
+  useEffect(()=>{ let r2=0; const r1=requestAnimationFrame(()=>{ r2=requestAnimationFrame(()=>finishLaunch()); }); return ()=>{ cancelAnimationFrame(r1); cancelAnimationFrame(r2); }; },[]);
+  return <ErrorBoundary><LockGate><AppInner/></LockGate></ErrorBoundary>;
+}
 function AppInner() {
   const [state,    setState]    = useState(() => migrateAndLoad());
   // The whole tree renders in the saved language. Changing it is an ordinary state update: everything re-renders in place,
