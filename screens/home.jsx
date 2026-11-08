@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useState } from "react";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse } from "./motion.jsx";
@@ -130,6 +130,7 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
   const spentToDate =calcSpentToDate(transactions,now);
   const paceInfo    =calcSpendingPace(spentToDate,now,budgetTotal);
   const safeInfo   =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills);
+  const runOut      =useMemo(()=>safeInfo.feasible&&safeToSpend?.enabled ? calcRunOutDay(transactions,bills,safeInfo.remaining,safeInfo.daysRemaining) : { show:false },[transactions,bills,safeInfo.feasible,safeInfo.remaining,safeInfo.daysRemaining,safeToSpend?.enabled]);   // Run 43
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curIn>0;   // Run 35b: any money in (a refund or savings withdrawal is spendable too); the Income figure itself is earnings only
 
@@ -146,7 +147,7 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
   return (
     <div>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
-      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} currency={currency} now={now} held={accountsHeld(accountTxns||transactions)}/>
+      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={accountsHeld(accountTxns||transactions)}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount"><MoneyText v={fmt(curExp,currency)}/></div>
@@ -265,7 +266,7 @@ export function accountsHeld(transactions) {
   const bal=accountBalances(data,transactions);
   return shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0)/100;
 }
-export function SafeToSpendCard({ safeToSpend, safeInfo, currency, now, held=null }) {
+export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null }) {
   // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
   // summary and upcoming bills out of the first screen.
   const [open,setOpen]=useState(false);
@@ -285,6 +286,7 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, currency, now, held=nul
               {tn("safe.daysLeft",safeInfo.daysRemaining,{month:monthShort(now)})}
             </div>
           )}
+          {runOut&&runOut.show&&<div className="list-sub" data-section="safe-runout" style={{marginTop:4,color:"var(--warn)",fontWeight:600}}>{t("safe.runOut",{ day:runOut.day, month:monthShort(now), daily:fmt(runOut.usualDaily,currency) })}</div>}
           {safeInfo.daysRemaining>0&&(()=>{ const t0=new Date(), dim=new Date(t0.getFullYear(),t0.getMonth()+1,0).getDate(), left=Math.min(safeInfo.daysRemaining,dim), gone=dim-left; return (   /* Run 27d: the month as a row of day-ticks: days gone are filled, today is taller, days ahead are faint */
             <div className="runway" aria-hidden="true">{Array.from({length:dim},(_,i)=><i key={i} className={i<gone?"on":i===gone?"now":""}/>)}</div>
           ); })()}

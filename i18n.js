@@ -1061,6 +1061,7 @@ export const MESSAGES = {
   // Safe to Spend
   "pace.title":         { en: "Spending Pace", az: "Xərcləmə tempi", ru: "Темп расходов" },
   "safe.title":          { en: "Safe to Spend", az: "Xərcləmək olar", ru: "Можно потратить" },
+  "safe.runOut":         { en: "At your usual pace (about {daily} a day) this may run out around {day} {month}.", az: "Adi tempinizlə (gündə təxminən {daily}) bu məbləğ təxminən {day} {month} tarixində bitə bilər.", ru: "При вашем обычном темпе (около {daily} в день) этого может хватить примерно до {day} {month}." },
   "safe.perDay":         { en: "{amount}/day · ", az: "gündə {amount} · ", ru: "{amount} в день · " },
   "safe.daysLeft":       { en: { one: "{n} day left in {month} (today included)", other: "{n} days left in {month} (today included)" }, az: "Ayın sonuna {n} gün qalıb (bu gün daxil)", ru: "До конца месяца дней: {n} (включая сегодня)" },
   "safe.incomeReceived": { en: "Income received so far", az: "İndiyədək daxil olan gəlir", ru: "Уже полученный доход" },

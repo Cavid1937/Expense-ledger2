@@ -2466,6 +2466,22 @@ export function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
   return { ...f, backtest:{ months, hits }, rangeShown:months>=2 && hits*3>=months*2 };
 }
 
+// Run 43: "at your usual pace the money may run out around day N". Uses what the app already trusts: the usual daily spend of the forecast (the 28 days
+// before today, without bills/recurring entries and without unusually large purchases, so one big day cannot cause a scare) and the Safe to Spend that is
+// left (already after bills still to pay). Shown only when there is a real chance of running short: from the 5th of the month, at least 7 days of
+// history, money left, and the cover is at least 2 days shorter than the days remaining. Wording says "around"; it is an estimate, never a promise.
+export function calcRunOutDay(transactions, bills, remaining, daysRemaining, now=new Date()) {
+  const none={ show:false };
+  if (!(remaining>0) || !(daysRemaining>0) || now.getDate()<5) return none;
+  const f=forecastCore(Array.isArray(transactions)?transactions:[],Array.isArray(bills)?bills:[],now);
+  if (!f.available || !(f.usualDaily>0)) return none;
+  const cover=remaining/f.usualDaily;
+  if (cover>=daysRemaining-2) return none;
+  const day=new Date(now.getFullYear(),now.getMonth(),now.getDate()+Math.floor(cover));
+  if (day.getMonth()!==now.getMonth()) return none;
+  return { show:true, day:day.getDate(), usualDaily:f.usualDaily, cover:Math.round(cover*10)/10 };
+}
+
 // Run 24: split one entry (a shopping receipt, say) into 2–6 entries in different categories. No new data shape: the original is
 // replaced by ordinary entries with the same date, merchant, note, wallet and tag, and their amounts add up to the original to the
 // cent. Entries that belong to a bill, a repeating schedule or a debt repayment are not split, so those links never break.
