@@ -87,6 +87,7 @@
     "run42io.test.mjs": 13,
     "run42slot.test.mjs": 17,
     "run42merch.test.mjs": 15,
+    "run43reimb.test.mjs": 28,
   "run18coach.test.mjs": 9
   },
   "browser": {
@@ -196,7 +197,8 @@
     "e2e_run40.mjs": 42,
     "e2e_run41.mjs": 21,
     "e2e_run42.mjs": 26,
-    "e2e_run42_io.mjs": 6
+    "e2e_run42_io.mjs": 6,
+    "e2e_run43.mjs": 13
   }
 }
 

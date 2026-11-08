@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact } from "../App.jsx";
+import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
@@ -102,6 +102,9 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   // Run 22: optional trip / group name (free text; earlier names are suggested). Editing keeps the entry's own.
   const [trip, setTrip] = useState(tripName(prefill?.trip));
   const [spread, setSpread] = useState(spreadMonths(prefill?.spread));   // Run 41: 0 = not spread; otherwise the number of months the cost is shown over
+  // Run 43: part of an expense others will pay back (reimb = { amt, who }). Text while typing; empty = none.
+  const [reimbAmt, setReimbAmt] = useState(cleanReimb(prefill?.reimb) ? String(cleanReimb(prefill.reimb).amt) : "");
+  const [reimbWho, setReimbWho] = useState(cleanReimb(prefill?.reimb)?.who || "");
   const accData=useMemo(()=>readAccounts(),[]);   // Run 24: optional account (card, cash...) the entry belongs to
   const [account, setAccount] = useState(accId(prefill?.account));
   // Run 36: a refund can say which kind of spending it gives money back to; then it lowers that category's spending instead of counting as money in.
@@ -135,11 +138,11 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
   // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
   // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
-  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account, refundFor, fxCur, spread }).current;
+  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account, refundFor, fxCur, spread, reimbAmt, reimbWho }).current;
   const [askDiscard, setAskDiscard] = useState(false);
   const defaultCat=type===initial.type ? initial.catId : firstCat(type);
   const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
-    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account || refundFor!==initial.refundFor || fxCur!==initial.fxCur || spread!==initial.spread;
+    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account || refundFor!==initial.refundFor || fxCur!==initial.fxCur || spread!==initial.spread || reimbAmt!==initial.reimbAmt || reimbWho!==initial.reimbWho;
   const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
 
   const expCats=CATEGORIES.filter(c=>!c.income);
@@ -217,6 +220,13 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
     const amt=fxCur ? fxToBase(typed,fxEff.rate) : typed;
     if (!(amt>0)) { setErr(t("add.errAmount")); return; }
     const fx=fxCur ? { cur:fxCur, amt:typed, rate:fxEff.rate, on:fxEff.on, src:fxEff.src } : null;
+    // Run 43: money others will pay back. Empty = none; a typed amount must be a real amount and at most the total.
+    const rTyped=reimbAmt.trim() ? amountOf(reimbAmt) : 0;
+    if (type==="expense" && !recur && reimbAmt.trim()) {
+      if (rTyped===null) { setErr(t("reimb.errAmt")); return; }
+      if (Math.round(rTyped*100)>Math.round(amt*100)) { setErr(t("reimb.errMore")); return; }
+    }
+    const reimb=type==="expense" && !recur && rTyped>0 ? { amt:rTyped, who:reimbWho.trim().slice(0,40) } : null;
     // S0: Preserve isActive when editing — never silently reactivate a paused recurring
     const isActive=isEditing?(prefill?.isActive!==undefined?prefill.isActive:true):true;
     // A bill that exists always links (also while old-style groups remain); only "a new bill" is held back until none remain.
@@ -227,7 +237,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
       const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
       if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
     }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",fx,spread:type==="expense"&&!recur?spread:0,
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",fx,spread:type==="expense"&&!recur?spread:0,reimb,reimbFor:isEditing&&type==="income"&&catId==="refund"?prefill?.reimbFor:undefined,
       billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
@@ -508,6 +518,17 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
               {[...new Set([0,3,6,12,spread])].sort((a,b)=>a-b).map(n=>(<button key={n} type="button" className={`chip${spread===n?" on":""}`} aria-pressed={spread===n} data-spread={n} onClick={()=>setSpread(n)}>{n===0?t("spread.off"):tn("spread.months",n)}</button>))}
             </div>
             <div className="list-sub" style={{lineHeight:1.5,marginTop:6}}>{spread>0 ? t("spread.on",{ months:spread, each:fmt(Math.floor(Math.round((amountOf(amount)||0)*100)/spread)/100,currency) }) : t("spread.hint")}</div>
+          </div>
+        </Collapse>
+        {/* Run 43: part of this expense is for someone else who will pay it back; only the user's share counts in spending */}
+        <Collapse open={type==="expense"&&!recur} id="add-reimb-wrap">
+          <div className="field" data-section="add-reimb">
+            <label className="field-lbl" htmlFor="txn-reimb-amt">{t("reimb.label")} {optional}</label>
+            <div style={{display:"flex",gap:8}}>
+              <input id="txn-reimb-amt" className="field-input" style={{flex:1,minWidth:0}} inputMode="decimal" autoComplete="off" placeholder={t("reimb.amt")} aria-label={t("reimb.amt")} value={reimbAmt} onChange={e=>setReimbAmt(e.target.value)}/>
+              <input id="txn-reimb-who" className="field-input" style={{flex:1,minWidth:0}} maxLength={40} autoComplete="off" placeholder={t("reimb.who")} aria-label={t("reimb.who")} value={reimbWho} onChange={e=>setReimbWho(e.target.value)}/>
+            </div>
+            <div className="list-sub" data-section="add-reimb-note" style={{lineHeight:1.5,marginTop:6}}>{(()=>{ const a=amountOf(amount), r=reimbAmt.trim()?amountOf(reimbAmt):null; return a!==null && r!==null && r>0 && Math.round(r*100)<=Math.round(a*100) ? t("reimb.share",{ share:fmt(Math.round(a*100-r*100)/100,currency), back:fmt(r,currency) }) : t("reimb.hint"); })()}</div>
           </div>
         </Collapse>
 

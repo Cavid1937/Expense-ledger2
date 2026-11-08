@@ -1,15 +1,16 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
-import { pickerCats, readCatPrefs } from "../App.jsx";
+import { pickerCats, readCatPrefs, cleanReimb, reimbOwedMap, reimbStatus } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, spreadMonths, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
 export const LEDGER_PAGE=150;   // Run 32: rows drawn at first and per "Show more" (a throttled phone froze for seconds drawing 300+ rows at once). Whole days only.
-export function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPress, compact }) {
+export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onLongPress, compact }) {
   const [cap,setCap]=useState(LEDGER_PAGE);
+  const owed=useMemo(()=>reimbOwedMap(all||txns),[all,txns]);   // Run 43: what is still owed back, per entry (the full list, since a filter may hide the repayments)
   const groups=useMemo(()=>{
     const g={}; txns.forEach(t=>{ (g[t.date]=g[t.date]||[]).push(t); });
     return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));
@@ -31,7 +32,7 @@ export function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPr
               {dayTotal>0&&<span className="txn-date-total" aria-label={t("ledger.daySpent",{amount:fmt(dayTotal,currency)})}>−{fmt(dayTotal,currency)}</span>}
             </div>
             <div className="txn-list">
-              {rows.map(t=><TxnRow key={t.id} txn={t} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact/>)}
+              {rows.map(t=><TxnRow key={t.id} txn={t} owed={owed.get(String(t.id))} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact/>)}
             </div>
           </div>
         );
@@ -41,7 +42,7 @@ export function GroupedTxns({ txns, currency, onDelete, onEdit, onView, onLongPr
   );
 }
 
-export function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, compact }) {
+export function TxnRow({ txn, owed, currency, onDelete, onEdit, onView, onLongPress, compact }) {
   const cat=CAT(txn.category);
   // Press and hold a row (about half a second) to start selecting several; the tap that follows the hold is ignored.
   const hold=useRef({ timer:0, x:0, y:0, fired:false });
@@ -57,6 +58,7 @@ export function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, c
     txn.wallet?walletName(txn.wallet):null,
     tripName(txn.trip)||null,
     spreadMonths(txn.spread)&&!isInc?t("spread.tag",{n:spreadMonths(txn.spread)}):null,   // Run 41
+    owed>0&&!isInc?(cleanReimb(txn.reimb)?.who?t("reimb.tagWho",{ who:maskText(cleanReimb(txn.reimb).who), amt:fmt(owed,currency) }):t("reimb.tag",{ amt:fmt(owed,currency) })):null,   // Run 43
     !compact?fmtDate(txn.date):null,
   ].filter(Boolean).join(" · ");
   return (
@@ -295,7 +297,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
           </div>
         );
       })():(
-        <GroupedTxns txns={filtered} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={x=>{ setSelMode(true); setPicked(new Set([String(x.id)])); }}/>
+        <GroupedTxns txns={filtered} all={transactions} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={x=>{ setSelMode(true); setPicked(new Set([String(x.id)])); }}/>
       )}
       </Swap>
       {showCatSheet&&(
@@ -357,7 +359,7 @@ export function SplitPanel({ txn, currency, onSplit }) {
   );
 }
 
-export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClose, onEdit, onDuplicate, onSplit, onDelete, onLinkBill, onAssignBill }) {
+export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClose, onEdit, onDuplicate, onSplit, onRepaid, onDelete, onLinkBill, onAssignBill }) {
   // Run 9: an ordinary (non-recurring) entry can be marked as the payment of an existing bill — only when the user picks the
   // bill. Same merchant and amount are never enough to link anything automatically.
   // Run 12: once every recurring payment has a bill ("explicit"), any entry can be linked to a bill, moved to another bill,
@@ -370,6 +372,7 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
   const myBill=txn.billId ? billList.find(b=>b.id===txn.billId) : null;
   const cat=CAT(txn.category)||{id:"other",name:txn.category,color:"#98A5B7"};
   const isInc=txn.type==="income";
+  const reimb=useMemo(()=>reimbStatus(transactions,txn),[transactions,txn]);   // Run 43
   const profile=useMemo(()=>txn.merchant?calcMerchantProfile(txn.merchant,transactions):null,[txn.merchant,transactions]);
 
   return (
@@ -402,6 +405,8 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
             [t("add.recurring"), txn.recurring?(txn.recurFreq?t("freqCap."+txn.recurFreq):t("common.yes")):t("common.no")],
             ...(txn.wallet?[[t(txn.type==="income"?"wallet.labelIn":"wallet.label"), walletName(txn.wallet)]]:[]),
             ...(txn.type==="income"&&txn.category==="refund"&&txn.refundFor?[[t("add.refundFor"), catName(txn.refundFor)]]:[]),
+            // Run 43: money others will pay back
+            ...(reimb?[[t("reimb.detailLabel"), (reimb.who?maskText(reimb.who)+": ":"")+t("reimb.detail",{ expected:fmt(reimb.expected,currency), received:fmt(reimb.received,currency) })]]:[]),
             // Run 39: what was really paid, in which currency and at which rate
             ...(txn.fx&&txn.fx.cur?[[t("fx.detailLabel"), t("fx.detail",{ amt:Number(txn.fx.amt).toFixed(2), cur:txn.fx.cur, rate:String(txn.fx.rate), date:txn.fx.on?fmtDate(txn.fx.on):"", src:t(txn.fx.src==="manual"?"fx.srcShortOwn":"fx.srcShortCbar") })]]:[]),
           ].map(([lbl,val])=>(
@@ -505,7 +510,9 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
           <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onEdit}><Icon name="edit" size={14}/>{t("common.edit")}</button>
           <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onDuplicate}><Icon name="repeat" size={14}/>{t("detail.duplicate")}</button>
         </div>
-        {onSplit&&!txn.recurring&&!txn.billId&&!txn.debtLink&&txn.amount>0&&<SplitPanel key={txn.id} txn={txn} currency={currency} onSplit={onSplit}/>}
+        {onRepaid&&reimb&&reimb.owed>0&&<button className="btn btn-primary btn-full" data-section="reimb-paid" style={{marginBottom:8}} onClick={onRepaid}>{t("reimb.markPaid",{ amt:fmt(reimb.owed,currency) })}</button>}
+        {reimb&&reimb.owed===0&&<div className="list-sub" data-section="reimb-settled" style={{margin:"0 2px 8px"}}>{t("reimb.settled")}</div>}
+        {onSplit&&!txn.recurring&&!txn.billId&&!txn.debtLink&&txn.amount>0&&!txn.reimb&&<SplitPanel key={txn.id} txn={txn} currency={currency} onSplit={onSplit}/>}
         {myBill&&<div className="list-sub bill-of" style={{margin:"0 2px 8px"}}>{t("bill.paymentOf",{name:maskText(myBill.name)})}</div>}
         {((explicit&&onAssignBill)||(onLinkBill&&bills.length>0))&&(
           <div style={{marginBottom:8}}>

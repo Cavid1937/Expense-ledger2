@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useState } from "react";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcSpendingPace, calcSpentToDate, calcWhatChanged, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse } from "./motion.jsx";
@@ -134,6 +134,7 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
   const hasIncome   =curIn>0;   // Run 35b: any money in (a refund or savings withdrawal is spendable too); the Income figure itself is earnings only
 
   // Upcoming recurring (due within 7 days)
+  const owedMap=useMemo(()=>reimbOwedMap(accountTxns||transactions),[accountTxns,transactions]), owedTotal=useMemo(()=>reimbOwedTotal(accountTxns||transactions),[accountTxns,transactions]);   // the full list: the spending list already has the repayments folded in   // Run 43
   const upcomingSchedules=useMemo(()=>{
     const nowD=new Date();
     return buildSchedules(transactions,bills).filter(x=>x.isActive&&x.type==="expense")
@@ -204,11 +205,14 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
         </div>
       )}
 
+      {/* Run 43: money others still owe the user for things the user paid (only when something is owed) */}
+      {owedTotal.total>0&&<div className="list-sub" data-section="home-reimb" style={{margin:"0 4px 12px",fontWeight:600}}>{t("reimb.home",{ amount:fmt(owedTotal.total,currency) })}</div>}
+
       {/* Run 18: the five most recent entries (all of them, including loan and debt repayments), newest first */}
       {latest.length>0&&(
         <div className="card section-enter section-enter-2" data-section="home-latest">
           <div className="card-head"><span className="card-title">{t("home.latest")}</span><button className="btn btn-sm" data-section="home-latest-all" onClick={onOpenLedger}>{t("home.seeAllTxns")}</button></div>
-          {latest.map(x=><TxnRow key={x.id} txn={x} currency={currency} onView={onView} compact/>)}
+          {latest.map(x=><TxnRow key={x.id} txn={x} owed={owedMap.get(String(x.id))} currency={currency} onView={onView} compact/>)}
         </div>
       )}
 

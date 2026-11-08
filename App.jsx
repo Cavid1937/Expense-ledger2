@@ -603,6 +603,9 @@ function normaliseTxn(t, opts={}) {
     ...(cleanFx(t.fx) ? { fx:cleanFx(t.fx) } : {}),
     // Run 41: an expense whose cost is shown spread over several months in the analytics. Optional, same rule; only on expenses; 2 to 24.
     ...(normType(t.type)!=="income" && spreadMonths(t.spread) ? { spread:spreadMonths(t.spread) } : {}),
+    // Run 43: money others will pay back (expenses) / a payment received for such an expense (income). Optional, same rule.
+    ...(normType(t.type)!=="income" && cleanReimb(t.reimb) ? { reimb:cleanReimb(t.reimb) } : {}),
+    ...(normType(t.type)==="income" && reimbForRef(t.reimbFor)!==null ? { reimbFor:reimbForRef(t.reimbFor) } : {}),
   };
 }
 // Run 41 (owner wishlist, "amortize"): a big one-off cost (insurance, tuition, a flight) can be spread over 2 to 24 months in every spending view
@@ -769,7 +772,60 @@ export function refundsNetted(list, mon) {
   const pre=forSpendingRows(list), post=netRefunds(pre), m=(x)=>x && x.type==="expense" && String(x.date).slice(0,7)===mon;
   return Math.round((sumCents(pre.filter(m))-sumCents(post.filter(m)))*100)/100;
 }
-function forSpending(list) { return expandSpreads(netRefunds(forSpendingRows(list))); }   // Run 41: spread costs are cut into monthly slices last, after refunds were netted against the whole entry
+// ─── Run 43: money others will pay back ("float", owner wishlist) ────────────────────────────────────────────────────────────────────────────
+// An expense may say: "reimb": { amt, who } = this much of it is for someone else, who will pay it back. Every spending view (month totals,
+// categories, budgets, pace, coach, Safe to Spend) then counts only YOUR share (amount - amt, never below 0). Balances and the entry list keep
+// the full amount, because that is what really left the account. When the person pays back, the app records a normal "Refunds" income entry
+// with reimbFor = the expense's id; those entries are folded into the share (never counted twice); anything paid beyond the amount stays money in.
+export function cleanReimb(v) {
+  if (!isPlainObject(v)) return null;
+  const amt=typeof v.amt==="number" ? v.amt : NaN;
+  if (!(amt>0) || amt>1e10 || Number(amt.toFixed(2))!==amt) return null;
+  const who=typeof v.who==="string" ? v.who.replace(/[\u0000-\u001f\u007f]+/g," ").trim().slice(0,40) : "";
+  return { amt, who };
+}
+export function reimbForRef(v) { return (typeof v==="number" && Number.isFinite(v)) || (typeof v==="string" && v.trim()!=="" && v.length<=64) ? v : null; }
+// How much of an expense is expected back, and how much has come back, from the whole list. Pure; used by Home, the ledger row and the tests.
+export function reimbStatus(list, expense) {
+  const r=expense && expense.type==="expense" ? cleanReimb(expense.reimb) : null;
+  if (!r) return null;
+  const c=(x)=>Math.round((Number(x)||0)*100), cap=Math.min(c(expense.amount),c(r.amt));
+  let got=0;
+  (Array.isArray(list)?list:[]).forEach(t=>{ if (t && t.type==="income" && t.category==="refund" && reimbForRef(t.reimbFor)!==null && String(t.reimbFor)===String(expense.id)) got+=c(t.amount); });
+  return { who:r.who, expected:cap/100, received:Math.min(got,cap)/100, owed:Math.max(0,cap-got)/100, extra:Math.max(0,got-cap)/100 };
+}
+// id -> amount still owed, only for entries that have something owed (one pass; for lists).
+export function reimbOwedMap(list) {
+  const arr=Array.isArray(list)?list:[], c=(x)=>Math.round((Number(x)||0)*100), got=new Map();
+  arr.forEach(t=>{ if (t && t.type==="income" && t.category==="refund" && reimbForRef(t.reimbFor)!==null) got.set(String(t.reimbFor),(got.get(String(t.reimbFor))||0)+c(t.amount)); });
+  const out=new Map();
+  arr.forEach(t=>{ const r=t && t.type==="expense" ? cleanReimb(t.reimb) : null; if (!r) return; const cap=Math.min(c(t.amount),c(r.amt)), owed=cap-(got.get(String(t.id))||0); if (owed>0) out.set(String(t.id),owed/100); });
+  return out;
+}
+// Total still owed to the person, across all entries (Home line).
+export function reimbOwedTotal(list) {
+  let cents=0, people=new Set();
+  (Array.isArray(list)?list:[]).forEach(t=>{ const s=reimbStatus(list,t); if (s && s.owed>0) { cents+=Math.round(s.owed*100); people.add(s.who||""); } });
+  return { total:cents/100, n:people.size };
+}
+function netReimb(rows) {
+  const c=(x)=>Math.round((Number(x)||0)*100), share=new Map();
+  rows.forEach(t=>{ if (t && t.type==="expense") { const r=cleanReimb(t.reimb); if (r) share.set(String(t.id),Math.min(c(t.amount),c(r.amt))); } });
+  if (!share.size) return rows;
+  const used=new Map(), out=[];
+  rows.forEach(t=>{
+    if (t && t.type==="expense" && share.has(String(t.id))) { const left=c(t.amount)-share.get(String(t.id)); if (left>0) { const { reimb:_rb, ...rest }=t; out.push({ ...rest, amount:left/100 }); } return; }
+    if (t && t.type==="income" && t.category==="refund" && reimbForRef(t.reimbFor)!==null && share.has(String(t.reimbFor))) {
+      const k=String(t.reimbFor), room=share.get(k)-(used.get(k)||0), have=c(t.amount), take=Math.min(room,have);
+      used.set(k,(used.get(k)||0)+take);
+      if (have-take>0) out.push({ ...t, amount:(have-take)/100 });
+      return;
+    }
+    out.push(t);
+  });
+  return out;
+}
+function forSpending(list) { return expandSpreads(netRefunds(netReimb(forSpendingRows(list)))); }  // Run 41: spread costs are cut into monthly slices last, after refunds were netted against the whole entry
 function forSpendingRows(list) {
   return ((Array.isArray(list)?list:[]).flatMap(t=>{
     if (t && t.debtLink && debtLinkRef(t.debtLink)) return [];
@@ -3704,8 +3760,8 @@ function AppInner() {
     return { ...s, transactions:r.transactions, bills:r.bills };
   };
   const addTransaction=useCallback((txn)=>{
-    const { billChoice, wallet, trip, account, refundFor, fx, spread, ...data }=txn, id=Date.now()+Math.random();
-    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}) };   // Run 39: fx kept only when valid; Run 41: spread only on expenses, 2 to 24
+    const { billChoice, wallet, trip, account, refundFor, fx, spread, reimb, reimbFor, ...data }=txn, id=Date.now()+Math.random();
+    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}), ...(data.type==="expense" && cleanReimb(reimb) ? { reimb:cleanReimb(reimb) } : {}), ...(data.type==="income" && data.category==="refund" && reimbForRef(reimbFor)!==null ? { reimbFor:reimbForRef(reimbFor) } : {}) };   // Run 39: fx kept only when valid; Run 41: spread only on expenses, 2 to 24
     // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
     // bill the entry may have created, and refuses if something else changed in the meantime, like the other undo windows.
     const before=stateRef.current;
@@ -3732,10 +3788,10 @@ function AppInner() {
     const dd=readDebts(), d=dd.debts.find(x=>x.id===tx.debtLink.debtId); return !!(d && d.payments.some(p=>p.id===tx.debtLink.paymentId)); };
   const updateTransaction=useCallback((id,txn)=>{
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
-    const { billChoice, wallet, trip, account, refundFor, fx, spread, ...data }=txn;
-    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}) };   // Run 39: switching back to manat removes fx; Run 41: an empty spread removes it
+    const { billChoice, wallet, trip, account, refundFor, fx, spread, reimb, reimbFor, ...data }=txn;
+    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}), ...(data.type==="expense" && cleanReimb(reimb) ? { reimb:cleanReimb(reimb) } : {}), ...(data.type==="income" && data.category==="refund" && reimbForRef(reimbFor)!==null ? { reimbFor:reimbForRef(reimbFor) } : {}) };   // Run 39: switching back to manat removes fx; Run 41: an empty spread removes it
     // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored). Run 22: same for the trip. Run 36: same for "refund of".
-    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, refundFor:_rf, fx:_fx, spread:_sp, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}), ...rf }; })},id,billChoice));
+    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, refundFor:_rf, fx:_fx, spread:_sp, reimb:_rb, reimbFor:_rbf, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}), ...rf }; })},id,billChoice));
     showToast(t("toast.updated"));
   },[showToast]);
 
@@ -4352,6 +4408,7 @@ function AppInner() {
             onEdit={()=>{ openAdd(viewTxn,viewTxn.id); setViewTxn(null); }}
             onDuplicate={()=>{ openAdd({...viewTxn,date:today(),id:undefined},null); setViewTxn(null); }}
             onSplit={parts=>{ if (splitEntry(viewTxn.id,parts)) setViewTxn(null); }}
+            onRepaid={()=>{ const s=reimbStatus(stateRef.current.transactions,viewTxn); if (!s || !(s.owed>0)) { setViewTxn(null); return; } addTransaction({ type:"income", category:"refund", amount:s.owed, merchant:s.who, note:"", subcategory:"", date:today(), recurring:false, recurFreq:null, isActive:true, reimbFor:viewTxn.id }); showToast(t("reimb.paidToast",{ amt:fmt(s.owed,currency) })); setViewTxn(null); }}
             onDelete={()=>{ deleteTransaction(viewTxn.id); setViewTxn(null); }}
             onLinkBill={x=>{
               // The entry becomes that bill's payment: it takes the bill's name, category and frequency (the fields that identify
