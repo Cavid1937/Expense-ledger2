@@ -1,13 +1,13 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { pickerCats, readCatPrefs } from "../App.jsx";
+import { pickerCats, planRebalance, readCatPrefs } from "../App.jsx";
 import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
 import { Collapse, EditSwap, useBackStep, useLeave } from "./motion.jsx";
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
-export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange }) {
+export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange, onRebalance }) {
   const { transactions, budgets={}, goals=[], currency, templates=[], safeToSpend={} }=state;
   const setSeg=onSeg;
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
@@ -35,6 +35,7 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
   // Run 36: the user's order; a hidden category is listed only when it already has a budget (never dropped from view silently).
   const expCats=pickerCats(false,readCatPrefs(),Object.keys(budgets).filter(k=>budgets[k]>0));
   const budgeted=expCats.filter(c=>byCat[c.id]), unbudgeted=expCats.filter(c=>!byCat[c.id]);
+  const rebalance=useMemo(()=>planRebalance(items),[budgets,transactions]);   // Run 41: offered only when it covers the whole shortfall
 
   const saveGoal=()=>{
     const gTarget=formMoney(goalTarget,{positive:true});
@@ -106,6 +107,13 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
             </div>
           </div>
         )}</Collapse>
+        {rebalance&&(
+          <div className="card" data-section="bg-rebalance">
+            <div className="card-title" style={{marginBottom:6}}>{t("budget.rebalTitle",{cat:catName(rebalance.catId),amount:fmt(rebalance.need,currency)})}</div>
+            <div className="list-sub" style={{lineHeight:1.5}}>{t("budget.rebalBody",{moves:rebalance.moves.map(m=>`${catName(m.catId)} ${fmt(m.amount,currency)}`).join(", ")})}</div>
+            <button className="btn btn-primary btn-full" data-action="rebalance" style={{marginTop:12}} onClick={()=>onRebalance&&onRebalance(rebalance)}>{t("budget.rebalApply")}</button>
+          </div>
+        )}
         {limitTotal>0&&(
           <div className="card" data-section="bg-total">
             <div className="list-sub">{t("budgets.monthTotal",{month:monthName(now)})}</div>

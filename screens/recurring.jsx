@@ -55,6 +55,8 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
           <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(x.amount,currency)}</div>
           {x.freq!=="monthly"&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}}>{t("rec.perMonthApprox",{amount:fmt(x.monthly,currency)})}</div>}
+          {/* Run 41: what it costs over a year (the monthly estimate x 12), so a small monthly charge is seen for its real size */}
+          {!isInc&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}} data-yearly="1">{t("rec.perYearApprox",{amount:fmt(x.monthly*12,currency)})}</div>}
           {/* Run 6 (D20): a payment only settles a bill when it is recorded as that bill (same details, Recurring on).
               This opens the Add form filled in exactly that way, dated today; the user can still change anything. */}
           {x.isActive&&onRecordPayment&&(

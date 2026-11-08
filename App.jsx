@@ -1141,6 +1141,24 @@ export function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
       const d=c.c-a.c; if (!top || d>top.d) top={ d, id:"priceUp", merchant:c.name, from:a.c, to:c.c, pct:Math.round((c.c/a.c-1)*100) };
     });
     if (top) numbers.push({ id:top.id, merchant:top.merchant, from:top.from, to:top.to, pct:top.pct });
+    // lifestyle: the last three completed months against the three before them (all six must have an entry). Income is earned income only.
+    // Shown when income rose 5% or more, spending rose too, and spending took at least half of the extra income (cents, no division until the end).
+    const spendBy={}, anyBy={};
+    spend.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number), k=y*12+(m-1); spendBy[k]=(spendBy[k]||0)+Math.round((Number(x.amount)||0)*100); });
+    past.forEach(x=>{ const [y,m]=String(x.date).split("-").map(Number); anyBy[y*12+(m-1)]=true; });
+    const ks=[1,2,3,4,5,6].map(i=>curK-i);
+    if (ks.every(k=>anyBy[k])) {
+      const sumC=(arr,f)=>arr.reduce((s,k)=>s+f(k),0), recent=ks.slice(0,3), older=ks.slice(3), incC=(k)=>Math.round((incBy[k]||0)*100), spC=(k)=>spendBy[k]||0;
+      const incR=sumC(recent,incC), incO=sumC(older,incC), spR=sumC(recent,spC), spO=sumC(older,spC);
+      if (incO>0 && incR*100>=incO*105 && spO>0 && spR>spO && (spR-spO)*2>=(incR-incO))
+        numbers.push({ id:"lifestyle", inc:Math.round((incR/incO-1)*100), spend:Math.round((spR/spO-1)*100), share:Math.round((spR-spO)/(incR-incO)*100) });
+    }
+    // income hill: last completed month's earned income at least 50% above the average of the previous months (at least three of them, each with income)
+    const prior=[2,3,4,5,6].map(i=>curK-i).filter(k=>(incBy[k]||0)>0), lastInc=Math.round((incBy[curK-1]||0)*100);
+    if (prior.length>=3 && lastInc>0) {
+      const avg=prior.reduce((s,k)=>s+Math.round(incBy[k]*100),0)/prior.length;
+      if (lastInc>=avg*1.5) numbers.push({ id:"incomeHill", pct:Math.round((lastInc/avg-1)*100) });
+    }
   }
   return [...actions.sort((a,b)=>(a.id==="loanOverdue"?0:1)-(b.id==="loanOverdue"?0:1)), ...numbers];
 }
@@ -2274,6 +2292,28 @@ export function splitTransaction(txn, parts, mkId=()=>Date.now()+Math.random()) 
     entries.push({ ...base, id:mkId(), category:cat.id, amount:c/100, subcategory:cat.id===txn.category ? (txn.subcategory||"") : "" });
   }
   return sum===total ? { ok:true, entries } : { ok:false, reason:"sum", diff:(total-sum)/100 };
+}
+
+// Run 41 (owner wishlist): one-tap rebalance. For the category furthest over its limit this month, suggest moving the shortfall (rounded
+// up to a whole currency unit) from categories that still have room: each gives at most half of its room, in whole units, largest room first.
+// Only a plan that covers the whole shortfall is offered; otherwise null. Pure: it changes nothing. Limits are monthly and apply to every month.
+export function planRebalance(items) {
+  const list=Array.isArray(items)?items.filter(x=>x && x.catId && Number(x.limit)>0):[];
+  const c=(v)=>Math.round((Number(v)||0)*100);
+  const over=list.filter(x=>c(x.spent)>c(x.limit)).sort((a,b)=>(c(b.spent)-c(b.limit))-(c(a.spent)-c(a.limit)))[0];
+  if (!over) return null;
+  const need=Math.ceil((c(over.spent)-c(over.limit))/100);
+  const donors=list.filter(x=>x!==over && c(x.spent)<=c(x.limit)).map(x=>({ catId:x.catId, room:Math.floor((c(x.limit)-c(x.spent))/200) })).filter(x=>x.room>=1).sort((a,b)=>b.room-a.room);
+  let left=need; const moves=[];
+  for (const d of donors) { if (left<=0) break; const give=Math.min(d.room,left); moves.push({ catId:d.catId, amount:give }); left-=give; }
+  return left>0 ? null : { catId:over.catId, need, moves };
+}
+export function applyRebalance(budgets, plan) {
+  const b={ ...(budgets||{}) }; if (!plan) return b;
+  const cents=(v)=>Math.round((Number(v)||0)*100);
+  b[plan.catId]=(cents(b[plan.catId])+plan.moves.reduce((s,m)=>s+m.amount*100,0))/100;
+  plan.moves.forEach(m=>{ b[m.catId]=(cents(b[m.catId])-m.amount*100)/100; });
+  return b;
 }
 
 // Run 24: a newly added expense can push its category past 80% of that month's limit ("near") or past the limit ("over"). Only the
@@ -4040,6 +4080,7 @@ function AppInner() {
           {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={spendState} rawState={state} onCatsChanged={()=>setCatVer(v=>v+1)} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
+            onRebalance={(plan)=>{ const prev=stateRef.current.budgets, next=applyRebalance(prev,plan); setState(s=>({...s,budgets:next})); showSnackbar(t("budget.rebalDone"),()=>setState(s=>s.budgets===next?{...s,budgets:prev}:s),6000,"rebalance"); }}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
             onDeleteGoal={id=>{

@@ -1158,6 +1158,13 @@ export const MESSAGES = {
   "rec.paymentsRecorded": { en: { one: "{n} payment recorded", other: "{n} payments recorded" }, az: "{n} ödəniş qeydə alınıb", ru: { one: "записан {n} платёж", few: "записано {n} платежа", many: "записано {n} платежей", other: "записано {n} платежа" } },
   "rec.last":          { en: "last {date}", az: "sonuncu: {date}", ru: "последний: {date}" },
   "rec.notRecorded":   { en: "{n} not recorded this month", az: "bu ay {n} ödəniş qeydə alınmayıb", ru: "не записано в этом месяце: {n}" },
+  "budget.rebalTitle": { en: "{cat} is over by {amount}. Balance the month?", az: "«{cat}» limiti {amount} aşıb. Ayı balanslaşdıraq?", ru: "«{cat}»: лимит превышен на {amount}. Выровнять месяц?" },
+  "budget.rebalBody":  { en: "Move {moves} of unused limit to it. The limits change for every month, and you can undo this right after.", az: "Ona istifadə olunmamış limitdən {moves} köçürün. Limitlər bütün aylar üçün dəyişir, dərhal geri qaytara bilərsiniz.", ru: "Перенести в неё {moves} из неиспользованных лимитов. Лимиты изменятся для всех месяцев, сразу после этого можно отменить." },
+  "budget.rebalApply": { en: "Move the limits", az: "Limitləri köçür", ru: "Перенести лимиты" },
+  "budget.rebalDone":  { en: "Limits moved", az: "Limitlər köçürüldü", ru: "Лимиты перенесены" },
+  "rec.perYearApprox": { en: "≈{amount}/year", az: "ildə ≈{amount}", ru: "≈{amount}/год" },
+  "coach.lifestyle":   { en: "Your income is {inc}% higher than in the three months before, and your spending is {spend}% higher. About {share}% of the extra income went to spending.", az: "Gəliriniz əvvəlki üç aya görə {inc}%, xərcləriniz {spend}% artıb. Əlavə gəlirin təxminən {share}%-i xərclərə gedib.", ru: "Доход вырос на {inc}% по сравнению с тремя предыдущими месяцами, расходы — на {spend}%. Примерно {share}% дополнительного дохода ушло на расходы." },
+  "coach.incomeHill":  { en: "Last month's income was {pct}% above your usual. Setting some of it aside now can cover a slower month later.", az: "Keçən ayın gəliri adi səviyyənizdən {pct}% yuxarı olub. Bir hissəsini ayırmaq sonrakı zəif ayı örtə bilər.", ru: "Доход прошлого месяца был на {pct}% выше обычного. Если отложить часть, это поможет в более скромный месяц." },
   "rec.perMonthApprox": { en: "≈{amount}/mo", az: "ayda ≈{amount}", ru: "≈{amount}/мес." },
   "rec.yearlyByCat":   { en: "Typical Yearly Cost by Category", az: "Kateqoriyalar üzrə tipik illik xərc", ru: "Обычные годовые расходы по категориям" },
 
