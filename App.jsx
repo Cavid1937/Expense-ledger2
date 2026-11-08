@@ -1186,6 +1186,18 @@ export function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
       if (incO>0 && incR*100>=incO*105 && spO>0 && spR>spO && (spR-spO)*2>=(incR-incO))
         numbers.push({ id:"lifestyle", inc:Math.round((incR/incO-1)*100), spend:Math.round((spR/spO-1)*100), share:Math.round((spR-spO)/(incR-incO)*100) });
     }
+    // windfall: the largest one-off income (gift, other income, sales; not recurring, not tied to a bill) of the last 7 days, so it gets a purpose before it is spent.
+    let wind=null;
+    past.forEach(x=>{ if (x.type!=="income" || x.recurring || x.billId || !["giftin","income","sales"].includes(x.category) || daysTo(x.date)<-7) return; const c=Math.round((Number(x.amount)||0)*100); if (c>0 && (!wind || c>wind.amount)) wind={ id:"windfall", amount:c, cat:x.category }; });
+    if (wind) numbers.push(wind);
+    // month end: in the last three days of the month, earned income so far minus spending so far is still above 10: say how much is unspent, once.
+    {
+      const last=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+      if (now.getDate()>=last-2) {
+        const earned=Math.round((incBy[curK]||0)*100), spent=spend.filter(x=>String(x.date).slice(0,7)===monthPrefix).reduce((s,x)=>s+Math.round((Number(x.amount)||0)*100),0);
+        if (earned-spent>=1000) numbers.push({ id:"monthLeft", amount:earned-spent });
+      }
+    }
     // income hill: last completed month's earned income at least 50% above the average of the previous months (at least three of them, each with income)
     const prior=[2,3,4,5,6].map(i=>curK-i).filter(k=>(incBy[k]||0)>0), lastInc=Math.round((incBy[curK-1]||0)*100);
     if (prior.length>=3 && lastInc>0) {
@@ -3629,6 +3641,7 @@ function AppInner() {
     const before=stateRef.current;
     const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),...(accId(account)?{account:accId(account)}:{}),...rf,id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
     setState(next);
+    try { if (!readFxOff() && navigator.vibrate) navigator.vibrate(10); } catch { /* no vibration here */ }   // Run 41: one short tick when an entry is saved (off with "reduce effects")
     freshTxnId=id; setTimeout(()=>{ if (freshTxnId===id) freshTxnId=null; },1500);   // Run 25: the new row settles in (see TxnRow)
     const cross=budgetCrossing(before.transactions,next.transactions,next.budgets,{...data});
     const msg=cross ? t("toast.recorded")+". "+t(cross.kind==="over"?"budget.crossOver":"budget.crossNear",{ cat:catName(data.category), pct:cross.pct }) : t("toast.recorded");
