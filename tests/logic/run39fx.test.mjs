@@ -1,4 +1,4 @@
-// Run 39 (2026-11-07): entries paid in another currency. The ledger keeps the manat amount (all totals unchanged); fx remembers what was paid
+﻿// Run 39 (2026-11-07): entries paid in another currency. The ledger keeps the manat amount (all totals unchanged); fx remembers what was paid
 // and at which rate. Expected values worked out by hand. The network is replaced by a fake; synthetic data only.
 import { H, ok, section, eq, reset, T, finish } from "./lib.mjs";
 const { cleanFx, fxToBase, fetchCbarRate, fxBaseOk, normaliseTxn, buildCsv, migrateAndLoad, calcMonthSummary, forSpending } = H;
@@ -26,7 +26,7 @@ ok(migrateAndLoad().transactions[0].fx.cur === "EUR", "it survives saving and lo
 const s = calcMonthSummary(forSpending([e, T({ id: 4, amount: 9.63, date: "2026-10-06" })]), "2026-10", "2026-09", new Date(2026, 9, 31));
 ok(s.curExp === 200, "spending = 190.37 (the EUR entry in manat) + 9.63 = 200.00", s.curExp);
 const lines = buildCsv([e]).replace(/^﻿/, "").split("\r\n");
-ok(/"190\.37"/.test(lines[1]) && /"100\.00","EUR","1\.90371"$/.test(lines[1]), "CSV: Amount 190.37 in manat, and PaidAmount 100.00, PaidCurrency EUR, Rate 1.90371", lines[1]);
+ok(/"190\.37"/.test(lines[1]) && /"100\.00","EUR","1\.90371",""$/.test(lines[1]), "CSV: Amount 190.37 in manat, and PaidAmount 100.00, PaidCurrency EUR, Rate 1.90371", lines[1]);
 
 section("R39-4. The official rate: asked once per currency and day, then remembered");
 reset();

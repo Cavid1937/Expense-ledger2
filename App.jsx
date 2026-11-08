@@ -569,7 +569,34 @@ function normaliseTxn(t, opts={}) {
     ...(normType(t.type)==="income" && refundForId(t.refundFor) ? { refundFor:refundForId(t.refundFor) } : {}),
     // Run 39: what was really paid in another currency. Optional, same rule; the manat amount above stays the one every figure uses.
     ...(cleanFx(t.fx) ? { fx:cleanFx(t.fx) } : {}),
+    // Run 41: an expense whose cost is shown spread over several months in the analytics. Optional, same rule; only on expenses; 2 to 24.
+    ...(normType(t.type)!=="income" && spreadMonths(t.spread) ? { spread:spreadMonths(t.spread) } : {}),
   };
+}
+// Run 41 (owner wishlist, "amortize"): a big one-off cost (insurance, tuition, a flight) can be spread over 2 to 24 months in every spending view
+// (month totals, categories, budgets, pace, trends, coach). The cash still leaves on the real date: balances, the entry list and Safe to Spend use the
+// entry itself. Slices are whole cents, any remainder on the first slice, one per month on the same day (the month's last day when it is shorter).
+export const SPREAD_MAX=24;
+export function spreadMonths(v) { const n=typeof v==="string" && /^\d{1,2}$/.test(v.trim()) ? Number(v) : v; return Number.isInteger(n) && n>=2 && n<=SPREAD_MAX ? n : 0; }
+export function expandSpreads(list) {
+  return (Array.isArray(list)?list:[]).flatMap(t=>{
+    const n=t && t.type==="expense" ? spreadMonths(t.spread) : 0, cents=Math.round((Number(t && t.amount)||0)*100);
+    if (!n || !(cents>0) || !isValidDateStr(String(t.date).slice(0,10))) return [t];
+    const [y,m,d]=String(t.date).slice(0,10).split("-").map(Number), base=Math.floor(cents/n), rest=cents-base*n, out=[];
+    for (let i=0;i<n;i++) {
+      const last=new Date(y,m-1+i+1,0), day=Math.min(d,last.getDate()), when=localDateStr(new Date(last.getFullYear(),last.getMonth(),day));
+      out.push({ ...t, amount:(base+(i===0?rest:0))/100, date:i===0 ? String(t.date).slice(0,10) : when, id:i===0 ? t.id : `${t.id}#s${i}`, spreadSlice:{ i, n, total:cents/100, date:String(t.date).slice(0,10), id:t.id } });
+    }
+    return out;
+  });
+}
+// The reverse, for cash figures (Safe to Spend): the first slice becomes the whole entry again on its real date, later slices are dropped.
+export function collapseSpreads(list) {
+  return (Array.isArray(list)?list:[]).flatMap(t=>{
+    const s=t && t.spreadSlice; if (!s) return [t];
+    if (s.i>0) return [];
+    const { spreadSlice:_s, ...rest }=t; return [{ ...rest, amount:s.total, date:s.date }];
+  });
 }
 // Run 22: a trip is a short free-text label (max 40 characters) on ordinary entries. Anything that is not text gives no trip.
 export function tripName(v) { return typeof v==="string" ? v.replace(/[\u0000-\u001f\u007f\s]+/g," ").trim().slice(0,40).trim() : ""; }
@@ -710,7 +737,7 @@ export function refundsNetted(list, mon) {
   const pre=forSpendingRows(list), post=netRefunds(pre), m=(x)=>x && x.type==="expense" && String(x.date).slice(0,7)===mon;
   return Math.round((sumCents(pre.filter(m))-sumCents(post.filter(m)))*100)/100;
 }
-function forSpending(list) { return netRefunds(forSpendingRows(list)); }
+function forSpending(list) { return expandSpreads(netRefunds(forSpendingRows(list))); }   // Run 41: spread costs are cut into monthly slices last, after refunds were netted against the whole entry
 function forSpendingRows(list) {
   return ((Array.isArray(list)?list:[]).flatMap(t=>{
     if (t && t.debtLink && debtLinkRef(t.debtLink)) return [];
@@ -1631,7 +1658,7 @@ function pruneRecoveryCopies(label) {
 // ─── Import / export pipeline (pure: no React, no storage) ───────────────────
 const CSV_COLUMNS = { date:["date"], amount:["amount","amt","value"], type:["type"], category:["category","cat"],
   categoryId:["categoryid","category id","category_id"], subcategory:["subcategory","subcat"], merchant:["merchant"],
-  note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"], wallet:["wallet","paid with"], trip:["trip","group"] };
+  note:["note","notes","description","memo"], recurring:["recurring","recurfreq","frequency"], wallet:["wallet","paid with"], trip:["trip","group"], spread:["spreadmonths"] };
 
 // Run 24: bank statements. Banks name columns differently, split money into Debit/Credit columns, use ; or tab, day-first dates and
 // comma decimals. This rewrites such a file into the app's own CSV (date, amount, type, merchant, note); the normal import review,
@@ -1720,7 +1747,7 @@ function parseCsvImport(raw, _bank=false) {
     return { id:Date.now()+i+Math.random(), type:cell(row,"type"), amount:cell(row,"amount"),
       category:cell(row,"categoryId")||cell(row,"category"), subcategory:cell(row,"subcategory"), merchant:cell(row,"merchant"),
       note:cell(row,"note"), date:cell(row,"date"), recurring:isRec, recurFreq:isRec?rec:null, isActive:true, createdAt:new Date().toISOString(),
-      ...(wal ? { wallet:wal } : {}), ...(trp ? { trip:trp } : {}) };
+      ...(wal ? { wallet:wal } : {}), ...(trp ? { trip:trp } : {}), ...(spreadMonths(cell(row,"spread")) ? { spread:cell(row,"spread") } : {}) };   // Run 41 (normaliseTxn keeps it only on expenses)
   });
   return { records };
 }
@@ -1985,10 +2012,10 @@ function buildCsv(transactions) {
   // Run 16: "Wallet" is the last column, so the columns before it did not move (older readers and the older import still work).
   // Run 32: Account (its name), LoanInterest (the interest part of a loan instalment; "unknown" when the split was not given) and DebtRepayment ("yes" for a person-to-person
   // repayment entry) are appended after "Trip", so earlier columns did not move. They are for the user's spreadsheet: this CSV is NOT a backup and the import ignores them.
-  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip","Account","LoanInterest","DebtRepayment","RefundOf","PaidAmount","PaidCurrency","Rate"]];   // Run 36: "RefundOf" appended last; Run 39: what was paid in another currency (earlier columns unchanged)   // Run 22: "Trip" is appended after "Wallet"
+  const rows=[["Date","Type","Category","Subcategory","Merchant","Amount","Note","Recurring","CategoryId","Wallet","Trip","Account","LoanInterest","DebtRepayment","RefundOf","PaidAmount","PaidCurrency","Rate","SpreadMonths"]];   // Run 41: "SpreadMonths" appended last   // Run 36: "RefundOf" appended last; Run 39: what was paid in another currency (earlier columns unchanged)   // Run 22: "Trip" is appended after "Wallet"
   transactions.forEach(t=>{ const lr=loanRef(t.loan);
     rows.push([t.date,t.type,CAT(t.category)?.name||t.category,t.subcategory||"",t.merchant||"",Number(t.amount).toFixed(2),t.note||"",t.recurring?(t.recurFreq||""):"",t.category,walletId(t.wallet),tripName(t.trip),
-      accountName(t.account),lr ? (lr.interest===null ? "unknown" : lr.interest.toFixed(2)) : "",debtLinkRef(t.debtLink) ? "yes" : "",refundForId(t.refundFor) ? (CAT(t.refundFor)?.name||t.refundFor) : "",...(cleanFx(t.fx) ? [cleanFx(t.fx).amt.toFixed(2),cleanFx(t.fx).cur,String(cleanFx(t.fx).rate)] : ["","",""])]); });
+      accountName(t.account),lr ? (lr.interest===null ? "unknown" : lr.interest.toFixed(2)) : "",debtLinkRef(t.debtLink) ? "yes" : "",refundForId(t.refundFor) ? (CAT(t.refundFor)?.name||t.refundFor) : "",...(cleanFx(t.fx) ? [cleanFx(t.fx).amt.toFixed(2),cleanFx(t.fx).cur,String(cleanFx(t.fx).rate)] : ["","",""]),t.type==="expense" && spreadMonths(t.spread) ? String(spreadMonths(t.spread)) : ""]); });
   // Formula-injection guard: a cell starting with = + - @ tab or CR would run as a formula in a spreadsheet, so it gets a
   // leading apostrophe (shown as text). parseCsvImport removes it again, so the app's own CSV round trip stays exact.
   const safe=(v)=>{ const s=String(v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; };
@@ -2691,6 +2718,7 @@ export function billPaymentsLeft(s, transactions, now=new Date()) {
 // both upcoming ones and earlier ones that were never recorded (counted so the figure is never optimistic).
 // Recurring monthly estimates (recurringMonthly) are informational and are NOT part of this month's subtraction.
 export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bills=[]) {
+  transactions=collapseSpreads(transactions);   // Run 41: Safe to Spend is about cash, so a spread cost counts whole on its real date
   const { savingsTarget=0 }=safeConfig||{};
   const mon=localMonthStr(now), todayStr=localDateStr(now);
   // Every expense recorded for this month, including ones dated later: money entered ahead of time is already committed.
@@ -3594,8 +3622,8 @@ function AppInner() {
     return { ...s, transactions:r.transactions, bills:r.bills };
   };
   const addTransaction=useCallback((txn)=>{
-    const { billChoice, wallet, trip, account, refundFor, fx, ...data }=txn, id=Date.now()+Math.random();
-    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}) };   // Run 39: fx kept only when valid
+    const { billChoice, wallet, trip, account, refundFor, fx, spread, ...data }=txn, id=Date.now()+Math.random();
+    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}) };   // Run 39: fx kept only when valid; Run 41: spread only on expenses, 2 to 24
     // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
     // bill the entry may have created, and refuses if something else changed in the meantime, like the other undo windows.
     const before=stateRef.current;
@@ -3621,10 +3649,10 @@ function AppInner() {
     const dd=readDebts(), d=dd.debts.find(x=>x.id===tx.debtLink.debtId); return !!(d && d.payments.some(p=>p.id===tx.debtLink.paymentId)); };
   const updateTransaction=useCallback((id,txn)=>{
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
-    const { billChoice, wallet, trip, account, refundFor, fx, ...data }=txn;
-    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}) };   // Run 39: switching back to manat removes fx
+    const { billChoice, wallet, trip, account, refundFor, fx, spread, ...data }=txn;
+    const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}) };   // Run 39: switching back to manat removes fx; Run 41: an empty spread removes it
     // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored). Run 22: same for the trip. Run 36: same for "refund of".
-    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, refundFor:_rf, fx:_fx, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}), ...rf }; })},id,billChoice));
+    setState(s=>withBill({...s,transactions:s.transactions.map(t=>{ if (t.id!==id) return t; const { wallet:_w, trip:_tr, account:_ac, refundFor:_rf, fx:_fx, spread:_sp, ...rest }=t; return { ...rest, ...data, ...(walletId(wallet)?{wallet:walletId(wallet)}:{}), ...(tripName(trip)?{trip:tripName(trip)}:{}), ...(accId(account)?{account:accId(account)}:{}), ...rf }; })},id,billChoice));
     showToast(t("toast.updated"));
   },[showToast]);
 
@@ -4105,7 +4133,7 @@ function AppInner() {
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onGroupMany={groupMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
-          {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn)}/>}
+          {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn&&txn.spreadSlice ? (transactions.find(x=>x.id===txn.spreadSlice.id)||txn) : txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={spendState} rawState={state} onCatsChanged={()=>setCatVer(v=>v+1)} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onRebalance={(plan)=>{ const prev=stateRef.current.budgets, next=applyRebalance(prev,plan); setState(s=>({...s,budgets:next})); showSnackbar(t("budget.rebalDone"),()=>setState(s=>s.budgets===next?{...s,budgets:prev}:s),6000,"rebalance"); }}

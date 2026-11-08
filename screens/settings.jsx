@@ -298,9 +298,9 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
         {/* Run 41: monthly working hours, so an expense can be shown as hours of work */}
         <div className="settings-section-lbl" style={{marginTop:14}}>{t("work.title")}</div>
         <div className="list-sub" style={{lineHeight:1.5}}>{t("work.sub")}</div>
-        <div className="settings-row" data-section="work-hours">
-          <div className="settings-row-title" id="set-work-lbl">{t("work.label")}</div>
-          <div style={{display:"flex",gap:7,alignItems:"center"}}>
+        <div className="settings-row" data-section="work-hours" style={{flexWrap:"wrap",gap:8}}>
+          <div className="settings-row-title" id="set-work-lbl" style={{minWidth:0,overflowWrap:"anywhere"}}>{t("work.label")}</div>
+          <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap",maxWidth:"100%"}}>
             <input className="field-input" inputMode="decimal" autoComplete="off" value={workHrs} onChange={e=>setWorkHrs(e.target.value.replace(/[^0-9.,]/g,""))} maxLength={6} aria-labelledby="set-work-lbl" placeholder="160" style={{width:78,minHeight:38,textAlign:"center",padding:"7px 8px"}}/>
             <button className="btn btn-sm btn-sm-primary" onClick={()=>{ if (workHrs.trim()==="") { writeWorkHours(null); showToast(t("set.saved")); return; } const n=cleanWorkHours(workHrs); if (n===null) { showToast(t("work.invalid"),4000); return; } if (!writeWorkHours(n)) { showToast(t("acc.saveFailed"),5000); return; } setWorkHrs(String(n)); showToast(t("set.saved")); }}>{t("common.save")}</button>
           </div>

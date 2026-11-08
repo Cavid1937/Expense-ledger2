@@ -1,4 +1,4 @@
-// Run 32 (backlog item 2): the CSV export carries Account, LoanInterest and DebtRepayment after Trip, earlier columns did not move,
+﻿// Run 32 (backlog item 2): the CSV export carries Account, LoanInterest and DebtRepayment after Trip, earlier columns did not move,
 // and the app's own CSV import still round-trips. Expected values worked out by hand. Synthetic data only.
 import { H, ok, section, finish, reset, T, eq } from "./lib.mjs";
 const { buildCsv, planImport } = H;
@@ -14,9 +14,9 @@ const tx = [
 ];
 const lines = buildCsv(tx).replace(/^﻿/, "").split("\r\n");
 section("R32-C1. Header and columns");
-ok(eq(cells(lines[0]), ["Date", "Type", "Category", "Subcategory", "Merchant", "Amount", "Note", "Recurring", "CategoryId", "Wallet", "Trip", "Account", "LoanInterest", "DebtRepayment", "RefundOf", "PaidAmount", "PaidCurrency", "Rate"]), "the first 11 columns are exactly as before; Account, LoanInterest, DebtRepayment, RefundOf (Run 36), then PaidAmount, PaidCurrency, Rate (Run 39) follow", cells(lines[0]));
+ok(eq(cells(lines[0]), ["Date", "Type", "Category", "Subcategory", "Merchant", "Amount", "Note", "Recurring", "CategoryId", "Wallet", "Trip", "Account", "LoanInterest", "DebtRepayment", "RefundOf", "PaidAmount", "PaidCurrency", "Rate", "SpreadMonths"]), "the first 11 columns are exactly as before; Account, LoanInterest, DebtRepayment, RefundOf (Run 36), then PaidAmount, PaidCurrency, Rate (Run 39), SpreadMonths (Run 41) follow", cells(lines[0]));
 const r = lines.slice(1).map(cells);
-ok(r.every((c) => c.length === 18), "every row has 18 cells", r.map((c) => c.length));
+ok(r.every((c) => c.length === 19), "every row has 19 cells", r.map((c) => c.length));
 section("R32-C2. Values");
 ok(r[0][11] === "ABB Card" && r[0][12] === "" && r[0][13] === "", "an entry on an account shows the account's name, no loan interest, no debt flag", r[0].slice(9));
 ok(r[1][12] === "37.25" && r[1][11] === "", "a loan instalment shows its interest 37.25 (and no account)", r[1].slice(9));

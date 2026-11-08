@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t } from "../i18n.js";
 import { pickerCats, readCatPrefs } from "../App.jsx";
-import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
+import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, spreadMonths, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";
 
@@ -56,6 +56,7 @@ export function TxnRow({ txn, currency, onDelete, onEdit, onView, onLongPress, c
     subName(txn.subcategory)||null,
     txn.wallet?walletName(txn.wallet):null,
     tripName(txn.trip)||null,
+    spreadMonths(txn.spread)&&!isInc?t("spread.tag",{n:spreadMonths(txn.spread)}):null,   // Run 41
     !compact?fmtDate(txn.date):null,
   ].filter(Boolean).join(" · ");
   return (

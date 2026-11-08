@@ -63,4 +63,38 @@ section("R41-3. Hours of work");
   ok(p2.errors.length === 0, "no JavaScript errors", p2.errors[0]);
   await p2.close();
 }
+section("R41-4. Spread a cost: add, see it, edit it away");
+{
+  const seed = baseSeed({ language: "en", transactions: [] });
+  const page = await openPage(browser, { seed }); await phone(page); await settle(page);
+  await openAdd(page);
+  await page.type(".amount-input", "120"); await wait(200);
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="add-spread"]')), "an expense offers 'Spread the cost'");
+  await page.evaluate(() => document.querySelector('[data-spread="3"]').click()); await wait(300);
+  const hint = await page.evaluate(() => document.querySelector('[data-section="add-spread"] .list-sub').textContent);
+  ok(/40\.00/.test(hint) && /3 months/.test(hint), "the hint says about 40.00 a month for 3 months", hint);
+  await page.evaluate(() => document.querySelector(".add-foot .btn-primary").click()); await wait(600);
+  let tx = (await state(page)).transactions;
+  ok(tx.length === 1 && tx[0].spread === 3 && tx[0].amount === 120, "saved with spread 3 and the full amount 120", tx);
+  // the entry list shows the label
+  await page.evaluate(() => document.querySelectorAll(".tab-btn")[1].click()); await wait(500);
+  ok(/spread over 3 mo/.test(await page.evaluate(() => document.body.innerText)), "the entry row says it is spread over 3 months");
+  // edit: set to No
+  await page.evaluate(() => document.querySelector(".txn-row").click()); await wait(500);
+  const opened = await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => /^edit$/i.test(x.textContent.trim())); if (b) { b.click(); return true; } return false; }); await wait(600);
+  ok(opened, "the Edit button is there");
+  await page.evaluate(() => document.querySelector('[data-spread="0"]').click()); await wait(200);
+  await page.evaluate(() => document.querySelector(".add-foot .btn-primary").click()); await wait(600);
+  tx = (await state(page)).transactions;
+  ok(tx.length === 1 && !("spread" in tx[0]) && tx[0].amount === 120, "choosing No removes the field; nothing else changed", tx);
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
+{
+  const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }) }); await phone(page); await settle(page);
+  await openAdd(page);
+  await page.evaluate(() => { const b = [...document.querySelectorAll(".add-seg button, [role=tab]")].find((x) => /income/i.test(x.textContent)); if (b) b.click(); }); await wait(500);
+  ok(await page.evaluate(() => { const w = document.getElementById("add-spread-wrap"); return !w || w.getBoundingClientRect().height < 2 || getComputedStyle(w).visibility === "hidden" || w.getAttribute("aria-hidden") === "true" || w.hasAttribute("inert") || w.offsetHeight === 0; }), "income does not offer it");
+  await page.close();
+}
 finish();

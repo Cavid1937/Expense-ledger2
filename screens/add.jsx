@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { locale, t } from "../i18n.js";
-import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours } from "../App.jsx";
+import { locale, t, tn } from "../i18n.js";
+import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
@@ -94,6 +94,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [wallet,   setWallet]   = useState(isEditing ? walletId(prefill?.wallet) : (prefill && "wallet" in prefill ? walletId(prefill.wallet) : ""));   // Run 25: a new entry never starts with a wallet chosen for you (it used to repeat the last one, unseen under "More details")
   // Run 22: optional trip / group name (free text; earlier names are suggested). Editing keeps the entry's own.
   const [trip, setTrip] = useState(tripName(prefill?.trip));
+  const [spread, setSpread] = useState(spreadMonths(prefill?.spread));   // Run 41: 0 = not spread; otherwise the number of months the cost is shown over
   const accData=useMemo(()=>readAccounts(),[]);   // Run 24: optional account (card, cash...) the entry belongs to
   const [account, setAccount] = useState(accId(prefill?.account));
   // Run 36: a refund can say which kind of spending it gives money back to; then it lowers that category's spending instead of counting as money in.
@@ -127,11 +128,11 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   // Unsaved-input guard: every close route (×, Cancel, Escape, phone Back) goes through requestClose. When something was
   // entered it asks first; an untouched form closes at once. Switching Expense/Income alone is not input: the category then
   // changes to that type's default by itself, so the category only counts as changed when it differs from that default.
-  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account, refundFor, fxCur }).current;
+  const initial=useRef({ type, amount, catId, subcat, merchant, note, date, recur, freq, wallet, trip, account, refundFor, fxCur, spread }).current;
   const [askDiscard, setAskDiscard] = useState(false);
   const defaultCat=type===initial.type ? initial.catId : firstCat(type);
   const dirty=amount!==initial.amount || subcat!==initial.subcat || merchant!==initial.merchant || note!==initial.note ||
-    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account || refundFor!==initial.refundFor || fxCur!==initial.fxCur;
+    date!==initial.date || recur!==initial.recur || (recur && freq!==initial.freq) || catId!==defaultCat || wallet!==initial.wallet || trip!==initial.trip || account!==initial.account || refundFor!==initial.refundFor || fxCur!==initial.fxCur || spread!==initial.spread;
   const requestClose=()=>{ if (dirty) setAskDiscard(true); else onClose(); };
 
   const expCats=CATEGORIES.filter(c=>!c.income);
@@ -212,7 +213,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
       const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
       if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
     }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",fx,
+    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",fx,spread:type==="expense"&&!recur?spread:0,
       billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
@@ -476,6 +477,16 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           <input id="txn-trip" className="field-input" list="txn-trip-list" value={trip} maxLength={40} autoComplete="off" placeholder={t("trip.placeholder")} onChange={e=>setTrip(e.target.value)}/>
           <datalist id="txn-trip-list">{knownTrips.map(n=><option key={n} value={n}/>)}</datalist>
         </div>
+        {/* Run 41: spread a big one-off cost over several months in the analytics; the cash still leaves on the date above */}
+        <Collapse open={type==="expense"&&!recur} id="add-spread-wrap">
+          <div className="field" data-section="add-spread">
+            <label className="field-lbl" id="txn-spread-lbl">{t("spread.label")} {optional}</label>
+            <div className="filter-bar" role="group" aria-labelledby="txn-spread-lbl" style={{flexWrap:"wrap",overflowX:"visible"}}>
+              {[...new Set([0,3,6,12,spread])].sort((a,b)=>a-b).map(n=>(<button key={n} type="button" className={`chip${spread===n?" on":""}`} aria-pressed={spread===n} data-spread={n} onClick={()=>setSpread(n)}>{n===0?t("spread.off"):tn("spread.months",n)}</button>))}
+            </div>
+            <div className="list-sub" style={{lineHeight:1.5,marginTop:6}}>{spread>0 ? t("spread.on",{ months:spread, each:fmt(Math.floor(Math.round((formMoney(amount,{positive:true})||0)*100)/spread)/100,currency) }) : t("spread.hint")}</div>
+          </div>
+        </Collapse>
 
         </div></div>
         <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
