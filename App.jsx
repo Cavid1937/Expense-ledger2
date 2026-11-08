@@ -1120,6 +1120,28 @@ export function calcCoach(transactions, debtData, now=new Date(), bills=[]) {
     const amount=sc.payments.slice(k).reduce((s,p)=>s+(Number(p.interest)||0),0);
     if (amount>0) numbers.push({ id:"loanInterest", lender:l.lender, amount:Math.round(amount) });
   });
+  // Run 41 (owner wishlist 8 Nov): two facts from entered data only, no new stored fields.
+  // microSpill: this month so far, expenses under 10 (cents compared); shown from 10 of them. total is whole qapik.
+  // priceUp: one merchant charged in each of the last three months; the two older charges are equal and the newest is 1%-50% higher
+  // and falls in the last 45 days. Amounts compared in whole cents. Refunds are netted by forSpending first.
+  {
+    const spend=forSpending(past.filter(x=>x.type==="expense")), monthPrefix=todayS.slice(0,7);
+    const micro=spend.filter(x=>String(x.date).slice(0,7)===monthPrefix && Math.round((Number(x.amount)||0)*100)<1000 && Math.round((Number(x.amount)||0)*100)>0);
+    if (micro.length>=10) numbers.push({ id:"microSpill", n:micro.length, total:micro.reduce((s,x)=>s+Math.round((Number(x.amount)||0)*100),0) });
+    const byM={};
+    spend.forEach(x=>{ const m=norm(x.merchant); if (!m) return; const [y,mo]=String(x.date).split("-").map(Number); (byM[m]||(byM[m]=[])).push({ k:y*12+(mo-1), date:x.date, c:Math.round((Number(x.amount)||0)*100), name:txt(x.merchant).trim() }); });
+    let top=null;
+    Object.keys(byM).forEach(m=>{
+      const rows=byM[m].sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:0), perMonth=[];
+      rows.forEach(r=>{ const l=perMonth[perMonth.length-1]; if (l && l.k===r.k) perMonth[perMonth.length-1]=r; else perMonth.push(r); });
+      if (perMonth.length<3) return;
+      const [a,b,c]=perMonth.slice(-3);
+      if (b.k!==a.k+1 || c.k!==b.k+1 || a.c<=0 || a.c!==b.c || c.c<=a.c || c.c*100>a.c*150 || c.c*100<a.c*101) return;
+      if (daysTo(c.date)<-45) return;
+      const d=c.c-a.c; if (!top || d>top.d) top={ d, id:"priceUp", merchant:c.name, from:a.c, to:c.c, pct:Math.round((c.c/a.c-1)*100) };
+    });
+    if (top) numbers.push({ id:top.id, merchant:top.merchant, from:top.from, to:top.to, pct:top.pct });
+  }
   return [...actions.sort((a,b)=>(a.id==="loanOverdue"?0:1)-(b.id==="loanOverdue"?0:1)), ...numbers];
 }
 function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().length<=64; }

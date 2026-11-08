@@ -1,0 +1,43 @@
+// Run 41: coach facts "small purchases" (microSpill) and "price went up" (priceUp). Hand-computed. Synthetic data.
+import { H, ok, section, reset, T, finish } from "./lib.mjs";
+const { calcCoach } = H;
+reset();
+const NOW = new Date(2026, 9, 20, 12);
+const ex = (id, amount, date, merchant = "", category = "food") => T({ id, type: "expense", category, amount, date, merchant });
+const get = (r, id) => r.find((c) => c.id === id);
+
+section("R41-M. Small purchases this month");
+const nine = Array.from({ length: 9 }, (_, i) => ex("m" + i, 4.5, "2026-10-" + String(i + 1).padStart(2, "0")));
+ok(!get(calcCoach(nine, null, NOW), "microSpill"), "9 small purchases: no card");
+const ten = [...nine, ex("m9", 9.99, "2026-10-10")];
+let c = get(calcCoach(ten, null, NOW), "microSpill");
+ok(!!c && c.n === 10 && c.total === 4050 + 999, "10 purchases: 9 x 4.50 + 9.99 = 50.49 (5049 qapik)", c);
+const withBig = [...ten, ex("big", 10, "2026-10-11"), ex("big2", 250, "2026-10-12")];
+c = get(calcCoach(withBig, null, NOW), "microSpill");
+ok(!!c && c.n === 10, "10.00 and above is not small", c);
+const lastMonth = Array.from({ length: 12 }, (_, i) => ex("o" + i, 3, "2026-09-" + String(i + 1).padStart(2, "0")));
+ok(!get(calcCoach(lastMonth, null, NOW), "microSpill"), "last month's small purchases are not counted");
+const inc = [...nine, T({ id: "inc1", type: "income", category: "salary", amount: 5, date: "2026-10-02" })];
+ok(!get(calcCoach(inc, null, NOW), "microSpill"), "income is not counted");
+
+section("R41-P. Price went up");
+const sub = (a, b, c, d) => [ex("s1", a, "2026-07-15", "Spotify"), ex("s2", b, "2026-08-15", "Spotify"), ex("s3", c, "2026-09-15", "Spotify"), ...(d ? [ex("s4", d, "2026-10-15", "Spotify")] : [])];
+let p = get(calcCoach(sub(10.99, 10.99, 11.99), null, NOW), "priceUp");
+ok(!!p && p.from === 1099 && p.to === 1199 && p.pct === 9 && p.merchant === "Spotify", "10.99, 10.99, 11.99 = +9%", p);
+ok(!get(calcCoach(sub(10.99, 11.5, 11.99), null, NOW), "priceUp"), "older two charges differ: no card");
+ok(!get(calcCoach(sub(10.99, 10.99, 10.99), null, NOW), "priceUp"), "no change: no card");
+ok(!get(calcCoach(sub(10.99, 10.99, 10.0), null, NOW), "priceUp"), "a drop is not a rise");
+ok(!get(calcCoach(sub(10, 10, 16), null, NOW), "priceUp"), "+60% looks like a different purchase: no card");
+p = get(calcCoach(sub(10, 10, 15), null, NOW), "priceUp");
+ok(!!p && p.pct === 50, "exactly +50% still counts", p);
+ok(!get(calcCoach([ex("a", 10, "2026-08-15", "X"), ex("b", 11, "2026-09-15", "X")], null, NOW), "priceUp"), "only two months: no card");
+ok(!get(calcCoach([ex("a", 10, "2026-05-15", "X"), ex("b", 10, "2026-06-15", "X"), ex("c", 12, "2026-07-15", "X")], null, NOW), "priceUp"), "older than 45 days: no card");
+ok(!get(calcCoach([ex("a", 10, "2026-07-15", "X"), ex("b", 10, "2026-09-15", "X"), ex("c", 12, "2026-10-15", "X")], null, NOW), "priceUp"), "a month skipped: no card");
+const noName = [ex("a", 10, "2026-07-15"), ex("b", 10, "2026-08-15"), ex("c", 12, "2026-09-15")];
+ok(!get(calcCoach(noName, null, NOW), "priceUp"), "no merchant name: no card");
+const two = [...sub(10, 10, 12), ...[ex("n1", 20, "2026-07-10", "Gym"), ex("n2", 20, "2026-08-10", "Gym"), ex("n3", 25, "2026-09-10", "Gym")]];
+p = get(calcCoach(two, null, NOW), "priceUp");
+ok(!!p && p.merchant === "Gym" && p.to === 2500, "two candidates: the bigger rise (5.00 vs 2.00) is shown", p);
+const mixed = [ex("a", 10, "2026-07-15", "Spotify"), ex("b", 10, "2026-08-15", "SPOTIFY "), ex("c", 11, "2026-09-15", "spotify")];
+ok(!!get(calcCoach(mixed, null, NOW), "priceUp"), "merchant matching ignores case and spaces at the ends");
+finish();

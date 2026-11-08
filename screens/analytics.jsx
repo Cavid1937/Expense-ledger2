@@ -310,6 +310,8 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
               : c.id==="billsShare" ? t("coach.billsShare",{pct:num(c.pct)})
               : c.id==="catUp" ? t("coach.catUp",{cat:catName(c.cat),pct:num(c.pct)})
               : c.id==="loanInterest" ? t("coach.loanInterest",{lender:maskText(c.lender),amount:amt(c.amount)})
+              : c.id==="microSpill" ? t("coach.microSpill",{n:num(c.n),total:amt(c.total)})
+              : c.id==="priceUp" ? t("coach.priceUp",{merchant:maskText(c.merchant),from:amt(c.from),to:amt(c.to),pct:num(c.pct)})
               : c.id==="noCover" ? t("coach.noCover",{lender:maskText(c.lender)})
               : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
               : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
