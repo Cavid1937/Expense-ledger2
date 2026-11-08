@@ -1165,6 +1165,28 @@ export function applyTheme(id) {   // sets (or clears) the colour variables on t
 }
 if (typeof document!=="undefined") applyTheme(readTheme());
 if (typeof document!=="undefined") startLaunch();   // Run 40: the opening mark (screens/launch.js); after the theme, so it takes the theme's colours
+// Run 40 (owner: "Yes, I meant visitor counting - add it"): the Android app counts its own opening with the website's Vercel Web Analytics.
+// The app's page lives at https://localhost inside the phone, and Vercel's collector does not accept data from another address, so the app
+// loads one tiny page of the live site (public/app-open.html) in an invisible frame; that page counts itself like any website visit.
+// Once per app start, 4 s after opening (never slows the start), only inside the Android app, nothing from the ledger in the address.
+// No connection = nothing happens. Described in Privacy (info.privacy.3.hA / 3.bA).
+export const APP_OPEN_URL=PUBLIC_URL+"app-open.html", APP_OPEN_DELAY=4000;
+export function countAppOpen(win=typeof window!=="undefined"?window:null) {
+  try {
+    if (!win || !win.LedgerNative || !win.document || !win.document.body) return false;
+    const flag=KEY+"__opencounted";
+    if (win.sessionStorage.getItem(flag)) return false;   // once per start (a WebView reload in the same start does not count twice)
+    win.sessionStorage.setItem(flag,"1");
+    const f=win.document.createElement("iframe");
+    f.src=APP_OPEN_URL; f.title=""; f.tabIndex=-1; f.setAttribute("aria-hidden","true"); f.setAttribute("data-app-open","1");
+    f.setAttribute("referrerpolicy","no-referrer");
+    f.style.cssText="position:absolute;left:-9999px;top:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
+    win.document.body.appendChild(f);
+    win.setTimeout(()=>{ try { f.remove(); } catch {} },20000);
+    return true;
+  } catch { return false; }
+}
+if (typeof window!=="undefined") window.setTimeout(()=>countAppOpen(),APP_OPEN_DELAY);
 
 // Run 25: "Reduce effects" - a plain preference (own key). Turns off shadows and highlights; tone and hairline edges stay, so layers remain readable.
 const FX_KEY=KEY+"__fx";

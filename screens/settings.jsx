@@ -1,6 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Collapse, EditSwap, useBackStep, useFlip, useLeave } from "./motion.jsx";
+import { Collapse, EditSwap, motionOff, useBackStep, useFlip, useLeave } from "./motion.jsx";
+import { LAUNCH_GLYPH } from "./launch.js";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
@@ -12,12 +13,18 @@ import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NA
 // texts around them are shown in all three languages until a choice is made.
 // ─────────────────────────────────────────────────────────────────────────────
 export function LanguageChooser({ onChoose }) {
-  const [sel,setSel]=useState(null);
+  const [sel,setSel]=useState(null), [leaving,setLeaving]=useState(false);
   const inEach=(key)=>LANGS.map(l=><span key={l} lang={l} className="lang-line">{tIn(l,key)}</span>);
+  // Run 40: Continue eases the screen away before Home rises in (it used to switch in one frame)
+  const go=()=>{ if (!sel || leaving) return; if (motionOff()) { onChoose(sel); return; } setLeaving(true); setTimeout(()=>onChoose(sel),240); };
   return (
-    <div className="lang-screen">
-      <form className="lang-box" onSubmit={e=>{ e.preventDefault(); if (sel) onChoose(sel); }}>
-        <div className="wordmark lang-mark">Expense Ledger</div>
+    <div className={"lang-screen"+(leaving?" lang-leaving":"")}>
+      <form className="lang-box" onSubmit={e=>{ e.preventDefault(); go(); }}>
+        {/* Run 40: the app mark heads the first screen; on the very first start the opening mark flies here and lands on it (screens/launch.js) */}
+        <div className="lang-brand">
+          <span className="lang-glyph" data-launch-target="1" aria-hidden="true" dangerouslySetInnerHTML={{ __html:LAUNCH_GLYPH }}/>
+          <div className="wordmark lang-mark">Expense Ledger</div>
+        </div>
         <fieldset className="lang-set">
           <legend className="lang-title">{sel ? <span lang={sel}>{tIn(sel,"lang.title")}</span> : inEach("lang.title")}</legend>
           {LANGS.map(l=>(

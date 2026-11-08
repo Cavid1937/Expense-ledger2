@@ -386,6 +386,22 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .lang-screen{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:var(--bg)}
 .lang-box{width:100%;max-width:420px}
 .lang-mark{display:block;text-align:center;font-size:20px;margin-bottom:22px}
+/* Run 40: first screen - the app mark on top; on the very first start the opening mark lands on it (html.launch-first) and the rest rises in,
+   one part after another. Continue: the screen eases away before Home appears. Reduced motion / Reduce effects: no movement. */
+.lang-brand{display:flex;flex-direction:column;align-items:center}
+.lang-glyph{display:block;width:52px;height:64px;margin:0 auto 12px}
+.lang-glyph svg{display:block}
+html.launch-first .lang-glyph{animation:langLand 1ms linear 560ms both}
+html.launch-first .lang-mark{animation:langUp 420ms cubic-bezier(.2,.8,.2,1) 220ms both}
+html.launch-first .lang-set{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 300ms both}
+html.launch-first .lang-continue{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 390ms both}
+html.launch-first .lang-hint{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 460ms both}
+@keyframes langLand{from{opacity:0}to{opacity:1}}
+@keyframes langUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.lang-box{transition:opacity 220ms ease-in,transform 240ms cubic-bezier(.4,0,1,1)}
+.lang-leaving .lang-box{opacity:0;transform:translateY(-12px) scale(.985)}
+@media (prefers-reduced-motion: reduce){html.launch-first .lang-glyph,html.launch-first .lang-mark,html.launch-first .lang-set,html.launch-first .lang-continue,html.launch-first .lang-hint{animation:none}.lang-box{transition:none}.lang-leaving .lang-box{transform:none}}
+[data-fx="off"].launch-first .lang-glyph,[data-fx="off"].launch-first .lang-mark,[data-fx="off"].launch-first .lang-set,[data-fx="off"].launch-first .lang-continue,[data-fx="off"].launch-first .lang-hint{animation:none}
 .lang-set{border:none;margin:0;padding:0;min-width:0}
 .lang-title{display:flex;flex-direction:column;gap:2px;text-align:center;font-size:15px;font-weight:600;color:var(--ink);line-height:1.35;margin:0 auto 16px;padding:0}
 .lang-line{display:block}

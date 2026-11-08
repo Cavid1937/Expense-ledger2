@@ -38,6 +38,7 @@ const quiet = () => {
 };
 let started = 0, finishing = false;
 function remove(el) { try { el.remove(); } catch { /* already gone */ } try { document.documentElement.classList.remove("launch-rise"); } catch { /* ignore */ } }
+// launch-first stays until the language screen is left (its rise-in uses it; removing it early would not replay anything, but keep it simple)
 
 // Called once when the app module loads. Adopts the static copy from index.html, or draws it (the test page and any page without it).
 export function startLaunch() {
@@ -52,6 +53,33 @@ export function startLaunch() {
   setTimeout(() => finishLaunch(true), MAX_MS);
 }
 
+// The glyph alone (for the first-run language screen, which shows the same mark as its header).
+export const LAUNCH_GLYPH = LAUNCH_HTML.slice(LAUNCH_HTML.indexOf("<svg"), LAUNCH_HTML.indexOf("</svg>") + 6).replace(' class="launch-mark"', "").replace(' width="82" height="102"', ' width="100%" height="100%"');
+export const FIRST_MS = 560;   // first run: the mark's flight to the language screen's header
+
+// Run 40 (owner: "the opening scene must be improved for first-time users"): on the very first start the mark does not dissolve. It flies to the
+// language screen's own mark ([data-launch-target]) and lands there, the name crossfades, and the language choices rise in under it
+// (CSS html.launch-first, styles.js), like the second half of the owner's recording where the logo moves up and the buttons appear.
+function firstRun(el, target) {
+  const mark = el.querySelector(".launch-mark"), name = el.querySelector(".launch-name");
+  const a = mark.getBoundingClientRect(), b = target.getBoundingClientRect();
+  if (!a.height || !b.height) return false;
+  const s = b.height / a.height, dx = (b.left + b.width / 2) - (a.left + a.width / 2), dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+  const root = document.documentElement;
+  root.classList.add("launch-first");
+  if (name) { name.style.animation = "none"; name.style.opacity = "1"; name.style.transform = "none"; void name.offsetWidth; name.style.transition = "opacity 220ms ease-out"; name.style.opacity = "0"; }
+  mark.style.transformOrigin = "50% 50%";
+  mark.style.transition = `transform ${FIRST_MS}ms cubic-bezier(.2,.8,.2,1)`;
+  mark.style.transform = `translate(${dx}px,${dy}px) scale(${s})`;
+  // Only the layer's background clears (early, so the choices are seen rising in); the flying mark stays solid and is removed the moment it
+  // lands, when the screen's own mark appears in the same place (styles.js: .lang-glyph shows at FIRST_MS).
+  el.style.animation = "none";
+  el.style.transition = "background-color 340ms ease-out 140ms";
+  el.style.backgroundColor = "transparent"; el.style.pointerEvents = "none";
+  setTimeout(() => { remove(el); }, FIRST_MS + 30);
+  return true;
+}
+
 // Called when the first screen has been drawn. Waits out the rest of the hold, then plays the hand-over and removes the layer.
 export function finishLaunch(now = false) {
   if (typeof document === "undefined" || finishing) return;
@@ -60,6 +88,8 @@ export function finishLaunch(now = false) {
   const t = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
   const wait = now || quiet() ? 0 : Math.max(0, HOLD_MS - (t - started));
   setTimeout(() => {
+    const target = !now && !quiet() && document.querySelector("[data-launch-target]");
+    if (target && firstRun(el, target)) return;
     try { document.documentElement.classList.add("launch-rise"); } catch { /* ignore */ }
     el.classList.add("out");
     setTimeout(() => remove(el), quiet() ? 260 : OUT_MS + 120);

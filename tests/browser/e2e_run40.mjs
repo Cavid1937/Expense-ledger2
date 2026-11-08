@@ -117,4 +117,45 @@ section("R40-5. A broken or wrong file is named for what it is");
   fs.rmSync(dir, { recursive: true, force: true });
   await page.close();
 }
+section("R40-6. First start: the mark flies up onto the language screen, the choices rise in, Continue eases into Home");
+{
+  const page = await openPage(browser, { fresh: true, seed: null, chooseLang: false, pre: "window.__forceLaunch = true" });
+  await wait(450);
+  const before = await page.evaluate(() => { const m = document.querySelector("#launch .launch-mark"), tg = document.querySelector("[data-launch-target]"); return m && tg ? { mark: m.getBoundingClientRect().top, target: tg.getBoundingClientRect().top } : null; });
+  ok(!!before && before.target < before.mark - 40, "the language screen has the app mark as its header, above the centred opening mark", before);
+  // read the mark the moment the flight starts (the flight itself takes about half a second)
+  await page.waitForFunction(() => document.documentElement.classList.contains("launch-first"), { timeout: 3000, polling: 10 });
+  const mid = await page.evaluate(() => ({ first: document.documentElement.classList.contains("launch-first"), mt: document.querySelector("#launch .launch-mark") ? document.querySelector("#launch .launch-mark").style.transform : "gone" }));
+  ok(mid.first && /translate\(/.test(mid.mt) && /scale\(/.test(mid.mt), "it moves and shrinks towards that header (not a plain fade)", mid);
+  await wait(1200);
+  const land = await page.evaluate(() => ({ gone: !document.getElementById("launch"), glyph: getComputedStyle(document.querySelector("[data-launch-target]")).opacity, opts: [...document.querySelectorAll(".lang-opt")].length, contOp: getComputedStyle(document.querySelector(".lang-continue")).opacity }));
+  ok(land.gone && land.glyph === "1" && land.opts === 3 && land.contOp === "1", "then the layer is gone: the screen's own mark, three languages and Continue are all fully shown", land);
+  await page.evaluate(() => document.querySelector('.lang-opt input[value="en"]').click()); await wait(100);
+  await page.evaluate(() => document.querySelector(".lang-continue").click()); await wait(80);
+  ok(await page.evaluate(() => !!document.querySelector(".lang-screen.lang-leaving") && !document.querySelector(".tabbar")), "Continue: the language screen eases away first");
+  await page.waitForSelector(".tabbar", { timeout: 3000 });
+  ok(await page.evaluate(() => JSON.parse(localStorage.getItem("expense_ledger_v5")).language === "en"), "then Home opens in English");
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
+
+section("R40-7. Counting app opens (Android app only, once per start, nothing from the ledger)");
+{
+  const NATIVE = "window.LedgerNative = { reminders: { requestPermission: async () => ({ granted: true }), sync: async () => {} } }";
+  let page = await openPage(browser, { seed: baseSeed({ language: "en" }), pre: NATIVE });
+  ok(await page.evaluate(() => !document.querySelector("iframe[data-app-open]")), "nothing at once (the start is never slowed)");
+  await wait(4300);
+  const fr = await page.evaluate(() => [...document.querySelectorAll("iframe[data-app-open]")].map((f) => ({ src: f.src, hidden: f.getAttribute("aria-hidden"), w: f.getBoundingClientRect().width, tab: f.tabIndex })));
+  ok(fr.length === 1 && fr[0].src === "https://expense-ledger2.vercel.app/app-open.html" && fr[0].hidden === "true" && fr[0].w <= 1 && fr[0].tab === -1, "after 4 s: one invisible frame loads the site's app-open page (no query, no hash)", fr);
+  await page.reload({ waitUntil: "load" }); await wait(4300);
+  ok(await page.evaluate(() => !document.querySelector("iframe[data-app-open]")), "a reload in the same start does not count again");
+  await page.close();
+  page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await wait(4300);
+  ok(await page.evaluate(() => !document.querySelector("iframe[data-app-open]")), "the website never does this (it has its own counting)");
+  await page.close();
+  page = await openPage(browser, { seed: baseSeed({ language: "en" }), pre: NATIVE }); await openSettings(page);
+  await page.evaluate(() => document.querySelector('.more-page [data-more="privacy"]').click()); await page.waitForSelector('[data-section="info-privacy"]'); await wait(300);
+  ok(/Counting app opens/.test(await page.evaluate(() => document.querySelector('[data-section="info-privacy"]').innerText)), "the app's Privacy page explains it");
+  await page.close();
+}
 await finish("e2e_run40", browser);
