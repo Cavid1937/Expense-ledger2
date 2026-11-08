@@ -57,7 +57,7 @@ const S0 = { transactions: [ex(1, 600, "2026-10-05", { spread: 6 }), ex(2, 10, "
 const pl = planImport(JSON.stringify(buildBackup(S0)), "b.json");
 ok(pl.ok && pl.transactions.find((x) => x.id === 1).spread === 6 && !("spread" in pl.transactions.find((x) => x.id === 2)), "a JSON backup brings the spread back; entries without one gain none");
 const csv = buildCsv(S0.transactions);
-ok(csv.split("\r\n")[0].endsWith('"SpreadMonths"') && csv.split("\r\n")[1].endsWith('"6"') && csv.split("\r\n")[2].endsWith('""'), "the CSV has a last column SpreadMonths");
+ok(csv.split("\r\n")[0].endsWith('"SpreadMonths","OthersPayBack","OthersName"') && csv.split("\r\n")[1].endsWith('"6","",""') && csv.split("\r\n")[2].endsWith('"","",""'), "the CSV has a last column SpreadMonths");
 const pc = planImport(csv, "x.csv");
 ok(pc.ok && pc.transactions.filter((x) => x.spread === 6).length === 1, "the CSV brings it back", pc.error);
 const bad = csv.replace('"6"', '"99"');

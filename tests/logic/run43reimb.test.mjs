@@ -68,4 +68,5 @@ const plan = planImportWithCats(JSON.stringify(buildBackup(base)), "b.json");
 ok(plan.ok, "the file reads back", plan.error);
 const by = Object.fromEntries(plan.transactions.map((x) => [String(x.id), x]));
 ok(by["11"] && by["11"].reimb && by["11"].reimb.amt === 60 && by["11"].reimb.who === "Aysel" && by["21"] && by["21"].reimbFor === 11, "reimb and reimbFor survive a backup", by);
-finish("run43reimb");
+const csvLines = buildCsv([dinner, lunch]).replace(/^\uFEFF/, "").split("\r\n");
+ok(/"OthersPayBack","OthersName"$/.test(csvLines[0]) && /"60\.00","Aysel"$/.test(csvLines[1]) && /"",""$/.test(csvLines[2]), "the CSV export ends with OthersPayBack and OthersName: 60.00 / Aysel for the dinner, empty for the lunch", csvLines);finish("run43reimb");

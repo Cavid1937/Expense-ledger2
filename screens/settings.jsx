@@ -522,7 +522,7 @@ export function ListRow({ icon, title, sub, onClick, color="var(--accent-text)",
 // Run 16: "How it works" (four short steps) and the privacy notice, one simple sheet each. The notice describes what the app does
 // today (no account, no analytics, nothing sent); it is not legal advice and must be kept true if the app ever changes.
 export function InfoSheet({ kind, onClose }) {
-  const n=kind==="how"?5:kind==="safe"?6:8;   // Run 36: "how" gained part 5 (income, money in and refunds)
+  const n=kind==="how"?6:kind==="safe"?6:8;   // Run 36: "how" gained part 5 (income, money in and refunds); Run 43b part 6 (money others will pay back)
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("info."+kind+".title")} data-section={"info-"+kind}>
