@@ -151,7 +151,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .numpad-key{transition:transform .08s ease-out,background .12s}
 .lock-screen{position:fixed;inset:0;z-index:1000;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(10px,2.2dvh,20px);padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));overflow-y:auto;font-family:var(--font);animation:lockFade .22s ease-out both}
 .lock-card{width:100%;max-width:340px;text-align:center;animation:lockRise .42s cubic-bezier(.2,.8,.2,1) .04s both}
-.lock-mark{width:clamp(50px,7.5dvh,64px);height:clamp(50px,7.5dvh,64px);animation:lockRise .42s cubic-bezier(.2,.8,.2,1) both}
+.lock-mark{display:block;width:clamp(60px,9dvh,84px);height:clamp(60px,9dvh,84px);flex-shrink:0;animation:lockRise .42s cubic-bezier(.2,.8,.2,1) both}
 .lock-title{font-size:clamp(22px,3.4dvh,28px);font-weight:700;margin:0 0 4px}
 .lock-sub{font-size:14px;color:var(--ink-3);margin:0 0 clamp(14px,3dvh,26px)}
 .lock-dots{display:flex;gap:16px;justify-content:center;min-height:20px;margin-bottom:6px}

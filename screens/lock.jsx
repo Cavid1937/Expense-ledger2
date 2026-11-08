@@ -36,6 +36,19 @@ export function LockGate({ children }) {
   );
 }
 const BIO_DELAY_MS=650;
+// The app's own mark (the ledger page from the launcher icon) with a padlock where the tick normally sits: the first thing seen is the app, and the
+// padlock says why. Colours come from the theme so it suits every palette.
+function LockMark() {
+  return (
+    <svg className="lock-mark" viewBox="64 64 384 384" aria-hidden="true" focusable="false">
+      <rect x="136" y="104" width="240" height="304" rx="36" fill="var(--bg-card)" stroke="var(--accent)" strokeWidth="18"/>
+      <path d="M180 190H332M180 246H332M180 302H262" stroke="var(--accent)" strokeOpacity=".55" strokeWidth="16" strokeLinecap="round"/>
+      <circle cx="338" cy="334" r="42" fill="var(--accent)"/>
+      <rect x="320" y="334" width="36" height="28" rx="6" fill="var(--bg)"/>
+      <path d="M327 334v-9a11 11 0 0 1 22 0v9" stroke="var(--bg)" strokeWidth="7" fill="none" strokeLinecap="round"/>
+    </svg>
+  );
+}
 export function LockScreen({ lock, onUnlock, onRemoved }) {
   const damaged=!lock||!lock.ok;
   const [cur,setCur]=useState(()=>damaged?null:lock.rec);
@@ -88,7 +101,7 @@ export function LockScreen({ lock, onUnlock, onRemoved }) {
   const remove=()=>{ if (forgotS>0) return; removeLock(); onRemoved(); };
   return (
     <div className="lock-screen" role="dialog" aria-modal="true" aria-label={t("lock.screenTitle")} data-section="lock-screen">
-      <span className="more-mark lock-mark" aria-hidden="true"><Icon name="safe" size={30} color="var(--accent)"/></span>
+      <LockMark/>
       {forgot ? (
         <div className="lock-card" data-section="lock-forgot">
           <h1 className="lock-title">{t("lock.forgot")}</h1>
