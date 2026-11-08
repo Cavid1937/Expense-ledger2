@@ -988,7 +988,7 @@ export const MESSAGES = {
   "lock.wrong":      { en: "That PIN is not right.", az: "Bu PIN düzgün deyil.", ru: "Неверный PIN-код." },
   "lock.wait":       { en: "Too many wrong tries. Wait {s} seconds.", az: "Çox səhv cəhd. {s} saniyə gözləyin.", ru: "Слишком много ошибок. Подождите {s} с." },
   "lock.useBio":     { en: "Use fingerprint", az: "Barmaq izindən istifadə et", ru: "Использовать отпечаток" },
-  "lock.bioFail":    { en: "The fingerprint did not work. Use your PIN.", az: "Barmaq izi alınmadı. PIN-dən istifadə edin.", ru: "Отпечаток не сработал. Введите PIN-код." },
+  "lock.bioFail":    { en: "Fingerprint not confirmed. Try again, or use your PIN.", az: "Barmaq izi təsdiqlənmədi. Yenidən cəhd edin və ya PIN-dən istifadə edin.", ru: "Отпечаток не подтверждён. Попробуйте ещё раз или введите PIN-код." },
   "lock.del":        { en: "Delete the last digit", az: "Son rəqəmi sil", ru: "Удалить последнюю цифру" },
   "lock.entered":    { en: "{n} digits entered", az: "{n} rəqəm daxil edilib", ru: "Введено цифр: {n}" },
   "lock.forgot":     { en: "Forgot your PIN?", az: "PIN-i unutmusunuz?", ru: "Забыли PIN-код?" },

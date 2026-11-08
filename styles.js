@@ -149,15 +149,24 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
 .numpad-key{min-height:50px;border:1px solid var(--rule);border-radius:14px;background:var(--bg-card);color:var(--ink);font-family:var(--font);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
 .numpad-key{transition:transform .08s ease-out,background .12s}
-.lock-screen{position:fixed;inset:0;z-index:1000;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px 20px;overflow-y:auto;font-family:var(--font)}
-.lock-card{width:100%;max-width:320px;text-align:center}
-.lock-title{font-size:22px;font-weight:700;margin:0 0 4px}
-.lock-sub{font-size:14px;color:var(--ink-3);margin:0 0 14px}
-.lock-dots{display:flex;gap:12px;justify-content:center;min-height:18px;margin-bottom:6px}
-.lock-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink-3);box-sizing:border-box}
-.lock-dot.on{background:var(--accent-fill);border-color:var(--accent-fill)}
-.lock-msg{color:var(--neg);font-size:13px;font-weight:600;min-height:20px;margin-bottom:6px}
-.lock-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%}
+.lock-screen{position:fixed;inset:0;z-index:1000;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(10px,2.2dvh,20px);padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));overflow-y:auto;font-family:var(--font);animation:lockFade .22s ease-out both}
+.lock-card{width:100%;max-width:340px;text-align:center;animation:lockRise .42s cubic-bezier(.2,.8,.2,1) .04s both}
+.lock-mark{width:clamp(50px,7.5dvh,64px);height:clamp(50px,7.5dvh,64px);animation:lockRise .42s cubic-bezier(.2,.8,.2,1) both}
+.lock-title{font-size:clamp(22px,3.4dvh,28px);font-weight:700;margin:0 0 4px}
+.lock-sub{font-size:14px;color:var(--ink-3);margin:0 0 clamp(14px,3dvh,26px)}
+.lock-dots{display:flex;gap:16px;justify-content:center;min-height:20px;margin-bottom:6px}
+.lock-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--ink-3);box-sizing:border-box;transition:background .12s,border-color .12s}
+.lock-dot.on{background:var(--accent-fill);border-color:var(--accent-fill);animation:lockPop .16s ease-out}
+.lock-dots.shake{animation:lockShake .34s ease-out}
+.lock-msg{color:var(--neg);font-size:13px;font-weight:600;min-height:36px;margin-bottom:clamp(4px,1.2dvh,12px);display:flex;align-items:center;justify-content:center;line-height:1.35}
+.lock-msg.soft{color:var(--ink-3);font-weight:500}
+.lock-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(8px,1.6dvh,14px);width:100%}
+.lock-pad .numpad-key{min-height:clamp(54px,8.4dvh,74px);border-radius:18px;font-size:clamp(24px,3.6dvh,30px)}
+@keyframes lockFade{from{opacity:0}to{opacity:1}}
+@keyframes lockRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes lockPop{from{transform:scale(.6)}to{transform:scale(1)}}
+@keyframes lockShake{0%,100%{transform:none}20%{transform:translateX(-9px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(4px)}}
+@media (prefers-reduced-motion:reduce){.lock-screen,.lock-card,.lock-mark,.lock-dot.on,.lock-dots.shake{animation:none}}
 .lock-pad .numpad-key:disabled{opacity:.45}
 .lock-screen .btn:not(.btn-primary),[data-section="lock-sheet"] .btn:not(.btn-primary){-webkit-appearance:none;appearance:none;padding:12px 18px;min-height:48px;background:var(--bg-card);color:var(--ink);border:1px solid var(--rule);border-radius:14px;font-size:15px;-webkit-tap-highlight-color:transparent}
 .lock-screen .btn:not(.btn-primary):active,[data-section="lock-sheet"] .btn:not(.btn-primary):active{opacity:.7}

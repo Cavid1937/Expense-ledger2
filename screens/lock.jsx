@@ -35,24 +35,25 @@ export function LockGate({ children }) {
     </>
   );
 }
+const BIO_DELAY_MS=650;
 export function LockScreen({ lock, onUnlock, onRemoved }) {
   const damaged=!lock||!lock.ok;
   const [cur,setCur]=useState(()=>damaged?null:lock.rec);
-  const [pin,setPin]=useState(""), [msg,setMsg]=useState(""), [busy,setBusy]=useState(false);
+  const [pin,setPin]=useState(""), [msg,setMsg]=useState(""), [hint,setHint]=useState(""), [shake,setShake]=useState(0), [busy,setBusy]=useState(false);
   const bioWait=useRef(false);
   const [forgot,setForgot]=useState(damaged), [forgotAt,setForgotAt]=useState(()=>Date.now()), [now,setNow]=useState(()=>Date.now());
   useEffect(()=>{ const i=setInterval(()=>setNow(Date.now()),500); return ()=>clearInterval(i); },[]);
   const waitS=cur&&cur.until>now ? Math.ceil((cur.until-now)/1000) : 0;
   const forgotS=Math.max(0,10-Math.floor((now-forgotAt)/1000));
-  const press=(d)=>{ if (busy) return; setMsg(""); setPin(p=>p.length<6?p+d:p); };
-  const back=()=>{ if (!busy) { setMsg(""); setPin(p=>p.slice(0,-1)); } };
+  const press=(d)=>{ if (busy) return; setMsg(""); setHint(""); setPin(p=>p.length<6?p+d:p); };
+  const back=()=>{ if (!busy) { setMsg(""); setHint(""); setPin(p=>p.slice(0,-1)); } };
   const submit=async()=>{
     if (busy||waitS>0||!cur||!validPin(pin)) return;
     setBusy(true);
     const good=await verifyPin(cur,pin);
     if (good) { if (cur.fails||cur.until||!cur.len||cur.resetAt) writeLock({ ...cur, fails:0, until:0, resetAt:0, len:cur.len||pin.length }); onUnlock(); return; }
     const fails=cur.fails+1, w=lockWaitMs(fails), next={ ...cur, fails, until:w?Date.now()+w:0 };
-    writeLock(next); setCur(next); setPin(""); setMsg(t("lock.wrong")); setNow(Date.now()); setBusy(false);
+    writeLock(next); setCur(next); setPin(""); setMsg(t("lock.wrong")); setHint(""); setShake(n=>n+1); setNow(Date.now()); setBusy(false);
   };
   const bio=async()=>{
     // The phone's prompt may stay open or never answer; the PIN keys must keep working meanwhile, so this does not use "busy".
@@ -60,15 +61,16 @@ export function LockScreen({ lock, onUnlock, onRemoved }) {
     bioWait.current=true; let good=false; try { good=await bioCheck(cur.bio); } catch { good=false; }
     bioWait.current=false;
     if (good) { onUnlock(); return; }
-    setMsg(t("lock.bioFail"));
+    setHint(t("lock.bioFail")); // not an error: closing the phone's prompt is a normal choice, so this is a quiet hint, not red text
   };
   useEffect(()=>{
     const onKey=(e)=>{ if (forgot) return; if (/^[0-9]$/.test(e.key)) press(e.key); else if (e.key==="Backspace") back(); else if (e.key==="Enter") submit(); };
     window.addEventListener("keydown",onKey); return ()=>window.removeEventListener("keydown",onKey);
   });
-  // Opens by itself: the phone's fingerprint prompt appears as the lock screen does (it mounts on every lock), and a PIN of the saved length
-  // is checked the moment its last digit is typed. Locks saved before the length was stored still use the button until their first unlock.
-  useEffect(()=>{ if (cur&&cur.bio&&!forgot) bio(); },[]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Opens by itself, but not at once: the PIN screen rises first (about 0.45 s) and the phone's fingerprint prompt follows it, so the two arrive
+  // together instead of the prompt landing on a blank or half-drawn screen. A PIN of the saved length is checked the moment its last digit is typed.
+  // Locks saved before the length was stored still use the button until their first unlock.
+  useEffect(()=>{ if (!(cur&&cur.bio&&!forgot)) return; const id=setTimeout(()=>{ if (document.visibilityState!=="hidden") bio(); },BIO_DELAY_MS); return ()=>clearTimeout(id); },[]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{ if (cur&&cur.len&&pin.length===cur.len&&!forgot) submit(); },[pin]); // eslint-disable-line react-hooks/exhaustive-deps
   // Forgot PIN is not a quick bypass any more: with a fingerprint set up it needs that fingerprint; without one the lock can be removed only 24 h
   // after the request (stored with the lock, so closing the app does not restart or skip it; the right PIN cancels it). A damaged lock record
@@ -86,7 +88,7 @@ export function LockScreen({ lock, onUnlock, onRemoved }) {
   const remove=()=>{ if (forgotS>0) return; removeLock(); onRemoved(); };
   return (
     <div className="lock-screen" role="dialog" aria-modal="true" aria-label={t("lock.screenTitle")} data-section="lock-screen">
-      <span className="more-mark" aria-hidden="true"><Icon name="safe" size={26} color="var(--accent)"/></span>
+      <span className="more-mark lock-mark" aria-hidden="true"><Icon name="safe" size={30} color="var(--accent)"/></span>
       {forgot ? (
         <div className="lock-card" data-section="lock-forgot">
           <h1 className="lock-title">{t("lock.forgot")}</h1>
@@ -103,10 +105,10 @@ export function LockScreen({ lock, onUnlock, onRemoved }) {
         <div className="lock-card">
           <h1 className="lock-title">{t("lock.screenTitle")}</h1>
           <p className="lock-sub">{t("lock.screenSub")}</p>
-          <div className="lock-dots" role="img" aria-label={t("lock.entered",{n:pin.length})} data-section="lock-dots">
+          <div key={shake} className={"lock-dots"+(shake?" shake":"")} role="img" aria-label={t("lock.entered",{n:pin.length})} data-section="lock-dots">
             {Array.from({length:Math.max((cur&&cur.len)||4,pin.length)},(_,i)=><span key={i} className={`lock-dot${i<pin.length?" on":""}`}/>)}
           </div>
-          <div className="lock-msg" role="alert" data-section="lock-msg">{waitS>0?t("lock.wait",{s:waitS}):msg}</div>
+          <div className={"lock-msg"+(!waitS&&!msg&&hint?" soft":"")} role="alert" data-section="lock-msg">{waitS>0?t("lock.wait",{s:waitS}):(msg||hint)}</div>
           <div className="lock-pad">
             {["1","2","3","4","5","6","7","8","9"].map(d=><button key={d} type="button" className="numpad-key" onClick={()=>press(d)} disabled={waitS>0}>{d}</button>)}
             {cur&&cur.bio ? <button type="button" className="numpad-key lock-bio" data-section="lock-bio" onClick={bio} aria-label={t("lock.useBio")} title={t("lock.useBio")}><Icon name="safe" size={22}/></button> : <span/>}
