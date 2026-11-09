@@ -1,11 +1,11 @@
-﻿# Google sign-in and Drive backup: what I need from the owner
+# Google sign-in and Drive backup: what I need from the owner
 
 Written 10 Nov 2026. Nothing is built.
 
-## 1. Decisions (a yes or no each)
-1. Is it OK that the Privacy screen changes from "no account" to "optional Google backup, off by default"? (Recommended: yes.)
-2. Backup file encrypted with a password the owner's users choose, and no recovery if forgotten? (Recommended: yes, with a clear warning.)
-3. Automatic backup when the app opens, at most once a day? Or manual only at first? (Recommended: manual plus automatic daily.)
+## 1. Decisions (ANSWERED 10 Nov)
+1. Privacy screen changes to 'optional Google backup, off by default': YES (owner).
+2. Password on the backup: NO by default (owner: users may forget it and never come back). The file is protected by the user's Google account, not end-to-end encrypted; the app says so plainly. Optional password may come later.
+3. Automatic backup: Claude decides: when the app opens, at most once a day, only if data changed, plus Back up now, with a Last backed up line and a warning after several failed days.
 
 ## 2. Things only the owner can do (about 30 to 45 minutes, free)
 Claude cannot create accounts or enter credentials. When the owner says go, Claude writes click-by-click steps for:
@@ -27,4 +27,4 @@ Claude cannot create accounts or enter credentials. When the owner says go, Clau
 - Phone makers such as Xiaomi can block background work, so automatic backup runs when the app opens, not while it is closed.
 
 ## 5. What Claude does on its side
-Encrypted backup format reuse, Drive upload and download with error handling (offline, token expired, no space), restore through the existing safe import preview, tests for every failure path, privacy text and az/ru/en wording, and the plain-language "how it works" for this feature.
+Backup format reuse (plain backup file, no password), Drive upload and download with error handling (offline, token expired, no space), restore through the existing safe import preview, tests for every failure path, privacy text and az/ru/en wording, and the plain-language "how it works" for this feature.

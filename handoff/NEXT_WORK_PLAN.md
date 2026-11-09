@@ -78,7 +78,8 @@ Browser tests left about 8,350 temporary Chrome profile folders (about 83 GB) in
 ## Added 10 Nov (owner decision): Google sign-in for an optional encrypted Drive backup (APK only)
 Status: ON THE BUILDING LIST, NOT STARTED. Waits for the owner's inputs (see list below).
 - Scope: sign in with Google only to reach the user's own Drive (scope drive.appdata, hidden app folder). No server, no app account. Off by default; the app must open and work fully without it.
-- Backup file is encrypted on the phone with a password the user chooses (reuse the existing encrypted-backup code, run32enc); warn plainly that a forgotten password cannot be recovered.
+- OWNER DECISION 10 Nov: NO password by default (a forgotten password would lock users out). The file sits in the hidden app folder of the user's own Drive, protected by their Google account; it is not end-to-end encrypted and the Privacy screen says so in plain words. An optional extra password can come later.
+- OWNER DECISION 10 Nov: Privacy text changes to 'optional Google backup, off by default' (yes). Automatic backup: Claude decided: when the app opens, at most once a day, only if data changed; plus Back up now; show 'Last backed up' and warn after several failed days.
 - Features: back up now, automatic back up when the app opens (at most once a day, only when something changed), list backups, restore on a new phone (with the existing safe import preview), sign out / remove the Drive copy.
 - Privacy screen and 'How it works' updated: 'optional Google backup, off by default'.
 - Needs from owner: see reports/Google sign-in needs.md. Needs the APK and a test on the Poco F6; no APK is built without the owner's go-ahead.
