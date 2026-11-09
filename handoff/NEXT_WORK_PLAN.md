@@ -74,3 +74,11 @@ Order of value: Phase 1 (simplify) > Phase 2 (video fixes) > Phase 3 (currency) 
 
 ## Added 10 Nov: fix the test temp leak (do first in Session 1, Phase 0)
 Browser tests left about 8,350 temporary Chrome profile folders (about 83 GB) in %TEMP%. Make launch() in tests/browser/lib.mjs (and the cleanroom/v9 helpers) delete their temporary profile folders when the run ends, add a check that proves it, and delete leftovers older than an hour after each run.
+
+## Added 10 Nov (owner decision): Google sign-in for an optional encrypted Drive backup (APK only)
+Status: ON THE BUILDING LIST, NOT STARTED. Waits for the owner's inputs (see list below).
+- Scope: sign in with Google only to reach the user's own Drive (scope drive.appdata, hidden app folder). No server, no app account. Off by default; the app must open and work fully without it.
+- Backup file is encrypted on the phone with a password the user chooses (reuse the existing encrypted-backup code, run32enc); warn plainly that a forgotten password cannot be recovered.
+- Features: back up now, automatic back up when the app opens (at most once a day, only when something changed), list backups, restore on a new phone (with the existing safe import preview), sign out / remove the Drive copy.
+- Privacy screen and 'How it works' updated: 'optional Google backup, off by default'.
+- Needs from owner: see reports/Google sign-in needs.md. Needs the APK and a test on the Poco F6; no APK is built without the owner's go-ahead.
