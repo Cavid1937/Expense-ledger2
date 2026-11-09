@@ -122,7 +122,7 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount }) {
     </div>
   );
 }
-export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
+export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,curIn,curOther,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -260,7 +260,7 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
                 <span style={{flex:1,textDecoration:x.done?"line-through":"none"}}>{x.label}</span>
               </button>
             ))}
-            <button type="button" className="btn btn-ghost btn-sm setup-hide" style={{marginTop:6}} onClick={onSetupHide}>{t("setup.hide")}</button>
+            {onSetupWizard&&<button type="button" className="btn btn-sm" data-section="setup-wizard" style={{marginTop:8}} onClick={onSetupWizard}>{t("setupq.open")}</button>}
           </div>
         );
       })()}

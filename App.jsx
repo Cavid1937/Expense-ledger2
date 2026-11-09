@@ -10,6 +10,7 @@ import { ImportExportPage, ImportUnlock, InfoSheet, LanguageChooser, MorePage, M
 import { AccountSheet } from "./screens/home.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { GiftsPage } from "./screens/gifts.jsx";
+import { SetupSheet } from "./screens/setup.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
 import { Collapse, motionOff, runBackStep } from "./screens/motion.jsx";
@@ -2519,6 +2520,42 @@ export function recurringSuggestions(transactions, bills, dismissed=[], now=new 
   return out.sort((a,b)=>a.name.localeCompare(b.name));
 }
 
+// ─── Run 50 (owner list #1): the optional "set up in a minute" questions ──────────────────────────────────────────────
+// Answers (all optional) -> a plan of what to create: up to two accounts with an opening balance, one monthly income bill (fixed pay and
+// pay day), one goal. Nothing is created here and nothing is guessed: an empty answer creates nothing, an invalid one is reported by
+// field and the whole plan is refused so the person can fix it. Accounts whose name already exists are skipped.
+export function nextPayDate(day, now=new Date()) {
+  const clamp=(y,m)=>Math.min(day,new Date(y,m+1,0).getDate());
+  let y=now.getFullYear(), m=now.getMonth(), d=new Date(y,m,clamp(y,m));
+  if (localDateStr(d)<localDateStr(now)) { m++; if (m>11) { m=0; y++; } d=new Date(y,m,clamp(y,m)); }
+  return localDateStr(d);
+}
+export function planSetup(a, names, existingAccountNames=[], now=new Date()) {
+  const errors={}, plan={ accounts:[], bill:null, goal:null, skipped:[] };
+  const money=(v,field,{zeroOk=true}={})=>{ const s=String(v==null?"":v).trim().replace(",","."); if (s==="") return null; const n=parseMoney(s,{positive:true}); if (n===null) { if (zeroOk && Number(s)===0 && /^[0-9.]+$/.test(s)) return null; errors[field]="invalid"; return null; } return n; };
+  const have=new Set((existingAccountNames||[]).map(x=>lc(String(x).trim())));
+  const cash=money(a&&a.cash,"cash"), bank=money(a&&a.bank,"bank");
+  for (const [amt,kind,name] of [[cash,"cash",names&&names.cash],[bank,"card",names&&names.bank]]) {
+    if (amt===null) continue;
+    if (have.has(lc(String(name||"").trim()))) { plan.skipped.push(name); continue; }
+    plan.accounts.push({ name:String(name||"").trim(), kind, amount:amt });
+  }
+  if (a && a.income==="fixed") {
+    const sal=money(a.salary,"salary",{zeroOk:false}), dayN=Number(String(a.payDay==null?"":a.payDay).trim());
+    if (sal===null && !errors.salary) errors.salary="required";
+    if (!Number.isInteger(dayN) || dayN<1 || dayN>31 || String(a.payDay==null?"":a.payDay).trim()==="") errors.payDay="invalid";
+    if (!errors.salary && !errors.payDay) plan.bill={ name:String(names&&names.salary||"").trim(), type:"income", category:"salary", subcategory:"", amount:sal, freq:"monthly", anchorDate:nextPayDate(dayN,now), ...(dayN>28 ? { dueDay:dayN } : {}) };
+  }
+  const gn=String(a&&a.goalName||"").trim(), gt=money(a&&a.goalTarget,"goalTarget",{zeroOk:false});
+  if (gn || gt!==null || errors.goalTarget) {
+    if (gn.length>60) errors.goalName="long";
+    else if (!gn) errors.goalName="required";
+    if (gt===null && !errors.goalTarget) errors.goalTarget="required";
+    if (!errors.goalName && !errors.goalTarget) plan.goal={ name:gn, target:gt, saved:0, monthlyTarget:0, targetDate:null };
+  }
+  return { ...plan, errors, ok:Object.keys(errors).length===0 };
+}
+
 // Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
 // Whole cents, so 0.1 + 0.2 is exactly 0.30. "none" = entries without a wallet. "used" = at least one entry has a wallet.
 export function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
@@ -4045,6 +4082,7 @@ function AppInner() {
   },[showSnackbar,showToast]);
 
   // ── Run 12: explicit bills ──
+  const [showSetupQ, setShowSetupQ] = useState(false);   // Run 50: the optional "set up in a minute" sheet
   const [editBill, setEditBill] = useState(undefined);   // undefined = closed · null = new bill · a bill = editing it
   // One explicit step: every recurring payment still grouped the old way gets a bill. A recovery copy of the data is kept
   // first (as before a Replace import) and Undo restores it exactly, unless something changed since.
@@ -4062,6 +4100,13 @@ function AppInner() {
     setState(s=>{ const list=s.bills||[];
       return b.id ? { ...s, bills:list.map(x=>x.id===b.id?b:x) } : { ...s, bills:[...list, { ...b, id:newBillId(new Set(list.map(x=>x.id))) }] }; });
     setEditBill(undefined); showToast(t("bill.saved"));
+  },[showToast]);
+  // Run 50: apply what the "set up in a minute" sheet planned (planSetup already checked every answer). Accounts go to their own store first;
+  // if that cannot be saved nothing else is changed. Bill and goal are added in one state change.
+  const applySetupPlan=useCallback((plan)=>{
+    if (plan.accounts.length) { let data=readAccounts(); for (const a of plan.accounts) { const r=addAccount(data,a.name,a.kind,a.amount,today()); if (r.added) data=r.data; } if (!writeAccounts(data)) { showToast(t("acc.saveFailed"),5000); return; } }
+    if (plan.bill||plan.goal) setState(s=>{ const list=s.bills||[]; return { ...s, ...(plan.bill ? { bills:[...list,{ ...plan.bill, id:newBillId(new Set(list.map(x=>x.id))), active:true, createdAt:new Date().toISOString() }] } : {}), ...(plan.goal ? { goals:[...(s.goals||[]),{ ...plan.goal, id:"g"+Date.now() }] } : {}) }; });
+    setCatVer(v=>v+1); showToast(t("setupq.done"));
   },[showToast]);
   // Deleting a bill keeps every payment; they stop pointing to it (and count as recurring payments the earlier way). Undo.
   const deleteBill=useCallback((id)=>{
@@ -4455,7 +4500,7 @@ function AppInner() {
             rollover={{ offer:rolloverOffer(spendTxns,goals,rolloverSeen), onSkip:()=>{ const m=rolloverOffer(spendTxns,goals,rolloverSeen)?.month; if (m) { writeRolloverSeen(m); setRolloverSeen(m); } },
               onApply:(g)=>{ const o=rolloverOffer(spendTxns,goals,rolloverSeen); if (!o) return; setState(s=>({...s,goals:applyRollover(s.goals,g.id,g.amount)})); writeRolloverSeen(o.month); setRolloverSeen(o.month); showToast(t("rollover.done",{ amount:fmt(g.amount,currency), goal:g.name||t("rollover.goalFallback") })); } }}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
-            onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
+            onSetupWizard={()=>setShowSetupQ(true)} onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onGroupMany={groupMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn&&txn.spreadSlice ? (transactions.find(x=>x.id===txn.spreadSlice.id)||txn) : txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={spendState} rawState={state} onCatsChanged={()=>setCatVer(v=>v+1)} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
@@ -4579,6 +4624,7 @@ function AppInner() {
             </div>
           </div>
         )}
+        {showSetupQ&&<SetupSheet currency={currency} onClose={()=>setShowSetupQ(false)} onOpenDebts={()=>{ setDebtsStart("debts"); switchTab("debts"); }} onSave={applySetupPlan}/>}
         {editBill!==undefined&&(
           <BillSheet bill={editBill} currency={currency} onSave={saveBill} onDelete={deleteBill} onClose={()=>setEditBill(undefined)} showToast={showToast}/>
         )}

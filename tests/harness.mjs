@@ -33,7 +33,7 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   // added for this phase's regression tests (exported only if the candidate defines them)
   "calcWeekdayWeekend","backupReminderDue","BACKUP_REMINDER_DAYS",
   // Run 50 (owner list, 9 Nov): rollover to a goal
-  "rolloverOffer","applyRollover","readRolloverSeen","writeRolloverSeen","sinkingCandidates","parseQuickText","giftLedger","recurringSuggestions","readRecSuggestDismissed","writeRecSuggestDismissed",
+  "rolloverOffer","applyRollover","readRolloverSeen","writeRolloverSeen","sinkingCandidates","parseQuickText","giftLedger","planSetup","nextPayDate","recurringSuggestions","readRecSuggestDismissed","writeRecSuggestDismissed",
   // redesign (2026-10-27): the Home ring, the Analytics trend and the Home greeting
   "pctShares","donutSlices","cumulativeByDay","greetingKey",
   // Run 10: data safety
