@@ -1,0 +1,36 @@
+// Run 50 in the real bundled app: entries written as a sentence, reviewed, then saved in one step with one Undo.
+import { launch, openPage, openAdd, state, ok, section, finish, baseSeed, tx, wait } from "./lib.mjs";
+const browser = await launch();
+const clock = `() => { const fixed = new Date(2026, 9, 20, 12, 0, 0).getTime(); const RD = Date; class FD extends RD { constructor(...a) { if (a.length === 0) super(fixed); else super(...a); } static now() { return fixed; } } window.Date = FD; }`;
+const seed = () => baseSeed({ transactions: [tx({ merchant: "Bolt", category: "transport", subcategory: "Taxi", amount: 6, date: "2026-10-01" })] });
+const rows = (page) => page.evaluate(() => [...document.querySelectorAll('[data-section="qt-rows"] [role="listitem"]')].map((r) => r.innerText.replace(/\s+/g, " ").trim()));
+
+section("R50-TB1. Write, review, save");
+const page = await openPage(browser, { seed: seed(), pre: eval(clock) });
+await openAdd(page); await wait(400);
+ok(await page.$('[data-section="qt-toggle"]') !== null, "the Add screen offers 'Write it as a sentence'");
+await page.evaluate(() => document.querySelector('[data-section="qt-toggle"]').click()); await wait(400);
+await page.type("#qt-text", "bolt 12, market 25 yesterday, nothing here"); await wait(300);
+let r = await rows(page);
+ok(r.length === 3, "three lines are shown for review", r);
+ok(/Bolt/.test(r[0]) && /12/.test(r[0]) && /Transport/.test(r[0]), "Bolt 12 is read as Transport (the person's own history)", r[0]);
+ok(/Market/.test(r[1]) && /25/.test(r[1]), "Market 25 is read", r[1]);
+ok(/No amount found/.test(r[2]), "a line without an amount is refused with the reason", r[2]);
+const before = await state(page);
+ok(before.transactions.length === 1, "nothing has been saved yet while reviewing", before.transactions.length);
+const label = await page.evaluate(() => document.querySelector('[data-section="qt-save"]').innerText);
+ok(/Add 2 entries/.test(label), "the button counts only the readable lines", label);
+await page.evaluate(() => document.querySelector('[data-section="qt-save"]').click()); await wait(700);
+const st = await state(page);
+const bolt = st.transactions.find((x) => x.merchant === "Bolt" && x.amount === 12), mk = st.transactions.find((x) => x.merchant === "Market");
+ok(st.transactions.length === 3 && bolt && mk, "two entries were added", st.transactions.map((x) => x.merchant));
+ok(bolt.date === "2026-10-20" && bolt.type === "expense" && bolt.category === "transport" && bolt.subcategory === "Taxi", "Bolt: today, expense, Transport / Taxi", bolt);
+ok(mk.date === "2026-10-19" && mk.amount === 25 && mk.category === "other", "Market: yesterday, 25, Other", mk);
+ok(bolt.id !== mk.id && bolt.createdAt && mk.createdAt, "each entry has its own id and a creation time");
+const snack = await page.evaluate(() => (document.querySelector(".snackbar") || {}).innerText || "");
+ok(/2 entries added/.test(snack) && /Undo/.test(snack), "one message with Undo", snack);
+await page.evaluate(() => document.querySelector(".snackbar-undo").click()); await wait(500);
+ok((await state(page)).transactions.length === 1, "Undo removes both entries in one step");
+ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+await page.close(); await browser.close();
+finish("e2e_run50text");

@@ -91,6 +91,7 @@
     "run50rollover.test.mjs": 22,
     "run50net.test.mjs": 9,
     "run50sinking.test.mjs": 9,
+    "run50text.test.mjs": 30,
     "run43pace.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
@@ -110,6 +111,7 @@
     "e2e_run50.mjs": 11,
     "e2e_run50net.mjs": 4,
     "e2e_run50sinking.mjs": 5,
+    "e2e_run50text.mjs": 14,
     "e2e_run9.mjs": 55,
     "e2e_run10.mjs": 16,
     "e2e_run12.mjs": 35,

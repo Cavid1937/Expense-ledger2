@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb } from "../App.jsx";
+import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
@@ -64,7 +64,38 @@ export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast
 }
 
 // Run 25 (owner decision): the in-app number pad is gone; the amount box opens the phone's own number keyboard (no space lost to a pad).
-export function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onClose, onOtherKind, onRenameSub }) {
+// Run 50 (owner list #2): "bolt 12, market 25 yesterday" -> a review list -> one tap saves them all. Nothing is saved before that tap;
+// a row the parser could not read is shown with the reason and is never saved. Local parsing only.
+function QuickTextPanel({ currency, memory, onSaveMany }) {
+  const [open, setOpen] = useState(false), [text, setText] = useState("");
+  const rows=useMemo(()=>open&&text.trim() ? parseQuickText(text,memory||{}) : [],[open,text,memory]);
+  const good=rows.filter(r=>r.ok);
+  return (
+    <div className="qt" data-section="qt" style={{margin:"0 0 12px"}}>
+      <button type="button" className="btn btn-ghost btn-sm" data-section="qt-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>{t(open?"qt.hide":"qt.show")}</button>
+      <Collapse open={open} id="qt-body">
+        <div className="field" style={{marginTop:8}}>
+          <label className="field-lbl" htmlFor="qt-text">{t("qt.label")}</label>
+          <textarea id="qt-text" data-section="qt-input" className="input" rows={3} value={text} onChange={e=>setText(e.target.value)} placeholder={t("qt.example")} style={{width:"100%",resize:"vertical"}}/>
+          <div className="list-sub">{t("qt.help")}</div>
+        </div>
+        {rows.length>0&&(<div data-section="qt-rows" role="list" aria-label={t("qt.review")}>
+          {rows.map((r,i)=>(
+            <div key={i} role="listitem" className="list-row" data-ok={r.ok} style={{opacity:r.ok?1:0.7,alignItems:"center"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div className="list-title">{r.ok ? (r.merchant||t(r.type==="income"?"qt.income":"qt.noName")) : r.raw}</div>
+                <div className="list-sub">{r.ok ? `${r.type==="income"?"+":"−"}${fmt(r.amount,currency)} · ${catName(r.category)} · ${fmtDate(r.date)}${r.warn?" · "+t("qt.check"):""}` : t(r.reason==="noAmount"?"qt.noAmount":"qt.badAmount")}</div>
+              </div>
+            </div>
+          ))}
+          <button type="button" className="btn btn-primary btn-full" data-section="qt-save" disabled={!good.length} style={{marginTop:8}} onClick={()=>{ onSaveMany(good); setText(""); }}>{tn("qt.save",good.length)}</button>
+        </div>)}
+      </Collapse>
+    </div>
+  );
+}
+
+export function AddEditOverlay({ leaving, templates, currency, transactions, bills=[], prefill, editId, merchantMemory, onSave, onSaveMany, onClose, onOtherKind, onRenameSub }) {
   // Run 12: which bill a recurring entry pays. Offered only when every recurring payment is already linked to a bill
   // (nothing inferred the old way); otherwise the entry is grouped as before, so it can't start a second copy of a bill
   // that is still inferred. "new" makes a bill from this entry; an id links to that bill.
@@ -258,6 +289,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           <button type="button" className={`type-pick type-btn${type==="income"?" active":""}`} aria-pressed={type==="income"} onClick={()=>setType("income")}><span className="type-dot" style={{background:"var(--pos)"}} aria-hidden="true"/>{t("add.income")}</button>
           {!editId&&onOtherKind&&["loans","debts"].map(k=><button key={k} type="button" className="type-pick" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}><span className="type-dot" style={{background:k==="loans"?"var(--info)":"var(--warn)"}} aria-hidden="true"/>{t(k==="loans"?"add.loan":"add.debt")}</button>)}
         </div>
+        {!editId&&!prefill&&onSaveMany&&<QuickTextPanel currency={currency} memory={merchantMemory} onSaveMany={onSaveMany}/>}
         <div className="amount-zone" onClick={()=>amtRef.current?.focus()}>
           <div className="amount-line">
             <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off" autoFocus={!editId}

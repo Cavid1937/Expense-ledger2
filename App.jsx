@@ -2415,6 +2415,53 @@ export function sinkingCandidates(transactions, bills, goals, now=new Date()) {
   return out.sort((a,b)=>a.due.localeCompare(b.due)||a.name.localeCompare(b.name));
 }
 
+// ─── Run 50 (owner list #2): write entries as a sentence ──────────────────────────────────────────────────────────────
+// "bolt 12, market 25 yesterday" becomes two entries to REVIEW; nothing is saved by the parser. Local rules only (no AI, no network).
+// Lines, ";" and commas that do not start a decimal ("12,50" is 12.50) separate entries. In each entry: a number is the amount (the last
+// one wins and the row is flagged when there are several), "yesterday / dünən / вчера" and "today / bu gün / сегодня" set the date, a
+// full date (31.10.2026, 31/10, 2026-10-31) sets it exactly, a leading "+" or a word like salary / maaş / зарплата makes it income.
+// What is left is the merchant. The category comes from the person's own history first, then the built-in merchant list, else Other.
+// (JavaScript's \b only knows ASCII letters, so words are delimited by spaces here: the text is padded with one before parsing.)
+const qtWord=(alts,flags="i")=>new RegExp("(^|\\s)(?:"+alts+")(?=\\s|$)",flags);
+const QT_CUR=/₼|(^|\s)(?:azn|manat|manata|manatı|manatdan|руб|руб\.|манат|манатов|манатах|маната)(?=\s|$)/gi;
+const QT_INCOME=qtWord("maaş|maas|salary|зарплата|зарплату|зп|income|gəlir|доход");
+const QT_DBY=qtWord("day before yesterday|srağagün|позавчера"), QT_Y=qtWord("yesterday|dünən|вчера"), QT_TD=qtWord("today|bu gün|bugün|сегодня");
+export function parseQuickText(text, memory={}, now=new Date()) {
+  const chunks=String(text==null?"":text).replace(/\r/g,"").split(/\n|;|,(?!\d)/).map(s=>s.trim()).filter(Boolean).slice(0,20);
+  const day=(k)=>localDateStr(new Date(now.getFullYear(),now.getMonth(),now.getDate()-k));
+  return chunks.map(raw=>{
+    let s=" "+raw+" ", type="expense", date=day(0), reason=null, warn=false;
+    if (/^\s*\+/.test(s)) { type="income"; s=s.replace(/^\s*\+/," "); }
+    if (QT_INCOME.test(s)) type="income";
+    s=s.replace(QT_DBY,()=>{ date=day(2); return " "; });
+    s=s.replace(QT_Y,()=>{ date=day(1); return " "; });
+    s=s.replace(QT_TD," ");
+    s=s.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/,(m,y,mo,d)=>{ const v=`${y}-${mo}-${d}`; if (isValidDateStr(v)) date=v; else warn=true; return " "; });
+    s=s.replace(/\b(\d{1,2})[./](\d{1,2})[./](\d{4})\b/,(m,d,mo,y)=>{ const v=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`; if (isValidDateStr(v)) date=v; else warn=true; return " "; });
+    s=s.replace(/\b(\d{1,2})\/(\d{1,2})\b/,(m,d,mo)=>{ let y=now.getFullYear(); let v=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`; if (isValidDateStr(v)) { if (v>localDateStr(now)) { y-=1; v=`${y}-${String(mo).padStart(2,"0")}-${String(d).padStart(2,"0")}`; } if (isValidDateStr(v)) date=v; else warn=true; } else warn=true; return " "; });
+    s=s.replace(QT_CUR," ");
+    const nums=[...s.matchAll(/\d+(?:[.,]\d+)?/g)];
+    let amount=null;
+    if (!nums.length) reason="noAmount";
+    else {
+      const pick=nums[nums.length-1]; warn=warn||nums.length>1;
+      amount=parseMoney(pick[0].replace(",","."),{positive:true});
+      if (amount===null) reason="badAmount"; else s=s.slice(0,pick.index)+" "+s.slice(pick.index+pick[0].length);
+    }
+    let merchant=s.replace(/[€$]/g," ").replace(/\s+/g," ").trim();
+    const salaryWord=qtWord("maaş|maas|salary|зарплата|зарплату|зп").test(" "+raw+" ");
+    if (type==="income") merchant=(" "+merchant+" ").replace(QT_INCOME," ").replace(/\s+/g," ").trim();
+    if (merchant) merchant=merchant.charAt(0).toUpperCase()+merchant.slice(1);
+    let category=type==="income" ? (salaryWord ? "salary" : "income") : "other", subcategory="";
+    if (merchant) {
+      const mem=merchantSuggest(merchant,memory||{},type), kn=type==="expense" ? knownMerchantExact(merchant) : null;
+      if (mem && mem.category) { category=mem.category; subcategory=mem.subcategory||""; }
+      else if (kn) { category=kn.category; subcategory=kn.subcategory||""; }
+    }
+    return { raw, ok:reason===null, reason, warn, type, amount, merchant, category, subcategory, date };
+  });
+}
+
 // Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
 // Whole cents, so 0.1 + 0.2 is exactly 0.30. "none" = entries without a wallet. "used" = at least one entry has a wallet.
 export function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
@@ -3840,6 +3887,17 @@ function AppInner() {
     showSnackbar(msg,()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },6000,"add");
   },[showToast,showSnackbar]);
 
+  // Run 50: several entries written as one sentence, saved in one step with one Undo (the review list already showed each one).
+  const addManyTransactions=useCallback((items)=>{
+    const list=(items||[]).filter(i=>i&&i.ok&&(i.type==="expense"||i.type==="income")&&i.amount>0&&isValidDateStr(i.date));
+    if (!list.length) return;
+    const before=stateRef.current, stamp=new Date().toISOString();
+    const rows=list.map(i=>({ type:i.type, amount:i.amount, category:i.category, subcategory:i.subcategory||"", merchant:i.merchant||"", note:"", date:i.date, recurring:false, recurFreq:null, isActive:true, id:Date.now()+Math.random(), createdAt:stamp }));
+    const next={...before,transactions:[...rows,...before.transactions]};
+    setState(next);
+    showSnackbar(tn("qt.added",rows.length),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },6000,"add");
+  },[showToast,showSnackbar]);
+
   // Run 17: a loan payment marked paid adds one plain expense and returns its id (so the payment record can point at it); removing
   // the record removes that entry again. No undo window here: the confirmation on the Debts page already asked.
   const addLoanEntry=useCallback((data)=>{
@@ -4390,7 +4448,7 @@ function AppInner() {
 
         {showAdd&&(
           <AddEditOverlay leaving={addLeaving} templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
-            onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onClose={closeAdd}
+            onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onSaveMany={items=>{ addManyTransactions(items); closeAdd(); }} onClose={closeAdd}
             onRenameSub={(cid,from,to)=>{ setState(s=>({...s,transactions:renameSubcatInEntries(s.transactions,cid,from,to)})); showToast(t("subcat.renamed")); }}
             onOtherKind={k=>{ setDebtsStart(k); closeAdd(); switchTab("debts"); }}/>
         )}
