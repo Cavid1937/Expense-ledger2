@@ -502,6 +502,15 @@ export const MESSAGES = {
   "rollover.sub": { en: "Add it to a goal so it does not get spent by accident. Nothing else changes.", az: "Təsadüfən xərclənməsin deyə məqsədə əlavə edin. Başqa heç nə dəyişmir.", ru: "Добавьте к цели, чтобы случайно не потратить. Больше ничего не меняется." },
   "rollover.add": { en: "Add {amount} to {goal}", az: "{goal} məqsədinə {amount} əlavə et", ru: "Добавить {amount} к цели «{goal}»" },
   "rollover.goalFallback": { en: "unnamed", az: "adsız", ru: "без названия" },
+  // Run 50: set money aside for a yearly bill (plural forms: en/az one+other, ru one+few+many+other)
+  "sinking.title": { en: "Get ready for yearly bills", az: "İllik ödənişlərə hazırlaşın", ru: "Подготовьтесь к годовым платежам" },
+  "sinking.sub": { en: "Put a little aside each month so the whole bill is ready on its due date. A goal tracks it.", az: "Hər ay bir az kənara qoyun ki, ödəniş günü məbləğ hazır olsun. Məqsəd bunu izləyir.", ru: "Откладывайте понемногу каждый месяц, чтобы к сроку нужная сумма была готова. Цель следит за этим." },
+  "sinking.line": {
+    en: { one: "{amount} this month for {total} due {date}", other: "{amount} a month for {n} months for {total} due {date}" },
+    az: { one: "{date} üçün {total}: bu ay {amount}", other: "{date} üçün {total}: {n} ay ərzində ayda {amount}" },
+    ru: { one: "{total} к {date}: в этом месяце {amount}", few: "{total} к {date}: по {amount} в месяц, {n} месяца", many: "{total} к {date}: по {amount} в месяц, {n} месяцев", other: "{total} к {date}: по {amount} в месяц, {n} месяца" } },
+  "sinking.make": { en: "Make a goal", az: "Məqsəd yarat", ru: "Создать цель" },
+  "sinking.made": { en: "Goal added: {name}", az: "Məqsəd əlavə edildi: {name}", ru: "Цель добавлена: {name}" },
   "rollover.skip": { en: "Not now", az: "İndi yox", ru: "Не сейчас" },
   "rollover.done": { en: "Added {amount} to {goal}", az: "{goal} məqsədinə {amount} əlavə edildi", ru: "К цели «{goal}» добавлено {amount}" },
   "loan.interestPart": { en: "Interest part of this payment", az: "Bu ödənişin faiz hissəsi", ru: "Часть платежа — проценты" },

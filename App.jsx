@@ -2396,6 +2396,25 @@ export function applyRollover(goals, goalId, amount) {
   });
 }
 
+// ─── Run 50 (owner list #6): set money aside for a yearly bill ──────────────────────────────────────────────────────────
+// For each active, explicit YEARLY expense bill whose next due date is ahead, the amount to put aside every month so the whole
+// bill is ready on its due date (the same rounded-up figure the goals use). A bill whose name already matches a goal is left out,
+// so the offer disappears once the person has made the goal. Nothing is created here; the Goals screen offers a button.
+export function sinkingCandidates(transactions, bills, goals, now=new Date()) {
+  const have=new Set((goals||[]).map(g=>String(g&&g.name||"").trim().toLowerCase()));
+  const out=[];
+  for (const s of buildSchedules(transactions||[], bills||[])) {
+    if (!s.billId || !s.isActive || s.type!=="expense" || s.freq!=="yearly") continue;
+    const name=String(s.merchant||"").trim();
+    if (!name || have.has(name.toLowerCase())) continue;
+    const due=scheduleNextDue(s, transactions||[], now); if (!due) continue;
+    const dueStr=localDateStr(due), r=goalRequiredMonthly({ target:s.amount, saved:0, targetDate:dueStr }, now);
+    if (r.state!=="active") continue;
+    out.push({ billId:s.billId, name, amount:s.amount, due:dueStr, months:r.periods, perMonth:r.perMonth });
+  }
+  return out.sort((a,b)=>a.due.localeCompare(b.due)||a.name.localeCompare(b.name));
+}
+
 // Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
 // Whole cents, so 0.1 + 0.2 is exactly 0.30. "none" = entries without a wallet. "used" = at least one entry has a wallet.
 export function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {

@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { pickerCats, planRebalance, readCatPrefs } from "../App.jsx";
+import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates } from "../App.jsx";
 import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
 import { Collapse, EditSwap, useBackStep, useLeave } from "./motion.jsx";
@@ -168,6 +168,24 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
           <button className="btn btn-sm" onClick={()=>{ if (showNewGoal) { setEditGoalId(null); setGoalName(""); setGoalTarget(""); setGoalSaved(""); setGoalMonthly(""); setGoalDate(""); } setShowNewGoal(s=>!s); }}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
         </div>
         <Collapse open={showNewGoal&&!editGoalId} id="goal-new">{renderGoalForm()}</Collapse>
+        {(()=>{
+          // Run 50: yearly bills that have no goal yet; one tap makes the goal (target = the bill, date = its due date)
+          const cands=sinkingCandidates((rawState&&rawState.transactions)||transactions, (rawState&&rawState.bills)||[], goals);
+          if (!cands.length) return null;
+          return (<div className="card" data-section="sinking" style={{marginBottom:10}}>
+            <div className="a-card-title">{t("sinking.title")}</div>
+            <div className="list-sub" style={{marginBottom:6}}>{t("sinking.sub")}</div>
+            {cands.slice(0,3).map(c=>(
+              <div key={c.billId} className="list-row" style={{alignItems:"center",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div className="list-title">{c.name}</div>
+                  <div className="list-sub">{tn("sinking.line",c.months,{ amount:fmt(c.perMonth,currency), total:fmt(c.amount,currency), date:fmtDate(c.due) })}</div>
+                </div>
+                <button type="button" className="btn btn-sm" data-section="sinking-make" data-bill={c.billId} onClick={()=>{ onAddGoal({ name:c.name, target:c.amount, saved:0, monthlyTarget:c.perMonth, targetDate:c.due }); showToast(t("sinking.made",{ name:c.name })); }}>{t("sinking.make")}</button>
+              </div>
+            ))}
+          </div>);
+        })()}
         {goals.length===0&&!showNewGoal&&<div className="list-sub" style={{margin:"0 2px"}}>{t("set.noGoals")}</div>}
         {goals.map(goal=>{
           const gp=calcGoalProgress(goal); const {pct,remaining,estCompletion}=gp; const req=goalRequiredMonthly(goal);
