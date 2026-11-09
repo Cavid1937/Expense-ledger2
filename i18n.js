@@ -542,6 +542,13 @@ export const MESSAGES = {
   "gifts.noMatch": { en: "Nothing matches your search.", az: "Axtarışa uyğun heç nə yoxdur.", ru: "По вашему запросу ничего не найдено." },
   "gifts.export": { en: "Export these gifts (CSV)", az: "Bu hədiyyələri ixrac et (CSV)", ru: "Экспортировать эти подарки (CSV)" },
   "gifts.exported": { en: "Gift list saved as a file", az: "Hədiyyə siyahısı fayl kimi saxlanıldı", ru: "Список подарков сохранён в файл" },
+  // Run 50: bills suggested from repeated payments
+  "recsug.title": { en: "Looks like a bill", az: "Ödənişə bənzəyir", ru: "Похоже на регулярный платёж" },
+  "recsug.sub": { en: "You paid these again and again for about the same amount. Turn one into a bill to see when it is due. Nothing is added until you save.", az: "Bunları təxminən eyni məbləğə dəfələrlə ödəmisiniz. Nə vaxt gəldiyini görmək üçün birini ödənişə çevirin. Siz saxlamayana qədər heç nə əlavə olunmur.", ru: "Вы платили за это снова и снова примерно одинаково. Превратите один в платёж, чтобы видеть срок. Пока вы не сохраните, ничего не добавляется." },
+  "recsug.lineMonthly": { en: { one: "{amount}, monthly ({n} time)", other: "{amount}, monthly ({n} times)" }, az: { one: "{amount}, aylıq ({n} dəfə)", other: "{amount}, aylıq ({n} dəfə)" }, ru: { one: "{amount}, ежемесячно ({n} раз)", few: "{amount}, ежемесячно ({n} раза)", many: "{amount}, ежемесячно ({n} раз)", other: "{amount}, ежемесячно ({n} раза)" } },
+  "recsug.lineYearly": { en: { one: "{amount}, yearly ({n} time)", other: "{amount}, yearly ({n} times)" }, az: { one: "{amount}, illik ({n} dəfə)", other: "{amount}, illik ({n} dəfə)" }, ru: { one: "{amount}, ежегодно ({n} раз)", few: "{amount}, ежегодно ({n} раза)", many: "{amount}, ежегодно ({n} раз)", other: "{amount}, ежегодно ({n} раза)" } },
+  "recsug.review": { en: "Review", az: "Bax", ru: "Проверить" },
+  "recsug.dismiss": { en: "Not a bill", az: "Ödəniş deyil", ru: "Не платёж" },
   "rollover.skip": { en: "Not now", az: "İndi yox", ru: "Не сейчас" },
   "rollover.done": { en: "Added {amount} to {goal}", az: "{goal} məqsədinə {amount} əlavə edildi", ru: "К цели «{goal}» добавлено {amount}" },
   "loan.interestPart": { en: "Interest part of this payment", az: "Bu ödənişin faiz hissəsi", ru: "Часть платежа — проценты" },

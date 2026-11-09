@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, activateKey, billPaymentsLeft, billsToIcs, buildSchedules, catName, daysBetween, downloadFile, fmt, fmtDate, localDateStr, localMonthStr, maskText, scheduleMonthStatus, scheduleMonthly, scheduleNextDue, subName, today } from "../App.jsx";
 
-export function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedule, onRecordPayment, onConvert, onEditBill, onToggleBill, onAddBill }) {
+export function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedule, onRecordPayment, onConvert, onEditBill, onToggleBill, onAddBill, suggestions=[], onReviewSuggestion, onDismissSuggestion }) {
   const schedules=useMemo(()=>{
     const nowD=new Date();
     return buildSchedules(transactions,bills).map(x=>{
@@ -19,11 +19,28 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
   const nowD=new Date();
   const upcoming=outgoing.filter(x=>x.nextDue&&daysBetween(nowD,x.nextDue)<=7);
 
+  const sugCard = (suggestions&&suggestions.length>0&&onReviewSuggestion) ? (
+    <div className="card" data-section="rec-suggest" style={{marginBottom:12}}>
+      <div className="a-card-title">{t("recsug.title")}</div>
+      <div className="list-sub" style={{marginBottom:6}}>{t("recsug.sub")}</div>
+      {suggestions.slice(0,3).map(s=>(
+        <div key={s.name} className="list-row" style={{alignItems:"center",gap:8}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div className="list-title">{s.name}</div>
+            <div className="list-sub">{tn(s.freq==="yearly"?"recsug.lineYearly":"recsug.lineMonthly",s.count,{ amount:fmt(s.amount,currency) })}</div>
+          </div>
+          <button type="button" className="btn btn-sm btn-sm-primary" data-section="rec-suggest-review" data-name={s.name} onClick={()=>onReviewSuggestion(s)}>{t("recsug.review")}</button>
+          <button type="button" className="btn btn-ghost btn-sm" data-section="rec-suggest-dismiss" data-name={s.name} aria-label={t("recsug.dismiss")+": "+s.name} onClick={()=>onDismissSuggestion(s)}>{t("recsug.dismiss")}</button>
+        </div>
+      ))}
+    </div>
+  ) : null;
   if (schedules.length===0) return (
     <div className="empty">
       <div className="empty-icon"><Icon name="repeat" size={30}/></div>
       <div className="empty-title">{t("rec.emptyTitle")}</div>
       <div className="empty-body">{t("rec.emptyBody")}</div>
+      {sugCard}
       {/* Run 31: an empty screen is an invitation to act: the same "Add bill" the header action opens */}
       {onAddBill&&<button className="btn btn-primary btn-full" data-section="rec-empty-add" style={{maxWidth:220,marginTop:4}} onClick={onAddBill}>{t("bill.add")}</button>}
     </div>
@@ -75,6 +92,7 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
   return (
     <div>
       <div style={{fontSize:11,color:"var(--ink-4)",fontStyle:"italic",marginBottom:14,lineHeight:1.5}}>{t("rec.intro")}</div>
+      {sugCard}
       {inferred>0&&onConvert&&(
         <div className="card bill-convert">
           <div className="card-title" style={{marginBottom:6}}>{t("bill.legacyTitle")}</div>

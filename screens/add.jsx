@@ -15,7 +15,7 @@ const amountOf=(txt)=>isExprText(txt) ? evalAmountExpr(txt) : formMoney(txt,{pos
 // and then every week / two weeks / month / year (a day past a month's end falls on that month's last day).
 // Deleting a bill keeps all its payments; they just stop pointing to it.
 export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast }) {
-  const isNew=!bill;
+  const isNew=!bill || bill.prefill===true;   // Run 50: a suggested bill arrives pre-filled but is still a NEW bill
   const [name,setName]=useState(bill?.name||""), [type,setType]=useState(bill?.type||"expense"), [amount,setAmount]=useState(bill?String(bill.amount):"");
   const [category,setCategory]=useState(bill?.category||"housing"), [freq,setFreq]=useState(bill?.freq||"monthly");
   const [anchor,setAnchor]=useState(bill?.anchorDate||today()), [active,setActive]=useState(bill?bill.active!==false:true);

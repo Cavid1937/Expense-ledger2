@@ -2485,6 +2485,40 @@ export function giftLedger(transactions, query="") {
   return { rows, people:list, given:sum("given"), received:sum("received") };
 }
 
+// ─── Run 50 (owner list #9): suggest bills from repeated payments ───────────────────────────────────────────────────
+// An expense place that was paid at least 3 times, about once a month or once a year, for almost the same amount, and was paid
+// recently enough to still be going, is offered as a bill. Entries already tied to a bill or marked recurring, places that already
+// have a bill of the same name, and places the person dismissed are left out. Nothing is created here; the person reviews the bill
+// first. The first due date offered is the NEXT one after today (the earlier payments stay as they are, not linked).
+const RECSUG_KEY=KEY+"__recsug";
+export function readRecSuggestDismissed() { try { const v=JSON.parse(localStorage.getItem(RECSUG_KEY)||"[]"); return Array.isArray(v) ? v.filter(x=>typeof x==="string").slice(0,200) : []; } catch { return []; } }
+export function writeRecSuggestDismissed(list) { try { localStorage.setItem(RECSUG_KEY,JSON.stringify([...new Set((list||[]).map(x=>String(x)))].slice(0,200))); } catch { /* offered again next time */ } }
+export function recurringSuggestions(transactions, bills, dismissed=[], now=new Date()) {
+  const billNames=new Set((bills||[]).map(b=>lc(String(b&&b.name||"").trim()))), gone=new Set((dismissed||[]).map(x=>lc(String(x).trim())));
+  const by=new Map();
+  for (const x of transactions||[]) {
+    if (!x || x.type!=="expense" || x.billId || x.recurring || !isValidDateStr(String(x.date))) continue;
+    const name=String(x.merchant||"").trim(); if (!name) continue;
+    const k=lc(name); if (!by.has(k)) by.set(k,{ name, list:[] }); by.get(k).list.push(x);
+  }
+  const out=[], todayStr=localDateStr(now);
+  for (const { name, list } of by.values()) {
+    if (list.length<3 || billNames.has(lc(name)) || gone.has(lc(name))) continue;
+    const sorted=[...list].sort((a,b)=>a.date.localeCompare(b.date));
+    const rec=detectRecurrence(sorted);
+    if (!rec.isRecurring || (rec.recurringFreq!=="monthly" && rec.recurringFreq!=="yearly")) continue;
+    const amts=sorted.map(x=>Math.round((Number(x.amount)||0)*100)).filter(a=>a>0);
+    if (amts.length<3 || Math.max(...amts)>Math.min(...amts)*1.25) continue;
+    const last=sorted[sorted.length-1];
+    if (daysBetween(parseLocalDate(last.date),now)>rec.avgDaysBetween*1.6) continue;
+    const step=rec.recurringFreq==="yearly" ? 12 : 1;
+    let next=addMonths(parseLocalDate(last.date),step);
+    for (let i=0;i<40 && localDateStr(next)<todayStr;i++) next=addMonths(next,step);
+    out.push({ name, amount:Math.round((Number(last.amount)||0)*100)/100, freq:rec.recurringFreq, count:sorted.length, lastDate:last.date, anchorDate:localDateStr(next), category:last.category, subcategory:last.subcategory||"" });
+  }
+  return out.sort((a,b)=>a.name.localeCompare(b.name));
+}
+
 // Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
 // Whole cents, so 0.1 + 0.2 is exactly 0.30. "none" = entries without a wallet. "used" = at least one entry has a wallet.
 export function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
@@ -3710,6 +3744,7 @@ function AppInner() {
   const [backupDismissed, setBackupDismissed] = useState(false);
   const [iosNote, setIosNote] = useState(()=>iosBrowserTab() && !iosNoteSeen());
   const [rolloverSeen, setRolloverSeen] = useState(()=>readRolloverSeen());   // Run 50: month already answered (own key)
+  const [recDismissed, setRecDismissed] = useState(()=>readRecSuggestDismissed());   // Run 50: places whose "make it a bill" offer was dismissed (own key)
   const backupReminder = backupReminderDue(state);
   const snackTimer=useRef(null);
   const snackActive=useRef(false);   // is an undo window currently open?
@@ -4326,6 +4361,7 @@ function AppInner() {
   },[importPending,skipDup,showToast,showSnackbar]);
 
   const {transactions,budgets,templates,currency,goals,safeToSpend}=state; const bills=state.bills||[];
+  const recSuggestions=tab==="recurring" ? recurringSuggestions(transactions,bills,recDismissed) : [];   // Run 50: only worked out while the Recurring page is open (no hook here: it sits after possible early returns)
   // Run 17: spending views see loan payments as only their interest part (see forSpending); Transactions and backups keep the full payment.
   const spendTxns=useMemo(()=>forSpending(transactions),[transactions]);
   // Run 18: newest five entries for the Home list (date, then creation time).
@@ -4443,6 +4479,8 @@ function AppInner() {
           {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={tb=>{ if (tb==="goals") setGoalsSeg("goals"); switchTab(tb); }} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill} onAddBill={()=>setEditBill(null)}
+            suggestions={recSuggestions} onReviewSuggestion={s=>setEditBill({ prefill:true, name:s.name, type:"expense", amount:s.amount, category:s.category, subcategory:s.subcategory, freq:s.freq, anchorDate:s.anchorDate, active:true })}
+            onDismissSuggestion={s=>{ const next=[...recDismissed,s.name]; writeRecSuggestDismissed(next); setRecDismissed(next); }}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
           {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast}/></div>}
           {tab==="gifts"     && <GiftsPage transactions={transactions} currency={currency} showToast={showToast} onView={txn=>setViewTxn(txn)} onAdd={k=>openAdd(k==="received"?{type:"income",category:"giftin"}:{type:"expense",category:"gifts"})}/>}
