@@ -88,6 +88,8 @@
     "run42slot.test.mjs": 17,
     "run42merch.test.mjs": 15,
     "run43reimb.test.mjs": 29,
+    "run50rollover.test.mjs": 22,
+    "run50net.test.mjs": 9,
     "run43pace.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
@@ -104,6 +106,8 @@
     "e2e_run6.mjs": 14,
     "e2e_run7.mjs": 21,
     "e2e_run8.mjs": 9,
+    "e2e_run50.mjs": 11,
+    "e2e_run50net.mjs": 4,
     "e2e_run9.mjs": 55,
     "e2e_run10.mjs": 16,
     "e2e_run12.mjs": 35,

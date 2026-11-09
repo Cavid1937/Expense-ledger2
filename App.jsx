@@ -2366,6 +2366,36 @@ export function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
   return out;
 }
 
+// ─── Run 50 (owner list #5): month-end rollover to a goal ─────────────────────────────────────────────────────────────
+// In the first week of a month, if last month ended with money left over (money in minus spending, the same figures as the
+// month card) and a goal is not finished, Home offers to add that amount to the goal. A goal's "saved" is a number the user
+// keeps (it is not linked to an account), so adding to it changes no balance. Declining is remembered per month in its own key.
+const ROLLOVER_KEY=KEY+"__rollover";
+export function readRolloverSeen() { try { return localStorage.getItem(ROLLOVER_KEY)||""; } catch { return ""; } }
+export function writeRolloverSeen(ym) { try { localStorage.setItem(ROLLOVER_KEY,String(ym)); } catch { /* offered again next time */ } }
+export function rolloverOffer(transactions, goals, seenYm="", now=new Date()) {
+  if (now.getDate()>7) return null;
+  const prv=localMonthStr(new Date(now.getFullYear(),now.getMonth()-1,1));
+  if (seenYm===prv) return null;
+  const s=calcMonthSummary(transactions||[], prv, localMonthStr(new Date(now.getFullYear(),now.getMonth()-2,1)), now);
+  const kept=Math.round((s.curIn-s.curExp)*100)/100;
+  if (!(kept>=1)) return null;
+  const open=(goals||[]).map(g=>({ id:g.id, name:String(g.name||""), remaining:Math.round(((Number(g.target)||0)-(Number(g.saved)||0))*100)/100 }))
+    .filter(g=>g.id && g.remaining>0).slice(0,3)
+    .map(g=>({ ...g, amount:Math.min(kept,g.remaining) }));
+  return open.length ? { month:prv, kept, goals:open } : null;
+}
+// Adds `amount` (capped at what is still missing) to one goal; every other goal and the goal's other fields stay as they were.
+export function applyRollover(goals, goalId, amount) {
+  const a=Math.round((Number(amount)||0)*100)/100;
+  if (!(a>0)) return goals;
+  return (goals||[]).map(g=>{
+    if (g.id!==goalId) return g;
+    const saved=Number(g.saved)||0, left=Math.max(0,Math.round(((Number(g.target)||0)-saved)*100)/100);
+    return { ...g, saved:Math.round((saved+Math.min(a,left))*100)/100 };
+  });
+}
+
 // Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
 // Whole cents, so 0.1 + 0.2 is exactly 0.30. "none" = entries without a wallet. "used" = at least one entry has a wallet.
 export function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
@@ -3590,6 +3620,7 @@ function AppInner() {
   // Dismissing the backup reminder hides it for this visit only; it is worked out from the saved state on every render.
   const [backupDismissed, setBackupDismissed] = useState(false);
   const [iosNote, setIosNote] = useState(()=>iosBrowserTab() && !iosNoteSeen());
+  const [rolloverSeen, setRolloverSeen] = useState(()=>readRolloverSeen());   // Run 50: month already answered (own key)
   const backupReminder = backupReminderDue(state);
   const snackTimer=useRef(null);
   const snackActive=useRef(false);   // is an undo window currently open?
@@ -4285,6 +4316,8 @@ function AppInner() {
 
         <main className={(SUBPAGE_PARENT[tab]?"page page-sub":"page")+(pageOut?" page-out":"")+(pfCount.current>0?(pfCount.current%2?" pf-a":" pf-b"):"")} key={tabKey}>
           {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+            rollover={{ offer:rolloverOffer(spendTxns,goals,rolloverSeen), onSkip:()=>{ const m=rolloverOffer(spendTxns,goals,rolloverSeen)?.month; if (m) { writeRolloverSeen(m); setRolloverSeen(m); } },
+              onApply:(g)=>{ const o=rolloverOffer(spendTxns,goals,rolloverSeen); if (!o) return; setState(s=>({...s,goals:applyRollover(s.goals,g.id,g.amount)})); writeRolloverSeen(o.month); setRolloverSeen(o.month); showToast(t("rollover.done",{ amount:fmt(g.amount,currency), goal:g.name||t("rollover.goalFallback") })); } }}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onGroupMany={groupMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}

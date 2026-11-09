@@ -497,6 +497,13 @@ export const MESSAGES = {
   "setup.s4": { en: "Save a backup file", az: "Ehtiyat nüsxə faylı saxlayın", ru: "Сохраните файл резервной копии" },
   "setup.stepDone": { en: "done", az: "tamamlandı", ru: "готово" },
   "setup.hide": { en: "Hide this list", az: "Bu siyahını gizlət", ru: "Скрыть этот список" },
+  // Run 50: month-end rollover to a goal
+  "rollover.title": { en: "Last month you kept {amount}", az: "Keçən ay {amount} qaldı", ru: "В прошлом месяце осталось {amount}" },
+  "rollover.sub": { en: "Add it to a goal so it does not get spent by accident. Nothing else changes.", az: "Təsadüfən xərclənməsin deyə məqsədə əlavə edin. Başqa heç nə dəyişmir.", ru: "Добавьте к цели, чтобы случайно не потратить. Больше ничего не меняется." },
+  "rollover.add": { en: "Add {amount} to {goal}", az: "{goal} məqsədinə {amount} əlavə et", ru: "Добавить {amount} к цели «{goal}»" },
+  "rollover.goalFallback": { en: "unnamed", az: "adsız", ru: "без названия" },
+  "rollover.skip": { en: "Not now", az: "İndi yox", ru: "Не сейчас" },
+  "rollover.done": { en: "Added {amount} to {goal}", az: "{goal} məqsədinə {amount} əlavə edildi", ru: "К цели «{goal}» добавлено {amount}" },
   "loan.interestPart": { en: "Interest part of this payment", az: "Bu ödənişin faiz hissəsi", ru: "Часть платежа — проценты" },
   "loan.interestHint": { en: "Estimated from the terms you typed; correct it from your bank statement. Clear it if you do not know. The full payment is always recorded as money paid out; only the interest counts as spending.", az: "Məbləğ daxil etdiyiniz şərtlərə əsasən təxmin edilir. Bank çıxarışınızdakı məlumatla dəqiqləşdirin; bilmirsinizsə, sahəni boş saxlayın. Ödənişin tam məbləği çıxan pul kimi, yalnız faiz hissəsi isə xərc kimi qeyd olunur.", ru: "Сумма рассчитана приблизительно по введённым условиям. Сверьте её с банковской выпиской; если точная сумма неизвестна, оставьте поле пустым. Вся сумма платежа учитывается как выплата, а расходом считается только процентная часть." },
   "loan.interestInvalid": { en: "Check the interest amount: a number from 0 up to the payment.", az: "Faiz məbləği 0 ilə ödənişin tam məbləği arasında olmalıdır.", ru: "Сумма процентов должна быть от 0 до полной суммы платежа." },

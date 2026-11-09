@@ -122,7 +122,7 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount }) {
     </div>
   );
 }
-export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
+export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,curIn,curOther,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -223,6 +223,18 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
         <SpendDonut catSpend={catSpend} total={curExp} currency={currency}/>
       </div>}
 
+      {rollover&&rollover.offer&&(
+        <div className="card section-enter section-enter-2" data-section="home-rollover" role="group" aria-label={t("rollover.title",{ amount:fmt(rollover.offer.kept,currency) })}>
+          <div className="a-card-title">{t("rollover.title",{ amount:fmt(rollover.offer.kept,currency) })}</div>
+          <div className="list-sub" style={{marginBottom:8}}>{t("rollover.sub")}</div>
+          {rollover.offer.goals.map(g=>(
+            <button key={g.id} type="button" className="btn btn-full" style={{marginBottom:6}} data-section="rollover-add" data-goal={g.id} onClick={()=>rollover.onApply(g)}>
+              {t("rollover.add",{ amount:fmt(g.amount,currency), goal:g.name||t("rollover.goalFallback") })}
+            </button>
+          ))}
+          <button type="button" className="btn btn-ghost btn-sm" data-section="rollover-skip" onClick={rollover.onSkip}>{t("rollover.skip")}</button>
+        </div>
+      )}
       {/* Smart Helper — deterministic advice cards */}
       <div className="section-enter section-enter-2" data-section="home-coach">
         <SmartHelper transactions={transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
