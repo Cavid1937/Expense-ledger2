@@ -575,6 +575,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
         <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
         <ListRow id="debts" icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
+          <ListRow id="gifts" icon="gifts" title={t("gifts.title")} sub={t("gifts.rowSub")} onClick={()=>onOpen("gifts")}/>
       </div>
       {/* Run 31: language moved next to Appearance: both are about how the app looks and reads, not about money. */}
       <div className="settings-section-lbl more-group-lbl">{t("st.groupLook")}</div>

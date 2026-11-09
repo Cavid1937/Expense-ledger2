@@ -9,6 +9,7 @@ import { RecurringHub } from "./screens/recurring.jsx";
 import { ImportExportPage, ImportUnlock, InfoSheet, LanguageChooser, MorePage, MyAccounts } from "./screens/settings.jsx";
 import { AccountSheet } from "./screens/home.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
+import { GiftsPage } from "./screens/gifts.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
 import { Collapse, motionOff, runBackStep } from "./screens/motion.jsx";
@@ -2113,7 +2114,7 @@ export async function encryptBackupText(text, pass, iterations=ENC_ITER) {
   } catch { return { ok:false, reason:"failed" }; }
 }
 
-function buildCsv(transactions) {
+export function buildCsv(transactions) {
   // Run 16: "Wallet" is the last column, so the columns before it did not move (older readers and the older import still work).
   // Run 32: Account (its name), LoanInterest (the interest part of a loan instalment; "unknown" when the split was not given) and DebtRepayment ("yes" for a person-to-person
   // repayment entry) are appended after "Trip", so earlier columns did not move. They are for the user's spreadsheet: this CSV is NOT a backup and the import ignores them.
@@ -2460,6 +2461,28 @@ export function parseQuickText(text, memory={}, now=new Date()) {
     }
     return { raw, ok:reason===null, reason, warn, type, amount, merchant, category, subcategory, date };
   });
+}
+
+// ─── Run 50 (owner list #3): gift ledger ──────────────────────────────────────────────────────────────────────────────
+// A view over entries that already exist: expenses in the "Gifts & Personal" category are gifts GIVEN, income in "Gifts Received" is gifts
+// RECEIVED. The merchant field is the person (or the occasion's host), the note or subcategory is the event ("Wedding", "Birthday").
+// Nothing new is stored; the page only reads. A search matches person, note, subcategory and amount, in any letter case.
+export function giftLedger(transactions, query="") {
+  const q=lc(String(query||"").trim());
+  const rows=(transactions||[]).filter(x=>x && ((x.type==="expense" && x.category==="gifts") || (x.type==="income" && x.category==="giftin")) && isValidDateStr(String(x.date)))
+    .map(x=>({ txn:x, kind:x.type==="expense" ? "given" : "received", person:String(x.merchant||"").trim(), event:String(x.note||x.subcategory||"").trim(), cents:Math.round((Number(x.amount)||0)*100) }))
+    .filter(r=>!q || lc(r.person).includes(q) || lc(r.event).includes(q) || lc(String(r.txn.subcategory||"")).includes(q) || String(r.txn.amount).includes(q))
+    .sort((a,b)=>b.txn.date.localeCompare(a.txn.date) || String(b.txn.createdAt||"").localeCompare(String(a.txn.createdAt||"")));
+  const people=new Map();
+  for (const r of rows) {
+    const key=lc(r.person)||"\u0000"; const p=people.get(key)||{ name:r.person, given:0, received:0, count:0 };
+    if (r.kind==="given") p.given+=r.cents; else p.received+=r.cents;
+    p.count++; people.set(key,p);
+  }
+  const list=[...people.values()].map(p=>({ ...p, given:p.given/100, received:p.received/100 }))
+    .sort((a,b)=>(b.given+b.received)-(a.given+a.received) || a.name.localeCompare(b.name));
+  const sum=k=>rows.filter(r=>r.kind===k).reduce((s,r)=>s+r.cents,0)/100;
+  return { rows, people:list, given:sum("given"), received:sum("received") };
 }
 
 // Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
@@ -3472,7 +3495,7 @@ const ICONS = {
 const TABS = [{id:"home",icon:"home"},{id:"ledger",icon:"list"},{id:"monthly",icon:"chart"},{id:"goals",icon:"goal"},{id:"more",icon:"menu"}];
 const TAB_ORDER = TABS.map(x=>x.id);
 // Run 38: "accounts" is a page of its own opened from Home (it used to jump into the Settings tab, open a fold and scroll at the same time).
-const SUBPAGE_PARENT = { recurring:"more", io:"more", debts:"more", accounts:"home" };
+const SUBPAGE_PARENT = { recurring:"more", io:"more", debts:"more", gifts:"more", accounts:"home" };
 
 export function Icon({ name, size=16, color="currentColor", style={} }) {
   return (
@@ -4382,7 +4405,7 @@ function AppInner() {
           {SUBPAGE_PARENT[tab]
             ? <div className="topbar-back">
                 <button className="topbar-btn" onClick={()=>switchTab(SUBPAGE_PARENT[tab])} aria-label={t("common.back")} title={t("common.back")}><Icon name="chevLeft" size={22}/></button>
-                <h1 className="wordmark">{t(tab==="io"?"io.title":tab==="debts"?"debt.title":tab==="accounts"?"acc.title":"rec.title")}</h1>
+                <h1 className="wordmark">{t(tab==="io"?"io.title":tab==="debts"?"debt.title":tab==="accounts"?"acc.title":tab==="gifts"?"gifts.title":"rec.title")}</h1>
               </div>
             : <h1 className="wordmark">{tab==="home"?t(greetingKey())+(state.profileName?", "+state.profileName:""):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
@@ -4422,6 +4445,7 @@ function AppInner() {
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill} onAddBill={()=>setEditBill(null)}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
           {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast}/></div>}
+          {tab==="gifts"     && <GiftsPage transactions={transactions} currency={currency} showToast={showToast} onView={txn=>setViewTxn(txn)} onAdd={k=>openAdd(k==="received"?{type:"income",category:"giftin"}:{type:"expense",category:"gifts"})}/>}
           {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} onExportEncrypted={exportEncrypted} protection={protection} onProtect={()=>askProtection(true)}
