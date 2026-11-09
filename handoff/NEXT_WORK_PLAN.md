@@ -71,3 +71,6 @@ Bank notifications, home-screen widgets, voice entry and receipt scan (need the 
 
 ## If time runs short
 Order of value: Phase 1 (simplify) > Phase 2 (video fixes) > Phase 3 (currency) > Phase 4 > Phase 6 > Phase 5 (sync) > Phase 7. Finish and verify a phase before starting the next; leave PHASE_CHECKPOINT.md accurate after each.
+
+## Added 10 Nov: fix the test temp leak (do first in Session 1, Phase 0)
+Browser tests left about 8,350 temporary Chrome profile folders (about 83 GB) in %TEMP%. Make launch() in tests/browser/lib.mjs (and the cleanroom/v9 helpers) delete their temporary profile folders when the run ends, add a check that proves it, and delete leftovers older than an hour after each run.
