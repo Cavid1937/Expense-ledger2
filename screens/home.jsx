@@ -261,6 +261,7 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
               </button>
             ))}
             {onSetupWizard&&<button type="button" className="btn btn-sm" data-section="setup-wizard" style={{marginTop:8}} onClick={onSetupWizard}>{t("setupq.open")}</button>}
+            <button type="button" className="btn btn-ghost btn-sm setup-hide" style={{marginTop:6}} onClick={onSetupHide}>{t("setup.hide")}</button>
           </div>
         );
       })()}
