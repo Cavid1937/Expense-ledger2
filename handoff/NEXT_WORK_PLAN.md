@@ -217,3 +217,18 @@ Whatever is chosen: nothing is saved without the person's confirmation, every re
 - Stress phase: push the app past its limits, record what breaks.
 - Polish pass 2: fix what the stress phase exposed, then a final visual and wording check and the final gate.
 Reflect this order in every future session plan: build, verify, polish 1, stress, fix, polish 2.
+
+## Definition of 'polish' (owner, 10 Nov): broad. Polish pass 1 and 2 mean a full readiness review, not only looks. PLAN ONLY.
+The word the owner was looking for is visual hierarchy (also information hierarchy): on every screen the most important thing is seen first, the next things are clearly secondary, and the person knows what to do next.
+Method: act as a first-time user (fresh install, no data, then with data), in az, ru and en, on a small phone, and review each area through these lenses. For each area record Finding, Evidence, Impact, Priority, Fix, and a status (the six statuses).
+1. First-use journey: open the app for the first time: language, what it is, what to do first, first entry, first budget, first goal, where is my money, what do these numbers mean. Time to first useful result.
+2. Hierarchy and clarity per screen: Home, Transactions, Add, Analytics, Budgets and Goals, Debts and loans, Gifts, Accounts, Recurring, Settings/More, tutorial, coach and tips, notifications, import/export, statement import, receipt photos. One main action per screen, clear headings, readable numbers, no jargon, nothing that makes a beginner stop.
+3. Wording: plain, kind, consistent names for the same thing everywhere; az and ru native review.
+4. Look and feel: themes, contrast, spacing, motion, icons, empty and loading and error states, large text, dark and light.
+5. Frontend quality: no layout breaks on small or large phones, keyboard behaviour, sheets and scrolling (for example buttons that disappear), back-button behaviour, press feedback, no flicker or jumps, performance on a low-end phone.
+6. Correctness: every number the app shows is traceable and right (balances, safe to spend, budgets, goals, debts, loans, currency conversion, spreading, refunds, reimbursements, transfers, imports); independent recalculation tests on boundaries, rounding, dates, leap days, time zones and clock changes.
+7. Security and privacy: app lock and PIN recovery, hidden-in-recents and screenshot block, backups and restore, encryption choices stated honestly, Google sign-in scope, what leaves the phone (only what the Privacy text says), untrusted-file import (malformed, huge, malicious), no secrets in the app, dependency check.
+8. Data safety: migrations, downgrade, storage full, interrupted saves, restore on a new phone, uninstall warning, duplicate protection, undo.
+9. Readiness for real users: privacy policy and terms text (az/ru/en), support and feedback path, how users learn about updates, crash and error reporting decision (no tracking), store listing material, install and update path for the APK, accessibility basics (screen reader names, touch size, text scaling), low storage and battery behaviour, offline everywhere.
+10. Independent perspectives (per the project rules): ordinary user, student, parent, older adult, low financial literacy, irregular income, Azerbaijani local market, designer, engineer, security reviewer, financial-correctness reviewer, support team, sceptical competitor. Anything these would stumble on is a finding.
+Output: a readiness scorecard (one line per lens and per screen with a status and evidence), a prioritised fix list, and a plain-language summary for the owner. Nothing is called 'ready' without evidence; items that need a real device or a native speaker stay IMPLEMENTED BUT UNVERIFIED until the owner confirms.
