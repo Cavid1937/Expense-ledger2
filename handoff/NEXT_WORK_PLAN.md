@@ -129,3 +129,17 @@ H. Final stress phase (after everything above is built and verified)
 
 ## Model note
 The owner suggested a different model for the build sessions. Claude cannot switch its own model; the owner picks it in the app's model selector before saying start.
+
+## Added 10 Nov: ABB bank statement import (item #11 is now UNBLOCKED for ABB) and PIN recovery
+Evidence: the owner's real ABB statement (28-page PDF, about 500 rows, 12 months). It is private: it stays out of the repo; only the format below is recorded. Never store the customer name, ID number, PIN code or account number from it.
+Format learned:
+- Header: account number and currency, customer details (ignore), opening and closing balance with dates, total credit and debit movement.
+- Table columns: Date | Description | CR amount | DR amount | Balance (balance AFTER the row). Newest row first. A row can wrap onto two lines.
+- Description is a tilde-separated record: MERCHANT ~ real transaction date YYYYMMDD ~ currency ~ amount ~ city ~ masked card, then a second part: bank code ~ merchant category code (MCC, e.g. 4131 bus, 4111 transit, 5411 grocery, 5734 software, 6532 payments) ~ unique reference (RRN, starts with RD) ~ extra reference ~ country.
+- The statement date is the day the bank posted it and can be 1 to 3 days after the real transaction date inside the description. Use the real transaction date.
+- The amount in the description can differ from the debit actually charged (a foreign-merchant row: described 34.00, charged 40.12). Use the DR/CR column as the money that really moved and keep the described amount as a note.
+- Transfers have fixed wording (AniPay C2C transfer, AniPay-da kocurma, Karta m*daxil = money in, P2P SEND). Mobile top-ups, bill payments and online banking appear as their own merchants.
+- The running balance lets the importer prove every row: previous balance minus debit plus credit must equal the row's balance (checked by hand on the first rows).
+Plan: a local-only PDF reader (text extraction on the phone, lazy-loaded so the app does not grow for everyone), a preview with every row, duplicate detection by the unique reference (RRN) so importing the same statement twice adds nothing, category guess from MCC and the user's merchant memory, a balance-chain check that refuses or warns on a broken chain, transfers offered as account transfers, and nothing saved until the person confirms. Test with synthetic statements built from the same layout (never the real file). Other banks (Leobank, Kapital, PASHA) need their own samples.
+
+PIN recovery (replaces the SMS idea). Owner asked for one-time SMS codes for sign-in and forgotten PIN; recommendation: do not build SMS. Reasons: sending SMS needs a paid gateway and a server that holds the secret and checks the code (the app has neither; a code checked inside the app proves nothing); SMS can be stolen by SIM swap; the PIN protects data stored on the phone, so an SMS cannot unlock that data anyway. Instead: (a) Google sign-in is the identity step, free; (b) at PIN creation show a one-time recovery code to write down; (c) forgot PIN plus no code: reset the app and restore from the Drive backup or backup file. Decide with the owner before building.
