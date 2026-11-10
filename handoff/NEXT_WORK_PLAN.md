@@ -200,3 +200,20 @@ Receipt scanning, what was understood and what is open. The add-list item meant:
  (B) read the printed text on the phone (on-device text recognition; accuracy on Azerbaijani receipts is unknown and must be tested with real receipts);
  (C) read the QR code that fiscal receipts carry and fetch the receipt data from the tax system (not verified: whether the format and access are public and allowed; research first).
 Whatever is chosen: nothing is saved without the person's confirmation, every read value can be corrected, duplicates are caught, and it runs on the phone. Needs real receipt samples from the owner and the APK. Status: NOT ASSESSED; research item before any building.
+
+## Decided 10 Nov (owner): receipt feature = option A, keep the photo as proof. No reading, no AI. PLAN ONLY.
+- Add one or more photos to an entry (camera or gallery pick), see them on the entry, open full screen with zoom, delete one, remove with the entry.
+- Compression on the phone before saving: about 800 px wide, about 60 percent quality, so a receipt is roughly 50 to 60 KB; 1,000 receipts is roughly 50 to 60 MB.
+- Storage: photos do NOT go into the main ledger key expense_ledger_v5 (the browser's small text storage would overflow and could threaten the ledger). They live in their own store (IndexedDB in the web app; the app's private files in the APK), and the entry keeps only a small id list. Never in the phone's public gallery.
+- Safety: the main ledger must keep working if the photo store is full, missing or cleared (entry shows 'photo not available', nothing else breaks); ask for persistent storage; show total photo space used in Settings with per-entry cleanup; limit photos per entry (for example 5) and size per photo; handle camera permission denied, camera missing, interrupted save, and quota errors with plain messages.
+- Backups and export: the normal backup file stays small and does NOT include photos by default. Offer 'Back up with photos' as a separate bigger file (zip of the data file plus a photos folder named after the entry ids), and include photos in the Google Drive backup only if the user turns that on. The export readme (see the export-coherence item) explains how photos link to entries.
+- Migration: entries get an optional photos list; old app versions ignore it; old backups import unchanged; downgrade test required.
+- Privacy: photos stay on the phone; the app-lock and hide-in-recent-apps settings also cover the photo viewer; Privacy text updated.
+- Tests: add/remove/compress, quota full, store cleared, restore with and without photos, round trip, big counts (thousands) for the stress phase. Needs a device test of the camera on the Poco F6.
+- Receipt reading (OCR/QR/AI) is NOT planned; revisit only if users ask.
+
+## Polish phases (owner, 10 Nov): polishment is the LAST step, twice
+- Polish pass 1: after everything is built and verified, before the stress phase: appearance of every screen including the new features (receipt photos, goals history, completed goals, statement import, notifications, export readme), spacing, motion, empty states, wording, contrast, themes.
+- Stress phase: push the app past its limits, record what breaks.
+- Polish pass 2: fix what the stress phase exposed, then a final visual and wording check and the final gate.
+Reflect this order in every future session plan: build, verify, polish 1, stress, fix, polish 2.
