@@ -83,3 +83,49 @@ Status: ON THE BUILDING LIST, NOT STARTED. Waits for the owner's inputs (see lis
 - Features: back up now, automatic back up when the app opens (at most once a day, only when something changed), list backups, restore on a new phone (with the existing safe import preview), sign out / remove the Drive copy.
 - Privacy screen and 'How it works' updated: 'optional Google backup, off by default'.
 - Needs from owner: see reports/Google sign-in needs.md. Needs the APK and a test on the Poco F6; no APK is built without the owner's go-ahead.
+
+## Added 10 Nov (owner's second batch). Still NOT STARTED; runs after the "start" order, in this priority order inside each session
+Everything here follows the plain-language rule: anyone reading any text in the app must understand it (coach, tips, settings, tutorial, features), in az and ru first.
+
+A. Bugs seen on the Poco F6 (do first, small and certain)
+1. Quick-Add Templates (Goals screen): when editing a template far down the list, the Cancel button scrolls out of sight. Make Cancel (and Save) stay visible while editing, or put the edit form in a sheet with a fixed header. Browser test with a long list and a small screen.
+2. Text selection: long-press must offer copy/paste/select-all only inside text fields. Make everything else non-selectable (user-select none on the page, allowed on inputs, textareas and on places meant to be copied, such as an exported text). Check the long-press on rows still selects the row.
+3. Notification icon: replace the grey round 'i' with an app-specific small icon (white-on-transparent Android status-bar icon, round-safe) and an accent colour; choose a distinct, short notification sound (a custom sound file in the Android shell). APK-only: needs a build and a device test.
+4. Currency conversion in other currencies: cause found (App.jsx fxBaseOk): foreign-currency entry is offered only when the ledger currency is manat, and rates are only asked against AZN. Make it work both ways: any ledger currency can record an entry in another currency, using the Central Bank's AZN rates to cross-calculate (X to AZN to Y), with the date and the rate shown, rounding checked to the qepik, and the manual-rate fallback kept. Tests: both directions, same currency, AZN to EUR, EUR to USD, rounding, weekend dates, offline.
+
+B. Themes and look
+5. Default theme: change from Sea glass to a more neutral theme. Existing users keep their chosen theme (only new installs get the new default). Design 1 or 2 neutral options and pick the best; owner may supply palettes.
+6. Improve Sea glass: reduce the 'matrix' feel (less green/cyan saturation, calmer contrast, softer glow), keep its identity. Check contrast (WCAG AA) on every screen in light and dark. New palettes are welcome if good; screenshots of each for the owner.
+
+C. Goals
+7. Completed goals: a proper finished state (celebration moment, date completed, how long it took, total saved and the contribution history), not just the word 'completed'.
+8. Goal contributions: instead of overwriting the 'saved' number, the user adds an amount ('Add money'), each addition is recorded with date and optional note, and the goal shows its history and each contribution. Migration: existing 'saved' numbers become one opening contribution. Tests for migration, undo, delete a contribution, completion, over-contribution, backup/restore round trip, old-version safety. Update rollover and sinking-fund code that read 'saved'.
+
+D. History and progress everywhere
+9. Debts and loans history: debts keep a payment list per item; verify how complete it looks on screen and make the full history (every payment, date, remaining balance after each) visible and exportable. Check whether loans show the same.
+10. 'See all progress with details, everywhere': audit every feature (budgets, goals, debts, loans, gifts, recurring, accounts) for a visible history and a simple progress view; fill the gaps, in the same plain style.
+
+E. Export file coherence
+11. Make the CSV/JSON export one coherent, self-explaining system: clear column names (same words as the app), one row per thing, dates and amounts in a consistent format, a short readme or header sheet explaining each file, goals/debts/loans/accounts exported with their histories, and links between files (for example an account id or goal id that matches). A person opening the file in Excel must not be confused. Round-trip test: export then import gives identical data.
+
+F. Language
+12. Azerbaijani and Russian must be perfect: a full native-quality pass over every string, plurals, forms of address, number/date/currency formats, and the new plain-language rewrites. Prepare review sheets for a native speaker (owner or friend) because machine review alone cannot guarantee it; status stays IMPLEMENTED BUT UNVERIFIED until a native speaker signs off.
+
+G. After the Google sign-in exists
+13. Greet the user by their Google account name on Home (only if signed in and the name is available; otherwise keep the typed name; never blocks anything).
+
+H. Final stress phase (after everything above is built and verified)
+14. Push the app past its limits: very large data (hundreds of thousands of entries), huge amounts and tiny amounts, long text, emoji and right-to-left text, storage full, interrupted saves, rapid taps, repeated import/export, clock changes, leap days, extreme dates, thousands of goals/debts/accounts, low-memory and slow-CPU runs. Record what breaks, fix what is safe to fix, report limits honestly (what size the app handles smoothly and where it degrades).
+
+## Evaluation of the owner's pasted Gemini list (10 Nov)
+- Drive appDataFolder backup: already planned (needs the owner's Google setup). Silent upload 'whenever the app closes' is not reliable in a web view; use 'when the app opens, at most once a day, if changed'.
+- Google Sheets live backup: possible and free but needs a broader Google permission (Sheets scope is sensitive and may need Google's verification), duplicates the Drive backup and exposes full data in a readable sheet. Recommendation: skip for now; the improved CSV export covers the need.
+- CBAR XML feed: already used through Frankfurter's cbar provider. Direct cbar.az calls may be blocked by browser rules (CORS) in the web app; keep Frankfurter, optionally try cbar.az as a fallback in the APK shell.
+- Frankfurter ECB fallback: useful for non-AZN pairs only as a fallback and labelled 'market rate, not official'.
+- Native calendar events for recurring bills: the app already makes .ics files; direct calendar insertion is APK-only and a later extra.
+- Voice entry: possible in the APK; the sentence entry parser built in Run 50 would take its text. Later, APK, needs a device test; speech quality for az is uncertain, so it must be verified before promising it.
+- OpenStreetMap location tags: sends the user's GPS position to a third party; conflicts with the privacy promise and is not asked for by any user. Recommendation: do not build.
+- Share sheet: already exists.
+
+## Model note
+The owner suggested a different model for the build sessions. Claude cannot switch its own model; the owner picks it in the app's model selector before saying start.
