@@ -155,3 +155,22 @@ PIN recovery (replaces the SMS idea). Owner asked for one-time SMS codes for sig
 - Notification-based capture (Leobank samples) stays a separate later route.
 - Honest limit: only ABB is verified. Other banks need real sample statements (private; layout only is recorded); until then they are NOT ASSESSED. Ask the owner for one statement each from the banks his users use most (Leobank, Kapital, PASHA, Birbank...), personal details blanked.
 - SMS one-time codes: POSTPONED by the owner (10 Nov).
+
+## Added 10 Nov (owner): LATER JOB - expand the categories and subcategories using what the bank files showed. PLAN ONLY, nothing is changed now.
+Source: the owner's ABB statement (about 500 rows, 12 months). Only the kinds of spending are recorded here, no personal details.
+What the file shows people actually pay for (by how often):
+- City transport is the biggest group: metro (TP METRO, station names), buses (TP BUS, BUS plus a route number), card-QR rides (Bak* Kart QR), top-ups (M10 TOP UP).
+- Bank and online payments: Birbank website payments, IBA MOBILE, terminal payments, bill and utility payments, internet (Citynet), mobile operators (Nar, Bakcell).
+- Groceries and shops: Bazarstore, BIRMARKET, AL Market, Prime Store, electronics, iHerb.
+- Eating out: bakery and fast food (Yummy Ponchik, Dominos).
+- Fuel (UP-NEFTCHI) and ATM cash withdrawals.
+- Education (an academy), online subscriptions (an AI service), crypto platforms (Binance, Bfinity), a financial-service fee (DrFIN).
+- Money moves, not spending: AniPay C2C transfers (in and out), P2P sends, 'Karta m*daxil' (money in), cashback.
+Plan for the later job:
+1. Compare these kinds against the app's current categories and subcategories (read them in the app first) and list the gaps and the wrong fits.
+2. Propose additions in plain words for az, ru and en, with few, clear names (for example Transport: Metro, Bus, Taxi, Card top-up; Bills: Mobile, Internet, Utilities; Money transfers as their own non-spending kind; Fees and cashback; Subscriptions; Crypto and investments; Education).
+3. Use the merchant-category code (MCC) in bank statements as a hint for the category, and keep it overridable by the user's own merchant memory.
+4. Never rename or delete an existing category id; additions only. Existing entries keep their category. Old backups import unchanged. Tests: every new category has az/ru/en names, an icon, a colour, appears in pickers, budgets, analytics and exports; old data round trip.
+5. Check the new list against the simplification goal: keep the day-one view short; extra subcategories sit one level down.
+6. Ask the owner (or a native speaker) to review the az and ru names before they go live; status IMPLEMENTED BUT UNVERIFIED until then.
+Sequence: do this after bank-statement import is designed, so the MCC mapping and the categories are built together.
