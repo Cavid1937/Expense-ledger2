@@ -186,3 +186,17 @@ Layout learned (private file: layout only recorded; it names a client, a tax num
 - Detection of internal moves: offer to pair an 'in' and an 'out' with the same amount within a few minutes as one transfer between the user's accounts (user confirms).
 Category plan update (owner, 10 Nov): do NOT only add new categories. First improve what exists: better names and wording, extra keyword hints, extra subcategories, and moving things that clearly sit in the wrong place. Category ids are never renamed or deleted; display names and hints may improve. Money moves (transfers, wallet top-ups, cashback) are not spending categories.
 Status: ABB and Unibank are the only verified layouts; all other banks are NOT ASSESSED.
+
+## Added 10 Nov (owner): better in-app and phone notifications, and what 'receipt scanning' means. PLAN ONLY.
+Notifications today are flat statements ('{name} is due today', 'Daily check-in'). Goal: warm, specific, useful, never nagging or shaming, in perfect az and ru.
+- Rules: say what happened and what to do next in one short line; use the person's own words (bill name, goal name, amount unless the hide-amounts setting is on); a gentle tone with some variety (a few wordings per case, rotated); a clear action ('Mark paid', 'Add expense'); never more than a few a day; quiet by default at night; never scold ('you forgot' is forbidden; use 'Quick check-in?').
+- Cases to rewrite: bill due today, recurring due tomorrow, daily check-in, goal milestones (25, 50, 75 and 100 percent), completed goal (celebration), safe-to-spend running low, budget nearly reached, backup reminder, weekly review, month-end surplus offer (links to the rollover card), pending-sync or backup problems in plain words.
+- Same quality for the in-app messages: toasts, empty states, coach tips and warnings, errors, confirmations.
+- Icon and sound: app-specific round status-bar icon and a distinct short sound (already listed under the bugs; needs the APK).
+- Every new text goes through the plain-language rule and the az/ru native review sheets.
+
+Receipt scanning, what was understood and what is open. The add-list item meant: point the phone camera at a paper receipt, the app reads the shop, date and total, and fills an expense for the person to check and save. Three possible ways, not yet chosen:
+ (A) keep the receipt photo as proof attached to an entry (no reading; storage and backup size need care);
+ (B) read the printed text on the phone (on-device text recognition; accuracy on Azerbaijani receipts is unknown and must be tested with real receipts);
+ (C) read the QR code that fiscal receipts carry and fetch the receipt data from the tax system (not verified: whether the format and access are public and allowed; research first).
+Whatever is chosen: nothing is saved without the person's confirmation, every read value can be corrected, duplicates are caught, and it runs on the phone. Needs real receipt samples from the owner and the APK. Status: NOT ASSESSED; research item before any building.
