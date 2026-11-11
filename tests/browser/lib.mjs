@@ -22,10 +22,15 @@ const launched = new Set(), trail = [];
 const note = (s) => { trail.push(`${new Date().toISOString().slice(11, 23)} ${s}`); if (trail.length > 40) trail.shift(); };
 const closeLaunched = async () => { for (const b of [...launched]) { const proc = b.process && b.process(); await Promise.race([b.close().catch(() => {}), new Promise((r) => setTimeout(r, 4000))]); try { proc && proc.kill(); } catch {} launched.delete(b); } };
 for (const ev of ["uncaughtException", "unhandledRejection"]) process.on(ev, async (e) => { console.error(String((e && e.stack) || e)); console.error("[lib] last page events before the fault:\n" + trail.join("\n")); await closeLaunched(); process.exit(1); });
+// Run 51: every launch made a Chrome profile folder in the temp folder and never removed it (about 8,000 folders, 83 GB by 10 Nov).
+// Each profile is now deleted when its browser closes, and again when the test file exits (in case the browser was killed).
+const profiles = new Set();
+const dropProfile = (dir) => { try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 6, retryDelay: 150 }); profiles.delete(dir); } catch { /* still locked by Chrome: the exit hook tries once more */ } };
+process.on("exit", () => { for (const d of [...profiles]) dropProfile(d); });
 export async function launch() {
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ledger-e2e-profile-"));
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ledger-e2e-profile-")); profiles.add(userDataDir);
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", headless: true, userDataDir, args: ["--no-first-run", "--no-default-browser-check", "--disable-extensions"] });
-  launched.add(browser); browser.on("disconnected", () => { note("browser disconnected"); launched.delete(browser); });
+  launched.add(browser); browser.on("disconnected", () => { note("browser disconnected"); launched.delete(browser); dropProfile(userDataDir); });
   // Every download goes to a throw-away folder, never the user's real Downloads (tests may override with their own folder).
   const dl = process.env.E2E_DL_DIR || path.join(userDataDir, "downloads"); fs.mkdirSync(dl, { recursive: true });
   const cdp = await browser.target().createCDPSession(); await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: dl });

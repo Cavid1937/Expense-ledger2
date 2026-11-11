@@ -89,7 +89,8 @@ section("I5. Look-alike transactions (re-importing the same CSV)");
 page = await openPage(browser); await openData(page); const pre5 = strip(await state(page));
 const dupFile = write("dups.json", JSON.stringify({ transactions: [{ ...pre5.transactions[0], id: 777001 }, tx({ merchant: "Brand new", amount: 99 })] }));
 await upload(page, dupFile); sh = await sheetText(page);
-ok(/skip 1 that look like transactions you already have/.test(sh), "sheet counts the look-alike and offers to skip it (checked by default)", sh.slice(0, 400));
+// Run 51: the sheet now says exactly what a merge will do: 1 new, 1 identical to an entry already here (skipped by default).
+ok(/New, will be added: 1/.test(sh) && /Skip 1 that are exactly the same as entries you already have/.test(sh), "sheet counts the look-alike and offers to skip it (checked by default)", sh.slice(0, 600));
 await sheetBtn(page, /^Merge/); await wait(300); st = await state(page);
 ok(st.transactions.length === pre5.transactions.length + 1 && st.transactions.some((t) => t.merchant === "Brand new") && !st.transactions.some((t) => t.id === 777001), "merge with the box checked adds only the new one");
 await page.close();
@@ -106,7 +107,8 @@ ok(/Backup file created/.test(bt) && /can't confirm it was saved/.test(bt), "mes
 ok(/Last backup: [^\n]*Check that you still have that file/.test(await bodyText(page)), "Import / Export shows the date and asks to check the file is still there (Run 37 wording; never claims it was saved)");
 await upload(page, jf); sh = await sheetText(page);
 // Run 7: on failure, report what the import sheet showed (this failed once inside a full suite run and passed 5/5 alone).
-ok(/skip \d+ that look like/.test(sh), "importing the same backup back → every transaction is recognised as already present", { sheet: sh.slice(0, 400), file: path.basename(jf), bytes: fs.statSync(jf).size });
+// Run 51: stricter than before: the sheet must say that ALL of them are already here and that none is new.
+ok(new RegExp(`Already here, left as they are: ${pre6.transactions.length}(\\D|$)`).test(sh) && /New, will be added: 0/.test(sh), "importing the same backup back → every transaction is recognised as already present", { sheet: sh.slice(0, 600), file: path.basename(jf), bytes: fs.statSync(jf).size });
 await sheetBtn(page, /^Merge/); await wait(300); st = await state(page);
 ok(st.transactions.length === pre6.transactions.length && eq2(st.budgets, pre6.budgets) && st.currency === pre6.currency, "merging your own backup changes nothing");
 await openData(page).catch(() => {});

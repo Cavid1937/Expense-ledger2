@@ -96,6 +96,7 @@
     "run50recur.test.mjs": 20,
     "run50setup.test.mjs": 22,
     "run50sync.test.mjs": 15,
+    "run51integrity.test.mjs": 41,
     "run43pace.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
@@ -119,6 +120,7 @@
     "e2e_run50gifts.mjs": 9,
     "e2e_run50recur.mjs": 10,
     "e2e_run50setup.mjs": 10,
+    "e2e_run51_integrity.mjs": 30,
     "e2e_run9.mjs": 55,
     "e2e_run10.mjs": 16,
     "e2e_run12.mjs": 35,

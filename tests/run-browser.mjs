@@ -29,4 +29,6 @@ try {
   const n = parseInt(String(q.stdout || "").trim(), 10);
   if (Number.isFinite(n)) console.log(`[run-browser] power: ${n} standby enter/exit event(s) during this run${n ? " — NOTE: the computer slept while the tests ran; a stop caused by that is not an app failure, rerun with the computer kept awake" : ""}`);
 } catch { /* not Windows, or no permission: nothing to report */ }
+// Run 51: the scratch folder (downloads, import files) is removed after a clean run; after a run with problems it is kept as evidence.
+if (!bad) { try { fs.rmSync(work, { recursive: true, force: true }); } catch { /* nothing to do */ } }
 process.exit(bad ? 1 : 0);

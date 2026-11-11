@@ -5,6 +5,7 @@ import { LAUNCH_GLYPH } from "./launch.js";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
+import { accountRemovalPlan, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, creditOwed, cleanWorkHours, readWorkHours, writeWorkHours, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ export function MyCategories({ state, onChanged, showToast }) {
 }
 
 // Run 24: accounts with derived balances, and transfers between them (a transfer is never income or spending).
-export function MyAccounts({ state, currency, showToast }) {
+export function MyAccounts({ state, currency, showToast, accTools=null }) {
   const [data,setData]=useState(()=>readAccounts());
   const [name,setName]=useState(""), [kind,setKind]=useState("card"), [opening,setOpening]=useState("");
   const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState(""), [editing,setEditing]=useState(null);
@@ -178,9 +179,38 @@ export function MyAccounts({ state, currency, showToast }) {
     if (commit(r.data)) { setEditing(null); showToast(t("acc.edited")); }
   };
   const toggleHidden=(a)=>commit({ accounts:data.accounts.map(x=>x.id===a.id?{...x,hidden:!x.hidden}:x), transfers:data.transfers });
+  // Run 51 (owner: an account vanished without a question, and there was no Undo): removing always asks first and says what it touches.
+  // The entries that used the account are never deleted: they move to another account or to "no account". Undo puts everything back.
+  const [removing,setRemoving]=useState(null);   // { id, moveTo }
+  useBackStep(!!removing,()=>setRemoving(null));
+  const entriesNow=()=>accTools ? accTools.getTransactions() : state.transactions;
   const remove=(a)=>{
-    if (accountInUse(data,a.id,state.transactions)) { showToast(t("acc.inUse"),5000); return; }
-    if (commit({ accounts:data.accounts.filter(x=>x.id!==a.id), transfers:data.transfers })) showToast(t("acc.removed"));
+    const moveTo=removing && removing.id===a.id ? removing.moveTo : "", r=removeAccountSafely(data,a.id,entriesNow(),moveTo);
+    if (!r.ok) { showToast(t("acc.err.account"),4000); return; }
+    // Without the app's tools the entries cannot be moved, so a used account stays (the older rule).
+    if (!accTools && accountInUse(data,a.id,state.transactions)) { showToast(t("acc.inUse"),5000); return; }
+    if (!commit(r.data)) return;
+    const removed=r.removed;
+    if (removed.movedIds.length) accTools.setTransactions(list=>removeAccountSafely(data,a.id,list,moveTo).transactions);
+    setRemoving(null);
+    if (!accTools) { showToast(t("acc.removed")); return; }
+    accTools.showSnackbar(t("acc.removed"),()=>{
+      const cur=readAccounts(), back=restoreRemovedAccount(cur,[],removed);
+      if (!back.ok || !writeAccounts(back.data)) { showToast(t("acc.rm.cantUndo"),5000); return; }
+      if (removed.movedIds.length) accTools.setTransactions(list=>restoreRemovedAccount(cur,list,removed).transactions);
+      setData(readAccounts());
+    },8000,"delete");
+  };
+  const removeTransfer=(x)=>{
+    const index=data.transfers.findIndex(y=>y.id===x.id);
+    if (!commit({ accounts:data.accounts, transfers:data.transfers.filter(y=>y.id!==x.id) })) return;
+    if (!accTools) { showToast(t("acc.transferRemoved")); return; }
+    accTools.showSnackbar(t("acc.transferRemoved"),()=>{
+      const cur=readAccounts(); if (cur.transfers.some(y=>y.id===x.id)) return;
+      const list=cur.transfers.slice(); list.splice(Math.min(Math.max(index,0),list.length),0,x);
+      if (!writeAccounts({ accounts:cur.accounts, transfers:list }) || !readAccounts().transfers.some(y=>y.id===x.id)) { showToast(t("acc.rm.cantUndo"),5000); return; }
+      setData(readAccounts());
+    },8000,"delete");
   };
   const transfer=()=>{
     const v=parseMoney(amt);
@@ -211,9 +241,29 @@ export function MyAccounts({ state, currency, showToast }) {
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <button className="chip" onClick={()=>toggleHidden(a)}>{t(a.hidden?"acc.show":"acc.hide")}</button>
-            <button className="chip" aria-label={t("acc.remove",{name:a.name})} onClick={()=>remove(a)}>{t("mycat.removeBtn")}</button>
+            <button className="chip" aria-label={t("acc.remove",{name:a.name})} aria-expanded={!!(removing&&removing.id===a.id)} onClick={()=>setRemoving(removing&&removing.id===a.id ? null : { id:a.id, moveTo:"" })}>{t("mycat.removeBtn")}</button>
             <button className="chip" data-section="acc-edit" aria-label={t("acc.edit")+": "+a.name} onClick={()=>setEditing({ id:a.id, name:a.name, bal:String(bal[a.id]||0) })}>{t("acc.edit")}</button>
           </div>
+          {removing&&removing.id===a.id&&(()=>{ const p=accountRemovalPlan(data,a.id,entriesNow()), others=data.accounts.filter(x=>x.id!==a.id), canMove=!!accTools; return (
+            <div data-section="acc-remove-confirm" role="group" aria-label={t("acc.rm.title",{name:a.name})} style={{background:"var(--bg-warm)",borderRadius:8,padding:"12px 14px",fontSize:13,lineHeight:1.5,color:"var(--ink-2)"}}>
+              <div style={{fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{t("acc.rm.title",{name:a.name})}</div>
+              {Math.round(p.balance*100)!==0&&<div data-rm="balance">{t("acc.rm.balance",{amount:fmt(p.balance,currency)})}</div>}
+              {p.entries===0&&p.transfers===0&&<div data-rm="unused">{t("acc.rm.unused")}</div>}
+              {p.entries>0&&canMove&&(<>
+                <div data-rm="entries" style={{marginTop:4}}>{tn("acc.rm.entries",p.entries)}</div>
+                <select className="field-input" data-rm="move-to" aria-label={t("acc.rm.moveTo")} style={{marginTop:6}} value={removing.moveTo} onChange={e=>setRemoving({ id:a.id, moveTo:e.target.value })}>
+                  <option value="">{t("acc.rm.noAccount")}</option>
+                  {others.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+                </select>
+              </>)}
+              {p.entries>0&&!canMove&&<div data-rm="in-use">{t("acc.inUse")}</div>}
+              {p.transfers>0&&<div data-rm="transfers" style={{marginTop:4,color:"var(--warn)"}}>{tn("acc.rm.transfers",p.transfers)}</div>}
+              {canMove&&<div style={{marginTop:4,color:"var(--ink-3)"}}>{t("acc.rm.undoHint")}</div>}
+              <div style={{display:"flex",gap:8,marginTop:10}}>
+                <button className="btn btn-ghost" style={{flex:1}} data-rm="cancel" onClick={()=>setRemoving(null)}>{t("common.cancel")}</button>
+                <button className="btn btn-ghost" style={{flex:1,color:"var(--neg)",borderColor:"var(--neg-bg)"}} data-rm="go" disabled={p.entries>0&&!canMove} onClick={()=>remove(a)}>{t("acc.rm.go")}</button>
+              </div>
+            </div>); })()}
         </div>
       }/>)}
       {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
@@ -248,7 +298,7 @@ export function MyAccounts({ state, currency, showToast }) {
       {data.transfers.slice(0,5).map(x=>(
         <div key={x.id} className="settings-row" data-transfer={x.id}>
           <div style={{minWidth:0}}><div className="settings-row-title">{fmt(x.amount,currency)}</div><div className="settings-row-sub">{nameOf(x.from)} → {nameOf(x.to)} · {fmtDate(x.date)}</div></div>
-          <button className="chip" aria-label={t("acc.removeTransfer")} onClick={()=>{ if (commit({ accounts:data.accounts, transfers:data.transfers.filter(y=>y.id!==x.id) })) showToast(t("acc.transferRemoved")); }}>{t("mycat.removeBtn")}</button>
+          <button className="chip" aria-label={t("acc.removeTransfer")} onClick={()=>removeTransfer(x)}>{t("mycat.removeBtn")}</button>
         </div>
       ))}
     </div>
@@ -274,7 +324,7 @@ export function Fold({ id, icon, title, sub, open, onToggle, children }) {
 }
 // Run 27b: Preferences is no longer a sheet behind a row. Its contents sit directly on the Settings tab, in two parts:
 // MoneySettings (accounts, categories, Safe to Spend switch, currency) and LookSettings (colour theme, reduce effects).
-export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, open, toggle, onOpen=()=>{} }) {
+export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, accTools, open, toggle, onOpen=()=>{} }) {
   const { currency,safeToSpend={} }=state;
   const [curSym, setCurSym]=useState(currency);
   const [workHrs, setWorkHrs]=useState(()=>{ const h=readWorkHours(); return h===null ? "" : String(h); });   // Run 41
@@ -285,7 +335,7 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
   const moneySum=t(safeToSpend.enabled?"st.sumMoneyOn":"st.sumMoneyOff",{c:currency});
   return (
     <>
-      <Fold id="accounts" icon="wallet" title={t("acc.title")} sub={accSum} open={open.accounts} onToggle={()=>toggle("accounts")}><MyAccounts state={state} currency={state.currency} showToast={showToast}/></Fold>
+      <Fold id="accounts" icon="wallet" title={t("acc.title")} sub={accSum} open={open.accounts} onToggle={()=>toggle("accounts")}><MyAccounts state={state} currency={state.currency} showToast={showToast} accTools={accTools}/></Fold>
       {/* Run 38 moved categories to Budgets & Goals; Run 40 (owner): no reminder row here any more. */}
       <Fold id="money" icon="settings" title={t("st.foldMoney")} sub={moneySum} open={open.money} onToggle={()=>toggle("money")}>
       <div className="card st-card" data-section="st-money-options">
@@ -543,7 +593,7 @@ export function InfoSheet({ kind, onClose }) {
   );
 }
 
-export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, scrollTo="", onScrolled }) {
+export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, accTools, scrollTo="", onScrolled }) {
   // Run 42: the pill answers the touch at once (cheap local state, painted first); the whole app switches language one frame later.
   const [picked, setPicked]=useState(null);
   useEffect(()=>{ if (picked && picked===language) setPicked(null); },[picked,language]);
@@ -570,7 +620,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
       </div>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
-      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} open={open} toggle={toggle} onOpen={onOpen}/>
+      <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} accTools={accTools} open={open} toggle={toggle} onOpen={onOpen}/>
       <div className="card list-card" data-section="more-money">
         {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
         <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>

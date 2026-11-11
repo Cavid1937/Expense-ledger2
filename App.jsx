@@ -1941,12 +1941,87 @@ function planImport(raw, filename="") {
 // are not look-alikes. Paused/active is a state that changes over time and is left out (a re-imported entry still matches).
 function txnFingerprint(t) { return [t.date,t.type,Number(t.amount).toFixed(2),t.category,norm(t.merchant),norm(t.note),norm(t.subcategory),t.recurring?(t.recurFreq||"r"):""].join("|"); }
 function countSuspectedDuplicates(existing, incoming) { const fp=new Set(existing.map(txnFingerprint)); return incoming.filter(t=>fp.has(txnFingerprint(t))).length; }
+// Run 51 (owner report: a merge double counted): what a merge would do with each entry of the file, worked out BEFORE anything is added.
+//   sameId     the very same record is already here (its id exists): never added.
+//   identical  no id match, but every detail equals an entry here (the old "look-alike" rule).
+//   similar    no id match and not identical, but the same day, kind and amount as an entry here: most likely the same real payment
+//              typed or imported twice with different words. The person chooses; pairs are kept so the sheet can show examples.
+//   fresh      nothing like it here: added.
+// Matching is one-to-one: an entry here can stand for only ONE entry of the file, so two real coffees at the same price on the same day
+// in the file, against one here, give one match and one new entry (nothing real is dropped, nothing is counted twice).
+function txnLooseKey(t) { return [t.date,t.type,Math.round(Number(t.amount)*100)].join("|"); }
+function planMerge(existing, incoming) {
+  const ex=Array.isArray(existing)?existing:[], inc=Array.isArray(incoming)?incoming:[];
+  const byId=new Map(), byFp=new Map(), byLoose=new Map(), used=new Set();
+  const push=(m,k,i)=>{ const l=m.get(k); if (l) l.push(i); else m.set(k,[i]); };
+  ex.forEach((t,i)=>{ byId.set(String(t.id),i); push(byFp,txnFingerprint(t),i); push(byLoose,txnLooseKey(t),i); });
+  const take=(m,k)=>{ const l=m.get(k); if (!l) return -1; for (const i of l) if (!used.has(i)) { used.add(i); return i; } return -1; };
+  const sameId=[], identical=[], similar=[], fresh=[], rest1=[], rest2=[];
+  inc.forEach(t=>{ const i=byId.get(String(t.id)); if (i!==undefined) { used.add(i); sameId.push(t); } else rest1.push(t); });
+  rest1.forEach(t=>{ if (take(byFp,txnFingerprint(t))>=0) identical.push(t); else rest2.push(t); });
+  rest2.forEach(t=>{ const i=take(byLoose,txnLooseKey(t)); if (i>=0) similar.push({ file:t, here:ex[i] }); else fresh.push(t); });
+  return { sameId, identical, similar, fresh };
+}
+// Run 51: accounts of a file against the accounts on this phone. Same id = the same account (what is here wins, as before). NEW: an account
+// of the file whose NAME is already used here under another id is the same account too; its id is mapped to the one here, so the file's
+// entries and transfers land on the account the person already has (before, that account was dropped and its entries pointed nowhere).
+// Opening balances are never added together. A transfer of the file that equals one here (same accounts, amount, day, note) is not added twice.
+function planAccountMerge(mine, file) {
+  const A=cleanAccountData(mine), B=cleanAccountData(file), remap={};
+  const idsA=new Set(A.accounts.map(a=>a.id)), byName=new Map(A.accounts.map(a=>[lc(a.name),a.id]));
+  B.accounts.forEach(b=>{ if (!idsA.has(b.id) && byName.has(lc(b.name))) remap[b.id]=byName.get(lc(b.name)); });
+  const m=(id)=>remap[id]||id, tkey=(x)=>[x.from,x.to,Math.round(x.amount*100),x.date,norm(x.note)].join("|");
+  const haveT=new Set(A.transfers.map(x=>x.id)), haveK=new Map(); A.transfers.forEach(x=>haveK.set(tkey(x),(haveK.get(tkey(x))||0)+1));
+  const addT=[];
+  B.transfers.forEach(x=>{ if (haveT.has(x.id)) return; const y={ ...x, from:m(x.from), to:m(x.to) }, k=tkey(y), n=haveK.get(k)||0; if (n>0) { haveK.set(k,n-1); return; } addT.push(y); });
+  const data=cleanAccountData({ accounts:[...A.accounts,...B.accounts.filter(b=>!idsA.has(b.id) && !remap[b.id])], transfers:[...A.transfers,...addT] });
+  return { data, remap, renamed:Object.keys(remap).length };
+}
+// What the import sheet shows before anything is applied: the four counts, up to three example pairs, and how many accounts of the file
+// are the same as an account here under another id. dupCount is kept (= identical) for the older parts of the sheet.
+function mergeCounts(existing, plan) {
+  const mp=planMerge(existing, plan.transactions||[]);
+  const ap=plan.accountData && plan.accountData.accounts.length ? planAccountMerge(readAccounts(),plan.accountData) : null;
+  return { dupCount:mp.identical.length, mergeInfo:{ sameId:mp.sameId.length, identical:mp.identical.length, similar:mp.similar.length, fresh:mp.fresh.length, examples:mp.similar.slice(0,3), sameAccounts:ap?ap.renamed:0 } };
+}
+function remapEntryAccounts(list, remap) { return remap && Object.keys(remap).length ? list.map(t=>t.account && remap[t.account] ? { ...t, account:remap[t.account] } : t) : list; }
+// Run 51: removing an account, safely. What it would touch is counted first (shown to the person); then the entries that used it are moved to
+// another account or to "no account" (their amounts, dates and ids never change), its transfers are removed (a transfer cannot exist with one
+// side missing), and the account itself goes. Everything removed is returned, so Undo can put it back exactly.
+export function accountRemovalPlan(data, id, transactions) {
+  const d=cleanAccountData(data), acc=d.accounts.find(a=>a.id===id)||null;
+  const entries=(transactions||[]).filter(x=>x && x.account===id).length, transfers=d.transfers.filter(x=>x.from===id||x.to===id).length;
+  return { account:acc, entries, transfers, balance:acc ? (accountBalances(d,transactions)[id]||0) : 0 };
+}
+export function removeAccountSafely(data, id, transactions, moveTo="") {
+  const d=cleanAccountData(data), acc=d.accounts.find(a=>a.id===id), list=Array.isArray(transactions)?transactions:[];
+  if (!acc) return { ok:false, reason:"account", data:d, transactions:list };
+  const target=moveTo ? accId(moveTo) : "";
+  if (moveTo && (!target || target===id || !d.accounts.some(a=>a.id===target))) return { ok:false, reason:"target", data:d, transactions:list };
+  const movedIds=[], next=list.map(x=>{ if (!x || x.account!==id) return x; movedIds.push(x.id); if (target) return { ...x, account:target }; const { account, ...rest }=x; return rest; });
+  const removedTransfers=d.transfers.filter(x=>x.from===id||x.to===id);
+  const index=d.accounts.findIndex(a=>a.id===id);
+  return { ok:true, reason:"", data:cleanAccountData({ accounts:d.accounts.filter(a=>a.id!==id), transfers:d.transfers.filter(x=>x.from!==id&&x.to!==id) }), transactions:movedIds.length?next:list, removed:{ account:acc, index, transfers:removedTransfers, movedIds, movedTo:target } };
+}
+// Undo of the above against whatever is on the phone NOW (other work done in between is kept): the account and its transfers come back,
+// and the moved entries point to it again, but only those that still sit where the removal left them.
+export function restoreRemovedAccount(data, transactions, removed) {
+  const d=cleanAccountData(data), list=Array.isArray(transactions)?transactions:[];
+  if (!removed || !removed.account) return { ok:false, data:d, transactions:list };
+  if (d.accounts.some(a=>a.id===removed.account.id || lc(a.name)===lc(removed.account.name)) || d.accounts.length>=ACC_MAX) return { ok:false, data:d, transactions:list };
+  const accounts=d.accounts.slice(); accounts.splice(Math.min(Math.max(removed.index||0,0),accounts.length),0,removed.account);
+  const haveT=new Set(d.transfers.map(x=>x.id));
+  const back=cleanAccountData({ accounts, transfers:[...d.transfers,...(removed.transfers||[]).filter(x=>!haveT.has(x.id))] });
+  const ids=new Set((removed.movedIds||[]).map(String)), to=removed.movedTo||"";
+  const next=ids.size ? list.map(x=>x && ids.has(String(x.id)) && (x.account||"")===to ? { ...x, account:removed.account.id } : x) : list;
+  return { ok:back.accounts.some(a=>a.id===removed.account.id), data:back, transactions:next };
+}
 
 // What each mode does with each part of a backup (shown to the user in the import sheet):
 //   Merge   transactions: added unless the id exists (optionally also skipping look-alikes) · budgets: combined, imported categories win ·
 //           templates/goals: new ones added · currency and Safe to Spend: YOUR current values stay.
 //   Replace transactions: replaced · budgets/templates/goals/currency/Safe to Spend: replaced ONLY if the file contains a valid section.
-function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
+function applyImport(state, plan, mode, { skipDuplicates=false, skipSimilar=false }={}) {
   const sortDesc=(l)=>[...l].sort((a,b)=>b.date.localeCompare(a.date));
   const S=plan.settings||{};
   if (mode==="replace") {
@@ -1963,9 +2038,9 @@ function applyImport(state, plan, mode, { skipDuplicates=false }={}) {
   // Run 37: on a phone that has nothing recorded yet (a new install, or the browser copy being set up), "Merge" also takes the file's
   // currency and Safe to Spend setting; otherwise a fresh phone silently lost them. A phone with its own data keeps its own, as before.
   const emptyHere=!state.transactions.length && !(state.bills||[]).length && !(state.goals||[]).length && !Object.keys(state.budgets||{}).length;
-  const ids=new Set(state.transactions.map(t=>String(t.id)));
-  const fps=new Set(state.transactions.map(txnFingerprint));
-  const add=plan.transactions.filter(t=>!ids.has(String(t.id)) && !(skipDuplicates && fps.has(txnFingerprint(t))));
+  // Run 51: one-to-one matching (planMerge). An id that is already here is never added; identical and similar entries follow the two choices.
+  const mp=planMerge(state.transactions, plan.transactions);
+  const add=[...mp.fresh, ...(skipDuplicates ? [] : mp.identical), ...(skipSimilar ? [] : mp.similar.map(p=>p.file))];
   const next={ ...state, transactions:sortDesc([...add, ...state.transactions]) };
   const fresh=(prefix)=>`${prefix}${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
   if (S.budgets) next.budgets={ ...state.budgets, ...S.budgets };
@@ -3748,6 +3823,7 @@ function AppInner() {
   const [showLock, setShowLock] = useState(false);   // Run 19: the App lock sheet
   const [importPending, setImportPending] = useState(null);
   const [skipDup, setSkipDup] = useState(true);
+  const [skipSim, setSkipSim] = useState(true);   // Run 51: entries of the file with the same day, kind and amount as one here
   // Recovery messages stay on screen until the user dismisses them; ordinary toasts can never replace them.
   const [recoveryNotice, setRecoveryNotice] = useState(()=>LOAD_NOTICE);
   const stateRef = useRef(state);
@@ -3840,6 +3916,8 @@ function AppInner() {
     if (snackActive.current && snackKind.current!==kind) { snackQueue.current.push({msg,onUndo,ms,kind,label}); return; }
     openSnack({msg,onUndo,ms,kind,label});
   },[showToast]);
+  // Run 51: what the Accounts card needs to remove an account safely: the entries as they are now, a way to change them, and the Undo bar.
+  const accTools=useMemo(()=>({ getTransactions:()=>stateRef.current.transactions, setTransactions:(fn)=>setState(s=>({ ...s, transactions:fn(s.transactions) })), showSnackbar }),[showSnackbar]);
 
   // Run 34: going back out of a sub-page (Recurring, Import / Export, Debts) slides the page away first (~0.19 s) instead of cutting; every other switch is as before.
   const [pageOut,setPageOut]=useState(false), pageOutBusy=useRef(false);
@@ -4304,8 +4382,8 @@ function AppInner() {
       if (isEncryptedBackup(raw)) { setImportPending({ needPass:true, text:raw, filename:file.name }); return; }   // Run 32: asks for the passphrase first
       const plan=planImportWithCats(raw, file.name||"");
       if (!plan.ok) { setImportPending({ error:plan.error, filename:file.name }); return; }
-      setSkipDup(true);
-      setImportPending({ ...plan, dupCount:countSuspectedDuplicates(stateRef.current.transactions, plan.transactions) });
+      setSkipDup(true); setSkipSim(true);
+      setImportPending({ ...plan, ...mergeCounts(stateRef.current.transactions, plan) });
     };
     reader.readAsText(file);
   },[]);
@@ -4317,8 +4395,8 @@ function AppInner() {
     if (!r.ok) return r.reason;
     const plan=planImportWithCats(r.text,"backup.json");
     if (!plan.ok) { setImportPending({ error:plan.error, filename:p.filename }); return null; }
-    setSkipDup(true);
-    setImportPending({ ...plan, filename:p.filename, dupCount:countSuspectedDuplicates(stateRef.current.transactions, plan.transactions) });
+    setSkipDup(true); setSkipSim(true);
+    setImportPending({ ...plan, filename:p.filename, ...mergeCounts(stateRef.current.transactions, plan) });
     return null;
   },[importPending]);
 
@@ -4360,7 +4438,10 @@ function AppInner() {
       if (!preserveRaw("before_import", before)) { showToast(t("import.copyFailed"),6000); return; }
       pruneRecoveryCopies("before_import");
     }
-    const next=applyImport(before, plan, mode, { skipDuplicates:skipDup && plan.dupCount>0 });
+    // Run 51: an account of the file that has the same name as one here IS that account: its entries and transfers are pointed at the one here.
+    const accPlan=plan.accountData && plan.accountData.accounts.length ? planAccountMerge(readAccounts(),plan.accountData) : null;
+    const planUse=accPlan && accPlan.renamed ? { ...plan, transactions:remapEntryAccounts(plan.transactions,accPlan.remap) } : plan;
+    const next=applyImport(before, planUse, mode, { skipDuplicates:skipDup, skipSimilar:skipSim });
     // Run 18: the import is all-or-nothing. The side stores are written FIRST and checked; if one cannot be written, the others are put
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
@@ -4391,7 +4472,7 @@ function AppInner() {
     const hasSub=plan.subcategories && Object.keys(plan.subcategories).length;
     // Run 17: debts and loans from the file are added by id (what is already on this phone is never overwritten).
     const hasDebts=plan.debtData && (plan.debtData.debts.length || plan.debtData.loans.length);
-    if (plan.accountData && plan.accountData.accounts.length && !writeAccounts(mergeAccountData(readAccounts(),plan.accountData))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
+    if (accPlan && !writeAccounts(accPlan.data)) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
     if (hasSub && !writeSubcats(mergeSubcats(readSubcats(),plan.subcategories))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
     if (hasDebts && !writeDebts(mergeDebtData(readDebts(),plan.debtData))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
     setState(next);
@@ -4403,7 +4484,7 @@ function AppInner() {
       undoAux();
       setState(before);
     }, 8000, "import");
-  },[importPending,skipDup,showToast,showSnackbar]);
+  },[importPending,skipDup,skipSim,showToast,showSnackbar]);
 
   const {transactions,budgets,templates,currency,goals,safeToSpend}=state; const bills=state.bills||[];
   const recSuggestions=tab==="recurring" ? recurringSuggestions(transactions,bills,recDismissed) : [];   // Run 50: only worked out while the Recurring page is open (no hook here: it sits after possible early returns)
@@ -4521,13 +4602,13 @@ function AppInner() {
             }}
             onUpdateTemplate={(id,patch)=>setState(s=>({...s,templates:s.templates.map(x=>x.id===id?{...x,...patch}:x)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
-          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={tb=>{ if (tb==="goals") setGoalsSeg("goals"); switchTab(tb); }} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
+          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={tb=>{ if (tb==="goals") setGoalsSeg("goals"); switchTab(tb); }} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} accTools={accTools} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill} onAddBill={()=>setEditBill(null)}
             suggestions={recSuggestions} onReviewSuggestion={s=>setEditBill({ prefill:true, name:s.name, type:"expense", amount:s.amount, category:s.category, subcategory:s.subcategory, freq:s.freq, anchorDate:s.anchorDate, active:true })}
             onDismissSuggestion={s=>{ const next=[...recDismissed,s.name]; writeRecSuggestDismissed(next); setRecDismissed(next); }}
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
-          {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast}/></div>}
+          {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast} accTools={accTools}/></div>}
           {tab==="gifts"     && <GiftsPage transactions={transactions} currency={currency} showToast={showToast} onView={txn=>setViewTxn(txn)} onAdd={k=>openAdd(k==="received"?{type:"income",category:"giftin"}:{type:"expense",category:"gifts"})}/>}
           {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
           {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
@@ -4606,12 +4687,29 @@ function AppInner() {
                       <div className="import-bills-stay" style={{marginTop:6,color:"var(--warn)"}}>{tn("import.billsStay",state.bills.length)}</div>
                     )}
                   </div>
-                  {importPending.dupCount>0&&(
-                    <label style={{display:"flex",gap:8,alignItems:"flex-start",fontSize:12,color:"var(--ink-2)",marginBottom:14,lineHeight:1.45}}>
-                      <input type="checkbox" checked={skipDup} onChange={e=>setSkipDup(e.target.checked)} style={{marginTop:2}}/>
-                      <span>{t("import.skipDup",{n:importPending.dupCount})}</span>
-                    </label>
-                  )}
+                  {/* Run 51: what a merge will do, in numbers, before anything is added (owner: a merge double counted) */}
+                  {importPending.mergeInfo&&importPending.transactions.length>0&&(()=>{ const mi=importPending.mergeInfo, words=(x)=>[x.merchant||x.note,x.subcategory,catName(x.category)].filter(Boolean).join(", "); return (
+                    <div data-section="import-merge-plan" style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
+                      <div style={{fontWeight:600}}>{t("import.planTitle")}</div>
+                      <div data-merge="fresh">{t("import.planNew",{n:mi.fresh})}</div>
+                      {mi.sameId>0&&<div data-merge="sameId">{t("import.planSameId",{n:mi.sameId})}</div>}
+                      {mi.sameAccounts>0&&<div data-merge="accounts">{t("import.planAccounts",{n:mi.sameAccounts})}</div>}
+                      {mi.identical>0&&(
+                        <label style={{display:"flex",gap:8,alignItems:"flex-start",marginTop:8,lineHeight:1.45}}>
+                          <input type="checkbox" data-merge="skip-identical" checked={skipDup} onChange={e=>setSkipDup(e.target.checked)} style={{marginTop:2}}/>
+                          <span>{t("import.skipDup",{n:mi.identical})}</span>
+                        </label>
+                      )}
+                      {mi.similar>0&&(<>
+                        <label style={{display:"flex",gap:8,alignItems:"flex-start",marginTop:8,lineHeight:1.45}}>
+                          <input type="checkbox" data-merge="skip-similar" checked={skipSim} onChange={e=>setSkipSim(e.target.checked)} style={{marginTop:2}}/>
+                          <span>{t("import.skipSim",{n:mi.similar})}</span>
+                        </label>
+                        <ul data-merge="examples" style={{margin:"4px 0 0",paddingLeft:26,color:"var(--ink-3)"}}>
+                          {mi.examples.map((p,i)=><li key={i} style={{overflowWrap:"anywhere"}}>{t("import.simExample",{ date:fmtDate(p.file.date), amount:fmt(p.file.amount,currency), here:maskText(words(p.here)), file:maskText(words(p.file)) })}</li>)}
+                        </ul>
+                      </>)}
+                    </div>); })()}
                   <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>commitImport("merge")}>{t("import.mergeBtn")}</button>
                   {importPending.canReplace
                     ? <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>{t("import.replaceBtn")}</button>
