@@ -316,3 +316,34 @@ Added to the reproduction plan: test remove() with entries linked by id; with en
 ## Update 10 Nov (owner): second import and undo. PLAN ONLY.
 - After the owner imported the data again, the same account was refused ('Entries or transfers use this account...'). So the guard works once the entries carry the account link. This supports explanation (a): in the URL copy the entries were not linked to that account before the import. Still unproven as a cause; the reproduction tests stay in the plan. It also means the real fault may be how those entries lost or never had their account link (older entries from before accounts existed, an earlier import that dropped the link, or editing). Add to the tests: entries imported or created without an account link, then the account is removed.
 - Missing undo: removing an account (and a transfer) shows only a plain message ('Account removed'); it does not offer Undo, unlike deleting an entry. Plan: every delete in the app gets the same Undo snackbar for several seconds: accounts, transfers, hide/unhide, templates, categories and subcategories, goals, budgets, bills, debts, loans, gifts, trips. Undo restores the item exactly (id, balances, links). Audit all delete and remove buttons first and list which already have undo, then close the gaps with one shared pattern and tests (delete, undo, undo after leaving the screen, two deletes in a row, storage failure).
+
+
+## Update 11 Nov (owner): widget designs, live bank notifications, notification-settings reference (PLAN ONLY, NOT STARTED)
+
+### A. Home-screen widgets (APK only; owner's GPT mock-ups are inspiration, not a copy)
+Mock-ups show: Safe to Spend (small), Total Balance (medium), Budget Progress (large), Quick Actions (add expense / income / transfer / scan receipt), Upcoming bills (small), Financial Pulse chart, five widget colour themes.
+My assessment (strategic opinion, not user research):
+- Strong: Safe to Spend and Quick Add are the two a real user opens daily; both fit "simple".
+- Weak/skip for now: Financial Pulse chart (decoration), Budget Progress large (duplicates Home), five separate widget themes (we already have 6 app themes; widgets should follow the chosen app theme, not a second system).
+- Phase 1 (recommended): Safe to Spend (small) + Quick Add (4 buttons, deep link into Add). Phase 2: Upcoming bills, Total balance.
+- Needs native Android code (AppWidget in the Capacitor shell) and a small data snapshot the app writes after every change and on open; stale-time shown ("updated 14:05"). Cannot be tested without an APK on the owner's Poco F6.
+- Privacy: a balance on the home screen is visible to anyone near the phone. Add "Hide amounts on widgets" (default OFF is the owner's call; I recommend a clear setting and a lock-aware option). Widgets must NOT show anything when the app lock is on and "hide when locked" is chosen.
+- Mock-up details not to copy: "$" (we use AZN symbol), invented percentages, "Scan receipt" button until receipt photos exist.
+- Design in Figma first (as agreed), then build. Status: NOT STARTED.
+
+### B. Live bank notifications seen today (owner's phone, 11 Nov) - the first REAL samples
+Two apps notified the SAME payment:
+1. ABB Mobile: title "Payment: -0.90 (manat sign)", body lines: merchant, "Card: **<last4>", "Balance: 3.26 (manat sign)". Emoji at the start of the title.
+2. Google Wallet: title = merchant (shortened), body "AZN0.90 with <card nickname> ..<last4>". No balance, no date (use the time the notification arrived).
+What this teaches (confirmed from the screenshot, not assumed):
+- DUPLICATE RISK: one payment = two notifications. The reader must merge them into ONE entry: same amount + same last-4 + arrival within a few minutes + merchant text that matches by prefix ("8 Noyabr" vs "8 Noyabr Metro"). Prefer the bank's text (it has the balance); the wallet one only confirms.
+- Amount formats differ: "-0.90 + manat symbol" vs "AZN0.90" (code glued to the number, no space). Parser must accept the manat symbol U+20BC, the code AZN before or after, minus sign variants, decimal point or comma.
+- Balance-chain check works on these samples: balances 4.16 then 3.26, and 3.26 + 0.90 = 4.16 (consistent). Use it to catch a missed or doubled notification. (Numbers are used here only as a format check; real balances are not stored.)
+- Transport payments (bus, metro) are many tiny entries: default category Transport; consider one-tap "same as last time".
+- Notifications grouped under one app: reader must treat each line as a separate event, and must not re-read the same notification when it is updated.
+- Privacy rules unchanged: do not store card digits or balances from samples; the app itself would keep only what the user approves (ask-each-time default).
+Status: NOT STARTED; needs APK (notification listener) and owner approval of the permission screen. A "paste a notification text" test box can be built first and tested without the APK.
+
+### C. myUNEC notification-settings screen as a reference
+What it does well: one master switch ("if you turn it off, no notifications arrive") with a plain explanation; then a short list of categories, each with its own switch and a one-line description; separate switch for the one time-based reminder type.
+Apply to our Notifications settings (part of the simplify job): master switch on top; below, groups in plain words (Bills coming up, Budget warnings, Goals, Weekly summary, Tips); each switch with one sentence saying exactly what you will receive; the OS-level permission state shown honestly. Keep the warm, specific wording rule from the notification-rewrite job. Also note: their "More" page uses a searchable list with grouped sections (legal, support) - useful model for our Settings grouping. Status: NOT STARTED.
