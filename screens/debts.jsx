@@ -11,7 +11,7 @@ import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";   // Run 38:
 // (category Finance, merchant = the lender) and remembers its id; deleting the payment record removes that entry too.
 export const LOAN_KIND_KEY={ cash:"loan.kind.cash", card:"loan.kind.card", taksit:"loan.kind.taksit", other:"loan.kind.other" };
 export const LOAN_RT_KEY={ annuity:"loan.rt.annuity", equal:"loan.rt.equal", flat:"loan.rt.flat", none:"loan.rt.none" };
-export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, showSnackbar, initialSeg="debts" }) {
+export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=null, onPutEntries=()=>{}, showToast, showSnackbar, initialSeg="debts" }) {
   const [data,setData]=useState(()=>readDebts());
   const [seg,setSeg]=useState(initialSeg==="loans"?"loans":"debts");
   const [showDebt,setShowDebt]=useState(false), [showLoan,setShowLoan]=useState(false);
@@ -64,8 +64,18 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
         const e=entryFor(d,pid,p.amount,p.date), newId=onAddEntry(e);
         if (writeDebts({ ...cur, debts:cur.debts.map(x=>x.id===d.id?{...x,payments:[...x.payments,{ ...p, txnId:newId }]}:x) })) setData(readDebts()); else onRemoveEntry(newId);
       },6000,"debtpay");
+    } else {
+      // Run 51: a repayment without a linked entry had no Undo at all.
+      showSnackbar(t("debt.payRemoved"),()=>{
+        const cur=readDebts(), cd=cur.debts.find(x=>x.id===d.id); if (!cd || cd.payments.some(x=>x.id===pid) || !debtCanPay(cd,p.amount)) return;
+        if (writeDebts({ ...cur, debts:cur.debts.map(x=>x.id===d.id?{...x,payments:putAt(x.payments,p,d.payments.findIndex(y=>y.id===pid))}:x) })) setData(readDebts()); else showToast(t("import.cantUndo"));
+      },6000,"debtpay");
     }
   };
+  // Run 51: every delete on this page can be undone. The item goes back to the place it had; entries removed with it come back as they were.
+  const putAt=(list,item,index)=>{ const l=list.slice(); l.splice(Math.min(Math.max(index,0),l.length),0,item); return l; };
+  const takeEntries=(ids)=>onTakeEntries ? onTakeEntries(ids) : (ids.forEach(id=>onRemoveEntry(id)), []);
+  const undoBar=(msg,undo)=>showSnackbar(msg,()=>{ if (undo()) { setData(readDebts()); setHealth(debtsHealth()); } else showToast(t("import.cantUndo")); },8000,"delete");
   // Edit a debt's name, amount and due date. The amount can never drop below what has already been repaid.
   const [dEdit,setDEdit]=useState(null), [lEdit,setLEdit]=useState(null);
   // Run 40: phone Back cancels an open form, edit or question first (newest first), the same as its Cancel button; nothing is saved.
@@ -93,7 +103,11 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
   const delDebt=(d)=>{
     const linked=d.payments.filter(p=>p.txnId!==undefined);
     askConfirm(t(linked.length?"debt.confirmDeleteLinked":"debt.confirmDelete")).then(yes=>{ if (!yes) return;
-      if (save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) })) { linked.forEach(p=>onRemoveEntry(p.txnId)); showToast(t("debt.removedToast")); } });
+      const index=data.debts.findIndex(x=>x.id===d.id);
+      if (!save({ ...data, debts:data.debts.filter(x=>x.id!==d.id) })) return;
+      const gone=takeEntries(linked.map(p=>p.txnId));
+      if (!onTakeEntries) { showToast(t("debt.removedToast")); return; }
+      undoBar(t("debt.removedToast"),()=>{ const cur=readDebts(); if (cur.debts.some(x=>x.id===d.id) || !writeDebts({ ...cur, debts:putAt(cur.debts,d,index) })) return false; onPutEntries(gone); return true; }); });
   };
 
   const addLoan=()=>{
@@ -117,10 +131,18 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, showToast, show
   };
   const delLoanPayment=(l,p)=>{
     askConfirm(t("loan.confirmDeletePay")).then(yes=>{ if (!yes) return;
-      if (p.txnId!==undefined) onRemoveEntry(p.txnId);
-      if (save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:x.payments.filter(y=>y.id!==p.id)}:x) })) showToast(t("loan.payRemovedToast")); });
+      const index=l.payments.findIndex(y=>y.id===p.id);
+      // Run 51: the record is saved first; only then is its entry removed (before, a failed save still removed the entry).
+      if (!save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:x.payments.filter(y=>y.id!==p.id)}:x) })) return;
+      const gone=p.txnId!==undefined ? takeEntries([p.txnId]) : [];
+      if (!onTakeEntries) { showToast(t("loan.payRemovedToast")); return; }
+      undoBar(t("loan.payRemovedToast"),()=>{ const cur=readDebts(), cl=cur.loans.find(x=>x.id===l.id); if (!cl || cl.payments.some(y=>y.id===p.id)) return false;
+        if (!writeDebts({ ...cur, loans:cur.loans.map(x=>x.id===l.id?{...x,payments:putAt(x.payments,p,index)}:x) })) return false; onPutEntries(gone); return true; }); });
   };
-  const delLoan=(l)=>{ askConfirm(t("debt.confirmDelete")).then(yes=>{ if (yes && save({ ...data, loans:data.loans.filter(x=>x.id!==l.id) })) showToast(t("loan.removedToast")); }); };
+  const delLoan=(l)=>{ askConfirm(t("debt.confirmDelete")).then(yes=>{ if (!yes) return;
+    const index=data.loans.findIndex(x=>x.id===l.id);
+    if (!save({ ...data, loans:data.loans.filter(x=>x.id!==l.id) })) return;
+    undoBar(t("loan.removedToast"),()=>{ const cur=readDebts(); return !cur.loans.some(x=>x.id===l.id) && writeDebts({ ...cur, loans:putAt(cur.loans,l,index) }); }); }); };
 
   const owe=data.debts.filter(d=>d.direction==="owe").reduce((s,d)=>s+debtRemaining(d),0), owed=data.debts.filter(d=>d.direction==="owed").reduce((s,d)=>s+debtRemaining(d),0);
   const loanLeft=data.loans.reduce((s,l)=>{ const sc=loanSchedule(l), k=l.payments.length; return s+(sc ? (k===0 ? l.principal : k>=sc.payments.length ? 0 : sc.payments[k-1].balance) : 0); },0);

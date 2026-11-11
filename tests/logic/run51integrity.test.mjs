@@ -120,4 +120,29 @@ ok(!restoreRemovedAccount(d0, tx, null).ok && !restoreRemovedAccount(d0, tx, r.r
 const r1 = removeAccountSafely(d0, "a_card01", tx, ""), r2 = removeAccountSafely(r1.data, "a_cash01", r1.transactions, "");
 const u2 = restoreRemovedAccount(r2.data, r2.transactions, r2.removed), u1 = restoreRemovedAccount(u2.data, u2.transactions, r1.removed);
 ok(r2.data.accounts.length === 1 && u1.ok && eq(u1.data, d0) && eq(u1.transactions, tx), "two accounts removed, then both undone: everything is as it was");
+
+section("R51-F1. Finding entries already here that may be counted twice");
+const { findDoubleEntries, offerUndo, setUndoHost } = H;
+// 1 Oct: three entries of 12.50 (one plain, one with an account, one tied to a debt repayment); 2 Oct: two of 30.00; 3 Oct: one of 8.00 (alone);
+// 1 Oct: an INCOME of 12.50 (another kind, not a copy); an entry with a broken date (ignored).
+const dl = [E(1, "2026-10-01", 12.5, { merchant: "Bravo" }), E(2, "2026-10-01", 12.5, { merchant: "Bravo", account: "a_card01", subcategory: "Groceries" }), E(3, "2026-10-01", 12.5, { note: "Rauf", debtLink: { debtId: "d1", paymentId: "p1" } }),
+  E(4, "2026-10-02", 30, { note: "Taxi home" }), E(5, "2026-10-02", 30, { note: "Taxi" }), E(6, "2026-10-03", 8), E(7, "2026-10-01", 12.5, { type: "income", category: "salary" }), E(8, "not a date", 12.5)];
+let g = findDoubleEntries(dl);
+ok(g.length === 2 && g[0].date === "2026-10-02" && g[1].date === "2026-10-01", "two groups (30.00 on 2 Oct, 12.50 on 1 Oct), newest first; the single 8.00, the income and the broken date are not groups", g.map((x) => [x.date, x.amount, x.items.length]));
+ok(eq(g[1].items.map((x) => x.id), [3, 2, 1]), "in the 12.50 group the entry tied to a debt comes first, then the one with an account, then the plain one", g[1].items.map((x) => x.id));
+ok(eq(g[1].extra.map((x) => x.id), [2, 1]) && eq(g[0].extra.map((x) => x.id), [5]) && eq(g[0].items.map((x) => x.id), [4, 5]), "'the rest' is 2 and 1 (never the debt-linked entry); in the taxi group the first one is kept, the second is extra");
+// Removing every 'extra' leaves the real spending: 12.50 + 30.00 + 8.00 = 50.50 (the debt repayment 12.50 is the kept 12.50).
+const extraIds = new Set(g.flatMap((x) => x.extra.map((y) => y.id)));
+const kept = dl.filter((x) => !extraIds.has(x.id) && x.type === "expense" && x.id !== 8);
+ok(cents(kept) === -5050 && findDoubleEntries(dl.filter((x) => !extraIds.has(x.id))).length === 0, "after deleting the extras: 50.50 spent and no group is left", cents(kept));
+ok(findDoubleEntries(null).length === 0 && findDoubleEntries([]).length === 0 && findDoubleEntries([E(1, "2026-10-01", 5), E(2, "2026-10-01", 5.01)]).length === 0, "no data, or amounts 0.01 apart: nothing found");
+ok(findDoubleEntries(dl).every((x) => x.items.every((y) => dl.includes(y))) && dl.length === 8, "the list itself is never changed (the same entry objects are handed back)");
+
+section("R51-F2. The shared Undo bar");
+setUndoHost(null);
+ok(offerUndo("x", () => {}) === false, "no bar on the screen: offerUndo says so (the screen then shows its plain message)");
+let seen = null; setUndoHost((msg, fn, ms, kind) => { seen = { msg, ms, kind, fn }; });
+ok(offerUndo("Removed", () => "undone") === true && seen.msg === "Removed" && seen.ms === 8000 && seen.kind === "delete" && seen.fn() === "undone", "with a bar: the message, 8 seconds, kind 'delete' and the undo action are handed over");
+setUndoHost("not a function"); ok(offerUndo("x", () => {}) === false, "a wrong host is ignored");
+setUndoHost(null);
 finish("run51integrity");

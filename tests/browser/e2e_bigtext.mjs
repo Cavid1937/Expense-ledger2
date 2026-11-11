@@ -7,13 +7,14 @@
 // Checks on the four sections (five before Run 7 merged Monthly and Analytics), the Add form and Settings, in en/az/ru: no sideways page scrolling, no clipped text in a
 // box that hides overflow (deliberate "…" truncation is allowed), every tab label readable, the Add form's Save button
 // reachable, and no JavaScript errors. Synthetic data only.
-import { openPage, wait, ok, section, finish, tx, baseSeed, TODAY, openAdd, openSettings, fs, path } from "./lib.mjs";
+import { openPage, wait, ok, section, finish, tx, baseSeed, TODAY, openAdd, openSettings, fs, path, trackProfile } from "./lib.mjs";
 import puppeteer from "puppeteer-core"; import os from "os";
 async function launchWith(prefs) {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ledger-e2e-profile-"));
   if (prefs) { fs.mkdirSync(path.join(userDataDir, "Default"), { recursive: true }); fs.writeFileSync(path.join(userDataDir, "Default", "Preferences"), JSON.stringify(prefs)); }
   // protocolTimeout: a hung headless Chrome (seen twice at 200 % zoom: 10–19 min, then "Target closed") fails in 90 s instead.
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", headless: true, userDataDir, protocolTimeout: 90000, args: ["--no-first-run", "--no-default-browser-check", "--disable-extensions"] });
+  trackProfile(userDataDir, browser);   // Run 51: the profile folder is deleted when this browser closes (it used to stay in the temp folder)
   const dl = process.env.E2E_DL_DIR || path.join(userDataDir, "downloads"); fs.mkdirSync(dl, { recursive: true });
   const cdp = await browser.target().createCDPSession(); await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: dl });
   return browser;

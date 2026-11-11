@@ -47,7 +47,7 @@ section("R25-T3. Notices for debts and loans");
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }), pre: loanPre() }); await settle(page); await openLoans(page);
   await page.evaluate(() => { window.confirm = () => true; });
   await page.evaluate(() => document.querySelector('[data-section="loan-card"] .topbar-btn').click()); await wait(300);
-  ok(/Loan removed/.test(await toast(page)), "removing a loan says 'Loan removed'", await toast(page));
+  { const sb = await page.evaluate(() => (document.querySelector(".snackbar") || {}).innerText || ""); ok(/Loan removed/.test(sb) && /Undo/.test(sb), "removing a loan says 'Loan removed'", sb); }   // Run 51: now an Undo bar, not a plain message
   ok((await page.evaluate(() => { const r = localStorage.getItem("expense_ledger_v5__debts"); return r ? JSON.parse(r).loans.length : 0; })) === 0, "and the loan is gone");
   await page.close();
 }

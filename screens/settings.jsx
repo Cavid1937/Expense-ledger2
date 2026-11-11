@@ -5,7 +5,7 @@ import { LAUNCH_GLYPH } from "./launch.js";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
-import { accountRemovalPlan, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
+import { accountName, accountRemovalPlan, findDoubleEntries, maskText, offerUndo, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, creditOwed, cleanWorkHours, readWorkHours, writeWorkHours, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -104,7 +104,11 @@ export function MyCategories({ state, onChanged, showToast }) {
   };
   const remove=(c)=>{
     if (customCatInUse(c.id,state.transactions,state.budgets)) { showToast(t("mycat.inUse"),5000); return; }
-    if (commit(list.filter(x=>x.id!==c.id))) showToast(t("mycat.removed"));
+    const index=list.findIndex(x=>x.id===c.id);
+    if (!commit(list.filter(x=>x.id!==c.id))) return;
+    // Run 51: Undo puts the category back in its place (it could only be removed because nothing used it).
+    const undo=()=>{ const cur=readCustomCats(); if (cur.some(x=>x.id===c.id)) return; const next=cur.slice(); next.splice(Math.min(Math.max(index,0),next.length),0,c); if (!commit(next)) showToast(t("import.cantUndo")); };
+    if (!offerUndo(t("mycat.removed"),undo)) showToast(t("mycat.removed"));
   };
   return (
     <div className="card prefs-card" data-section="my-categories">
@@ -752,7 +756,41 @@ function EncryptedBackup({ onExportEncrypted }) {
   );
 }
 
-export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall }) {
+// Run 51 (owner: a merge counted most things twice): a look at entries already here that share a day and an amount. The person ticks the
+// copies to delete; nothing is ticked to begin with, nothing is deleted without the button, and the delete has the usual Undo.
+function DoubleEntries({ transactions, currency, onDeleteMany }) {
+  const [open,setOpen]=useState(false), [picked,setPicked]=useState(()=>new Set());
+  const groups=useMemo(()=>findDoubleEntries(transactions),[transactions]);
+  const here=useMemo(()=>new Set(transactions.map(x=>String(x.id))),[transactions]);
+  const live=[...picked].filter(id=>here.has(id)), SHOW=40;
+  const words=(x)=>[x.merchant||x.note,x.subcategory ? subName(x.subcategory) : "",catName(x.category),x.account ? accountName(x.account) : ""].filter(Boolean).join(", ");
+  const toggle=(id)=>setPicked(p=>{ const n=new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  return (
+    <div className="card" data-section="io-doubles">
+      <div className="list-sub" data-dbl="summary" style={{lineHeight:1.55}}>{groups.length ? tn("dbl.found",groups.length) : t("dbl.none")}</div>
+      {groups.length>0&&!open&&<button className="btn btn-ghost btn-full" data-dbl="open" style={{marginTop:10}} onClick={()=>setOpen(true)}>{t("dbl.show")}</button>}
+      {groups.length>0&&open&&(<>
+        <div className="list-sub" style={{lineHeight:1.55,marginTop:8}}>{t("dbl.how")}</div>
+        <button className="btn btn-sm" data-dbl="tick-extra" style={{marginTop:8}} onClick={()=>setPicked(new Set(groups.flatMap(g=>g.extra.map(x=>String(x.id)))))}>{t("dbl.tickExtra")}</button>
+        {groups.slice(0,SHOW).map(g=>(
+          <div key={g.date+"|"+g.type+"|"+g.amount} data-dbl-group="1" style={{marginTop:12,paddingTop:10,borderTop:"1px solid var(--rule)"}}>
+            <div className="list-title">{fmtDate(g.date)} · {g.type==="income"?"+":"−"}{fmt(g.amount,currency)}</div>
+            {g.items.map(x=>(
+              <label key={String(x.id)} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"8px 0",minHeight:24,fontSize:13,lineHeight:1.45,color:"var(--ink-2)"}}>
+                <input type="checkbox" data-dbl-pick={String(x.id)} checked={picked.has(String(x.id))} onChange={()=>toggle(String(x.id))} style={{marginTop:2}}/>
+                <span style={{overflowWrap:"anywhere"}}>{maskText(words(x))}</span>
+              </label>
+            ))}
+          </div>
+        ))}
+        {groups.length>SHOW&&<div className="list-sub" style={{marginTop:10}}>{t("dbl.more",{n:groups.length-SHOW})}</div>}
+        <button className="btn btn-primary btn-full" data-dbl="delete" style={{marginTop:12}} disabled={!live.length} onClick={()=>{ onDeleteMany(live); setPicked(new Set()); }}>{t("dbl.delete",{n:live.length})}</button>
+      </>)}
+    </div>
+  );
+}
+
+export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall, onDeleteMany }) {
   const fileRef=useRef();
   const { transactions, lastBackup, backupConfirmedAt }=state;
   const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
@@ -805,6 +843,11 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
           <button className="btn btn-sm" onClick={onExportCSV} style={{marginTop:8}}><Icon name="download" size={12}/>{t("io.exportCsv")}</button>
         </div>
       </div>
+
+      {onDeleteMany&&(<>
+        <div className="section-title">{t("io2.doubleTitle")}</div>
+        <DoubleEntries transactions={transactions} currency={state.currency} onDeleteMany={onDeleteMany}/>
+      </>)}
 
       {/* Run 10: how safe the data is on this device, and what makes it safer (last: it is about the device, not about a file) */}
       <div className="section-title">{t("io.safety")}</div>

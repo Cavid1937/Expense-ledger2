@@ -149,6 +149,11 @@ export function cleanMoneyText(raw, opts) {
 // Run 26: an in-app question instead of the browser's own confirm box (same look as the rest, animated, translated). askConfirm(text) gives
 // a promise of true/false; the <ConfirmHost/> in the app shell shows it. Without a host (never in the app) it falls back to window.confirm.
 let confirmHost=null;
+// Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
+// there (the screen then shows its plain message, as before).
+let undoHost=null;
+export function setUndoHost(fn) { undoHost=typeof fn==="function" ? fn : null; }
+export function offerUndo(message, onUndo, ms=8000, kind="delete") { if (!undoHost) return false; undoHost(message,onUndo,ms,kind); return true; }
 export function askConfirm(message) { return new Promise(res=>{ if (!confirmHost) { res(typeof window!=="undefined" && window.confirm ? window.confirm(message) : false); return; } confirmHost({ message, res }); }); }
 // Run 26: one shared way to open an inline form without a jump: the view glides to it (smooth scroll) and the first box is focused
 // with preventScroll (a plain autoFocus makes phones snap the page). Use as ref={revealFocus}; it only acts once per element.
@@ -1961,6 +1966,19 @@ function planMerge(existing, incoming) {
   rest1.forEach(t=>{ if (take(byFp,txnFingerprint(t))>=0) identical.push(t); else rest2.push(t); });
   rest2.forEach(t=>{ const i=take(byLoose,txnLooseKey(t)); if (i>=0) similar.push({ file:t, here:ex[i] }); else fresh.push(t); });
   return { sameId, identical, similar, fresh };
+}
+// Run 51: entries ALREADY on this phone that may be one payment counted twice (after an earlier merge, or typed twice): groups of two or
+// more entries on the same day, of the same kind, for the same amount. Nothing is decided here; the person looks and chooses. In each group
+// the entry that carries the most (a link to a bill, debt or loan; an account; words) comes first, as the one to keep; "extra" is the rest,
+// never an entry tied to a debt repayment or a loan payment (those are managed from the Debts page).
+export function findDoubleEntries(transactions) {
+  const m=new Map();
+  (Array.isArray(transactions)?transactions:[]).forEach(t=>{ if (!t || !isValidDateStr(t.date)) return; const k=txnLooseKey(t), l=m.get(k); if (l) l.push(t); else m.set(k,[t]); });
+  const score=(t)=>(t.debtLink||t.loan||t.billId ? 8 : 0)+(t.account ? 2 : 0)+(t.merchant ? 1 : 0)+(t.note ? 1 : 0)+(t.subcategory ? 1 : 0);
+  return [...m.values()].filter(l=>l.length>1).map(l=>{
+    const items=l.map((t,i)=>({ t, i })).sort((a,b)=>score(b.t)-score(a.t) || a.i-b.i).map(x=>x.t);
+    return { date:items[0].date, type:items[0].type, amount:items[0].amount, items, extra:items.slice(1).filter(t=>!t.debtLink && !t.loan) };
+  }).sort((a,b)=>b.date.localeCompare(a.date) || b.amount-a.amount);
 }
 // Run 51: accounts of a file against the accounts on this phone. Same id = the same account (what is here wins, as before). NEW: an account
 // of the file whose NAME is already used here under another id is the same account too; its id is mapped to the one here, so the file's
@@ -3916,6 +3934,7 @@ function AppInner() {
     if (snackActive.current && snackKind.current!==kind) { snackQueue.current.push({msg,onUndo,ms,kind,label}); return; }
     openSnack({msg,onUndo,ms,kind,label});
   },[showToast]);
+  useEffect(()=>{ setUndoHost(showSnackbar); return ()=>setUndoHost(null); },[showSnackbar]);
   // Run 51: what the Accounts card needs to remove an account safely: the entries as they are now, a way to change them, and the Undo bar.
   const accTools=useMemo(()=>({ getTransactions:()=>stateRef.current.transactions, setTransactions:(fn)=>setState(s=>({ ...s, transactions:fn(s.transactions) })), showSnackbar }),[showSnackbar]);
 
@@ -4079,6 +4098,17 @@ function AppInner() {
     return id;
   },[]);
   const removeLoanEntry=useCallback((id)=>setState(s=>({...s,transactions:s.transactions.filter(t=>t.id!==id)})),[]);
+  // Run 51: deleting a debt, a loan or a payment can be undone. The entries that go with it are taken out and handed back, so Undo can
+  // return exactly the same entries (same ids, amounts and dates); an entry that is already there again is not added twice.
+  const takeEntries=useCallback((ids)=>{
+    const want=new Set((ids||[]).map(String)), gone=stateRef.current.transactions.filter(x=>want.has(String(x.id)));
+    if (gone.length) setState(s=>({...s,transactions:s.transactions.filter(x=>!want.has(String(x.id)))}));
+    return gone;
+  },[]);
+  const putEntries=useCallback((list)=>setState(s=>{
+    const have=new Set(s.transactions.map(x=>String(x.id))), back=(list||[]).filter(x=>!have.has(String(x.id)));
+    return back.length ? {...s,transactions:[...back,...s.transactions].sort((a,b)=>b.date.localeCompare(a.date))} : s;
+  }),[]);
 
   // Run 18: an entry linked to a debt repayment is changed only from the Debts page, so the debt balance and the entry cannot drift apart.
   const debtLinked=(id)=>{ const tx=stateRef.current.transactions.find(x=>x.id===id); if (!tx || !debtLinkRef(tx.debtLink)) return false;
@@ -4610,8 +4640,8 @@ function AppInner() {
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
           {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast} accTools={accTools}/></div>}
           {tab==="gifts"     && <GiftsPage transactions={transactions} currency={currency} showToast={showToast} onView={txn=>setViewTxn(txn)} onAdd={k=>openAdd(k==="received"?{type:"income",category:"giftin"}:{type:"expense",category:"gifts"})}/>}
-          {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} showToast={showToast} showSnackbar={showSnackbar}/>}
-          {tab==="io"        && <ImportExportPage state={state} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
+          {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} onTakeEntries={takeEntries} onPutEntries={putEntries} showToast={showToast} showSnackbar={showSnackbar}/>}
+          {tab==="io"        && <ImportExportPage state={state} onDeleteMany={deleteMany} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} onExportEncrypted={exportEncrypted} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
             onConfirmBackup={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}/>}

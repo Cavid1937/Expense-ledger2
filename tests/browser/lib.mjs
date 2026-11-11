@@ -27,6 +27,8 @@ for (const ev of ["uncaughtException", "unhandledRejection"]) process.on(ev, asy
 const profiles = new Set();
 const dropProfile = (dir) => { try { fs.rmSync(dir, { recursive: true, force: true, maxRetries: 6, retryDelay: 150 }); profiles.delete(dir); } catch { /* still locked by Chrome: the exit hook tries once more */ } };
 process.on("exit", () => { for (const d of [...profiles]) dropProfile(d); });
+// For a test that starts Chrome itself (e2e_bigtext): the same clean-up for its profile folder.
+export const trackProfile = (dir, browser) => { profiles.add(dir); browser.on("disconnected", () => dropProfile(dir)); };
 export async function launch() {
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "ledger-e2e-profile-")); profiles.add(userDataDir);
   const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", headless: true, userDataDir, args: ["--no-first-run", "--no-default-browser-check", "--disable-extensions"] });

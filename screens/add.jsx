@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb } from "../App.jsx";
+import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
@@ -146,6 +146,18 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [newSub, setNewSub] = useState(null);   // null = closed; otherwise the text being typed
   const [subMsg, setSubMsg] = useState("");
   const saveMySubs=(m)=>{ setMySubs(m); if (!writeSubcats(m)) setSubMsg(t("subcat.saveFailed")); };
+  // Run 51: removing one of your own subcategories can be undone; it goes back to the place it had in the list.
+  const removeMySub=(s)=>{
+    const cat=catId, index=(mySubs[cat]||[]).findIndex(x=>subKey(x)===subKey(s));
+    saveMySubs(removeUserSubcat(mySubs,cat,s));
+    offerUndo(t("subcat.removed",{name:s}),()=>{
+      const cur=readSubcats(), mine=cur[cat]||[];
+      if (mine.some(x=>subKey(x)===subKey(s))) return;
+      const list=mine.slice(); list.splice(Math.min(Math.max(index,0),list.length),0,s);
+      const next={ ...cur, [cat]:list };
+      if (writeSubcats(next)) setMySubs(readSubcats()); else setSubMsg(t("subcat.saveFailed"));
+    });
+  };
   const [renSub, setRenSub] = useState(null);   // { from, text } while one of the user's own subcategories is being renamed
   const renameMySub=()=>{
     const r=renameUserSubcat(mySubs,catId,renSub.from,renSub.text);
@@ -384,7 +396,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
                   <span key={"my-"+s} className="sub-chip-wrap" style={{display:"inline-flex",alignItems:"center",gap:2}}>
                     <button className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{s}</button>
                     <button type="button" className="sub-chip-ren" data-section="add-subcat-rename" aria-label={t("subcat.rename",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>{ setRenSub({ from:s, text:s }); setNewSub(null); setSubMsg(""); }}>✎</button>
-                    <button type="button" className="sub-chip-x" aria-label={t("subcat.remove",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>saveMySubs(removeUserSubcat(mySubs,catId,s))}>×</button>
+                    <button type="button" className="sub-chip-x" aria-label={t("subcat.remove",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>removeMySub(s)}>×</button>
                   </span>
                 ))}
                 {(selectedCat?.subs||[]).map(s=>(
