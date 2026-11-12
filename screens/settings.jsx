@@ -790,7 +790,25 @@ function DoubleEntries({ transactions, currency, onDeleteMany }) {
   );
 }
 
-export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall, onDeleteMany }) {
+// Run 52: a bank statement can also be pasted as text (for a bank that gives no file, or a file the app cannot open). The text is read on
+// this phone only and goes to the same review sheet as a file.
+function PasteStatement({ onImportText }) {
+  const [open,setOpen]=useState(false), [text,setText]=useState("");
+  useBackStep(open,()=>setOpen(false));
+  if (!open) return <button className="btn btn-ghost btn-full" data-section="io-paste-open" style={{marginTop:8}} onClick={()=>setOpen(true)}>{t("st.pasteOpen")}</button>;
+  return (
+    <div className="card" data-section="io-paste" style={{marginTop:8}}>
+      <label className="list-sub" htmlFor="st-paste" style={{display:"block",lineHeight:1.5,marginBottom:6}}>{t("st.pasteHint")}</label>
+      <textarea id="st-paste" className="field-input" rows={6} value={text} onChange={e=>setText(e.target.value)} style={{width:"100%",fontFamily:"inherit",fontSize:13,resize:"vertical",boxSizing:"border-box"}}/>
+      <div style={{display:"flex",gap:8,marginTop:8}}>
+        <button className="btn btn-ghost" style={{flex:1}} onClick={()=>{ setOpen(false); setText(""); }}>{t("common.cancel")}</button>
+        <button className="btn btn-primary" style={{flex:1}} data-section="io-paste-go" disabled={!text.trim()} onClick={()=>onImportText(text)}>{t("st.pasteGo")}</button>
+      </div>
+    </div>
+  );
+}
+
+export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onImportText, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall, onDeleteMany }) {
   const fileRef=useRef();
   const { transactions, lastBackup, backupConfirmedAt }=state;
   const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
@@ -834,6 +852,8 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
           <div className="list-sub" style={{lineHeight:1.5}}>{t("io2.importSub")}</div>
         </div>
       </div>
+
+      {onImportText&&<PasteStatement onImportText={onImportText}/>}
 
       <div className="section-title">{t("io2.sheetTitle")}</div>
       <div className="card io-card" data-section="io-csv" style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>

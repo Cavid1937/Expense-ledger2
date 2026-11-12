@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Fragment, Component } from "react";
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
+import { readStatement, statementEntries, linesFromText, linesFromGrid, xlsxGrid } from "./statement.js";
 import { CSS } from "./styles.js";
 import { LockGate, LockSheet } from "./screens/lock.jsx";
 import { HomePage } from "./screens/home.jsx";
@@ -3417,6 +3418,23 @@ export let PRIVACY=false;
 const MASK="••••";
 function setPrivacyMode(on) { PRIVACY=!!on; }
 export function maskText(s) { return PRIVACY && s ? "•••••" : s; }
+// Run 52: a bank statement that statement.js has read, shaped like a backup's plan so the same review sheet, merge rules and Undo apply.
+// The person's own history decides a category first (only when the merchant name is exactly one they have used); then the bank's merchant
+// code, then words, then the built-in merchant list. Transfers and not-yet-posted rows are kept apart so the sheet can offer them as choices.
+const STATEMENT_BANKS={ abb:"ABB", unibank:"Unibank" };
+function statementPick(plan, opts) { return plan.stAll.filter(e=>{ const m=plan.stMeta[String(e.id)]||{}; if (m.pending && !opts.pending) return false; if ((m.kind==="transfer"||m.kind==="cash") && !opts.transfers) return false; return true; }); }
+function statementPlan(res, filename, transactions) {
+  const memory=buildMerchantMemory(transactions);
+  const raw=statementEntries(res.bank,res.rows,{ known:KNOWN_MERCHANTS, suggest:(m,type)=>{ const s=merchantSuggest(m,memory,type); return s && lc(s.merchant||"")===lc(m||"") ? { category:s.category, subcategory:s.subcategory||"" } : null; } });
+  const stMeta={}; raw.forEach(e=>{ stMeta[String(e.id)]=e._st; });
+  const { good }=partitionTransactions(raw.map(({ _st, ...e })=>e),{ keepCategoryId:true });
+  const left=res.problems.filter(p=>/^(rows|left):/.test(p)).reduce((s,p)=>s+Number(p.split(":")[1]),0);
+  const plan={ ok:true, kind:"statement", filename, stAll:good, stMeta, stOpts:{ transfers:true, pending:false, account:"" },
+    statement:{ bank:res.bank, check:res.check, left, sign:res.problems.includes("sign"), nTransfer:good.filter(e=>["transfer","cash"].includes((stMeta[String(e.id)]||{}).kind)).length, nPending:good.filter(e=>(stMeta[String(e.id)]||{}).pending).length },
+    canReplace:false, skippedCount:0, skippedSummary:"", settings:{}, problems:[], warnings:[], subcategories:{}, debtData:{ debts:[], loans:[] }, accountData:{ accounts:[], transfers:[] } };
+  plan.transactions=statementPick(plan,plan.stOpts);
+  return plan;
+}
 export function fmtPct(n) { return PRIVACY ? "••%" : `${n}%`; }
 export function fmt(n, sym="₼") {
   if (PRIVACY) return `${MASK} ${sym}`;
@@ -4407,16 +4425,42 @@ function AppInner() {
     if (!file) return;
     const reader=new FileReader();
     reader.onerror=()=>setImportPending({ error:t("import.readFailed"), filename:file.name });
-    reader.onload=e=>{
-      const raw=String(e.target.result||"");
-      if (isEncryptedBackup(raw)) { setImportPending({ needPass:true, text:raw, filename:file.name }); return; }   // Run 32: asks for the passphrase first
-      const plan=planImportWithCats(raw, file.name||"");
-      if (!plan.ok) { setImportPending({ error:plan.error, filename:file.name }); return; }
+    reader.onload=async e=>{
+      // Run 52: the file is looked at by its first bytes, not its name: a PDF or an Excel file is read as a bank statement; anything else is
+      // text, handled as before (backup, CSV) and, when it is neither, tried as a statement that was saved or pasted as text.
+      const buf=e.target.result, head=String.fromCharCode(...new Uint8Array(buf.slice(0,5))), name=file.name||"";
+      const isPdf=head.startsWith("%PDF"), isZip=head.startsWith("PK");
+      if (isPdf || isZip) {
+        setImportPending({ busy:true, filename:name });
+        try {
+          const lines=isPdf ? await (await import("./pdfText.js")).pdfLines(buf) : linesFromGrid(await xlsxGrid(buf));
+          openStatement(readStatement(lines), name);
+        } catch { setImportPending({ error:t(isPdf?"st.pdfFailed":"st.xlsxFailed"), filename:name }); }
+        return;
+      }
+      const raw=new TextDecoder("utf-8").decode(buf);
+      if (isEncryptedBackup(raw)) { setImportPending({ needPass:true, text:raw, filename:name }); return; }   // Run 32: asks for the passphrase first
+      const plan=planImportWithCats(raw, name);
+      if (!plan.ok) {
+        const st=readStatement(linesFromText(raw));
+        if (st.rows.length) { openStatement(st, name); return; }
+        setImportPending({ error:plan.error, filename:name }); return;
+      }
       setSkipDup(true); setSkipSim(true);
       setImportPending({ ...plan, ...mergeCounts(stateRef.current.transactions, plan) });
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   },[]);
+  // Run 52: a statement that was read (from a PDF, an Excel file or text) is shown in the same review sheet as a backup: the same counts,
+  // the same "skip what is already here" choices, the same Undo. Nothing is added until the person presses the button.
+  const openStatement=(res, name)=>{
+    if (!res.rows.length) { setImportPending({ error:t(res.problems.includes("columns")?"st.columns":"st.none"), filename:name }); return; }
+    const plan=statementPlan(res, name, stateRef.current.transactions);
+    setSkipDup(true); setSkipSim(true);
+    setImportPending({ ...plan, ...mergeCounts(stateRef.current.transactions, plan) });
+  };
+  const importText=useCallback((text)=>{ openStatement(readStatement(linesFromText(text)), t("st.pasted")); },[]);
+  const setStOpt=(k,v)=>setImportPending(p=>{ if (!p || p.kind!=="statement") return p; const stOpts={ ...p.stOpts, [k]:v }, transactions=statementPick(p,stOpts); return { ...p, stOpts, transactions, ...mergeCounts(stateRef.current.transactions,{ ...p, transactions }) }; });
 
   // Run 32: returns null when the file was opened (the normal review sheet then shows), otherwise the reason, so the sheet can say why.
   const unlockImport=useCallback(async (pass)=>{
@@ -4470,7 +4514,9 @@ function AppInner() {
     }
     // Run 51: an account of the file that has the same name as one here IS that account: its entries and transfers are pointed at the one here.
     const accPlan=plan.accountData && plan.accountData.accounts.length ? planAccountMerge(readAccounts(),plan.accountData) : null;
-    const planUse=accPlan && accPlan.renamed ? { ...plan, transactions:remapEntryAccounts(plan.transactions,accPlan.remap) } : plan;
+    // Run 52: a bank statement's entries go on the account the person chose in the sheet (or on none).
+    const stAcc=plan.kind==="statement" && plan.stOpts ? accId(plan.stOpts.account) : "";
+    const planUse=stAcc ? { ...plan, transactions:plan.transactions.map(x=>({ ...x, account:stAcc })) } : accPlan && accPlan.renamed ? { ...plan, transactions:remapEntryAccounts(plan.transactions,accPlan.remap) } : plan;
     const next=applyImport(before, planUse, mode, { skipDuplicates:skipDup, skipSimilar:skipSim });
     // Run 18: the import is all-or-nothing. The side stores are written FIRST and checked; if one cannot be written, the others are put
     // back exactly as they were and the main data is not touched. Undo restores them too.
@@ -4641,7 +4687,7 @@ function AppInner() {
           {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast} accTools={accTools}/></div>}
           {tab==="gifts"     && <GiftsPage transactions={transactions} currency={currency} showToast={showToast} onView={txn=>setViewTxn(txn)} onAdd={k=>openAdd(k==="received"?{type:"income",category:"giftin"}:{type:"expense",category:"gifts"})}/>}
           {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} onTakeEntries={takeEntries} onPutEntries={putEntries} showToast={showToast} showSnackbar={showSnackbar}/>}
-          {tab==="io"        && <ImportExportPage state={state} onDeleteMany={deleteMany} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
+          {tab==="io"        && <ImportExportPage state={state} onDeleteMany={deleteMany} onImportText={importText} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} onExportEncrypted={exportEncrypted} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
             onConfirmBackup={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}/>}
@@ -4679,9 +4725,11 @@ function AppInner() {
           <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setImportPending(null)}>
             <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("import.dialogLabel")}>
               <div className="sheet-grip"><div className="sheet-handle"/></div>
-              <div className="sheet-title">{t(importPending.needPass?"enc.unlockTitle":"import.title")}</div>
+              <div className="sheet-title">{t(importPending.needPass?"enc.unlockTitle":importPending.kind==="statement"?"st.sheetTitle":"import.title")}</div>
               {importPending.needPass?(
                 <ImportUnlock filename={importPending.filename} onUnlock={unlockImport} onCancel={()=>setImportPending(null)}/>
+              ):importPending.busy?(
+                <div role="status" data-section="import-busy" style={{fontSize:13,color:"var(--ink-2)",padding:"8px 2px 16px",lineHeight:1.55}}>{t("st.reading")}<div style={{fontSize:12,color:"var(--ink-3)",overflowWrap:"anywhere"}}>{importPending.filename}</div></div>
               ):importPending.error?(
                 <>
                   <div role="alert" style={{background:"var(--neg-bg)",color:"var(--neg)",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:13,lineHeight:1.55}}>{importPending.error}</div>
@@ -4706,7 +4754,34 @@ function AppInner() {
                     {importPending.problems.map((m,i)=><div key={"p"+i} style={{fontSize:12,color:"var(--warn)",marginTop:4}}>{m}</div>)}
                     {importPending.warnings.map((m,i)=><div key={"w"+i} style={{fontSize:12,color:"var(--ink-3)",marginTop:4}}>{m}</div>)}
                   </div>
-                  <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
+                  {/* Run 52: a bank statement: which bank layout was recognised, whether the bank's own running balance confirms the rows, and three choices */}
+                  {importPending.kind==="statement"&&(()=>{ const s=importPending.statement, o=importPending.stOpts, accs=readAccounts().accounts.filter(a=>!a.hidden), row={display:"flex",gap:8,alignItems:"flex-start",marginTop:8,lineHeight:1.45}; return (
+                    <div data-section="import-statement" style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
+                      <div style={{fontWeight:600}} data-st="bank">{t("st.title",{ bank:STATEMENT_BANKS[s.bank]||t("st.bankOther") })}</div>
+                      <div data-st="check" data-ok={s.check.has?String(s.check.ok):"none"} style={s.check.has&&!s.check.ok?{color:"var(--warn)"}:null}>{!s.check.has ? t("st.checkNone") : s.check.ok ? t("st.checkOk") : t("st.checkBad",{n:s.check.breaks})}</div>
+                      {s.left>0&&<div data-st="left" style={{color:"var(--warn)"}}>{t("st.left",{n:s.left})}</div>}
+                      {s.sign&&<div data-st="sign" style={{color:"var(--warn)"}}>{t("st.sign")}</div>}
+                      {accs.length>0&&(
+                        <label style={{display:"block",marginTop:8}}>{t("st.account")}
+                          <select className="field-input" data-st="account" style={{marginTop:4}} value={o.account} onChange={e=>setStOpt("account",e.target.value)}>
+                            <option value="">{t("acc.rm.noAccount")}</option>{accs.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
+                          </select>
+                        </label>)}
+                      {s.nTransfer>0&&<label style={row}><input type="checkbox" data-st="transfers" checked={o.transfers} onChange={e=>setStOpt("transfers",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.transfers",s.nTransfer)}</span></label>}
+                      {s.nPending>0&&<label style={row}><input type="checkbox" data-st="pending" checked={o.pending} onChange={e=>setStOpt("pending",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.pending",s.nPending)}</span></label>}
+                      {/* every row that will be added, so nothing is taken on trust (a long statement scrolls inside this box) */}
+                      <div style={{fontWeight:600,marginTop:10}}>{t("st.rowsTitle")}</div>
+                      <div data-st="rows" role="list" tabIndex={0} aria-label={t("st.rowsTitle")} style={{maxHeight:188,overflowY:"auto",marginTop:4,border:"1px solid var(--rule)",borderRadius:8,padding:"2px 10px"}}>
+                        {importPending.transactions.slice(0,300).map(x=>(
+                          <div role="listitem" data-st-row={String(x.id)} key={String(x.id)} style={{display:"flex",justifyContent:"space-between",gap:10,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
+                            <span style={{minWidth:0,overflowWrap:"anywhere"}}>{fmtDate(x.date)} · {maskText(x.merchant||x.note||catName(x.category))}<span style={{color:"var(--ink-3)"}}> · {catName(x.category)}</span></span>
+                            <span style={{flexShrink:0,whiteSpace:"nowrap",color:x.type==="income"?"var(--pos)":"var(--ink)"}}>{x.type==="income"?"+":"−"}{fmt(x.amount,currency)}</span>
+                          </div>))}
+                        {importPending.transactions.length>300&&<div style={{padding:"6px 0",color:"var(--ink-3)"}}>{t("st.moreRows",{n:importPending.transactions.length-300})}</div>}
+                      </div>
+                      <div style={{marginTop:8}}>{t("st.mergeText")}</div>
+                    </div>); })()}
+                  <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12,display:importPending.kind==="statement"?"none":undefined}}>
                     <strong>{t("import.mergeLabel")}</strong> {t("import.mergeText")}<br/>
                     {importPending.canReplace
                       ? <><strong>{t("import.replaceLabel")}</strong> {t("import.replaceText")}</>
@@ -4720,7 +4795,7 @@ function AppInner() {
                   {/* Run 51: what a merge will do, in numbers, before anything is added (owner: a merge double counted) */}
                   {importPending.mergeInfo&&importPending.transactions.length>0&&(()=>{ const mi=importPending.mergeInfo, words=(x)=>[x.merchant||x.note,x.subcategory,catName(x.category)].filter(Boolean).join(", "); return (
                     <div data-section="import-merge-plan" style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
-                      <div style={{fontWeight:600}}>{t("import.planTitle")}</div>
+                      {importPending.kind!=="statement"&&<div style={{fontWeight:600}}>{t("import.planTitle")}</div>}
                       <div data-merge="fresh">{t("import.planNew",{n:mi.fresh})}</div>
                       {mi.sameId>0&&<div data-merge="sameId">{t("import.planSameId",{n:mi.sameId})}</div>}
                       {mi.sameAccounts>0&&<div data-merge="accounts">{t("import.planAccounts",{n:mi.sameAccounts})}</div>}
@@ -4740,7 +4815,7 @@ function AppInner() {
                         </ul>
                       </>)}
                     </div>); })()}
-                  <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>commitImport("merge")}>{t("import.mergeBtn")}</button>
+                  <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="import-go" disabled={importPending.kind==="statement"&&!importPending.transactions.length} onClick={()=>commitImport("merge")}>{t(importPending.kind==="statement"?"st.addBtn":"import.mergeBtn")}</button>
                   {importPending.canReplace
                     ? <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>{t("import.replaceBtn")}</button>
                     : Object.keys(importPending.settings||{}).length>0
