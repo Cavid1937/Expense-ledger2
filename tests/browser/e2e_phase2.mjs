@@ -51,7 +51,7 @@ for (let i = 2; i <= d; i++) dowSeed.push(tx({ merchant: "D", amount: 5, date: y
 page = await openPage(browser, { seed: baseSeed({ transactions: dowSeed }) });
 await tab(page, "Monthly"); await wait(300);
 const dowCard = await page.evaluate(() => { const c = [...document.querySelectorAll(".a-card")].find((e) => /Typical Purchase by Day of Week/i.test(e.innerText)); return c ? { text: c.innerText, widths: [...c.querySelectorAll(".dow-row")].map((r) => r.children[1].firstChild.style.width), amounts: [...c.querySelectorAll(".dow-row")].map((r) => r.children[2].innerText.trim()) } : null; });
-ok(dowCard && /Median amount per transaction/.test(dowCard.text), "the card is titled 'Typical Purchase by Day of Week' and says it shows the median per transaction", dowCard && dowCard.text.slice(0, 120));
+ok(dowCard && /Median amount per entry/.test(dowCard.text), "the card is titled 'Typical Purchase by Day of Week' and says it shows the median per transaction", dowCard && dowCard.text.slice(0, 120));
 // Every row, including the weekday of day 1, must read 5.00 ₼ (an average would read e.g. 204.00 or 129.38, depending on the date).
 ok(dowCard && dowCard.amounts.length > 0 && dowCard.amounts.every((a) => a === "5.00 ₼"), "every weekday shows 5.00 ₼ (typical), including the day with one 1,000 purchase", dowCard && dowCard.amounts);
 ok(dowCard && dowCard.widths.length > 0 && dowCard.widths.every((w) => w === "100%"), "every weekday bar is equally long (same typical purchase); no bar towers because of one purchase", dowCard && dowCard.widths);

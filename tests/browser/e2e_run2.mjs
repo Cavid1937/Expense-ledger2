@@ -76,7 +76,7 @@ ok(!(await page.$(".sheet")) && await inApp(), "Back closes the sheet and stays 
 await tab(page, "Ledger"); await wait(300);
 await page.evaluate(() => document.querySelector(".cat-filter-btn").click()); await wait(500);
 await back();
-ok(!(await page.$(".sheet")) && /Transactions/.test(await activeTab(page)), "Back closes the Ledger category sheet and stays on Ledger");
+ok(!(await page.$(".sheet")) && /Entries/.test(await activeTab(page)), "Back closes the Ledger category sheet and stays on Ledger");
 await back();
 ok(/Home/.test(await activeTab(page)) && await inApp(), "Back on Ledger returns to Home", await activeTab(page));
 await page.evaluate(() => document.querySelector(".fab-add").click()); await wait(500);
@@ -98,23 +98,23 @@ const swipe = async (x0, y0, x1, y1, steps = 8) => {
 };
 ok(/Home/.test(await activeTab(page)), "starts on Home");
 await swipe(320, 450, 60, 460);
-ok(/Transactions/.test(await activeTab(page)), "swipe left on Home → Transactions", await activeTab(page));
+ok(/Entries/.test(await activeTab(page)), "swipe left on Home → Transactions", await activeTab(page));
 await swipe(320, 450, 60, 460);
 ok(/Analytics/.test(await activeTab(page)), "swipe left again → Analytics", await activeTab(page));
 await swipe(60, 450, 320, 460);
-ok(/Transactions/.test(await activeTab(page)), "swipe right → back to Transactions", await activeTab(page));
+ok(/Entries/.test(await activeTab(page)), "swipe right → back to Transactions", await activeTab(page));
 await swipe(200, 300, 230, 650);
-ok(/Transactions/.test(await activeTab(page)), "a mostly vertical drag (scrolling) does not change section", await activeTab(page));
+ok(/Entries/.test(await activeTab(page)), "a mostly vertical drag (scrolling) does not change section", await activeTab(page));
 await swipe(200, 450, 170, 455);
-ok(/Transactions/.test(await activeTab(page)), "a short sideways nudge (30px) does not change section", await activeTab(page));
+ok(/Entries/.test(await activeTab(page)), "a short sideways nudge (30px) does not change section", await activeTab(page));
 const chipY = await page.evaluate(() => { const r = document.querySelector(".filter-bar").getBoundingClientRect(); return r.top + r.height / 2; });
 const scrollsX = await page.evaluate(() => { const f = document.querySelector(".filter-bar"); return f.scrollWidth > f.clientWidth; });
 // Precondition, checked rather than assumed: at 390px the chips must overflow, or the next check would prove nothing.
 ok(scrollsX, "precondition: the filter chips are wider than the screen (they scroll sideways)");
-await swipe(320, chipY, 60, chipY); ok(/Transactions/.test(await activeTab(page)), "a swipe on the sideways-scrolling filter chips scrolls them instead of changing section", await activeTab(page));
+await swipe(320, chipY, 60, chipY); ok(/Entries/.test(await activeTab(page)), "a swipe on the sideways-scrolling filter chips scrolls them instead of changing section", await activeTab(page));
 await page.evaluate(() => document.querySelector(".cat-filter-btn").click()); await wait(500);
 await swipe(320, 700, 60, 705);
-ok(/Transactions/.test(await activeTab(page)) && await page.$(".sheet"), "with a sheet open, a sideways swipe does not change section", await activeTab(page));
+ok(/Entries/.test(await activeTab(page)) && await page.$(".sheet"), "with a sheet open, a sideways swipe does not change section", await activeTab(page));
 await page.evaluate(() => document.querySelector(".sheet-overlay").click()); await wait(400);
 await tab(page, "Home"); await wait(300);
 await swipe(60, 450, 320, 460);

@@ -52,7 +52,7 @@ section("R15-B2. Analytics keeps aggregates and drops the repeated lists (en)");
   const s = await sections(page);
   ok(["an-month", "an-summary", "an-trend", "an-category", "an-merchant", "an-trends"].every((x) => s.includes(x)), "Analytics still has the month, summary, trend, categories, merchants and the trends block", s);
   ok((await count(page, ".txn-row")) === 0 && (await count(page, ".txn-group")) === 0, "no transaction rows on Analytics (they live in Transactions)");
-  ok(!/Top Expenses|All Transactions/i.test(await bodyText(page)), "no 'Top Expenses' or 'All Transactions' lists");
+  ok(!/Top Expenses|All Entries/i.test(await bodyText(page)), "no 'Top Expenses' or 'All Transactions' lists");
   ok(s.filter((x) => x === "an-budget").length <= 1, "at most one budget block, and it follows the selected month", s);
   await page.close();
 }

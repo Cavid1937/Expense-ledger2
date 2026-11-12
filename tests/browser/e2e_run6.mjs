@@ -27,7 +27,7 @@ page = await openPage(browser, { seed });
 const n0 = (await state(page)).transactions.length;
 await openData(page); const input = await page.$(".io-page input[type=file]"); await input.uploadFile(file); await page.waitForSelector('[aria-label="Restore backup"]'); await wait(250);
 const sheet = await page.evaluate(() => document.querySelector('[aria-label="Restore backup"]').innerText);
-ok(!/Replace — use the file's data/.test(sheet) && /No transactions in this file/.test(sheet) && /keep my transactions/i.test(sheet), "the sheet explains there are no transactions and offers 'Use the file's settings — keep my transactions' instead of Replace", sheet);
+ok(!/Replace — use the file's data/.test(sheet) && /No entries in this file/.test(sheet) && /keep my entries/i.test(sheet), "the sheet explains there are no transactions and offers 'Use the file's settings — keep my transactions' instead of Replace", sheet);
 await page.evaluate(() => document.querySelector(".import-settings-only").click()); await wait(400);
 let st = await state(page);
 ok(st.transactions.length === n0 && st.currency === "$" && st.budgets.food === 250, "after applying: all transactions kept, currency $ and the food budget 250 applied", { n: st.transactions.length, cur: st.currency, b: st.budgets });

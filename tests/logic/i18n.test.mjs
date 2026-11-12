@@ -49,7 +49,7 @@ section("L2. t() / tn() behaviour");
 setLang("ru");
 ok(tn("toast.deleted", 1) === "1 операция удалена" && tn("toast.deleted", 2) === "2 операции удалены" && tn("toast.deleted", 5) === "5 операций удалено" && tn("toast.deleted", 21) === "21 операция удалена", "Russian plural forms: 1 / 2 / 5 / 21", [1, 2, 5, 21].map((n) => tn("toast.deleted", n)));
 setLang("az"); ok(tn("toast.deleted", 3) === "3 əməliyyat silindi" && tn("toast.deleted", 1) === "Əməliyyat silindi", "Azerbaijani: noun stays singular after a number");
-setLang("en"); ok(tn("toast.deleted", 1) === "Transaction deleted" && tn("toast.deleted", 2) === "2 transactions deleted", "English: one / other");
+setLang("en"); ok(tn("toast.deleted", 1) === "Entry deleted" && tn("toast.deleted", 2) === "2 entries deleted", "English: one / other");
 setLang("az"); ok(t("goals.savedOf", { saved: "5 ₼", target: "10 ₼" }) === "10 ₼ məbləğdən 5 ₼", "placeholders are filled in the language's own word order");
 ok(t("safe.waitingExpected", { amount: "$&$1{amount}" }).includes("$&$1{amount}"), "values are inserted literally (no $-pattern or placeholder re-expansion)");
 ok(t("no.such.key") === "no.such.key", "an unknown key shows the key itself (visible in review, never blank)");

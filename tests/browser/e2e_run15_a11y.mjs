@@ -12,7 +12,7 @@ for (const lang of ["en", "az", "ru"]) {
   section(`R15-A1. Accessibility tree (${lang})`);
   const page = await openPage(browser, { seed: baseSeed({ goals, language: lang }) }); await settle(page);
   let nodes = flat(await page.accessibility.snapshot());
-  const seeAll = find(nodes, (n) => n.role === "button" && /Все операции|Bütün əməliyyatlara|See all transactions/.test(n.name || ""));
+  const seeAll = find(nodes, (n) => n.role === "button" && /Все операции|Bütün əməliyyatlara|See all entries/.test(n.name || ""));
   ok(seeAll.length === 1, `${lang}: Home has one named 'see all transactions' button`, seeAll.map((n) => n.name));
   await openGoals(page, "goals"); await settle(page);
   nodes = flat(await page.accessibility.snapshot());

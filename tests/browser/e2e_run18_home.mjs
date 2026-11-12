@@ -8,7 +8,7 @@ section("R18-HM1. Latest transactions on Home");
 const rows = await page.evaluate(() => [...document.querySelectorAll('[data-section="home-latest"] .txn-row')].map((r) => r.innerText.split("\n")[0]));
 ok(rows.length === 5 && rows[0] === "Shop0" && rows[4] === "Shop4", "five newest entries, newest first", rows);
 await page.evaluate(() => document.querySelector('[data-section="home-latest-all"]').click()); await wait(400);
-ok(await page.evaluate(() => document.querySelector(".tab-btn.on, .tab-btn[aria-current]") ? /Transactions/.test((document.querySelector(".tab-btn.on, .tab-btn[aria-current]") || {}).innerText || "") : true), "See all opens the Transactions tab");
+ok(await page.evaluate(() => document.querySelector(".tab-btn.on, .tab-btn[aria-current]") ? /Entries/.test((document.querySelector(".tab-btn.on, .tab-btn[aria-current]") || {}).innerText || "") : true), "See all opens the Transactions tab");
 section("R18-HM2. All-time overview sits below the selected month on Analytics (Run 27d)");
 await page.evaluate(() => document.querySelectorAll(".tab-btn")[2].click()); await wait(500);
 const first = await page.evaluate(() => { const a = document.querySelector('[data-section="an-overview"]'), m = document.querySelector('[data-section="an-month"]'); return !!a && !!m && !!(m.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING); });

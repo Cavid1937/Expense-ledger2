@@ -5,7 +5,7 @@ section("R24-HD1. Long-press starts selection");
 {
   const seed = baseSeed({ language: "en", transactions: [tx({ merchant: "A", amount: 5, date: "2026-10-20" }), tx({ merchant: "B", amount: 6, date: "2026-10-21" }), tx({ merchant: "C", amount: 7, date: "2026-10-22" })] });
   const page = await openPage(browser, { seed }); await settle(page);
-  await page.evaluate(() => { [...document.querySelectorAll(".tab-btn")].find((b) => /transactions|ledger/i.test(b.innerText))?.click(); }); await wait(400);
+  await page.evaluate(() => { [...document.querySelectorAll(".tab-btn")].find((b) => /entries|ledger/i.test(b.innerText))?.click(); }); await wait(400);
   const box = await page.evaluate(() => { const r = document.querySelector(".txn-row").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
   await page.mouse.move(box.x, box.y); await page.mouse.down(); await wait(700); await page.mouse.up(); await wait(300);
   ok(await page.evaluate(() => !!document.querySelector('[data-section="tx-select"]')), "holding a row opens selection mode");

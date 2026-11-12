@@ -18,7 +18,7 @@ section("R24-S1. Select, delete together, undo once");
   await click(page, '[data-section="tx-select-delete"]'); await wait(500);
   const s = await state(page);
   ok(s.transactions.length === 2, "two entries removed, two left", s.transactions.length);
-  ok(/2 transactions deleted/i.test(await bodyText(page)), "one message: 2 transactions deleted");
+  ok(/2 entries deleted/i.test(await bodyText(page)), "one message: 2 transactions deleted");
   await page.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => /undo/i.test(x.innerText)); b && b.click(); }); await wait(500);
   ok((await state(page)).transactions.length === 4, "one Undo brings both back");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);

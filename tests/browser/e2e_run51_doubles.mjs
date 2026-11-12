@@ -41,7 +41,7 @@ section("R51-X2. Doubled entries: look, tick, delete, undo");
   let st = await state(page);
   ok(st.transactions.length === 5 && !st.transactions.some((x) => x.id === 1 || x.id === 6) && spent(st.transactions) === 12.5 * 100 + 30 * 100 * 2 + 800 + 60, "the 2 ticked copies are deleted; spending is 12.50 + 30 + 30 + 8 + 0.60 = 81.10", [st.transactions.length, spent(st.transactions)]);
   ok(/1 group of entries has the same day and amount/.test(await box(page)), "the card now says 1 group (the taxi pair the person kept)", await box(page));
-  ok(/2 transactions deleted/.test(await snack(page)) && /Undo/.test(await snack(page)), "the usual Undo bar is shown", await snack(page));
+  ok(/2 entries deleted/.test(await snack(page)) && /Undo/.test(await snack(page)), "the usual Undo bar is shown", await snack(page));
   await page.evaluate(() => document.querySelector(".snackbar-undo").click()); await wait(500);
   st = await state(page);
   ok(st.transactions.length === 7 && spent(st.transactions) === spent(before) && [1, 6].every((id) => st.transactions.some((x) => x.id === id)), "Undo brings both entries back");

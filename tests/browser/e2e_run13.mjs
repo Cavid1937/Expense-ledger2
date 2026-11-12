@@ -30,7 +30,7 @@ section("R13-B1. Replace with an older (version 9) backup while the device has b
   const page = await openPage(browser, { seed: withBills() }); await openData(page);
   await upload(page, file);
   const sheet = await page.evaluate(() => (document.querySelector('[aria-label="Restore backup"]') || {}).innerText || "");
-  ok(/2 transactions ready to import/.test(sheet) && !!(await page.$(".import-bills-stay")) && /2 bills stay/.test(await page.evaluate(() => (document.querySelector(".import-bills-stay") || {}).innerText || "")), "the Replace sheet says: this file has no bills, so your 2 bills stay and its payments will not be linked to them", sheet.slice(0, 200));
+  ok(/2 entries ready to import/.test(sheet) && !!(await page.$(".import-bills-stay")) && /2 bills stay/.test(await page.evaluate(() => (document.querySelector(".import-bills-stay") || {}).innerText || "")), "the Replace sheet says: this file has no bills, so your 2 bills stay and its payments will not be linked to them", sheet.slice(0, 200));
   await clickText(page, '[aria-label="Restore backup"] .btn', /^Replace/); await wait(500);
   let st = await state(page);
   ok(st.transactions.length === 2 && st.bills.length === 2 && st.transactions.every((t) => !t.billId), "after Replace: the 2 entries of the file, the 2 bills still there, no entry linked to a bill");

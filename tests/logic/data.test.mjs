@@ -90,7 +90,7 @@ pl=planImport("date,amount,colour,whatever\r\n2026-09-01,5,red,x","x.csv"); ok(p
 pl=planImport(csv(["2026-09-01,expense,Food & Dining,,Gym,35,,monthly","2026-09-02,expense,Food & Dining,,Gym,35,,yes","2026-09-03,expense,Food & Dining,,Gym,35,,"]),"x.csv");
 ok(pl.transactions.length===2&&pl.transactions[0].recurring===true&&pl.transactions[0].recurFreq==="monthly"&&pl.transactions[1].recurring===false&&/1 invalid recurrence/.test(pl.skippedSummary),"Recurring column: 'monthly' kept, blank = not recurring, 'yes' (no frequency) rejected");
 pl=planImport(csv(["2026-09-01,expense,Mystery Box,,M,5,","2026-09-02,expense,Other,,M,5,"]),"x.csv");
-ok(pl.transactions.length===2&&pl.warnings.some(w=>/1 transaction has a category the app does not recognise/.test(w)),"unknown category is filed under Other AND the user is told");
+ok(pl.transactions.length===2&&pl.warnings.some(w=>/1 entry has a category the app does not recognise/.test(w)),"unknown category is filed under Other AND the user is told");
 pl=planImport(csv(["2026-09-01,expense,F,,M,-1,","2026-09-01,expense,F,,M,0,"]),"x.csv"); ok(!pl.ok&&/Nothing could be imported — 1 negative amount, 1 zero amount/.test(pl.error),"every row rejected → refused with the reasons",pl.error);
 
 section("15b. Import planning — JSON backups");
@@ -99,7 +99,7 @@ pl=planImport(JSON.stringify(buildBackup(S0)),"b.json");
 ok(pl.ok&&eq(pl.transactions,S0.transactions.map(t=>normaliseTxn(t)))&&eq(pl.settings.budgets,S0.budgets)&&eq(pl.settings.goals,S0.goals)&&eq(pl.settings.safeToSpend,S0.safeToSpend)&&pl.settings.currency==="₼"&&pl.problems.length===0,"app backup → export → import: transactions and every setting identical");
 const v10=planImport(JSON.stringify({...buildBackup(S0),version:11}),"b.json"); /* Run 12: the app writes version 10 now; 11 is "newer" */ ok(!v10.ok&&/newer version/.test(v10.error),"backup from a newer app version is refused");
 ok(!planImport(JSON.stringify({...buildBackup(S0),version:"x"}),"b.json").ok&&!planImport(JSON.stringify({...buildBackup(S0),version:0}),"b.json").ok&&!planImport(JSON.stringify({...buildBackup(S0),version:9.5}),"b.json").ok,"invalid version numbers are refused");
-pl=planImport(JSON.stringify({...buildBackup(S0),meta:{transactionCount:99}}),"b.json"); ok(pl.ok&&pl.warnings.some(w=>/99 transactions but contains 2/.test(w)),"transaction-count mismatch → warning (possible truncation)");
+pl=planImport(JSON.stringify({...buildBackup(S0),meta:{transactionCount:99}}),"b.json"); ok(pl.ok&&pl.warnings.some(w=>/99 entries but contains 2/.test(w)),"transaction-count mismatch → warning (possible truncation)");
 pl=planImport(JSON.stringify({...buildBackup(S0),exportedAt:"yesterday-ish"}),"b.json"); ok(pl.ok&&pl.warnings.some(w=>/export date is not valid/.test(w)),"invalid export date → warning");
 pl=planImport(JSON.stringify({...buildBackup(S0),budgets:{food:-5,x:1},goals:"oops",currency:"abcd",safeToSpend:{enabled:"y"},templates:[{}]}),"b.json");
 ok(pl.ok&&pl.transactions.length===2&&pl.settings.budgets===undefined&&pl.settings.goals===undefined&&pl.settings.currency===undefined&&pl.settings.safeToSpend===undefined&&pl.settings.templates===undefined&&pl.problems.length===5,"a valid transaction list does NOT make malformed settings trustworthy: all 5 bad sections rejected and reported",pl.problems);

@@ -54,7 +54,7 @@ section("R9-2. Header: no Settings gear anywhere; the + matches the screen");
   const seen = {};
   for (const s of ["Home", "Ledger", "Monthly", "Goals", "More", "Recurring", "ImportExport"]) { await tab(page, s); await wait(200); seen[s] = await head(); }
   ok(Object.values(seen).every((h) => !h.gear && h.eye), "no screen has a Settings gear in its title bar; every screen has the privacy eye there", seen);
-  ok(seen.Home.add === "Add transaction" && seen.Ledger.add === "Add transaction" && seen.Monthly.add === null && seen.More.add === null && seen.ImportExport.add === null,
+  ok(seen.Home.add === "Add entry" && seen.Ledger.add === "Add entry" && seen.Monthly.add === null && seen.More.add === null && seen.ImportExport.add === null,
     "+ adds a transaction on Home and Transactions; Analytics, More and Import / Export have no +", seen);
   ok(seen.Goals.add === "Add budget" && seen.Recurring.add === "Add bill", "Budgets & Goals: '+' = Add budget; Recurring: '+' = Add bill (Run 12: bills are their own records)", { goals: seen.Goals.add, rec: seen.Recurring.add });
   await tab(page, "Recurring"); await (await page.$(".fab-add")).click(); await page.waitForSelector(".bill-sheet"); await wait(350);

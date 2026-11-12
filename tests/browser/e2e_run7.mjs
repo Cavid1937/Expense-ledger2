@@ -20,7 +20,7 @@ section("R7-1. One month-aware screen instead of Monthly + Analytics");
 let page = await openPage(browser, { seed: seed() });
 const tabs = await page.evaluate(() => [...document.querySelectorAll(".tab-btn")].map((b) => b.innerText.trim()));
 // Redesign (2026-10-27): five tabs; the merged month screen is the Analytics tab and there is no second analytics screen.
-ok(tabs.length === 5 && tabs.filter((x) => /Analytics|Monthly/i.test(x)).length === 1 && tabs.join("|") === "Home|Transactions|Analytics|Goals|Settings", "the tab bar has 5 sections (Home, Transactions, Analytics, Goals, Settings); one month-aware analytics screen", tabs);
+ok(tabs.length === 5 && tabs.filter((x) => /Analytics|Monthly/i.test(x)).length === 1 && tabs.join("|") === "Home|Entries|Analytics|Goals|Settings", "the tab bar has 5 sections (Home, Transactions, Analytics, Goals, Settings); one month-aware analytics screen", tabs);
 await tab(page, "Monthly"); await settle(page);
 let txt = await bodyText(page);
 ok(/spent/i.test(txt) && /Trends up to today/i.test(txt) && /6-Month Overview|6-month|Last 6 months/i.test(txt) && /does not change with the month selected above/.test(txt), "Monthly shows the month summary AND the former Analytics trends, which say they do not follow the selected month", txt.slice(0, 300));
@@ -32,7 +32,7 @@ const prevSpent = await page.evaluate(() => document.querySelector(".month-stat-
 ok(/600\.00/.test(prevSpent) && /40\.00/.test(spentNow), `this month 40.00 → previous month 600.00 (no stale figure)`, { spentNow, prevSpent });
 await page.evaluate(() => document.querySelector('.month-nav-btn[aria-label="Previous month"]').click()); await wait(300);
 txt = await bodyText(page);
-ok(/0\.00 ₼/.test(await page.evaluate(() => document.querySelector(".month-stat-val").innerText)) && /No transactions/i.test(txt), "two months back (no entries) can be selected and shows an empty month, not skipped", txt.slice(0, 200));
+ok(/0\.00 ₼/.test(await page.evaluate(() => document.querySelector(".month-stat-val").innerText)) && /No entries/i.test(txt), "two months back (no entries) can be selected and shows an empty month, not skipped", txt.slice(0, 200));
 await page.evaluate(() => document.querySelector('.month-nav-btn[aria-label="Previous month"]').click()); await wait(300);
 ok(/300\.00/.test(await page.evaluate(() => document.querySelector(".month-stat-val").innerText)), "three months back shows its 300.00");
 ok(await page.evaluate(() => document.querySelector('.month-nav-btn[aria-label="Previous month"]').disabled), "…and is the first selectable month (Previous is disabled)");

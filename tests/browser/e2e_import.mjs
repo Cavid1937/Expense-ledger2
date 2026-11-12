@@ -30,7 +30,7 @@ const csv = "\uFEFFDate,Type,Category,Subcategory,Merchant,Amount,Note,Recurring
   "2026-09-05,expense,Food & Dining,,M,12.50,good1,", "2026-09-06,expense,Food & Dining,,M,7,good2,", "2026-09-07,expense,Food & Dining,,M,1e3,sci,", ",expense,Food & Dining,,M,5,nodate,"].join("\r\n");
 await upload(page, write("mixed.csv", csv));
 let sh = await sheetText(page);
-ok(/2 transactions ready to import/.test(sh), "sheet: '2 transactions ready to import'", sh.slice(0, 160));
+ok(/2 entries ready to import/.test(sh), "sheet: '2 transactions ready to import'", sh.slice(0, 160));
 ok(/6 rows skipped/.test(sh) && /1 negative amount/.test(sh) && /1 zero amount/.test(sh) && /1 missing amount/.test(sh) && /2 invalid amount/.test(sh) && /1 missing date/.test(sh), "sheet explains each skipped row by reason (−5, 0, empty, abc+1e3, no date)", sh);
 ok(/Merge/.test(sh) && /Replace/.test(sh) && /currency and Safe to Spend/.test(sh), "sheet explains what Merge and Replace do");
 await sheetBtn(page, /^Merge/); await wait(300);
@@ -38,7 +38,7 @@ let st = await state(page);
 const added = st.transactions.slice(0, st.transactions.length).filter((t) => ["good1", "good2"].includes(t.note));
 ok(st.transactions.length === n0 + 2 && eq2(added.map((t) => t.amount).sort((a, b) => a - b), [7, 12.5]), "merge adds exactly the 2 valid rows with exact amounts 12.5 and 7", added.map((t) => t.amount));
 ok(!st.transactions.some((t) => ["neg", "zero", "empty", "bad", "sci", "nodate"].includes(t.note)) && added.every((t) => t.date.startsWith("2026-09-0")), "no rejected row slipped in; the −5 did not become +5; no row got today's date");
-ok(/Added 2 transactions/.test(await bodyText(page)), "snackbar confirms 'Added 2 transactions'");
+ok(/Added 2 entries/.test(await bodyText(page)), "snackbar confirms 'Added 2 transactions'");
 function eq2(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
 await page.close();
 
@@ -54,7 +54,7 @@ const copies = (await storageKeys(page)).filter((k) => k.startsWith(KEY + "__bef
 ok(copies.length === 1, "a recovery copy of the previous data was stored before replacing");
 const copy = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)), copies[0]);
 ok(eq2(copy.transactions, pre.transactions) && eq2(copy.budgets, pre.budgets) && copy.currency === pre.currency, "…and it equals the pre-import data exactly");
-ok(/Replaced with 2 transactions/.test(await bodyText(page)), "snackbar offers Undo");
+ok(/Replaced with 2 entries/.test(await bodyText(page)), "snackbar offers Undo");
 await clickText(page, ".snackbar-undo", /Undo/); await wait(300);
 st = await state(page); ok(eq2(st.transactions, pre.transactions) && eq2(st.budgets, pre.budgets) && st.currency === pre.currency, "Undo restores the previous data exactly");
 await upload(page, write("replace.json", JSON.stringify(bk))); await sheetBtn(page, /^Replace/); await wait(300);
@@ -117,7 +117,7 @@ await clickText(page, ".io-page .btn-sm", /Export/); const cf = await newestDown
 const ctext = cf ? fs.readFileSync(cf, "utf8") : "";
 ok(ctext.startsWith("\uFEFF") && /CategoryId/.test(ctext.split("\r\n")[0]) && ctext.split("\r\n").length === pre6.transactions.length + 1, "CSV export: BOM, CategoryId column, one row per transaction");
 await upload(page, cf); sh = await sheetText(page);
-ok(new RegExp(`${pre6.transactions.length} transactions ready to import`).test(sh) && !/skipped/.test(sh), "re-importing the CSV: every row accepted, none skipped", sh.slice(0, 200));
+ok(new RegExp(`${pre6.transactions.length} entries ready to import`).test(sh) && !/skipped/.test(sh), "re-importing the CSV: every row accepted, none skipped", sh.slice(0, 200));
 await page.close();
 
 section("R1. Recovery notices stay until dismissed");
@@ -167,13 +167,13 @@ section("U1. Undo restores exactly what was deleted");
 const A = tx({ merchant: "AAA", amount: 11, note: "keep me" }), B = tx({ merchant: "BBB", amount: 22 }), C0 = tx({ merchant: "CCC", amount: 33 });
 page = await openPage(browser, { seed: baseSeed({ transactions: [A, B, C0] }) });
 const delVia = async (merchant) => { await tab(page, "Ledger"); await page.evaluate((m) => [...document.querySelectorAll(".txn-row")].find((r) => r.innerText.includes(m)).click(), merchant); await page.waitForSelector(".sheet"); await wait(300); await clickText(page, ".sheet .btn", /^Delete/); await wait(250); };
-await delVia("AAA"); ok(/Transaction deleted/.test(await bodyText(page)), "delete shows 'Transaction deleted' with Undo");
+await delVia("AAA"); ok(/Entry deleted/.test(await bodyText(page)), "delete shows 'Transaction deleted' with Undo");
 await openAdd(page); await page.$eval(".amount-input", (el) => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; set.call(el, "44"); el.dispatchEvent(new Event("input", { bubbles: true })); });
 await clickText(page, ".add-overlay .btn-primary", /record expense/); await wait(350);
 await clickText(page, ".snackbar-undo", /Undo/).catch(() => {}); await wait(300);
 st = await state(page); const restored = st.transactions.find((t) => t.id === A.id);
 ok(st.transactions.length === 4 && restored && eq2(restored, A) && st.transactions.some((t) => t.amount === 44), "Undo brings back the identical record AND keeps the entry added after the delete", st.transactions.map((t) => t.amount));
-await delVia("AAA"); await delVia("BBB"); ok(/2 transactions deleted/.test(await bodyText(page)), "two quick deletes share one undo window ('2 transactions deleted')");
+await delVia("AAA"); await delVia("BBB"); ok(/2 entries deleted/.test(await bodyText(page)), "two quick deletes share one undo window ('2 transactions deleted')");
 await clickText(page, ".snackbar-undo", /Undo/); await wait(300); st = await state(page);
 ok(st.transactions.some((t) => eq2(t, A)) && st.transactions.some((t) => eq2(t, B)) && st.transactions.length === 4, "one Undo restores both, exactly");
 await delVia("CCC"); await wait(4600); ok(!(await page.$(".snackbar")), "after the window closes the Undo is gone (no stale undo)");

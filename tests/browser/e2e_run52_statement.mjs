@@ -63,7 +63,7 @@ section("R52-B1. A PDF statement (ABB layout): read, checked, added, undone, and
   const before = await state(page);
   await upload(page, abbPdfFile);
   let sh = await sheet(page);
-  ok(/Bank statement: ABB/.test(sh) && /5 transactions ready to import/.test(sh), "the PDF is recognised as an ABB statement with 5 rows", sh.slice(0, 500));
+  ok(/Bank statement: ABB/.test(sh) && /5 entries ready to import/.test(sh), "the PDF is recognised as an ABB statement with 5 rows", sh.slice(0, 500));
   ok(/every row adds up/.test(sh) && (await page.evaluate(() => document.querySelector('[data-st="check"]').getAttribute("data-ok"))) === "true", "the sheet says the bank's running balance confirms every row");
   ok(/Include 2 transfers, top-ups and cash withdrawals/.test(sh) && (await page.evaluate(() => document.querySelector('[data-st="transfers"]').checked)) && !(await page.$('[data-st="pending"]')), "the cash withdrawal and the money-in are offered as a choice (ticked); no 'not finished' rows in this file");
   ok(/New, will be added: 5/.test(sh) && /Add these entries/.test(sh) && !/Replace/.test(sh.replace(/Restore Backup/i, "")), "5 new entries; the button says 'Add these entries'; Replace is not offered for a statement", sh.slice(-400));
@@ -77,7 +77,7 @@ section("R52-B1. A PDF statement (ABB layout): read, checked, added, undone, and
   ok(by("BUS 594").category === "transport" && by("BUS 594").subcategory === "Bus" && by("BUS 594").date === "2026-10-01" && by("BRAVO MARKET").category === "food" && by("OPENAI *CHATGPT").category === "digital" && by("OPENAI *CHATGPT").note === "20.00 USD, SAN FRANCISCO" && by("ATM NAGDLASDIRMA").category === "finance", "categories from the bank's merchant codes, the real payment date, and the dollar amount kept as a note", added.map((x) => [x.merchant, x.category, x.subcategory, x.date, x.note]));
   ok(added.every((x) => x.account === "a_card01") && !JSON.stringify(added).includes("1111") && !JSON.stringify(added).includes("RD0000"), "all five sit on the chosen account; no card digits or bank references are stored");
   const bal = await page.evaluate(() => null);
-  ok(/Added 5 transactions/.test(await snack(page)) && /Undo/.test(await snack(page)), "an Undo bar is shown", await snack(page));
+  ok(/Added 5 entries/.test(await snack(page)) && /Undo/.test(await snack(page)), "an Undo bar is shown", await snack(page));
   await page.evaluate(() => document.querySelector(".snackbar-undo").click()); await wait(500);
   ok(JSON.stringify((await state(page)).transactions) === JSON.stringify(before.transactions), "Undo: the entries are exactly as before");
   // add again, then the SAME statement as Excel: nothing new
@@ -98,11 +98,11 @@ section("R52-B2. A text file (Unibank layout): transfers and unfinished payments
   let sh = await sheet(page);
   ok(/Bank statement: Unibank/.test(sh) && /no running balance/.test(sh), "recognised as Unibank; the sheet says there is no running balance to check against", sh.slice(0, 500));
   ok(/Include 2 transfers/.test(sh) && /Include 1 payment the bank has not finished yet/.test(sh) && (await page.evaluate(() => document.querySelector('[data-st="transfers"]').checked && !document.querySelector('[data-st="pending"]').checked)), "2 transfers (the wallet pair) ticked; 1 unfinished payment NOT ticked");
-  ok(/5 transactions ready to import/.test(sh) && /New, will be added: 5/.test(sh), "5 of the 6 rows are ready (the unfinished one is left out)");
+  ok(/5 entries ready to import/.test(sh) && /New, will be added: 5/.test(sh), "5 of the 6 rows are ready (the unfinished one is left out)");
   await page.evaluate(() => document.querySelector('[data-st="transfers"]').click()); await wait(200);
-  ok(/3 transactions ready to import/.test(await sheet(page)) && /New, will be added: 3/.test(await sheet(page)) && (await page.evaluate(() => document.querySelectorAll("[data-st-row]").length)) === 3 && !/M10 WALLET/.test(await sheet(page)), "unticking transfers: 3 rows, and the list shows exactly those 3");
+  ok(/3 entries ready to import/.test(await sheet(page)) && /New, will be added: 3/.test(await sheet(page)) && (await page.evaluate(() => document.querySelectorAll("[data-st-row]").length)) === 3 && !/M10 WALLET/.test(await sheet(page)), "unticking transfers: 3 rows, and the list shows exactly those 3");
   await page.evaluate(() => document.querySelector('[data-st="pending"]').click()); await wait(200);
-  ok(/4 transactions ready to import/.test(await sheet(page)), "ticking the unfinished payment: 4 rows");
+  ok(/4 entries ready to import/.test(await sheet(page)), "ticking the unfinished payment: 4 rows");
   await add(page);
   const st = await state(page), m = (n) => st.transactions.find((x) => x.merchant === n);
   ok(st.transactions.length === 4 && m("BAKU METRO").subcategory === "Metro" && m("A VERY LONG MERCHANT NAME").amount === 7.5 && m("CASHBACK").type === "income" && m("CASHBACK").category === "refund" && m("KAFE 21").amount === 5 && !m("M10 WALLET"), "the 4 chosen rows are added: metro ride, the wrapped merchant with 7.50, the cashback as a refund, the cafe; the wallet pair is not", st.transactions.map((x) => [x.merchant, x.type, x.amount, x.category]));
@@ -115,7 +115,7 @@ section("R52-B3. Another bank's Excel file with Azerbaijani headings; pasted tex
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }) }); await settle(page); await openData(page);
   await upload(page, otherXlsxFile);
   let sh = await sheet(page);
-  ok(/Bank statement: read by its columns/.test(sh) && /every row adds up/.test(sh) && /3 transactions ready/.test(sh), "an unknown bank is read by its column headings, and its balance column confirms the rows", sh.slice(0, 400));
+  ok(/Bank statement: read by its columns/.test(sh) && /every row adds up/.test(sh) && /3 entries ready/.test(sh), "an unknown bank is read by its column headings, and its balance column confirms the rows", sh.slice(0, 400));
   await add(page);
   let st = await state(page);
   ok(st.transactions.length === 3 && spent(st.transactions) === 61250 && got(st.transactions) === 100000 && st.transactions.some((x) => x.merchant === "Əmək haqqı" && x.type === "income"), "12.50 + 600.00 out and 1 000.00 in, with Azerbaijani letters intact", st.transactions.map((x) => [x.merchant, x.type, x.amount]));
@@ -127,7 +127,7 @@ section("R52-B3. Another bank's Excel file with Azerbaijani headings; pasted tex
   await wait(150); await page.evaluate(() => document.querySelector('[data-section="io-paste-go"]').click());
   await page.waitForSelector('[data-section="import-statement"]', { timeout: 5000 }).catch(() => {}); await wait(250);
   sh = await sheet(page);
-  ok(/Pasted text/.test(sh) && /2 transactions ready/.test(sh) && /every row adds up/.test(sh), "pasted rows open the same sheet: 2 rows, balance confirmed", sh.slice(0, 300));
+  ok(/Pasted text/.test(sh) && /2 entries ready/.test(sh) && /every row adds up/.test(sh), "pasted rows open the same sheet: 2 rows, balance confirmed", sh.slice(0, 300));
   await add(page); st = await state(page);
   ok(st.transactions.length === 5 && st.transactions.some((x) => x.merchant === "Pharmacy Plus" && x.amount === 9 && x.category === "health"), "both pasted rows are added; 'Pharmacy' is filed under Health");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);

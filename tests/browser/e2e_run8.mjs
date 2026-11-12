@@ -15,10 +15,10 @@ let page = await openPage(browser, { seed: baseSeed({ transactions: [A, B], curr
 await tab(page, "Ledger");
 await page.evaluate(() => [...document.querySelectorAll(".txn-row")].find((r) => r.innerText.includes("AAA")).click()); await page.waitForSelector(".sheet"); await wait(300);
 await clickText(page, ".sheet .btn", /^Delete/); await wait(250);
-ok(/Transaction deleted/.test(await snack(page)), "delete shows 'Transaction deleted · Undo'");
+ok(/Entry deleted/.test(await snack(page)), "delete shows 'Transaction deleted · Undo'");
 await upload(page, write("settings8.json", JSON.stringify({ currency: "$" })));
 await page.evaluate(() => document.querySelector(".import-settings-only").click()); await wait(300);
-ok(/Transaction deleted/.test(await snack(page)) && (await state(page)).currency === "$", "the import is applied, but the delete's Undo is still the one on screen (was: replaced by the import's message)", await snack(page));
+ok(/Entry deleted/.test(await snack(page)) && (await state(page)).currency === "$", "the import is applied, but the delete's Undo is still the one on screen (was: replaced by the import's message)", await snack(page));
 await clickText(page, ".snackbar-undo", /Undo/); await wait(400);
 let st = await state(page);
 ok(st.transactions.some((t) => t.id === A.id) && st.currency === "$", "Undo brings AAA back and leaves the imported currency in place", { ids: st.transactions.map((t) => t.merchant), cur: st.currency });
@@ -41,7 +41,7 @@ section("R8-B3. Item 2: an unknown category goes to Other and the import says so
 page = await openPage(browser, { seed: baseSeed({ transactions: [A] }) });
 await upload(page, write("cats8.csv", "Date,Amount,Category,Merchant\r\n2026-10-01,7,Payment,Shop1\r\n2026-10-01,8,Groceries,Shop2\r\n"));
 const sh3 = await sheetText(page);
-ok(/1 transaction has a category the app does not recognise and was filed under Other/.test(sh3), "the sheet warns: 1 category not recognised → Other", sh3);
+ok(/1 entry has a category the app does not recognise and was filed under Other/.test(sh3), "the sheet warns: 1 category not recognised → Other", sh3);
 await clickText(page, '[aria-label="Restore backup"] .btn', /^Merge/); await wait(300);
 st = await state(page);
 ok(st.transactions.find((t) => t.merchant === "Shop1")?.category === "other" && st.transactions.find((t) => t.merchant === "Shop2")?.category === "food", "'Payment' → Other (was: Salary, guessed from 'pay'); 'Groceries' → Food", st.transactions.map((t) => [t.merchant, t.category]));
