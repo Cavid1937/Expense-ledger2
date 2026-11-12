@@ -455,3 +455,20 @@ Data safety and old files:
 - The Run 50 goal card turns off by default with no change to any goal.
 Regression tests to write first (from the approved list) plus: the month line equals the running total's row for that month; a refund, a savings withdrawal, a spread cost, a reimbursed cost and a transfer each counted exactly once and in the right place; a month with no entries is 0; an overspent month lowers the total; unused budget never appears in either figure; backup round trip with and without the new field.
 Status: APPROVED, NOT STARTED (waits for its place in the order).
+
+
+## Added 12 Nov (owner): split "Gifts & Personal" into two categories, without breaking old entries. PLAN ONLY.
+Facts from the code (read 12 Nov):
+- One category id "gifts", shown as "Gifts & Personal", with subcategories Gifts, Donations, Personal Care, Barber / Hair, Cosmetics, Other.
+- CONFIRMED DEFECT (code reading, not yet shown in a test): the Gifts page (Run 50, giftLedger in App.jsx) counts EVERY expense in category "gifts" as a gift given. A haircut or cosmetics entry therefore appears as a gift on that page.
+- Bank-statement and CSV words "personal", "personal care", "grooming", "beauty", "hygiene", "fragrance" are mapped to "gifts"; the built-in place Rossmann is filed as gifts > Cosmetics.
+Decision (Claude recommends, owner agreed with the direction):
+1. New category "Personal care" with a new id "personal" (az "Şəxsi qulluq", ru "Личный уход"); subcategories Barber / Hair, Cosmetics, Hygiene, Other. Its own icon and colour.
+2. The existing id "gifts" keeps its id and becomes "Gifts & Donations" (Gifts, Donations, Other). Ids are never renamed, so every old entry, budget, backup and older app version keeps working.
+3. Old entries: nothing moves silently. A one-time card offers: "12 entries in Gifts are personal care (haircut, cosmetics). Move them to Personal care?" with the list, Move / Keep, and Undo. Only entries whose subcategory is Personal Care, Barber / Hair or Cosmetics are offered; "Other" or no subcategory stay in Gifts. Ids, amounts and dates never change; only the category.
+4. A budget on "gifts": stays on gifts. If entries move, the card says the Gifts budget will count less and offers to create a Personal care budget with the same split, never automatically.
+5. The word mappings (personal, grooming, beauty, hygiene, fragrance, personal care) and Rossmann point to "personal" for NEW imports only.
+6. Gifts page: counts only gifts > Gifts and Donations (and entries without a subcategory, which it cannot tell apart), never Personal care. Fixes the defect above even before anyone moves entries.
+7. Older app versions: an entry in "personal" is kept as it is by the loader (category ids a later version added are preserved, Run 36 rule); confirm with a downgrade test before release.
+Tests: old entries in gifts unchanged after the update; the move offers only the three personal subcategories, Undo restores exactly; Gifts page no longer shows a haircut; a budget on gifts unchanged; new category in pickers, budgets, analytics, CSV export and import, and backup round trip; az/ru names; older-version file opens with the new id intact.
+Status: DECIDED, NOT STARTED.
