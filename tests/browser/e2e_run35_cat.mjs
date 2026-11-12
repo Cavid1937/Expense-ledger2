@@ -38,7 +38,7 @@ section("R35-B2. Run 35b: on screen, income is earnings only; the net and Balanc
   ok(/75\.00/.test(home.note), "Home: a note says 75.00 of refunds or savings is included, not counted as income", home.note);
   await tab(page, "Monthly"); await wait(400);
   const an = await page.evaluate(() => (document.querySelector('[data-section="an-summary"]') || {}).innerText || "");
-  ok(/100\.00/.test(an) && /165\.00/.test(an) && /Net surplus/.test(an) && /75\.00/.test(an), "Analytics: income 100.00, net surplus 165.00, and the 75.00 note", an);
+  ok(/100\.00/.test(an) && /165\.00/.test(an) && /Left over/.test(an) && /75\.00/.test(an), "Analytics: income 100.00, net surplus 165.00, and the 75.00 note", an);
   await page.close();
 }
 await browser.close();

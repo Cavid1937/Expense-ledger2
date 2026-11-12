@@ -67,11 +67,11 @@ await page.close();
 section("R7-5. V2: the Analytics overview names a surplus or a deficit in words");
 page = await openPage(browser, { seed: baseSeed({ transactions: [tx({ amount: 900 }), tx({ type: "income", category: "salary", amount: 400 })] }) });
 await tab(page, "Monthly"); await wait(400); txt = await page.evaluate(() => (document.querySelector('[data-section="an-overview"]') || {}).innerText || "");
-ok(/Net deficit\s*500\.00/.test(txt), "income 400, expenses 900 → 'Net deficit 500.00' (not an unsigned 'Net 500.00' in red only)", txt.match(/.{0,20}Net.{0,30}/)?.[0]);
+ok(/Overspent\s*500\.00/.test(txt), "income 400, expenses 900 → 'Net deficit 500.00' (not an unsigned 'Net 500.00' in red only)", txt.match(/.{0,20}Net.{0,30}/)?.[0]);
 await page.close();
 page = await openPage(browser, { seed: baseSeed({ transactions: [tx({ amount: 100 }), tx({ type: "income", category: "salary", amount: 400 })] }) });
 await tab(page, "Monthly"); await wait(400); txt = await page.evaluate(() => (document.querySelector('[data-section="an-overview"]') || {}).innerText || "");
-ok(/Net surplus\s*300\.00/.test(txt), "income 400, expenses 100 → 'Net surplus 300.00'", txt.match(/.{0,20}Net.{0,30}/)?.[0]);
+ok(/Left over\s*300\.00/.test(txt), "income 400, expenses 100 → 'Net surplus 300.00'", txt.match(/.{0,20}Net.{0,30}/)?.[0]);
 await page.close();
 
 section("R7-6. V4: Home tiles show exact amounts below 10,000, and they fit at 320 px");

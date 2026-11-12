@@ -132,7 +132,7 @@ ok(!ins, "Monday 1000+5+5 vs Tuesday 5+5+5: a typical purchase is the same size 
 const pOut = calcPatterns([...onDay("2026-10-05", [1000, 5]), ...onDay("2026-10-12", [5]), ...onDay("2026-10-06", [5, 5]), ...onDay("2026-10-13", [5])], "₼", NOW());
 ok(pOut.dayOfWeek.Monday.median === 5 && pOut.dayOfWeek.Monday.avg === 336.67 && pOut.dayOfWeek.Monday.count === 3, "per-weekday data keeps both: Monday median 5 (what the chart draws) and average 336.67", pOut.dayOfWeek.Monday);
 ins = dow([20, 20, 20], [10, 10, 10]);
-ok(ins && ins.text.includes("100% larger") && ins.text.includes("Mondays") && ins.text.includes("Tuesdays") && ins.text.includes("median of 3 vs 3"), "Monday 20,20,20 vs Tuesday 10,10,10 → a typical transaction '100% larger', with the sample sizes", ins && ins.text);
+ok(ins && ins.text.includes("100% bigger") && ins.text.includes("Mondays") && ins.text.includes("Tuesdays") && ins.text.includes("based on 3 and 3 entries"), "Monday 20,20,20 vs Tuesday 10,10,10 → a typical transaction '100% larger', with the sample sizes", ins && ins.text);
 ins = dow([50, 50, 50], [10, 10, 10]);
 ok(ins && ins.text.includes("5.0×") && !/\d{3,}%/.test(ins.text), "a 5-fold difference is stated as '5.0×', not as '400%'", ins && ins.text);
 ins = dow([12, 12, 12], [10, 10, 10]);
@@ -142,7 +142,7 @@ const sep4 = [1, 2, 3, 4].map((d) => X(`2026-09-0${d}`, 10, { id: id() }));
 ins = calcPatterns([...sep4, ...[1000, 10, 10, 10].map((a, i) => X(`2026-10-0${i + 1}`, a, { id: id() }))], "₼", NOW()).insights.find(i => i.id === "avgtxn");
 ok(!ins, "September 4 × 10; October 1000 + 3 × 10 → a typical purchase is unchanged → NO 'higher than last month' claim", ins && ins.text);
 ins = calcPatterns([...sep4, ...[15, 15, 15, 15].map((a, i) => X(`2026-10-0${i + 1}`, a, { id: id() }))], "₼", NOW()).insights.find(i => i.id === "avgtxn");
-ok(ins && ins.text.includes("50% larger") && ins.text.includes("4 vs 4"), "September 4 × 10; October 4 × 15 → a typical transaction '50% larger' than last month, with the sample sizes", ins && ins.text);
+ok(ins && ins.text.includes("50% bigger") && ins.text.includes("4 and 4 entries"), "September 4 × 10; October 4 × 15 → a typical transaction '50% larger' than last month, with the sample sizes", ins && ins.text);
 // category trend: completed months only
 const monthly = (cat, vals) => vals.flatMap((v, i) => v ? [X(`2026-0${4 + i}-15`, v, { category: cat })] : []);
 const t1 = [...monthly("food", [100, 100, 100, 100, 100, 200]), ...monthly("shopping", [100, 120, 140, 160, 180, 200]), ...oct([2, 3, 4, 5, 6], 3)];
