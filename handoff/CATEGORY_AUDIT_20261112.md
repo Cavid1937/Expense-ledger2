@@ -63,6 +63,44 @@ Every new name gets az, ru and en. All new names are drafts until a native speak
 - An older app version opening newer data keeps the new ids.
 - az / ru / en names exist for everything new; nothing overflows at 320 px.
 
+## Names that fit (measured 12 Nov, 320 px phone width, az / ru / en, synthetic data; nothing changed in the app)
+How it was checked: the real app was opened at 320 px with one entry and one budget in every category. Every place a category name appears was measured (Add tiles, Add subcategory chips, entry rows, category menu, Budgets, Analytics budget status and "by category", My categories). Then the proposed names were swapped into the same spots on the page only, and measured again.
+
+**Today:** nothing is cut off. Long names wrap to two lines in entry rows, Budgets and Analytics: az "Kommunal ödənişlər və abunəliklər", az "Hədiyyələr və şəxsi xərclər". The Add tiles use separate short names (en "Bills & subs", az "Ödənişlər", ru "Счета"). All 16 tiles fit in 68 px.
+
+**A wording fault found:** the az name for `digital` says "Kommunal ödənişlər" (utility payments), but utilities are not in it; they are in Home. The az tile "Ödənişlər" (payments) is just as vague. This is an existing mislabel, independent of the English rename.
+
+**#5 decision, measured candidates:**
+
+| Name | One line everywhere? |
+|---|---|
+| en "Phone, Internet & Subscriptions" / az "Telefon, internet və abunəliklər" / ru "Телефон, интернет и подписки" | No: 2 lines in entry rows, Budgets and Analytics |
+| en "Phone, Internet & Subs" | No: 2 lines in entry rows |
+| en "Connection & Subscriptions" | No: 2 lines in entry rows |
+| az "Rabitə və abunəliklər", ru "Связь и подписки" | Yes |
+| en "Phone & Internet", az "Telefon və internet", ru "Телефон и интернет" | Yes, but loses streaming and software |
+
+**Recommendation (owner to confirm):** en **"Phone & Subscriptions"** (same length as today's English, which fits on one line), az **"Rabitə və abunəliklər"**, ru **"Связь и подписки"**. Tiles: en "Phone & subs", az "Rabitə", ru "Связь". Add the hint "Electricity, gas, water are in Home" under the category, in all three languages.
+
+**Other proposed names, measured:**
+- "Personal care" / "Şəxsi qulluq" / "Уход за собой": one line.
+- "Gifts & Donations" / "Hədiyyələr və ianələr": one line.
+- ru "Подарки и пожертвования": two lines in entry rows and the menu. Acceptable (no shorter natural wording found); the ru tile stays "Подарки".
+
+**Rules for every new name, so it fits:**
+1. Each category needs a full name and a tile name in all 3 languages. A tile name must fit 68 px at 320 px; today's longest is "Entertainment".
+2. Subcategory chips scroll sideways, so they are never cut. Keep them short anyway: the longest today, "Çörək və çörək məmulatı", is 151 px. Proposed long ones get shorter forms:
+
+| Proposed | Shorter |
+|---|---|
+| "Government fees & duties" | "State fees" |
+| "Targeted social assistance" | "Social assistance (ünvanlı)" in en; az "Ünvanlı yardım" |
+| "Weddings & celebrations" | "Weddings & parties" |
+| "Bike / scooter rental" | "Bike & scooter" |
+
+3. A browser test measures every category and subcategory name at 320 px in az/ru/en in all of these places, and fails if any is cut. Wrapping to 2 lines is allowed in rows; it is not allowed on tiles.
+4. A native speaker checks az and ru wording before release (already a rule).
+
 ## Order
 1. The two correctness items first: #1 (Gifts page) and #7 (cash withdrawals counted twice).
 2. Then the retire-and-expand list, which is additive and safe.
