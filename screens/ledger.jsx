@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
 import { pickerCats, readCatPrefs, cleanReimb, reimbOwedMap, reimbStatus } from "../App.jsx";
+import { accountsMap, paidFromMatch, paidFromOptions, paidKindName, readAccounts } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, spreadMonths, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";
@@ -100,8 +101,10 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const [subFilter,  setSubFilter]  = useState("all");   // Run 36: subcategory within the chosen category ("all", "none" or the lower-cased name)
   useEffect(()=>{ setSubFilter("all"); },[catFilter]);
   const [tripFilter, setTripFilter] = useState("all");   // Run 22: "all" or a trip name (compared without case)
-  const [walletFilter, setWalletFilter] = useState("all");   // Run 16: "all", a wallet id, or "none" (entries without one)
-  const [accFilter,  setAccFilter]  = useState("all");   // Run 31: "all", an account id, or "none" (entries without an account)
+  // Run 57: ONE "paid from" filter instead of the separate wallet and account rows (they were combined with AND, so "Bank card" +
+  // "ABB Card" showed 0 entries). "all" | "k:<kind>" | "a:<account id>" | "none"; the rule is paidFromKind in App.jsx.
+  const [paidFilter, setPaidFilter] = useState("all");
+  const accMap = useMemo(()=>accountsMap(readAccounts()),[transactions]);
   const [moreOpen,   setMoreOpen]   = useState(false);   // Run 31: trip / wallet / account filters sit behind one "More filters" chip
   const [dateFrom,   setDateFrom]   = useState("");
   const [dateTo,     setDateTo]     = useState("");
@@ -132,22 +135,18 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
     if (typeFilter!=="all") list=list.filter(x=>x.type===typeFilter);
     if (catFilter!=="all")  list=list.filter(x=>x.category===catFilter);
     if (catFilter!=="all" && subFilter!=="all") list=list.filter(x=>{ const s=lc(String(x.subcategory||"").trim()); return subFilter==="none" ? !s : s===subFilter; });
-    if (walletFilter!=="all") list=list.filter(x=>(walletId(x.wallet)||"none")===walletFilter);
+    if (paidFilter!=="all") list=list.filter(x=>paidFromMatch(x,paidFilter,accMap));
     if (tripFilter!=="all") list=list.filter(x=>lc(tripName(x.trip))===lc(tripFilter));
-    if (accFilter!=="all")  list=list.filter(x=>(accId(x.account)||"none")===accFilter);
     if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
     if (dateTo)             list=list.filter(x=>x.date<=dateTo);
     return list;
-  },[transactions,search,typeFilter,catFilter,subFilter,walletFilter,tripFilter,accFilter,dateFrom,dateTo,locale()]);
-  const usedAccs=useMemo(()=>[...new Set(transactions.map(x=>accId(x.account)).filter(Boolean))],[transactions]);
-  const hasUnsetAcc=useMemo(()=>transactions.some(x=>!accId(x.account)),[transactions]);
+  },[transactions,search,typeFilter,catFilter,subFilter,paidFilter,tripFilter,accMap,dateFrom,dateTo,locale()]);
+  const paidOpts=useMemo(()=>paidFromOptions(transactions,accMap),[transactions,accMap]);
+  const paidUseful=paidOpts.some(o=>o.value!=="none");   // offered only when at least one entry says how it was paid
   // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
   const trips=useMemo(()=>tripTotals(transactions),[transactions]);
   const catSel=useMemo(()=>catFilter==="all" ? null : catTotals(transactions,catFilter),[transactions,catFilter]);   // Run 24
   const tripSel=tripFilter==="all" ? null : trips.find(x=>lc(x.name)===lc(tripFilter)) || null;
-  // Run 16: the wallet filter is offered only when at least one entry has a wallet, and lists only the wallets in use.
-  const usedWallets=useMemo(()=>[...new Set(transactions.map(x=>walletId(x.wallet)).filter(Boolean))],[transactions]);
-  const hasUnsetWallet=useMemo(()=>transactions.some(x=>!walletId(x.wallet)),[transactions]);
 
   // The category list offers only categories used by the chosen type (Expenses / Income), and changing the type drops a
   // category filter that type has no transactions in, instead of leaving an empty list.
@@ -155,8 +154,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const usedCats=useMemo(()=>catsFor(typeFilter).map(id=>CAT(id)).filter(Boolean),[transactions,typeFilter]);
   const chooseType=(ty)=>{ setTypeFilter(ty); if (catFilter!=="all" && !catsFor(ty).includes(catFilter)) setCatFilter("all"); };
   const hasCatFilter=catFilter!=="all",hasDateFilter=dateFrom||dateTo;
-  const hasMore=trips.length>0||usedWallets.length>0||usedAccs.length>0;
-  const moreActive=(tripFilter!=="all"?1:0)+(walletFilter!=="all"?1:0)+(accFilter!=="all"?1:0);   // how many of the tucked-away filters are on
+  const hasMore=trips.length>0||paidUseful;
+  const moreActive=(tripFilter!=="all"?1:0)+(paidFilter!=="all"?1:0);   // how many of the tucked-away filters are on
   const selectedCat=CAT(catFilter);
   // Run 36: the subcategories used inside the chosen category (first spelling wins), plus "without one" when some entries have none.
   const usedSubs=useMemo(()=>{
@@ -199,7 +198,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
         )}
         {(hasCatFilter||hasDateFilter||typeFilter!=="all"||moreActive>0)&&(
           <button className="chip on" data-section="tx-clear" style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)"}}
-            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setWalletFilter("all");setTripFilter("all");setAccFilter("all");}}>{t("ledger.clear")} ×</button>
+            onClick={()=>{setCatFilter("all");setDateFrom("");setDateTo("");setTypeFilter("all");setPaidFilter("all");setTripFilter("all");}}>{t("ledger.clear")} ×</button>
         )}
       </div>
       {/* Run 38: the tucked-away filters, the category totals and the subcategory chips ease in and out like every other fold */}
@@ -224,17 +223,10 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
         </div>
       </Collapse>
       {tripSel&&<div className="list-sub" data-section="tx-trip-total" style={{margin:"2px 2px 8px"}}>{t("trip.total",{name:tripSel.name,total:fmt(tripSel.total),n:tripSel.n})}</div>}
-      <Collapse open={moreOpen&&usedWallets.length>0}>
-        <div className="filter-bar" role="group" aria-label={t("wallet.filterLabel")} data-section="tx-wallet-filter">
-          {["all",...usedWallets,...(hasUnsetWallet?["none"]:[])].map(w=>(
-            <button key={w} className={`chip${walletFilter===w?" on":""}`} aria-pressed={walletFilter===w} onClick={()=>setWalletFilter(w)}>{w==="all"?t("wallet.filterAll"):w==="none"?t("wallet.none"):walletName(w)}</button>
-          ))}
-        </div>
-      </Collapse>
-      <Collapse open={moreOpen&&usedAccs.length>0}>
-        <div className="filter-bar" role="group" aria-label={t("ledger.accFilter")} data-section="tx-acc-filter">
-          {["all",...usedAccs,...(hasUnsetAcc?["none"]:[])].map(a=>(
-            <button key={a} className={`chip${accFilter===a?" on":""}`} aria-pressed={accFilter===a} onClick={()=>setAccFilter(a)}>{a==="all"?t("ledger.accAll"):a==="none"?t("ledger.accNone"):accountName(a)}</button>
+      <Collapse open={moreOpen&&paidUseful}>
+        <div className="filter-bar" role="group" aria-label={t("paid.filterLabel")} data-section="tx-paid-filter">
+          {[{ value:"all" },...paidOpts].map(o=>(
+            <button key={o.value} className={`chip${paidFilter===o.value?" on":""}`} aria-pressed={paidFilter===o.value} data-paid={o.value} onClick={()=>setPaidFilter(o.value)}>{o.value==="all"?t("paid.all"):o.value==="none"?t("wallet.none"):o.account?accountName(o.account):paidKindName(o.kind)}</button>
           ))}
         </div>
       </Collapse>

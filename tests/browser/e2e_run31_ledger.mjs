@@ -10,15 +10,15 @@ const seed = baseSeed({ language: "en", transactions: [T(1790003000001, { mercha
 section("R31-L1. More filters and the account filter");
 {
   const page = await openPage(browser, { seed, pre: new Function(ACC) }); await tab(page, "Ledger"); await settle(page);
-  ok(await page.evaluate(() => !!document.querySelector('[data-section="tx-more-toggle"]') && !document.querySelector('[data-section="tx-acc-filter"]')), "accounts in use: a 'More filters' chip, its filters tucked away");
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="tx-more-toggle"]') && !document.querySelector('[data-section="tx-paid-filter"]')), "accounts in use: a 'More filters' chip, its filters tucked away");
   await page.evaluate(() => document.querySelector('[data-section="tx-more-toggle"]').click()); await wait(200);
-  const labels = await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-acc-filter"] .chip')].map((b) => b.innerText.trim()));
-  ok(labels.join("|") === "All accounts|ABB Card|Cash|No account", "account filter lists All, the accounts in use, and No account", labels);
-  await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-acc-filter"] .chip')].find((b) => b.innerText.trim() === "Cash").click()); await wait(250);
+  const labels = await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-paid-filter"] .chip')].map((b) => b.innerText.trim()));
+  ok(labels.join("|") === "Any way|Cash|ABB Card|Not set", "Run 57: one row lists Any way, each account in use (each is the only one of its kind, so no extra kind chip), and Not set", labels);
+  await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-paid-filter"] .chip')].find((b) => b.innerText.trim() === "Cash").click()); await wait(250);
   let r = await rows(page); ok(r.length === 1 && /Bbb/.test(r[0]), "Cash: only the 20.00 entry", r);
   ok(await page.evaluate(() => /·\s*1/.test(document.querySelector('[data-section="tx-more-toggle"]').innerText)), "the chip shows 1 tucked-away filter is on");
-  await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-acc-filter"] .chip')].find((b) => b.innerText.trim() === "No account").click()); await wait(250);
-  r = await rows(page); ok(r.length === 1 && /Ccc/.test(r[0]), "No account: only the entry without one", r);
+  await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-paid-filter"] .chip')].find((b) => b.innerText.trim() === "Not set").click()); await wait(250);
+  r = await rows(page); ok(r.length === 1 && /Ccc/.test(r[0]), "Not set: only the entry without one", r);
   await page.evaluate(() => document.querySelector('[data-section="tx-clear"]').click()); await wait(250);
   r = await rows(page); ok(r.length === 4, "Clear shows all 4 entries again", r.length);
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);

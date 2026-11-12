@@ -38,6 +38,8 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   "planMerge","planAccountMerge","remapEntryAccounts","mergeCounts","accountRemovalPlan","removeAccountSafely","restoreRemovedAccount","readAccounts","writeAccounts","findDoubleEntries","offerUndo","setUndoHost",
   // Run 53: currency for any ledger, daily refresh
   "ledgerCode","fetchLedgerRate","lastSavedRate","warmRates",
+  // Run 57: one "paid from" rule
+  "PAID_KINDS","accountsMap","paidFromAccount","paidFromKind","paidFromMatch","paidFromOptions",
   // redesign (2026-10-27): the Home ring, the Analytics trend and the Home greeting
   "pctShares","donutSlices","cumulativeByDay","greetingKey",
   // Run 10: data safety

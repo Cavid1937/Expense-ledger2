@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from "react";
 import { Collapse, Swap, useLeave } from "./motion.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, KEY, isEarnedCat, refundsNetted, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
+import { accountsMap, readAccounts } from "../App.jsx";   // Run 57: Analytics groups spending by the same "paid from" rule as the entry filter
 import { LedgerArt, MoneyText, PlannedNote, cmpPrev, cmpText, cmpTitle } from "./home.jsx";
 
 // ─── Redesign pages (2026-10-27) ─────────────────────────────────────────────────────────────────────────────────────
@@ -194,7 +195,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
   expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
   const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const monTxns = transactions.filter(t => t.date.startsWith(selectedMon));
-  const walletSpend = calcWalletSpend(transactions, selectedMon);   // Run 16
+  const walletSpend = calcWalletSpend(transactions, selectedMon, new Date(), accountsMap(readAccounts()));   // Run 16; Run 57: same "paid from" rule as the entry filter
   const recurringCount = transactions.filter(x=>x.recurring&&x.date.startsWith(selectedMon)).length;
 
   // Trends: recent months up to today, independent of the selected month.
@@ -441,7 +442,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           <div className="a-card-title">{t("wallet.analyticsTitle")}</div>
           {Object.entries(walletSpend.byWallet).sort((a,b)=>b[1]-a[1]).map(([w,amt])=>(
             <div key={w} className="cat-bar">
-              <div className="cat-bar-name">{w==="none"?t("wallet.none"):walletName(w)}</div>
+              <div className="cat-bar-name">{w==="none"?t("wallet.none"):t("paid.short."+w)}</div>
               <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(amt/walletSpend.total)*100}%`,background:"var(--accent)"}}/></div>
               <div className="cat-bar-amt">{fmt(amt,currency)}</div>
               <div className="cat-bar-pct">{fmtPct(Math.round((amt/walletSpend.total)*100))}</div>

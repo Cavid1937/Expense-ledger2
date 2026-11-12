@@ -50,19 +50,19 @@ section("R16-B3. The entry list, the filter and Analytics");
   const rows = () => page.evaluate(() => [...document.querySelectorAll(".txn-row")].map((r) => r.innerText.replace(/\s+/g, " ")));
   ok((await rows()).find((r) => /A cash/.test(r) && /Cash/.test(r)) && !(await rows()).find((r) => /C unset/.test(r) && /Cash|Bank card/.test(r)), "a row shows its wallet next to the category; an entry without one shows nothing extra", await rows());
   await page.evaluate(() => document.querySelector('[data-section="tx-more-toggle"]').click()); await wait(200);   // Run 31: trip / wallet / account filters sit behind "More filters"
-  const filt = async (label) => page.evaluate((l) => [...document.querySelectorAll('[data-section="tx-wallet-filter"] .chip')].find((b) => b.innerText.trim() === l).click(), label);
-  const labels = await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-wallet-filter"] .chip')].map((b) => b.innerText.trim()));
-  ok(labels.join("|") === "All wallets|Cash|Bank card|Not set", "the wallet filter lists All, only the wallets in use, and Not set", labels);
-  await filt("Bank card"); await wait(200); ok((await rows()).length === 1 && /B card/.test((await rows())[0]), "filtering by Bank card shows only that entry", await rows());
+  const filt = async (label) => page.evaluate((l) => [...document.querySelectorAll('[data-section="tx-paid-filter"] .chip')].find((b) => b.innerText.trim() === l).click(), label);   // Run 57: one "paid from" row
+  const labels = await page.evaluate(() => [...document.querySelectorAll('[data-section="tx-paid-filter"] .chip')].map((b) => b.innerText.trim()));
+  ok(labels.join("|") === "Any way|All cash|All cards|Not set", "the paid-from filter lists Any way, only the kinds in use, and Not set (Run 57 wording)", labels);
+  await filt("All cards"); await wait(200); ok((await rows()).length === 1 && /B card/.test((await rows())[0]), "filtering by All cards shows only the bank-card entry", await rows());
   await filt("Not set"); await wait(200); ok((await rows()).length === 1 && /C unset/.test((await rows())[0]), "Not set shows the entries without a wallet", await rows());
   await page.evaluate(() => [...document.querySelectorAll(".filter-bar .chip")].find((b) => /clear/i.test(b.innerText)).click()); await wait(200);
   ok((await rows()).length === 3, "Clear shows everything again", (await rows()).length);
   await tab(page, "Monthly"); await settle(page);
   const card = await page.evaluate(() => { const e = document.querySelector('[data-section="an-wallet"]'); return e ? e.innerText.replace(/\s+/g, " ") : ""; });
-  ok(/Spending by wallet/.test(card) && /Cash/.test(card) && /Bank card/.test(card) && /Not set/.test(card), "Analytics shows 'Spending by wallet' with Cash, Bank card and Not set", card);
+  ok(/Spending by how you paid/.test(card) && /Cash/.test(card) && /Cards/.test(card) && /Not set/.test(card), "Analytics shows 'Spending by how you paid' with Cash, Cards and Not set (Run 57 wording)", card);
   await page.close();
   const p2 = await openPage(browser, { seed: base() }); await tab(p2, "Ledger"); await settle(p2);
-  ok(!(await p2.$('[data-section="tx-wallet-filter"]')), "no entry has a wallet: no wallet filter is shown");
+  ok(!(await p2.$('[data-section="tx-paid-filter"]')), "no entry has a wallet or an account: no paid-from filter is shown");
   await tab(p2, "Monthly"); await settle(p2); ok(!(await p2.$('[data-section="an-wallet"]')), "and no wallet card on Analytics");
   await p2.close();
 }

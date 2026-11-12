@@ -916,6 +916,49 @@ function walletFromText(s) { const k=String(s||"").trim().toLowerCase(); return 
 // The wallet of the newest entry that has one (the list is newest first): the default for the next entry.
 function lastWallet(transactions) { const t=(transactions||[]).find(x=>walletId(x && x.wallet)); return t ? walletId(t.wallet) : ""; }
 export const walletName=(id)=>WALLET_IDS.includes(id) ? t("wallet."+id) : t("wallet.other");   // an id this version does not know shows as "Other"
+// ─── Run 57 (owner, 10 Nov: "Cash is Nağd and ABB card is bank card, the app must understand them"): ONE "paid from" rule ─────────────
+// Entries say how they were paid in two ways: the older "wallet" (cash, bank card, mobile wallet) and the newer "account" (Nağd, ABB Card).
+// Both are kept exactly as stored. For filters and reports every entry gets one KIND:
+//   - an entry on an account this phone knows: the kind of that account (cash; card or credit card = card; mobile wallet = mobile; bank
+//     account = bank; other = other);
+//   - otherwise its old wallet (cash, card, mobile; any other wallet word = other);
+//   - otherwise "none" (not set). An account that no longer exists counts as not linked, so the entry never drops out of every filter.
+// Every entry has exactly one kind, so "All cash" + "All cards" + … + "Not set" always add up to every entry.
+export const PAID_KINDS=["cash","card","mobile","bank","other"];
+const ACC_KIND_GROUP={ cash:"cash", card:"card", credit:"card", wallet:"mobile", bank:"bank", other:"other" };
+const WALLET_GROUP={ cash:"cash", card:"card", mobile:"mobile" };
+export function accountsMap(data) { const out={}; ((data&&data.accounts)||[]).forEach(a=>{ if (a && accId(a.id)) out[a.id]=a; }); return out; }
+export function paidFromAccount(entry, accountsById) { const id=entry ? accId(entry.account) : ""; return id && accountsById && accountsById[id] ? id : ""; }
+export function paidFromKind(entry, accountsById) {
+  const a=paidFromAccount(entry,accountsById);
+  if (a) return ACC_KIND_GROUP[accountsById[a].kind]||"other";
+  const w=walletId(entry && entry.wallet);
+  return w ? (WALLET_GROUP[w]||"other") : "none";
+}
+// choice: "all" | "k:<kind>" | "a:<account id>" | "none"
+export function paidFromMatch(entry, choice, accountsById) {
+  if (!choice || choice==="all") return true;
+  if (choice==="none") return paidFromKind(entry,accountsById)==="none";
+  if (choice.startsWith("a:")) return paidFromAccount(entry,accountsById)===choice.slice(2);
+  if (choice.startsWith("k:")) return paidFromKind(entry,accountsById)===choice.slice(2);
+  return true;
+}
+// The choices worth offering for these entries, in a fixed order: each kind in use followed by its accounts in use, then "not set".
+// A kind is left out when it would show exactly the same entries as its only account (no two chips that do the same thing).
+export function paidFromOptions(transactions, accountsById) {
+  const kinds={}, accs={}; let none=0;
+  (transactions||[]).forEach(x=>{ const k=paidFromKind(x,accountsById); if (k==="none") { none++; return; } kinds[k]=(kinds[k]||0)+1; const a=paidFromAccount(x,accountsById); if (a) accs[a]=(accs[a]||0)+1; });
+  const out=[];
+  PAID_KINDS.forEach(k=>{
+    if (!kinds[k]) return;
+    const mine=Object.keys(accs).filter(id=>(ACC_KIND_GROUP[accountsById[id].kind]||"other")===k).sort((p,q)=>String(accountsById[p].name).localeCompare(String(accountsById[q].name)));
+    if (!(mine.length===1 && accs[mine[0]]===kinds[k])) out.push({ value:"k:"+k, kind:k, n:kinds[k] });
+    mine.forEach(id=>out.push({ value:"a:"+id, account:id, n:accs[id] }));
+  });
+  if (none) out.push({ value:"none", n:none });
+  return out;
+}
+export const paidKindName=(k)=>t("paid.kind."+k);
 // Run 16: the user's own subcategories (Phase 1 of the custom-categories design note). A subcategory is already free text on each
 // entry, so these are only SUGGESTIONS in the picker, kept in their own storage key. The ledger and every entry stay untouched,
 // and an older version simply never shows them. Limits: 20 per category, 30 characters, no duplicates (ignoring case), nothing
@@ -2701,10 +2744,12 @@ export function planSetup(a, names, existingAccountNames=[], now=new Date()) {
 
 // Run 16: money spent in one month by wallet, by the same rule as calcCategorySpend (entries that have happened, not later ones).
 // Whole cents, so 0.1 + 0.2 is exactly 0.30. "none" = entries without a wallet. "used" = at least one entry has a wallet.
-export function calcWalletSpend(transactions, mon=curMon(), now=new Date()) {
+// Run 57: grouped by the same "paid from" rule as the entry filter (paidFromKind), so the two screens always agree: an entry on a cash
+// account and an older entry marked "Cash" are both cash. Without the accounts (older callers) only the old wallet field is used.
+export function calcWalletSpend(transactions, mon=curMon(), now=new Date(), accountsById=null) {
   const done=happenedIn(mon,now), cents={}; let totalC=0, used=false;
   (transactions||[]).filter(t=>t.type==="expense"&&done(t)).forEach(t=>{
-    const w=walletId(t.wallet)||"none"; if (w!=="none") used=true;
+    const w=paidFromKind(t,accountsById); if (w!=="none") used=true;
     const c=Math.round(Number(t.amount)*100); cents[w]=(cents[w]||0)+c; totalC+=c;
   });
   const byWallet={}; Object.keys(cents).forEach(k=>{ byWallet[k]=cents[k]/100; });
