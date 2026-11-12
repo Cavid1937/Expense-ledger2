@@ -355,3 +355,43 @@ STILL OPEN from the integrity job: newer-edit-wins for the same record (needs ch
 STILL OPEN for statements: other banks' PDFs (need samples: Kapital, PASHA, Leobank, Birbank, Rabitabank...); a 'match the columns' screen for layouts the app cannot work out; move bank CSV files onto the new reader; category improvements from bank data (later job above); phone and APK check.
 Google Cloud (owner screenshot 12 Nov): the console asked for a one-time 30 USD prepayment. That is for a billing account. Do NOT pay: Google sign-in and Drive appDataFolder need a project and an OAuth consent screen only. In the setup steps, skip 'Start free trial' / 'Activate'.
 Birbank notification sample (12 Nov, card to card): title 'Card to Card'; lines 'PAN: <masked card>', 'Amount: 7.5 AZN' (one decimal, code after the number), 'Transfer from <dot> <last4>', 'Balance: <n> AZN', 'Remaining transfer limit for today: N transfers'. Lessons: amount may have one decimal; direction is in words ('Transfer from' = money in); an extra line that is not money ('4 transfers') must not be read as an amount; the balance line again allows the chain check. Third bank format after ABB and Google Wallet. Nothing from it is stored.
+
+
+## Added 12 Nov (owner): learning from users without collecting personal data, and the ABB payment catalogue. PLAN ONLY, nothing built.
+
+### A. Owner's idea: collect non-personal data to improve the app (example: places people pay at, so the built-in list grows)
+Facts first:
+- Today the app sends nothing about a person's money anywhere, and the Privacy screen promises that. Collecting anything needs (1) a server that receives it (the app has none; a free tier may do at first, but it is a running cost and a service to maintain), (2) a change to the Privacy text, (3) the person's clear permission, and (4) attention to Azerbaijan's law on personal data. A place name typed by a person can be personal ("to Aysel", a phone number, a home address), so it must be cleaned on the phone before anything leaves.
+Recommendation: yes, but opt-in, off by default, small, and with a screen that shows exactly what would be sent.
+Rules for anything collected:
+- Never: amounts, balances, dates, notes, account or card numbers, names of people, location, contacts, anything that identifies the phone over time.
+- On the phone first: drop anything that looks like a person's name, a phone number, a card or account number or an address; only the place name and the category the person chose leave the phone.
+- On the server: a place enters the built-in list only when many different people (for example 20 or more) used the same name, and only after a human looks at it. Raw submissions are deleted after counting.
+What would be worth learning, in order of value:
+1. Place names and the category people give them (the owner's example): grows the built-in list with real Azerbaijani places.
+2. Category corrections: when people change the category the app suggested for a known place, the suggestion is wrong; this fixes the list.
+3. Bank statements the app could not read: which bank, and the SHAPE of the lines with every letter and digit masked (the "xxx 99.99 xxx" method used in Run 52). This is how support for Kapital, PASHA, Leobank and others can be added without anyone sending a real statement.
+4. Crash reports: which screen, which error, app version, phone model; no data from the ledger. Today we only learn about crashes when the owner sees one.
+5. Feature use counts (which screens and buttons are used at all): tells the simplification work what to hide or remove.
+6. Speed on real phones (how long the app takes to open, how long an import takes): today only measured on the computer.
+7. Language and app-version counts.
+Cheaper first step that collects nothing: use public lists. The banks' own payment catalogues (section B) already name hundreds of real Azerbaijani companies by category. Start there.
+Owner decisions needed before building: opt-in default (recommendation: off), whether a running server cost is acceptable, and the Privacy text. Status: NOT STARTED.
+
+### B. ABB mobile app: payment catalogue seen in the owner's video (12 Nov)
+Birbank part of the video: only a red flash and a black screen were recorded (the app most likely blocks screen recording). Nothing could be read from it. A few screenshots would work instead.
+ABB groups: Mobile, Utility, HCC payments (residential complex service fees), Phone, Internet, TV, Parking, Government, Fines (DYP/AYNA), Transport (new), Loan, ABB loan, Mortgage payment, Insurance, Stores and e-commerce, Education, Nakhchivan, Betting, Taxi, Delivery, Donation, E-cash register operators, Other.
+Compared with the app's categories:
+- Already covered: mobile, internet, utilities (electricity, water, gas), building fees (Home), parking, fines (Car), loan payment, insurance, education, taxi, delivery, donations.
+- Gaps worth considering (as subcategories, never renaming existing ids): Home > Heating (Azəristilik), Home > Mortgage, Bills > TV, Bills > Home phone, Finance > Government fees and duties. Betting: present in the bank's list; decide deliberately (a neutral "Betting" subcategory under Entertainment is honest; no promotion of it).
+Companies visible in the catalogue (public business names) to add to the built-in place list, after checking each against the category above:
+- Utilities: Azərişıq, Azərsu, Azəriqaz, Azəristilik (new).
+- Home phone: Aztelecom/Baktelecom, AzEuroTel, TransEuroCom, Ultel.
+- Internet (about 50): Aztelecom/Baktelecom, NEOTELECOM, HDnet, ALnet, Azerlink, Aznet, GOODNET, AzLink, MaxiNET, Alfanet, Artkom, AzEuroTel, SFERA NET, GoLine, GammaNet, GoTelecom, AzeronlineADSL, Azfibernet, AileNet, Azeuronet, TvNet, Blue TV, Eurosel, BossGroup, Fibernet, SuperOptik, Birlink, LinkNet, Megalink, Metronet, NetPoint, PROKSI, RR TELECOM, SN Telekom, Sazz, SelNet, SevenLine, Shakh internet, Uninet/SuperOnline, Caspel, Portflix Net, INET, NEST Fiber, ABONNET, FastNet, UserNet, SpeedNET, ATF Telecom, SkyLink Fiber, AZTECHNET, AtraNet.
+- Taxi and drivers: 189 Taxi, Bolt, Maxim, OMEGA Taxi, Economy taxi, Emer Taxi, Alo taxi, TaxiMax, PILOT Sober Driver and 5050 Ayıq sürücü (sober-driver services; Transport > Taxi).
+- Insurance: PAŞA Həyat, PASHA Insurance, A-Qroup Sığorta, Ateşgah, Qala Həyat, Qala Insurance, Xalq Insurance, MEQA Həyat Sığorta.
+- Donations: Qarabağ Dirçəliş Fondu, Qızıl Aypara, Silahlı Qüvvələrə Yardım Fondu, YAŞAT Fondu (and AFAD, a Turkish agency).
+- Stores and electronics: Kontakt Home, Baku Electronics, İrşad, Soliton, Emsan, HOMM Life, World Telecom. (İrşad was removed from the list on 8 Nov for lack of evidence; the bank's own catalogue is that evidence.)
+- Parking: Bravo branch car parks, malls (Bakıxanov Mall, Blue Mall, JMR Plaza), Port Baku, Crescent, Naxçıvan airport. Mostly useful as hints in statement descriptions; not all need to be in the typing list.
+- Residential complex fees (Yasamal 82 MMMC, RahatBina, Port Baku Residence and many more): too many and too local for the built-in list; better learned from users (section A) or from the category word "MMC/MTK" in statements.
+How to use it: (1) built-in place list for typing suggestions, (2) category hints when reading bank statements and notifications, (3) the category gap list above. Status: NOT STARTED.
