@@ -152,7 +152,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="60 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="61 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -1645,7 +1645,10 @@ function validateSettings(src) {
         if (!name || name.length>80 || target===null || saved===null || monthly===null || (hasDate && !isValidDateStr(g.targetDate))) { bad++; return; }
         let id=typeof g.id==="string" && g.id ? g.id : `g${Date.now()}_${i}`;
         while (used.has(id)) id+="_"; used.add(id);
-        out.push({ id, name, target, saved, monthlyTarget:monthly, targetDate:hasDate?g.targetDate:null });
+        // Run 61 (owner batch C7/C8): the history of what was added (optional) and the day the goal was reached (optional). "saved" stays the
+        // total every figure uses, so older versions and older backups read the same number; they simply have no history.
+        const contribs=cleanContribs(g.contribs), doneAt=typeof g.doneAt==="string" && isValidDateStr(g.doneAt) ? g.doneAt : null;
+        out.push({ id, name, target, saved, monthlyTarget:monthly, targetDate:hasDate?g.targetDate:null, ...(contribs.length?{ contribs }:{}), ...(doneAt?{ doneAt }:{}) });
       });
       if (src.goals.length && !out.length) problems.push(tn("settings.goalsAllBad",src.goals.length));
       else { settings.goals=out; if (bad) problems.push(tn("settings.goalsSomeBad",bad)); }
@@ -2641,14 +2644,67 @@ export function rolloverOffer(transactions, goals, seenYm="", now=new Date()) {
   return open.length ? { month:prv, kept, goals:open } : null;
 }
 // Adds `amount` (capped at what is still missing) to one goal; every other goal and the goal's other fields stay as they were.
-export function applyRollover(goals, goalId, amount) {
+// Run 61: the addition is also written into the goal's history ("from last month's leftover").
+export function applyRollover(goals, goalId, amount, day=localDateStr()) {
   const a=Math.round((Number(amount)||0)*100)/100;
   if (!(a>0)) return goals;
   return (goals||[]).map(g=>{
     if (g.id!==goalId) return g;
     const saved=Number(g.saved)||0, left=Math.max(0,Math.round(((Number(g.target)||0)-saved)*100)/100);
-    return { ...g, saved:Math.round((saved+Math.min(a,left))*100)/100 };
+    const add=Math.min(a,left); if (!(add>0)) return g;
+    return goalAddMoney(g, add, "", day, "leftover").goal;
   });
+}
+
+// ─── Run 61 (owner batch C7/C8): goal contributions and a finished state ───────────────────────────────────────────────────────────
+// Each change to what a goal holds is one history line: { id, date, amount (+ added, − corrected down), note, src: "add" | "set" | "leftover" }.
+// The goal's "saved" stays the total (older versions read it); history added later than a goal's start shows the rest as "before the history".
+export const GOAL_CONTRIB_MAX=500;
+export function cleanContribs(v) {
+  const out=[], ids=new Set();
+  (Array.isArray(v)?v:[]).forEach(c=>{
+    if (!isPlainObject(c) || out.length>=GOAL_CONTRIB_MAX) return;
+    const id=typeof c.id==="string" && /^c[a-z0-9_]{1,40}$/i.test(c.id) && !ids.has(c.id) ? c.id : null;
+    const amount=typeof c.amount==="number" && Number.isFinite(c.amount) && c.amount!==0 && Math.abs(c.amount)<=1e10 && Number(c.amount.toFixed(2))===c.amount ? c.amount : null;
+    if (!id || amount===null || !isValidDateStr(String(c.date))) return;
+    ids.add(id);
+    const note=typeof c.note==="string" ? c.note.replace(/[\u0000-\u001f\u007f]+/g," ").trim().slice(0,80) : "";
+    const src=["add","set","leftover"].includes(c.src) ? c.src : "add";
+    out.push({ id, date:String(c.date), amount, ...(note?{ note }:{}), src });
+  });
+  return out;
+}
+const newContribId=(g)=>{ const used=new Set((g.contribs||[]).map(c=>c.id)); let id; do { id="c"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); } while (used.has(id)); return id; };
+const doneFor=(g, saved, day)=>{ const target=Number(g.target)||0; if (target>0 && Math.round(saved*100)>=Math.round(target*100)) return g.doneAt || day; return null; };
+// Adds a positive amount. Returns { goal, reached } (reached: true when this addition finished the goal).
+export function goalAddMoney(goal, amount, note="", day=localDateStr(), src="add") {
+  const a=Math.round((Number(amount)||0)*100)/100;
+  if (!(a>0) || a>1e10) return { goal, reached:false };
+  const saved=Math.round(((Number(goal.saved)||0)+a)*100)/100;
+  const entry={ id:newContribId(goal), date:day, amount:a, ...(String(note||"").trim()?{ note:String(note).trim().slice(0,80) }:{}), src };
+  const doneAt=doneFor(goal,saved,day);
+  const next={ ...goal, saved, contribs:[...(goal.contribs||[]), entry].slice(-GOAL_CONTRIB_MAX) };
+  if (doneAt) next.doneAt=doneAt; else delete next.doneAt;
+  return { goal:next, reached:!goal.doneAt && !!doneAt };
+}
+// Sets the total (for corrections). The difference is written into the history so the total always adds up.
+export function goalSetTotal(goal, total, day=localDateStr()) {
+  const v=Math.round((Number(total)||0)*100)/100;
+  if (!(v>=0) || v>1e10) return { goal, reached:false };
+  const diff=Math.round((v-(Number(goal.saved)||0))*100)/100;
+  if (diff===0) return { goal, reached:false };
+  const entry={ id:newContribId(goal), date:day, amount:diff, src:"set" };
+  const doneAt=doneFor(goal,v,day);
+  const next={ ...goal, saved:v, contribs:[...(goal.contribs||[]), entry].slice(-GOAL_CONTRIB_MAX) };
+  if (doneAt) next.doneAt=doneAt; else delete next.doneAt;
+  return { goal:next, reached:!goal.doneAt && !!doneAt };
+}
+// For the history view: what the goal held before its history began (older goals, or history over the cap), and the lines newest first.
+export function goalHistory(goal) {
+  const list=cleanContribs(goal && goal.contribs);
+  const sumC=list.reduce((s,c)=>s+Math.round(c.amount*100),0);
+  const before=(Math.round((Number(goal && goal.saved)||0)*100)-sumC)/100;
+  return { before, lines:[...list].reverse(), first:list.length ? list[0].date : null };
 }
 
 // ─── Run 59 (owner-approved 12 Nov, NEXT_WORK_PLAN "APPROVED: month-end leftover, exact definitions") ─────────────────────────────

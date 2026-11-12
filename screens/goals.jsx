@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates, tidyPlan, applyTidy, undoTidy, TIDY_KEY, subName, readBudgetCarry, writeBudgetCarry, budgetCarried, readLeftoverGoal, writeLeftoverGoal, readRolloverSeen } from "../App.jsx";import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
+import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates, tidyPlan, applyTidy, undoTidy, TIDY_KEY, subName, readBudgetCarry, writeBudgetCarry, budgetCarried, readLeftoverGoal, writeLeftoverGoal, readRolloverSeen, goalAddMoney, goalSetTotal, goalHistory, daysBetween, parseLocalDate, today } from "../App.jsx";import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
 import { Collapse, EditSwap, useBackStep, useLeave } from "./motion.jsx";
 
@@ -49,7 +49,12 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
     if (gSaved===null||gMonthly===null) { showToast(t("set.goalInvalidAmounts")); return; }
     if (goalDate && !isValidDateStr(goalDate)) { showToast(t("set.goalInvalidDate")); return; }
     const g={name:goalName.trim(),target:gTarget,saved:gSaved,monthlyTarget:gMonthly,targetDate:goalDate||null};
-    if (editGoalId) onUpdateGoal(editGoalId,g); else onAddGoal(g);
+    // Run 61: a changed "saved so far" while editing is a correction: it goes into the history, so the history keeps adding up to the total;
+    // a changed target can also finish (or un-finish) the goal
+    if (editGoalId) { const old=goals.find(x=>x.id===editGoalId); const r=old ? goalSetTotal({ ...old, target:gTarget },gSaved) : null;
+      const reachedNow=Math.round(gSaved*100)>=Math.round(gTarget*100);
+      onUpdateGoal(editGoalId, { ...g, ...(r && old && r.goal.contribs!==old.contribs ? { contribs:r.goal.contribs } : {}), doneAt:reachedNow ? ((old && old.doneAt) || today()) : undefined }); }
+    else onAddGoal(g);
     setGoalName("");setGoalTarget("");setGoalSaved("");setGoalMonthly("");setGoalDate("");setShowNewGoal(false);setEditGoalId(null);
   };
   // Run 40: phone Back cancels whichever of these is open (newest first), exactly like its Cancel button, before leaving the page.
@@ -212,19 +217,30 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
                   </div>
                 </div>
                 <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0,marginLeft:"auto"}}>
-                  <button className="btn btn-sm" data-section="goal-update" aria-expanded={updGoal&&updGoal.id===goal.id} onClick={()=>setUpdGoal(u=>u&&u.id===goal.id?null:{ id:goal.id, val:String(goal.saved||0) })}>{t("set.update")}</button>
+                  <button className="btn btn-sm" data-section="goal-update" aria-expanded={updGoal&&updGoal.id===goal.id} onClick={()=>setUpdGoal(u=>u&&u.id===goal.id?null:{ id:goal.id, val:"", note:"", mode:"add" })}>{t("goal.addMoney")}</button>
                   <button className="btn btn-sm" data-section="goal-edit" aria-label={t("common.edit")+": "+maskText(goal.name)} onClick={()=>startEditGoal(goal)}>{t("common.edit")}</button>
                   <button className="topbar-btn" style={{color:"var(--ink-4)"}} onClick={()=>leave(goal.id,()=>onDeleteGoal(goal.id))} aria-label={t("set.deleteGoal",{name:maskText(goal.name)})}><Icon name="trash" size={15}/></button>
                 </div>
               </div>
-              <Collapse open={!!(updGoal&&updGoal.id===goal.id)}>{ug&&(
-                <div data-section="goal-update-row" style={{display:"flex",gap:7,marginTop:10}}>
-                  <input className="field-input" type="text" inputMode="decimal" autoComplete="off" data-section="goal-update-input" aria-label={t("set.updatePrompt",{name:maskText(goal.name)})} value={ug.val} ref={revealFocus} onChange={e=>setUpdGoal({...ug,val:cleanMoneyText(e.target.value)})}
-                    onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); const v=formMoney(ug.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } } else if (e.key==="Escape") setUpdGoal(null); }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-                  <button className="btn btn-sm btn-sm-primary" data-section="goal-update-save" onClick={()=>{ const v=formMoney(ug.val); if (v===null) showToast(t("set.updateInvalid")); else { onUpdateGoal(goal.id,{saved:v}); setUpdGoal(null); } }}>{t("common.save")}</button>
-                  <button className="btn btn-sm" onClick={()=>setUpdGoal(null)} aria-label={t("common.cancel")}>✕</button>
-                </div>
-              )}</Collapse>
+              {/* Run 61 (owner batch C8): money is ADDED to a goal and each addition is kept in its history; "Set the total" stays for corrections */}
+              <Collapse open={!!(updGoal&&updGoal.id===goal.id)}>{ug&&(()=>{ const setMode=ug.mode==="set";
+                const save=()=>{ const v=formMoney(ug.val, setMode?{}:{ positive:true }); if (v===null || (!setMode && !(v>0))) { showToast(t("set.updateInvalid")); return; }
+                  const r=setMode ? goalSetTotal(goal,v) : goalAddMoney(goal,v,ug.note);
+                  if (r.goal===goal) { setUpdGoal(null); return; }
+                  onUpdateGoal(goal.id,{ saved:r.goal.saved, contribs:r.goal.contribs, doneAt:r.goal.doneAt });
+                  setUpdGoal(null);
+                  showToast(r.reached ? t("goal.reached",{ name:maskText(goal.name) }) : setMode ? t("goal.totalSet",{ amount:fmt(r.goal.saved,currency) }) : t("goal.added",{ amount:fmt(v,currency), name:maskText(goal.name) })); };
+                return (
+                <div data-section="goal-update-row" data-mode={ug.mode} style={{marginTop:10}}>
+                  <div style={{display:"flex",gap:7}}>
+                    <input className="field-input" type="text" inputMode="decimal" autoComplete="off" data-section="goal-update-input" placeholder={setMode?"":t("goal.addPh")} aria-label={setMode?t("set.updatePrompt",{name:maskText(goal.name)}):t("goal.addPrompt",{name:maskText(goal.name)})} value={ug.val} ref={revealFocus} onChange={e=>setUpdGoal({...ug,val:cleanMoneyText(e.target.value)})}
+                      onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); save(); } else if (e.key==="Escape") setUpdGoal(null); }} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+                    <button className="btn btn-sm btn-sm-primary" data-section="goal-update-save" onClick={save}>{t(setMode?"common.save":"goal.addBtn")}</button>
+                    <button className="btn btn-sm" onClick={()=>setUpdGoal(null)} aria-label={t("common.cancel")}>✕</button>
+                  </div>
+                  {!setMode&&<input className="field-input" type="text" autoComplete="off" data-section="goal-update-note" maxLength={80} placeholder={t("goal.notePh")} aria-label={t("goal.notePh")} value={ug.note} onChange={e=>setUpdGoal({...ug,note:e.target.value})} style={{width:"100%",marginTop:7,padding:"8px 10px",fontSize:13,boxSizing:"border-box"}}/>}
+                  <button type="button" className="link-btn" data-section="goal-update-mode" onClick={()=>setUpdGoal({...ug,mode:setMode?"add":"set",val:setMode?"":String(goal.saved||0)})} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12.5,padding:"8px 0 0",cursor:"pointer",minHeight:32}}>{t(setMode?"goal.modeAdd":"goal.modeSet")}</button>
+                </div>); })()}</Collapse>
               <div className="bud-bar-row" style={{marginTop:12}}>
                 <div className="bar"><div className="bar-fill" style={{width:`${pct}%`,background:"var(--accent)"}}/></div>
                 <span className="bud-pct">{fmtPct(Math.round(pct))}</span>
@@ -242,12 +258,13 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
                 </div>
               )}
               <div className="list-sub" style={{marginTop:6,color:gp.behindSchedule||gp.overdue?"var(--neg)":gp.onTrack||gp.complete?"var(--pos)":"var(--ink-3)"}}>
-                {gp.complete?t("goals.completed")
+                {gp.complete?(goal.doneAt?t("goal.reachedOn",{ date:fmtDate(goal.doneAt) }):t("goals.completed"))
                   :goal.targetDate&&gp.daysToTarget!==null?<>{gp.overdue?tn("goals.overdueDays",-gp.daysToTarget):gp.daysToTarget===0?t("set.targetToday"):tn("set.daysToTarget",gp.daysToTarget)}{gp.behindSchedule?t("set.projectedAfter"):gp.onTrack?t("set.onTrackSuffix"):""}</>
                   :remaining>0?t("goals.toGo",{amount:fmt(remaining,currency)}):""}
               </div>
               {estCompletion&&<div className="list-sub" style={{marginTop:4}}>{t("set.atRate",{amount:fmt(goal.monthlyTarget||0,currency),date:estCompletion})}</div>}
               {!gp.complete&&<GoalScenario goal={goal} currency={currency}/>}
+              <GoalHistory goal={goal} currency={currency}/>
             </div>
           }/>);
         })}
@@ -272,6 +289,33 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
           <CategoryOrder onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
         </div>
       </>)}
+    </div>
+  );
+}
+
+// Run 61 (owner batch C7/C8): every addition to a goal, newest first, with what it held before the history began; folded by default.
+// A reached goal also says how long it took, counted from the first recorded addition.
+export function GoalHistory({ goal, currency }) {
+  const [open,setOpen]=useState(false);
+  const h=goalHistory(goal);
+  if (!h.lines.length) return null;
+  const took=goal.doneAt && h.first ? daysBetween(parseLocalDate(h.first), parseLocalDate(goal.doneAt)) : null;
+  const signed=(n)=>(n<0?"−":"+")+fmt(Math.abs(n),currency);
+  const label=(c)=>c.src==="leftover" ? t("goal.srcLeftover") : c.src==="set" ? t("goal.srcSet") : (c.note ? maskText(c.note) : t("goal.srcAdd"));
+  return (
+    <div data-section="goal-history" style={{marginTop:8}}>
+      {took!==null&&took>0&&Math.round(h.before*100)===0&&<div className="list-sub" data-section="goal-took" style={{marginBottom:4}}>{tn("goal.took",took,{ amount:fmt(goal.saved||0,currency) })}</div>}
+      <button type="button" className="link-btn" data-section="goal-history-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12.5,padding:"4px 0",cursor:"pointer",minHeight:32}}>{t(open?"goal.histHide":"goal.histShow",{ n:h.lines.length })}</button>
+      <Collapse open={open}>
+        <div role="list" data-section="goal-history-rows" style={{fontSize:12.5}}>
+          {h.lines.map(c=>(
+            <div role="listitem" key={c.id} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",borderTop:"1px solid var(--rule)"}}>
+              <span style={{minWidth:0,overflowWrap:"anywhere"}}>{fmtDate(c.date)} · {label(c)}</span>
+              <span style={{whiteSpace:"nowrap",fontWeight:600,color:c.amount<0?"var(--neg)":"var(--ink)"}}>{signed(c.amount)}</span>
+            </div>))}
+          {Math.round(h.before*100)!==0&&<div role="listitem" data-section="goal-history-before" style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",borderTop:"1px solid var(--rule)",color:"var(--ink-3)"}}><span>{t("goal.histBefore")}</span><span style={{whiteSpace:"nowrap"}}>{fmt(h.before,currency)}</span></div>}
+        </div>
+      </Collapse>
     </div>
   );
 }

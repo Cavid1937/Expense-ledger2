@@ -103,6 +103,7 @@
     "run58cats.test.mjs": 30,
     "run59leftover.test.mjs": 20,
     "run60balance.test.mjs": 6,
+    "run61goals.test.mjs": 14,
     "run43pace.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
@@ -138,6 +139,8 @@
     "e2e_run58_cats.mjs": 25,
     "e2e_run59_leftover.mjs": 16,
     "e2e_run60_balances.mjs": 8,
+    "e2e_run61_downgrade.mjs": 4,
+    "e2e_run61_goals.mjs": 11,
     "e2e_run57_paid.mjs": 26,
     "e2e_run9.mjs": 55,
     "e2e_run10.mjs": 16,

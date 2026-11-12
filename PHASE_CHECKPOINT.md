@@ -1,3 +1,7 @@
+## 0000y. 2026-11-13 RUN 61 (latest). Local commit, NOT pushed. Read reports/Run 61 report.md.
+- Done (owner batch C7/C8): goals get optional `contribs` [{id,date,amount,note?,src add|set|leftover}] and `doneAt`; "saved" stays the total. cleanContribs in the goal validator; goalAddMoney / goalSetTotal / goalHistory; applyRollover writes a "leftover" line; goal card "Add money" + note + "Correct the total instead"; GoalHistory fold; "Reached on"; edit form records a correction. Removed unused key set.update. Review sheet handoff/az-ru-review-runs51-60.csv (321 rows). APP_RELEASE 61.
+- Tests: logic 105 files 2143/0/0 (run61goals 14). Browser: e2e_run61_goals 11, e2e_run61_downgrade 4 (v9 opens contribs data, total intact), e2e 27 (rewritten for Add money, same strictness), e2e_run34_motion 41, e2e_run50 12, e2e_run59_leftover 16, e2e_downgrade 26, e2e_run37_roundtrip 13, e2e_lang 57. Full suite NOT yet run on Runs 60-61.
+- NEXT: D9 debts/loans history visible and exportable; D10 progress audit; E11 export coherence; then a full browser suite.
 ## 0000x. 2026-11-13 RUN 60 (latest). Local commit, NOT pushed. Read reports/Run 60 report.md.
 - Full browser suite on Run 59 (da49d74): 129 files, 2233 passed / 0 failed / 0 missing, 0 standby events.
 - Done: importPlanUse (shared by commitImport and the preview) + mergeBalancePreview; import sheet block data-section="import-balances"; onSetBudget shows an Undo snackbar when a budget is cleared (budget.cleared). APP_RELEASE 60.
