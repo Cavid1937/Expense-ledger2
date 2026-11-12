@@ -139,7 +139,7 @@ section("R53-B7. The version in Settings is readable")
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page);
   await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(400);
   const v = await page.evaluate(() => (document.querySelector('[data-section="app-version"]') || {}).innerText || "");
-  ok(/^Version \d+ \(\d{2}\.\d{2}\.\d{4}\)/.test(v) && !/^Version [A-Za-z_-]{6,}/.test(v), "it reads 'Version <number> (<day>)', not a build code", v);
+  ok(/^Version \d+ \(\d{4}-\d{2}-\d{2}\)/.test(v) && !/^Version [A-Za-z_-]{6,}/.test(v), "it reads 'Version <number> (<day>)', not a build code", v);
   await page.close();
 }
 await finish("e2e_run53_quick", browser);
