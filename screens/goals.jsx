@@ -77,7 +77,7 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
   const editRow=(cat,limit)=>(<Collapse open={editBudget===cat.id}>{editBudget===cat.id&&(
     <div style={{display:"flex",gap:7,marginTop:9}}>
       <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} ref={revealFocus} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-      <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
+      <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);if(v>0)showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
       <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
     </div>
   )}{editBudget===cat.id&&limit>0&&(

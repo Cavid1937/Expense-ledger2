@@ -152,7 +152,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="59 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="60 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -2268,6 +2268,29 @@ export function cleanPrefs(raw) {
   if (s.leftoverGoal===true) out.leftoverGoal=true;
   return out;
 }
+// Run 51/52 (moved here in Run 60 so the sheet's preview and the real import use exactly the same steps):
+// an account of the file that has the same name as one here IS that account (its entries are pointed at the one here); a bank statement's
+// entries go on the account the person chose in the sheet (or on none).
+export function importPlanUse(plan, accData) {
+  const accPlan=plan.accountData && plan.accountData.accounts && plan.accountData.accounts.length ? planAccountMerge(accData,plan.accountData) : null;
+  const stAcc=plan.kind==="statement" && plan.stOpts ? accId(plan.stOpts.account) : "";
+  const planUse=stAcc ? { ...plan, transactions:plan.transactions.map(x=>({ ...x, account:stAcc })) } : accPlan && accPlan.renamed ? { ...plan, transactions:remapEntryAccounts(plan.transactions,accPlan.remap) } : plan;
+  return { accPlan, planUse };
+}
+// Run 60 (integrity plan item 6, "balance check after a merge"): before anything is added, each account whose balance the merge would change,
+// with its balance now and after. A doubled history shows up here as a balance that jumps, before it is saved. Only merges (Replace and
+// "settings only" are explained elsewhere in the sheet). Pure: the same applyImport the button runs, on a copy.
+export function mergeBalancePreview(state, plan, accData, opts={}, asOf) {
+  const acc=cleanAccountData(accData);
+  const { accPlan, planUse }=importPlanUse(plan, acc);
+  const next=applyImport(state, planUse, "merge", opts);
+  const accAfter=accPlan ? cleanAccountData(accPlan.data) : acc;
+  if (!accAfter.accounts.length) return [];
+  const b=accountBalances(acc, state.transactions, asOf), a=accountBalances(accAfter, next.transactions, asOf);
+  return accAfter.accounts.filter(x=>!x.hidden).map(x=>({ id:x.id, name:x.name, before:(x.id in b) ? b[x.id] : null, after:a[x.id] }))
+    .filter(r=>r.before===null || Math.round(r.before*100)!==Math.round(r.after*100));
+}
+
 // Run 37: what an import plan carries, part by part ([key, count] or [key, null] for a part without a count). Shown in the import sheet.
 export const IMPORT_PART_KEY={ entries:"import.part.entries", accounts:"import.part.accounts", transfers:"import.part.transfers", bills:"import.part.bills", budgets:"import.part.budgets", goals:"import.part.goals", templates:"import.part.templates",
   debts:"import.part.debts", loans:"import.part.loans", cats:"import.part.cats", subcats:"import.part.subcats", catprefs:"import.part.catprefs", safe:"import.part.safe", prefs:"import.part.prefs" };
@@ -4782,11 +4805,7 @@ function AppInner() {
       if (!preserveRaw("before_import", before)) { showToast(t("import.copyFailed"),6000); return; }
       pruneRecoveryCopies("before_import");
     }
-    // Run 51: an account of the file that has the same name as one here IS that account: its entries and transfers are pointed at the one here.
-    const accPlan=plan.accountData && plan.accountData.accounts.length ? planAccountMerge(readAccounts(),plan.accountData) : null;
-    // Run 52: a bank statement's entries go on the account the person chose in the sheet (or on none).
-    const stAcc=plan.kind==="statement" && plan.stOpts ? accId(plan.stOpts.account) : "";
-    const planUse=stAcc ? { ...plan, transactions:plan.transactions.map(x=>({ ...x, account:stAcc })) } : accPlan && accPlan.renamed ? { ...plan, transactions:remapEntryAccounts(plan.transactions,accPlan.remap) } : plan;
+    const { accPlan, planUse }=importPlanUse(plan, readAccounts());
     const next=applyImport(before, planUse, mode, { skipDuplicates:skipDup, skipSimilar:skipSim });
     // Run 18: the import is all-or-nothing. The side stores are written FIRST and checked; if one cannot be written, the others are put
     // back exactly as they were and the main data is not touched. Undo restores them too.
@@ -4933,7 +4952,9 @@ function AppInner() {
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onGroupMany={groupMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn&&txn.spreadSlice ? (transactions.find(x=>x.id===txn.spreadSlice.id)||txn) : txn)}/>}
           {tab==="goals"     && <BudgetsGoalsPage state={spendState} rawState={state} onCatsChanged={()=>setCatVer(v=>v+1)} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd} tidyTools={accTools}
-            onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
+            onSetBudget={(catId,amount)=>{ const was=(stateRef.current.budgets||{})[catId]; setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}));
+              // Run 60 (Undo audit): clearing a budget gets the same Undo bar as every other removal; Undo puts the old limit back unless it was set again since
+              if (!(amount>0) && was>0) showSnackbar(t("budget.cleared",{ cat:catName(catId) }),()=>setState(s=>((s.budgets||{})[catId]>0 ? s : {...s,budgets:{...s.budgets,[catId]:was}})),8000,"budget"); }}
             onRebalance={(plan)=>{ const prev=stateRef.current.budgets, next=applyRebalance(prev,plan); setState(s=>({...s,budgets:next})); showSnackbar(t("budget.rebalDone"),()=>setState(s=>s.budgets===next?{...s,budgets:prev}:s),6000,"rebalance"); }}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
             onUpdateGoal={(id,patch)=>setState(s=>({...s,goals:s.goals.map(g=>g.id===id?{...g,...patch}:g)}))}
@@ -5087,6 +5108,13 @@ function AppInner() {
                           {mi.examples.map((p,i)=><li key={i} style={{overflowWrap:"anywhere"}}>{t("import.simExample",{ date:fmtDate(p.file.date), amount:fmt(p.file.amount,currency), here:maskText(words(p.here)), file:maskText(words(p.file)) })}</li>)}
                         </ul>
                       </>)}
+                    </div>); })()}
+                  {/* Run 60: each account's balance now and after adding, before anything is saved (a doubled history shows as a jump here) */}
+                  {importPending.transactions.length>0&&(()=>{ let rows=[]; try { rows=mergeBalancePreview(state,importPending,readAccounts(),{ skipDuplicates:skipDup, skipSimilar:skipSim }); } catch { rows=[]; } return rows.length>0&&(
+                    <div data-section="import-balances" style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
+                      <div style={{fontWeight:600}}>{t("import.balTitle")}</div>
+                      {rows.map(r=><div key={r.id} data-bal={r.id} style={{overflowWrap:"anywhere"}}>{r.before===null ? t("import.balNew",{ name:maskText(r.name), after:fmt(r.after,currency) }) : t("import.balLine",{ name:maskText(r.name), before:(r.before<0?"−":"")+fmt(Math.abs(r.before),currency), after:(r.after<0?"−":"")+fmt(Math.abs(r.after),currency) })}</div>)}
+                      <div style={{color:"var(--ink-3)",marginTop:2}}>{t("import.balNote")}</div>
                     </div>); })()}
                   <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="import-go" disabled={importPending.kind==="statement"&&!importPending.transactions.length} onClick={()=>commitImport("merge")}>{t(importPending.kind==="statement"?"st.addBtn":"import.mergeBtn")}</button>
                   {importPending.canReplace

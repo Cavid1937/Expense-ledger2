@@ -1562,6 +1562,12 @@ export const MESSAGES = {
   "notspent.total": { en: "Total", az: "Cəmi", ru: "Итого" },
   "acc.leftoverHint": { en: "Add your cash or card as an account to see where unused money stays.", az: "İstifadə olunmayan pulun harada qaldığını görmək üçün nağd pulunuzu və ya kartınızı hesab kimi əlavə edin.", ru: "Добавьте наличные или карту как счёт, чтобы видеть, где остаются неиспользованные деньги." },
   "acc.leftoverHintOk": { en: "Got it", az: "Aydındır", ru: "Понятно" },
+  // Run 60: balances before adding an import; Undo when a budget is cleared
+  "import.balTitle": { en: "Account balances if you add these", az: "Bunları əlavə etsəniz hesab qalıqları", ru: "Балансы счетов, если добавить эти записи" },
+  "import.balLine":  { en: "{name}: {before} now, {after} after", az: "{name}: indi {before}, sonra {after}", ru: "{name}: сейчас {before}, после {after}" },
+  "import.balNew":   { en: "{name} (new account): {after}", az: "{name} (yeni hesab): {after}", ru: "{name} (новый счёт): {after}" },
+  "import.balNote":  { en: "If a balance looks doubled, cancel and check before adding.", az: "Qalıq iki dəfə artmış görünürsə, ləğv edin və əlavə etməzdən əvvəl yoxlayın.", ru: "Если баланс выглядит удвоенным, отмените и проверьте перед добавлением." },
+  "budget.cleared":  { en: "{cat} budget removed", az: "{cat} büdcəsi silindi", ru: "Бюджет «{cat}» удалён" },
   "tidy.title":    { en: "Tidy up categories", az: "Kateqoriyaları səliqəyə sal", ru: "Навести порядок в категориях" },
   "tidy.intro":    { en: "Some older entries are in a place that has since moved. Tick the ones you want to move. Amounts and dates stay the same, and you can undo right after.", az: "Bəzi köhnə qeydlər sonradan yeri dəyişən bölmədədir. Köçürmək istədiklərinizi seçin. Məbləğ və tarix dəyişmir, dərhal sonra geri qaytara bilərsiniz.", ru: "Некоторые старые записи лежат там, откуда эти траты потом переехали. Отметьте, что перенести. Суммы и даты не меняются, сразу после можно отменить." },
   "tidy.row":      { en: "{from} → {to}", az: "{from} → {to}", ru: "{from} → {to}" },

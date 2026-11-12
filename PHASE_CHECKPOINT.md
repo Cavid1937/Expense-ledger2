@@ -1,3 +1,8 @@
+## 0000x. 2026-11-13 RUN 60 (latest). Local commit, NOT pushed. Read reports/Run 60 report.md.
+- Full browser suite on Run 59 (da49d74): 129 files, 2233 passed / 0 failed / 0 missing, 0 standby events.
+- Done: importPlanUse (shared by commitImport and the preview) + mergeBalancePreview; import sheet block data-section="import-balances"; onSetBudget shows an Undo snackbar when a budget is cleared (budget.cleared). APP_RELEASE 60.
+- Tests: logic 104 files 2129/0/0 (run60balance 6). Browser: e2e_run60_balances 8, e2e_import 53, e2e_run52_statement 37, e2e_run51_integrity 30, e2e_run24_accounts 13.
+- NEXT: newer-edit-wins needs change stamps (data-shape change), deferred to sync. Then the polish/plain-language items that need no owner choice.
 ## 0000w. 2026-11-13 RUN 59 (latest). Local commit, NOT pushed. Read reports/Run 59 report.md.
 - Done (owner-approved month-end leftover): notSpentMonth/notSpentHistory + Analytics NotSpentCard (analytics.jsx); budgetCarried + calcBudgetStatus(…, carried) used by Budgets, Analytics and helper cards; carry tick box in the budget edit row (key expense_ledger_v5__budgetcarry {catId:"YYYY-MM" start}); goal leftover offer only when expense_ledger_v5__leftovergoal = "1" (setting card on Goals); accounts hint once (expense_ledger_v5__acchint); prefs budgetCarry/leftoverGoal in backup + import (auxBefore snapshot). Tidy-up rows reworded (tidy.row/tidy.total). APP_RELEASE 59.
 - Tests: logic 103 files 2123/0/0 (run59leftover 20). Browser: e2e_run59_leftover 16, e2e_run50 12 (11->12), e2e_run58_cats 25. Full suite: see the line below once it has run.
