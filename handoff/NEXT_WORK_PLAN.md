@@ -419,3 +419,17 @@ Status: NOT STARTED.
 ## Added 12 Nov (owner): scope rule and new tools
 - Owner: the Privacy text change, the server and everything else that "learning from users" needs are made ONLY if that feature is actually built. Nothing changes before.
 - The owner added Supabase and Context7 to this workspace. Supabase (database and server functions) is the natural candidate for the "learning from users" server; creating a project or anything that costs money needs the owner's go-ahead first. Context7 serves current library documentation (useful for pdfjs, Capacitor, React).
+
+
+## DECIDED 12 Nov: month-end leftover. Replaces the "Plan" list in the section "what happens to money left over at the end of a month" above. PLAN ONLY.
+Owner passed GPT's proposal and asked Claude to decide. Final decision:
+1. No rollover by default. Every budget starts each month at its own amount.
+2. The app does not ask about leftover money every month. The Run 50 "add last month's leftover to a goal" card becomes OFF by default; it stays available as a setting ("Offer to move last month's leftover to a goal"). Existing users who have it today: off too after the update, with one notice that the setting exists (it was a monthly question, which this decision rules out).
+3. Unused money stays where it really is: the account balances. Safe to Spend stays a this-month figure.
+4. Optional rollover PER BUDGET (Budgets > a budget > "Carry what's left into next month", off by default). Only the unused part is carried, up to one month's limit at most, so a forgotten budget does not grow without end. The carried amount is shown as its own line ("Food: 300 + 45 left from October").
+5. Overspending is never carried forward automatically, not even with rollover on. An overspent budget simply starts the next month at its normal amount. (Carrying debt between months punishes people and confuses beginners; the overspend stays visible in last month's history.)
+Two additions by Claude, because GPT's version only helps people who use accounts:
+6. A quiet line, no question: in Analytics' month view and in the month summary, "October: 230 ₼ not spent" or "October: 40 ₼ overspent", plus a running "Kept since you started" total. Information only.
+7. People who record entries without accounts get one gentle hint (once, dismissible) in Accounts and balances: "Add your cash or card as an account to see where unused money stays."
+Tests: budget resets each month; rollover on carries only the unused part, capped at one limit; overspend never carried; rollover off by default for new and existing budgets; the goal card off by default and on when chosen; December to January; backup and restore keeps each budget's rollover setting; old backups without the setting import as off.
+Status: DECIDED, NOT STARTED.
