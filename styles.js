@@ -502,7 +502,7 @@ html.launch-first .lang-hint{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 460
 .safe-amount{font-size:clamp(30px,10vw,38px);font-weight:700;letter-spacing:-1px}
 .safe-card .label-sm{font-size:14px;font-weight:600;color:var(--accent-text)}
 .safe-row{font-size:12.5px;padding:6px 0}
-.safe-toggle{display:inline-flex;align-items:center;gap:4px;min-height:36px;margin-top:6px;padding:0;background:none;border:none;color:var(--accent-text);font:inherit;font-size:13px;font-weight:600}
+.safe-toggle{display:inline-flex;align-items:center;gap:4px;min-height:36px;margin-top:6px;padding:0;background:none;border:none;color:var(--accent-text);font:inherit;font-size:13px;font-weight:600;flex-shrink:0;max-width:100%;text-align:left}   /* Run 54: never squeezed below its text (az "Hesablamanı gizlət" was 2 px too wide at 320 px); wraps only if the card is truly narrower */
 .safe-note{font-size:11.5px;color:var(--ink-3);line-height:1.5;margin-top:8px}
 /* Spending ring */
 .donut-wrap{display:flex;align-items:center;gap:16px}

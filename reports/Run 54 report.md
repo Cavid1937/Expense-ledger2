@@ -45,3 +45,4 @@ Owner: in English "entry" is better; in Azerbaijani and Russian use whichever wo
 - Tests: 37 patterns and 5 plain-text checks in 19 test files were changed to the new English words. No check was removed or loosened.
 - Run after the change: logic 100 files, 2,040 passed, 0 failed. 21 browser files that check English wording, run alone: all pass (e2e_import 53, e2e_run2 30, e2e_run9 55, e2e_run52_statement 35, and 17 others).
 - Full browser suite on commit 5f7f930: started 16:11; result is recorded in PHASE_CHECKPOINT.md when read.
+- Full browser suite on 5f7f930: 123 files, 2,120 checks passed, 1 failed, computer awake the whole time. The failure was real but tiny: at a 320 px wide screen the Azerbaijani 'Hesablamanı gizlət' button text was 2 px wider than its box. Fixed in styles.js; the language test then passed twice in a row, and the big-text test too.
