@@ -67,7 +67,7 @@ section("R58-B5. Tidy up categories: tick, move, Undo");
   const page = await openPage(browser, { seed }); await openCategories(page);
   const card = await page.evaluate(() => { const c = document.querySelector('[data-section="tidy-cats"]'); return c ? { text: c.innerText, rows: [...c.querySelectorAll("[data-tidy]")].map((r) => r.getAttribute("data-tidy")), ticked: [...c.querySelectorAll("input[type=checkbox]")].filter((i) => i.checked).length, disabled: c.querySelector('[data-section="tidy-move"]').disabled } : null; });
   ok(card && card.rows.join() === "gifts-barber,transport-fuel" && card.ticked === 0 && card.disabled, "the card offers 2 moves, nothing ticked, the button off until something is ticked", card && card.rows);
-  ok(card && /1 entry: Gifts & Donations \/ Barber \/ Hair → Personal Care \/ Barber \/ Hair/.test(card.text) && /1 entry: Transport \/ Fuel → Car \/ Fuel/.test(card.text), "each move says how many entries go from where to where (the repeating fuel entry is not counted)", card && card.text);
+  ok(card && /Gifts & Donations \/ Barber \/ Hair → Personal Care \/ Barber \/ Hair\s+1 entry, 15\.00/.test(card.text) && /Transport \/ Fuel → Car \/ Fuel\s+1 entry, 40\.00/.test(card.text), "each move says from where to where, how many entries and how much (the repeating fuel entry is not counted)", card && card.text);
   await page.evaluate(() => document.querySelector('[data-tidy="gifts-barber"] input').click()); await wait(400);
   const month = await page.evaluate(() => (document.querySelector('[data-section="tidy-month"]') || {}).innerText || "");
   ok(/This month: Gifts & Donations 15\.00 ₼ less, Personal Care 15\.00 ₼ more/.test(month), "ticking it shows what changes in this month's figures before anything moves", month);

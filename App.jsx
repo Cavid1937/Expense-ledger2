@@ -152,7 +152,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="58 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="59 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -4926,7 +4926,7 @@ function AppInner() {
 
         <main className={(SUBPAGE_PARENT[tab]?"page page-sub":"page")+(pageOut?" page-out":"")+(pfCount.current>0?(pfCount.current%2?" pf-a":" pf-b"):"")} key={tabKey}>
           {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
-            rollover={{ offer:rolloverOffer(spendTxns,goals,rolloverSeen), onSkip:()=>{ const m=rolloverOffer(spendTxns,goals,rolloverSeen)?.month; if (m) { writeRolloverSeen(m); setRolloverSeen(m); } },
+            rollover={{ offer:readLeftoverGoal() ? rolloverOffer(spendTxns,goals,rolloverSeen) : null /* Run 59: only when turned on (Budgets & Goals > Goals) */, onSkip:()=>{ const m=rolloverOffer(spendTxns,goals,rolloverSeen)?.month; if (m) { writeRolloverSeen(m); setRolloverSeen(m); } },
               onApply:(g)=>{ const o=rolloverOffer(spendTxns,goals,rolloverSeen); if (!o) return; setState(s=>({...s,goals:applyRollover(s.goals,g.id,g.amount)})); writeRolloverSeen(o.month); setRolloverSeen(o.month); showToast(t("rollover.done",{ amount:fmt(g.amount,currency), goal:g.name||t("rollover.goalFallback") })); } }}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
             onSetupWizard={()=>setShowSetupQ(true)} onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
@@ -5168,7 +5168,7 @@ export function calcHelperCards(transactions, budgets, goals, safeToSpend, curre
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const spentToDate = calcSpentToDate(transactions, mon);
   const paceInfo = calcSpendingPace(spentToDate, mon, budgetTotal);
-  const budgetItems = calcBudgetStatus(budgets||{}, catSpend, mon);
+  const budgetItems = calcBudgetStatus(budgets||{}, catSpend, mon, new Date(), budgetCarried(transactions, budgets||{}, readBudgetCarry(), mon));   // Run 59: same limits as Budgets
   const safeInfo = calcSafeToSpend(transactions, safeToSpend, goals, new Date(), bills);
 
   // 1. Spending pace — only fire when compared against a real budget (onTrack===false)

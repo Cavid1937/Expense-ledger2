@@ -1,8 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates, tidyPlan, applyTidy, undoTidy, TIDY_KEY, subName } from "../App.jsx";
-import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
+import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates, tidyPlan, applyTidy, undoTidy, TIDY_KEY, subName, readBudgetCarry, writeBudgetCarry, budgetCarried, readLeftoverGoal, writeLeftoverGoal, readRolloverSeen } from "../App.jsx";import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
 import { Collapse, EditSwap, useBackStep, useLeave } from "./motion.jsx";
 
@@ -29,7 +28,12 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
   const [goalMonthly,setGoalMonthly]=useState(""), [goalDate,setGoalDate]=useState(""), [editGoalId,setEditGoalId]=useState(null);
   const now=curMon();
   const catSpend=calcCategorySpend(transactions,now);
-  const items=calcBudgetStatus(budgets,catSpend,now);
+  // Run 59: optional per-budget carry of what was not used last month (off unless turned on for that budget)
+  const [carry,setCarry]=useState(()=>readBudgetCarry());
+  const carried=useMemo(()=>budgetCarried(transactions,budgets,carry,now),[transactions,budgets,carry,now]);
+  const items=calcBudgetStatus(budgets,catSpend,now,new Date(),carried);
+  const setCarryFor=(catId,on)=>{ const next={ ...carry }; if (on) next[catId]=now; else delete next[catId]; if (!writeBudgetCarry(next)) { showToast(t("carry.saveFailed")); return; } setCarry(readBudgetCarry()); showToast(t(on?"carry.on":"carry.off")); };
+  const [leftoverOn,setLeftoverOn]=useState(()=>readLeftoverGoal());
   const byCat=Object.fromEntries(items.map(x=>[x.catId,x]));
   const limitTotal=items.reduce((s,x)=>s+x.limit,0), spentTotal=items.reduce((s,x)=>s+x.spent,0);
   // Run 36: the user's order; a hidden category is listed only when it already has a budget (never dropped from view silently).
@@ -76,6 +80,11 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
       <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
       <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
     </div>
+  )}{editBudget===cat.id&&limit>0&&(
+    <label data-section="carry-toggle" style={{display:"flex",gap:10,alignItems:"flex-start",marginTop:10,lineHeight:1.45,fontSize:13}}>
+      <input type="checkbox" checked={!!carry[cat.id]} onChange={e=>setCarryFor(cat.id,e.target.checked)} style={{marginTop:2,flexShrink:0}}/>
+      <span><span style={{display:"block"}}>{t("carry.toggle")}</span><span className="list-sub" style={{display:"block"}}>{t("carry.help")}</span></span>
+    </label>
   )}</Collapse>);
   const editBtn=(cat,limit)=>(
     <button className="btn btn-sm" onClick={()=>{setEditBudget(cat.id);setBudgetVal(limit>0?String(limit):"");}} aria-label={`${limit>0?t("common.edit"):t("set.set")}: ${catName(cat.id)}`}>{limit>0?t("common.edit"):t("set.set")}</button>
@@ -139,9 +148,10 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
                 <div className="bud-bar-row">
                   <div className="bar"><div className="bar-fill" style={{width:`${x.pct}%`,background:x.over?"var(--neg)":x.warn?"var(--warn)":"var(--pos)"}}/></div>
                   <span className="bud-pct" style={{color:x.over?"var(--neg)":"var(--ink-3)"}}>{fmtPct(pct)}</span>
-                  {editBtn(cat,x.limit)}
+                  {editBtn(cat,x.base)}
                 </div>
-                {editRow(cat,x.limit)}
+                {x.carried>0&&<div className="list-sub" data-section="carry-line" style={{marginTop:4,paddingLeft:44}}>{t("carry.line",{ base:fmt(x.base,currency), carried:fmt(x.carried,currency) })}</div>}
+                {editRow(cat,x.base)}
               </div>
             ); })}
           </div>
@@ -241,6 +251,16 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
             </div>
           }/>);
         })}
+        {/* Run 59 (owner-approved): the month-start "add last month's leftover to a goal" question is off by default; it is only offered when turned on here */}
+        {goals.length>0&&(
+          <div className="card" data-section="leftover-goal" style={{marginBottom:12}}>
+            <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45}}>
+              <input type="checkbox" checked={leftoverOn} onChange={e=>{ const on=e.target.checked; if (!writeLeftoverGoal(on)) { showToast(t("carry.saveFailed")); return; } setLeftoverOn(on); }} style={{marginTop:3,flexShrink:0}}/>
+              <span><span style={{display:"block",fontWeight:600}}>{t("leftover.toggle")}</span><span className="list-sub" style={{display:"block"}}>{t("leftover.help")}</span>
+                {!leftoverOn&&readRolloverSeen()&&<span className="list-sub" data-section="leftover-was" style={{display:"block",marginTop:4}}>{t("leftover.wasAsked")}</span>}</span>
+            </label>
+          </div>
+        )}
         <SavingsFloorCard safeToSpend={safeToSpend} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>
         <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} onUpdateTemplate={onUpdateTemplate} showToast={showToast}/>
         {/* Run 38 (owner): your own categories and the order / visibility of all of them live here, next to the quick-add templates.
@@ -284,8 +304,8 @@ export function TidyCategories({ transactions, currency, tools }) {
         <label key={g.key} data-tidy={g.key} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"8px 0",borderTop:"1px solid var(--rule)",lineHeight:1.45}}>
           <input type="checkbox" checked={picked.includes(g.key)} onChange={e=>setPicked(p=>e.target.checked?[...p,g.key]:p.filter(k=>k!==g.key))} style={{marginTop:3,flexShrink:0}}/>
           <span style={{minWidth:0}}>
-            <span style={{display:"block",overflowWrap:"anywhere"}}>{tn("tidy.row",g.count,{ from:place(g.from), to:place(g.to) })}</span>
-            <span className="list-sub" style={{display:"block"}}>{t("tidy.total",{ amount:fmt(g.total,currency) })}{g.example&&g.example.merchant?" · "+t("tidy.example",{ name:maskText(g.example.merchant) }):""}</span>
+            <span style={{display:"block",overflowWrap:"anywhere",fontSize:13.5,fontWeight:600}}>{t("tidy.row",{ from:place(g.from), to:place(g.to) })}</span>
+            <span className="list-sub" style={{display:"block"}}>{tn("tidy.total",g.count,{ amount:fmt(g.total,currency) })}{g.example&&g.example.merchant?" · "+t("tidy.example",{ name:maskText(g.example.merchant) }):""}</span>
           </span>
         </label>
       ))}

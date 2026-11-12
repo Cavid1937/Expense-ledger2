@@ -206,6 +206,11 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
       setData(readAccounts());
     },8000,"delete");
   };
+  // Run 59 (owner-approved, month-end leftover item 7): someone who records entries but has no account gets one gentle hint, once.
+  const LEFT_HINT_KEY="expense_ledger_v5__acchint";
+  const [leftHintSeen,setLeftHintSeen]=useState(()=>{ try { return localStorage.getItem(LEFT_HINT_KEY)==="1"; } catch { return false; } });
+  const showLeftHint=!leftHintSeen && data.accounts.length===0 && (state.transactions||[]).length>0;
+  const hideLeftHint=()=>{ setLeftHintSeen(true); try { localStorage.setItem(LEFT_HINT_KEY,"1"); } catch { /* shown again next time */ } };
   // Run 57: the link offers, worked out from the entries as they are now; "Not now" is remembered per account under its own key.
   const LINK_KEY="expense_ledger_v5__linkdismiss";
   const [linkDismissed,setLinkDismissed]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(LINK_KEY)||"{}"); return v&&typeof v==="object"&&!Array.isArray(v)?v:{}; } catch { return {}; } });
@@ -295,6 +300,12 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
       {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
       {owedCredit>0&&<div className="list-sub" data-section="acc-credit-owed" style={{margin:"4px 2px 8px"}}><strong>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</strong><br/>{t("acc.creditNote")}</div>}
       {np&&(<div className="list-sub" data-section="acc-net" style={{margin:"4px 2px 8px"}}><strong>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</strong><br/>{t("acc.netNote")}</div>)}
+      {showLeftHint&&(
+        <div className="card" data-section="acc-leftover-hint" style={{background:"var(--bg-warm)",padding:"12px 14px",margin:"8px 0",fontSize:13,lineHeight:1.5,color:"var(--ink-2)"}}>
+          <div>{t("acc.leftoverHint")}</div>
+          <button type="button" className="btn btn-sm" data-section="acc-leftover-hint-ok" style={{marginTop:8}} onClick={hideLeftHint}>{t("acc.leftoverHintOk")}</button>
+        </div>
+      )}
       {PRESETS.length>0&&(<div data-section="acc-presets"><div className="list-sub" style={{margin:"6px 2px"}}>{t("acc.presetHint")}</div>
         <div className="filter-bar" role="group" aria-label={t("acc.presetHint")}>
           {PRESETS.map(([k,kd])=>(<button key={k} className="chip" data-preset={k} onClick={()=>{ setName(presetName[k]); setKind(kd); }}>{presetName[k]}</button>))}

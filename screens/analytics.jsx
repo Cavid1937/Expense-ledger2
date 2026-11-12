@@ -4,6 +4,40 @@ import { Collapse, Swap, useLeave } from "./motion.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, KEY, isEarnedCat, refundsNetted, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
 import { accountsMap, readAccounts } from "../App.jsx";   // Run 57: Analytics groups spending by the same "paid from" rule as the entry filter
+import { budgetCarried, readBudgetCarry, notSpentHistory } from "../App.jsx";   // Run 59
+
+// Run 59 (owner-approved): money not spent = money in minus money out, from what was recorded (notSpentHistory in App.jsx has the exact rule).
+// A quiet line for the chosen month and a running total over FINISHED months, with its working one tap away. Never called savings; unused
+// budget never enters it. Shown only once there is at least one finished month.
+function NotSpentCard({ raw, mon, currency }) {
+  const h=useMemo(()=>notSpentHistory(raw),[raw]);
+  const [open,setOpen]=useState(false);
+  if (!h.months.length) return null;
+  const cur=curMon(), row=mon===cur ? h.current : h.months.find(r=>r.mon===mon);
+  const sign=(n)=>(n<0?"−":"")+fmt(Math.abs(n),currency);
+  const line=(r,isCur)=>!r ? "" : r.net>0 ? t(isCur?"notspent.soFarPos":"notspent.monthPos",{ month:monthName(r.mon), amount:fmt(r.net,currency) })
+    : r.net<0 ? t(isCur?"notspent.soFarNeg":"notspent.monthNeg",{ month:monthName(r.mon), amount:fmt(-r.net,currency) }) : t(isCur?"notspent.soFarZero":"notspent.monthZero",{ month:monthName(r.mon) });
+  return (
+    <div className="a-card" data-section="an-notspent">
+      {row&&<div data-section="notspent-month" style={{fontSize:13,marginBottom:10,color:row.net<0?"var(--neg)":"var(--ink)"}}>{line(row,mon===cur)}</div>}
+      <div className="a-card-title">{t("notspent.title")}</div>
+      <div className="big-num" data-section="notspent-total" style={{color:h.total<0?"var(--neg)":"var(--ink)"}}><MoneyText v={sign(h.total)}/></div>
+      <div className="list-sub" style={{marginTop:4,lineHeight:1.5}}>{t("notspent.note")}</div>
+      <button type="button" className="btn btn-sm" data-section="notspent-toggle" aria-expanded={open} style={{marginTop:10}} onClick={()=>setOpen(o=>!o)}>{t(open?"notspent.hide":"notspent.show")}</button>
+      <Collapse open={open}>
+        <div data-section="notspent-rows" role="list" style={{marginTop:10}}>
+          {h.months.slice().reverse().map(r=>(
+            <div key={r.mon} role="listitem" data-mon={r.mon} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",fontSize:12.5,lineHeight:1.4}}>
+              <span style={{minWidth:0}}><span style={{display:"block",fontWeight:600}}>{monthName(r.mon)}</span><span className="list-sub">{t("notspent.inOut",{ inn:fmt(r.in,currency), out:fmt(r.out,currency) })}</span></span>
+              <span style={{fontWeight:600,whiteSpace:"nowrap",color:r.net<0?"var(--neg)":"var(--ink)"}}>{sign(r.net)}</span>
+            </div>
+          ))}
+          <div style={{display:"flex",justifyContent:"space-between",gap:8,padding:"8px 0 0",borderTop:"1px solid var(--rule)",fontWeight:700,fontSize:13}}><span>{t("notspent.total")}</span><span style={{whiteSpace:"nowrap"}}>{sign(h.total)}</span></div>
+        </div>
+      </Collapse>
+    </div>
+  );
+}
 import { LedgerArt, MoneyText, PlannedNote, cmpPrev, cmpText, cmpTitle } from "./home.jsx";
 
 // ─── Redesign pages (2026-10-27) ─────────────────────────────────────────────────────────────────────────────────────
@@ -167,7 +201,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
 
   const { curExp, curInc, curIn, curOther, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
   const catSpend    = calcCategorySpend(transactions, selectedMon);
-  const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon);
+  const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon, new Date(), budgetCarried(transactions, budgets || {}, readBudgetCarry(), selectedMon));   // Run 59: same limits as Budgets
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
   const debtCash    = useMemo(()=>debtCashFlow(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 18
@@ -273,6 +307,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           {loanCash.unknown>0&&<> {t("an.loanCashUnknown",{n:loanCash.unknown})}</>}
         </div>
       )}
+      <NotSpentCard raw={rawTransactions||transactions} mon={selectedMon} currency={currency}/>
       <div data-section="an-trend"><SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/></div>
       {isCurrentMon&&(
         <div className="a-card" data-section="an-forecast">

@@ -2,15 +2,22 @@
 // The page clock is fixed through a small Date wrapper so the test does not depend on the day it runs.
 import { launch, openPage, state, storageKeys, ok, section, finish, tx, baseSeed, wait } from "./lib.mjs";
 const browser = await launch();
-const clock = (y, m, d) => `() => { try { if (!sessionStorage.getItem("__r50")) { sessionStorage.setItem("__r50", "1"); localStorage.removeItem("expense_ledger_v5__rollover"); } } catch (e) { /* none */ } const fixed = new Date(${y}, ${m}, ${d}, 12, 0, 0).getTime(); const RD = Date; class FD extends RD { constructor(...a) { if (a.length === 0) super(fixed); else super(...a); } static now() { return fixed; } } window.Date = FD; }`;
+// Run 59 (owner-approved): the card is now off unless turned on (Budgets & Goals > Goals). These sections turn it on first; R50-B0 checks the default.
+const clock = (y, m, d, on = true) => `() => { try { if (!sessionStorage.getItem("__r50")) { sessionStorage.setItem("__r50", "1"); localStorage.removeItem("expense_ledger_v5__rollover"); ${on ? 'localStorage.setItem("expense_ledger_v5__leftovergoal", "1");' : 'localStorage.removeItem("expense_ledger_v5__leftovergoal");'} } } catch (e) { /* none */ } const fixed = new Date(${y}, ${m}, ${d}, 12, 0, 0).getTime(); const RD = Date; class FD extends RD { constructor(...a) { if (a.length === 0) super(fixed); else super(...a); } static now() { return fixed; } } window.Date = FD; }`;
 const seed = () => baseSeed({
   transactions: [tx({ type: "income", category: "salary", amount: 1200, date: "2026-10-02", merchant: "Employer" }), tx({ amount: 700, date: "2026-10-15", merchant: "Rent" }), tx({ amount: 5, date: "2026-11-01", merchant: "Shop" })],
   goals: [{ id: "g1", name: "Laptop", target: 4000, saved: 3200, monthlyTarget: 0, targetDate: null }, { id: "g2", name: "Done goal", target: 50, saved: 50, monthlyTarget: 0, targetDate: null }],
 });
 const card = (page) => page.evaluate(() => { const c = document.querySelector('[data-section="home-rollover"]'); return c ? c.innerText : null; });
 
+section("R50-B0. Off by default: no month-start question (Run 59)");
+let page = await openPage(browser, { seed: seed(), pre: eval(clock(2026, 10, 3, false)) });
+await wait(600);
+ok((await card(page)) === null, "on 3 Nov, with the setting left as it is, nothing is asked");
+await page.close();
+
 section("R50-B1. Offer appears on 3 Nov and adding it changes only the goal");
-let page = await openPage(browser, { seed: seed(), pre: eval(clock(2026, 10, 3)) });
+page = await openPage(browser, { seed: seed(), pre: eval(clock(2026, 10, 3)) });
 await wait(600);
 let txt = await card(page);
 ok(txt && /Last month you kept/.test(txt) && /500/.test(txt), "card says last month's leftover (1200 - 700 = 500)", txt);

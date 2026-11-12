@@ -33,7 +33,7 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   // added for this phase's regression tests (exported only if the candidate defines them)
   "calcWeekdayWeekend","backupReminderDue","BACKUP_REMINDER_DAYS",
   // Run 50 (owner list, 9 Nov): rollover to a goal
-  "rolloverOffer","applyRollover","readRolloverSeen","writeRolloverSeen","sinkingCandidates","parseQuickText","giftLedger","GIFT_NOT_GIFT_SUBS","catTile","catHint","statementPick","tidyPlan","applyTidy","undoTidy","TIDY_MOVES","planSetup","nextPayDate","recurringSuggestions","readRecSuggestDismissed","writeRecSuggestDismissed",
+  "rolloverOffer","applyRollover","readRolloverSeen","writeRolloverSeen","sinkingCandidates","parseQuickText","giftLedger","GIFT_NOT_GIFT_SUBS","catTile","catHint","statementPick","tidyPlan","applyTidy","undoTidy","TIDY_MOVES","notSpentMonth","notSpentHistory","budgetCarried","cleanBudgetCarry","planSetup","nextPayDate","recurringSuggestions","readRecSuggestDismissed","writeRecSuggestDismissed",
   // Run 51: merge and account-removal integrity
   "planMerge","planAccountMerge","remapEntryAccounts","mergeCounts","accountRemovalPlan","removeAccountSafely","restoreRemovedAccount","readAccounts","writeAccounts","findDoubleEntries","offerUndo","setUndoHost",
   // Run 53: currency for any ledger, daily refresh
