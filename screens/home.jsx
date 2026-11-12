@@ -122,6 +122,23 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount }) {
     </div>
   );
 }
+// Run 54 (owner: "explain the app in simple language: what is this, what do I gain"): three plain sentences for a person who has recorded
+// nothing yet. Shown above everything on Home until they tap "Got it" (remembered on this phone under its own key) or record a first entry.
+const WELCOME_KEY="expense_ledger_v5__welcome";
+export function WelcomeCard({ show }) {
+  const [gone,setGone]=useState(()=>{ try { return localStorage.getItem(WELCOME_KEY)==="1"; } catch { return false; } });
+  if (!show || gone) return null;
+  return (
+    <div className="card" data-section="home-welcome" style={{marginBottom:14}}>
+      <div className="card-title" style={{marginBottom:8}}>{t("welcome.title")}</div>
+      <ul style={{margin:0,paddingLeft:18,lineHeight:1.55,fontSize:14,color:"var(--ink-2)"}}>
+        <li>{t("welcome.1")}</li><li>{t("welcome.2")}</li><li>{t("welcome.3")}</li>
+      </ul>
+      <button type="button" className="btn btn-sm" data-section="welcome-ok" style={{marginTop:10}} onClick={()=>{ try { localStorage.setItem(WELCOME_KEY,"1"); } catch {} setGone(true); }}>{t("welcome.ok")}</button>
+    </div>
+  );
+}
+
 export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,curIn,curOther,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
@@ -146,6 +163,7 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
 
   return (
     <div>
+      <WelcomeCard show={!(accountTxns||transactions).length}/>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
       <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={accountsHeld(accountTxns||transactions)}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
@@ -293,6 +311,8 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
           <div className="safe-amount" style={{color:safeInfo.remaining>=0?"var(--ink)":"var(--neg)"}}>
             <MoneyText v={fmt(safeInfo.remaining,currency)}/>
           </div>
+          {/* Run 54: one plain sentence saying what this number is, for someone who has never met the term */}
+          <div className="list-sub" data-section="safe-plain" style={{marginTop:2,marginBottom:4,lineHeight:1.45}}>{t(safeInfo.remaining>=0?"safe.plain":"safe.plainOver")}</div>
           {safeInfo.daysRemaining>0&&(
             <div className="safe-daily">
               {safeInfo.remaining>0?t("safe.perDay",{amount:fmt(safeInfo.dailyAllowance,currency)}):""}
