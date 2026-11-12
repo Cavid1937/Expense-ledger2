@@ -1,6 +1,6 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { locale, t } from "../i18n.js";
+import { locale, t, tn } from "../i18n.js";
 import { pickerCats, readCatPrefs, cleanReimb, reimbOwedMap, reimbStatus } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, spreadMonths, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
@@ -336,7 +336,7 @@ export function SplitPanel({ txn, currency, onSplit }) {
   const set=(i,k,v)=>setParts(ps=>ps.map((p,j)=>j===i?{...p,[k]:v}:p));
   return (
     <div style={{marginBottom:8}} data-section="split">
-      <button className="btn btn-ghost btn-full" data-section="split-open" aria-expanded={open} onClick={()=>setOpen(o=>!o)}>{t("split.btn")}</button>
+      <button className="btn btn-sm btn-full detail-action" data-section="split-open" aria-expanded={open} onClick={()=>setOpen(o=>!o)}><Icon name="list" size={14}/>{t("split.btn")}</button>
       <Collapse open={open}>
         <div style={{marginTop:8}}>
           <div className="list-sub" style={{marginBottom:8}}>{t("split.sub",{ total:fmt(txn.amount,currency) })}</div>
@@ -359,6 +359,8 @@ export function SplitPanel({ txn, currency, onSplit }) {
   );
 }
 
+// Run 55: two texts say the same thing when they match ignoring letter case and spaces ("Bus/Metro" and "bus / metro").
+const sameWords=(a,b)=>!!a && !!b && String(a).toLowerCase().replace(/\s+/g,"")===String(b).toLowerCase().replace(/\s+/g,"");
 export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[], onClose, onEdit, onDuplicate, onSplit, onRepaid, onDelete, onLinkBill, onAssignBill }) {
   // Run 9: an ordinary (non-recurring) entry can be marked as the payment of an existing bill — only when the user picks the
   // bill. Same merchant and amount are never enough to link anything automatically.
@@ -374,6 +376,7 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
   const isInc=txn.type==="income";
   const reimb=useMemo(()=>reimbStatus(transactions,txn),[transactions,txn]);   // Run 43
   const profile=useMemo(()=>txn.merchant?calcMerchantProfile(txn.merchant,transactions):null,[txn.merchant,transactions]);
+  const [histOpen,setHistOpen]=useState(false);   // Run 55: the history card starts folded
 
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
@@ -417,98 +420,36 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
           ))}
         </div>
 
-        {txn.note&&<div style={{fontSize:14,color:"var(--ink-2)",background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px",marginBottom:16}}>{maskText(txn.note)}</div>}
-
-        {/* S6: Merchant profile — frequency, timing, category stability */}
-        {profile&&profile.count>1&&(
-          <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,padding:"13px 14px",marginBottom:16}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-              <div className="label-sm">{t("mp.title")}</div>
-              {profile.hasRecurring&&(
-                <span style={{fontSize:10,fontWeight:700,color:"var(--warn)",background:"var(--warn-bg)",padding:"2px 7px",borderRadius:4}}>{t("add.recurring")}</span>
-              )}
-            </div>
-            {/* Stats grid */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{profile.count}</div>
-                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.visits")}</div>
-              </div>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{fmt(profile.avg,currency)}</div>
-                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.avgSpend")}</div>
-              </div>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontFamily:"var(--font)",fontSize:18,fontWeight:700}}>{fmt(profile.total,currency)}</div>
-                <div style={{fontSize:9,fontWeight:700,letterSpacing:"0.8px",textTransform:"uppercase",color:"var(--ink-4)"}}>{t("mp.total")}</div>
-              </div>
-            </div>
-            {/* Behaviour rows */}
-            <div style={{borderTop:"1px solid var(--rule)",paddingTop:10,display:"flex",flexDirection:"column",gap:5}}>
-              {profile.avgDaysBetween&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.frequency")}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{t("mp.everyDays",{n:profile.avgDaysBetween})}</span>
-                </div>
-              )}
-              {profile.typicalDay&&profile.count>=3&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.typicalDay")}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{t("dow."+profile.typicalDay)}</span>
-                </div>
-              )}
-              {profile.usualSub&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.usuallyFor")}</span>
-                  <span style={{fontWeight:600,color:"var(--ink)"}}>{subName(profile.usualSub)}</span>
-                </div>
-              )}
-              {profile.amountStable&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("add.amount")}</span>
-                  <span style={{fontWeight:600,color:"var(--pos)"}}>{t("mp.consistent")}</span>
-                </div>
-              )}
-              {profile.spendingTrend&&profile.spendingTrend!=="stable"&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.trend")}</span>
-                  <span style={{fontWeight:600,color:profile.spendingTrend==="increasing"?"var(--neg)":"var(--pos)"}}>
-                    {profile.spendingTrend==="increasing"?t("mp.increasing"):t("mp.decreasing")}
-                  </span>
-                </div>
-              )}
-              {profile.estimatedNextVisit&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.nextVisit")}</span>
-                  <span style={{fontStyle:"italic",color:"var(--ink-3)"}}>
-                    ~{fmtDate(profile.estimatedNextVisit)}
-                    {profile.estimatedNextSpend&&<span style={{marginLeft:6}}>· ~{fmt(profile.estimatedNextSpend,currency)}</span>}
-                  </span>
-                </div>
-              )}
-              {profile.isRecurring&&profile.recurringFreq&&profile.recurringFreq!=="irregular"&&(
-                <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.pattern")}</span>
-                  <span style={{fontWeight:600,color:"var(--warn)"}}>{t("freqCap."+profile.recurringFreq)}</span>
-                </div>
-              )}
-              {profile.last30>0&&(
-                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
-                  <span style={{color:"var(--ink-3)"}}>{t("mp.last30")}</span>
-                  <span style={{fontWeight:600,color:profile.diff30<=0?"var(--pos)":"var(--neg)",textAlign:"right"}}>
-                    {fmt(profile.last30,currency)}
-                    {profile.prev30total>0&&profile.diff30!==0&&<span style={{fontSize:10,marginLeft:4,fontWeight:400}}>{profile.diff30>0?"↑":"↓"}{t("mp.vsPrev",{amount:fmt(Math.abs(profile.diff30),currency)})}</span>}
-                  </span>
-                </div>
-              )}
-            </div>
+        {/* Run 55 (owner, 10 Nov: "I can't figure out what this says"): the note has its own label, and it is not shown when it only
+            repeats the place or is already the title above */}
+        {txn.note&&!sameWords(txn.note,txn.merchant)&&!!txn.merchant&&(
+          <div data-section="detail-note" style={{background:"var(--bg-warm)",borderRadius:12,padding:"11px 13px",marginBottom:16}}>
+            <div style={{fontSize:12,fontWeight:500,color:"var(--ink-3)",marginBottom:3}}>{t("add.note")}</div>
+            <div style={{fontSize:14,color:"var(--ink)",lineHeight:1.4,overflowWrap:"anywhere"}}>{maskText(txn.note)}</div>
           </div>
         )}
 
-        {/* Actions */}
-        <div style={{display:"flex",gap:8,marginBottom:8}}>
-          <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onEdit}><Icon name="edit" size={14}/>{t("common.edit")}</button>
-          <button className="btn btn-sm btn-full" style={{flex:1,padding:"11px",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} onClick={onDuplicate}><Icon name="repeat" size={14}/>{t("detail.duplicate")}</button>
+        {/* Run 55: the person's history at this place, in plain sentences, folded until asked for, and only with enough history */}
+        {profile&&profile.count>=3&&(
+          <div data-section="detail-history" style={{marginBottom:12}}>
+            <button type="button" className="btn btn-sm btn-full detail-action" data-section="detail-history-toggle" aria-expanded={histOpen} onClick={()=>setHistOpen(o=>!o)}>
+              <Icon name="list" size={14}/>{t("detail.hist.title")}<span className={"fold-chev r90"+(histOpen?" open":"")} style={{marginLeft:"auto"}}><Icon name="chevRight" size={14}/></span>
+            </button>
+            <Collapse open={histOpen}>
+              <ul data-section="detail-history-lines" style={{margin:"8px 0 0",padding:"10px 14px 10px 30px",background:"var(--bg-warm)",borderRadius:12,fontSize:13,lineHeight:1.6,color:"var(--ink-2)"}}>
+                <li>{tn("detail.hist.times",profile.count,{ total:fmt(profile.total,currency) })}</li>
+                <li>{t(profile.amountStable?"detail.hist.same":"detail.hist.avg",{ avg:fmt(profile.avg,currency) })}</li>
+                {profile.avgDaysBetween>0&&<li>{tn("detail.hist.every",profile.avgDaysBetween)}</li>}
+                {profile.estimatedNextVisit&&profile.avgDaysBetween>0&&<li>{t("detail.hist.next",{ date:fmtDate(profile.estimatedNextVisit) })}</li>}
+                {profile.last30>0&&<li>{t("detail.hist.last30",{ amount:fmt(profile.last30,currency) })}</li>}
+              </ul>
+            </Collapse>
+          </div>
+        )}
+        {/* Actions. Run 55: every action looks like a button and says what it does; Edit first, Delete last and set apart. */}
+        <div data-section="detail-actions" style={{display:"flex",gap:8,marginBottom:8}}>
+          <button className="btn btn-sm btn-full detail-action" style={{flex:1}} onClick={onEdit}><Icon name="edit" size={14}/>{t("common.edit")}</button>
+          <button className="btn btn-sm btn-full detail-action" style={{flex:1}} onClick={onDuplicate}><Icon name="repeat" size={14}/>{t("detail.duplicate")}</button>
         </div>
         {onRepaid&&reimb&&reimb.owed>0&&<button className="btn btn-primary btn-full" data-section="reimb-paid" style={{marginBottom:8}} onClick={onRepaid}>{t("reimb.markPaid",{ amt:fmt(reimb.owed,currency) })}</button>}
         {reimb&&reimb.owed===0&&<div className="list-sub" data-section="reimb-settled" style={{margin:"0 2px 8px"}}>{t("reimb.settled")}</div>}
@@ -516,7 +457,7 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
         {myBill&&<div className="list-sub bill-of" style={{margin:"0 2px 8px"}}>{t("bill.paymentOf",{name:maskText(myBill.name)})}</div>}
         {((explicit&&onAssignBill)||(onLinkBill&&bills.length>0))&&(
           <div style={{marginBottom:8}}>
-            <button className="btn btn-ghost btn-full link-bill" style={{marginTop:0,display:"flex",alignItems:"center",justifyContent:"center",gap:6}} aria-expanded={showLink} onClick={()=>setShowLink(s=>!s)}>
+            <button className="btn btn-sm btn-full detail-action link-bill" aria-expanded={showLink} onClick={()=>setShowLink(s=>!s)}>
               <Icon name="repeat" size={14}/>{t(myBill?"bill.change":txn.type==="income"?"detail.linkIncome":"detail.linkBill")}
             </button>
             <Collapse open={!!showLink}>
@@ -537,7 +478,7 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
             </Collapse>
           </div>
         )}
-        <button className="btn btn-ghost btn-full" style={{color:"var(--neg)",borderColor:"var(--neg-bg)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:0}} onClick={onDelete}><Icon name="trash" size={14}/>{t("common.delete")}</button>
+        <button className="btn btn-ghost btn-full" data-section="detail-delete" style={{color:"var(--neg)",borderColor:"var(--neg-bg)",display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:16}} onClick={onDelete}><Icon name="trash" size={14}/>{t("common.delete")}</button>
         <button className="btn btn-ghost btn-full" data-closer="1" onClick={onClose} style={{marginTop:6}}>{t("common.close")}</button>
       </div>
     </div>

@@ -99,7 +99,7 @@ section("R12-3. Mixed state: some bills, some recurring payments still grouped t
   // the detail sheet: an ordinary expense linked to the Gym bill in the same mixed state
   page = await openPage(browser, { seed: seed([tx({ merchant: "Gym", category: "health", amount: 50, date: `${ym(0)}-${DAY}` })]) });
   await tab(page, "Ledger"); await page.evaluate(() => [...document.querySelectorAll(".txn-row")].find((r) => /Gym/.test(r.innerText)).click()); await page.waitForSelector(".sheet"); await wait(300);
-  await clickText(page, ".sheet .link-bill", /payment of a recurring bill/i); await wait(200);
+  await clickText(page, ".sheet .link-bill", /Mark as a bill payment/i); await wait(200);
   await clickText(page, ".sheet .link-bill-option", /Gym/); await wait(400);
   st = await state(page);
   ok(st.transactions.find((t) => t.merchant === "Gym")?.billId === "gym1", "linking an ordinary expense to a bill from its detail sheet works in the mixed state too (was: the link was lost)");

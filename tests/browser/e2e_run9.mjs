@@ -127,7 +127,7 @@ section("R9-4. A rent paid as an ordinary expense is linked to the bill only whe
   ok((await state(page)).transactions.find((t) => t.id === rentPaid.id).recurring === false, "nothing was linked automatically (same merchant and amount are not enough)");
   await tab(page, "Ledger"); await page.evaluate((id) => [...document.querySelectorAll(".txn-row")].find((r) => /Today/.test(r.closest(".txn-group")?.querySelector(".txn-date-hdr")?.innerText || "") && /Rent/.test(r.innerText)).click(), rentPaid.id);
   await page.waitForSelector(".sheet"); await wait(350);
-  await clickText(page, ".sheet button", /payment of a recurring bill/i); await wait(300);
+  await clickText(page, ".sheet button", /Mark as a bill payment/i); await wait(300);
   const choices = await page.evaluate(() => [...document.querySelectorAll(".sheet .link-bill-option")].map((b) => b.innerText.replace(/\s+/g, " ")));
   ok(choices.length === 1 && /Rent/.test(choices[0]) && /800\.00/.test(choices[0]) && /monthly/i.test(choices[0]), "the user is offered the matching kind of bill only (expense bills, not the salary schedule) and sees which one", choices);
   await clickText(page, ".sheet .link-bill-option", /Rent/); await wait(400);

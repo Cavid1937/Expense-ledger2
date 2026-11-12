@@ -37,7 +37,7 @@ section("R24-SPB2. Recurring entries cannot be split; az and ru labels");
   await openRow(page, "Rent");
   ok(await page.evaluate(() => !document.querySelector('[data-section="split-open"]')), "a recurring entry has no Split button");
   await page.close();
-  for (const [l, re] of [["az", /Kateqoriyalara böl/], ["ru", /Разделить по категориям/]]) {
+  for (const [l, re] of [["az", /Kateqoriyalar arasında böl/], ["ru", /Разделить между категориями/]]) {   // Run 55: the label now says what it does ("Split between categories")
     const p = await openPage(browser, { seed: seed(l) }); await settle(p); await openRow(p, "Bravo");
     ok(re.test(await p.evaluate(() => (document.querySelector('[data-section="split-open"]') || {}).innerText || "")), `${l}: button label`);
     await p.close();
