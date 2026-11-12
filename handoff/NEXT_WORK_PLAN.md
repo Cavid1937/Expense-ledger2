@@ -395,3 +395,27 @@ Companies visible in the catalogue (public business names) to add to the built-i
 - Parking: Bravo branch car parks, malls (Bakıxanov Mall, Blue Mall, JMR Plaza), Port Baku, Crescent, Naxçıvan airport. Mostly useful as hints in statement descriptions; not all need to be in the typing list.
 - Residential complex fees (Yasamal 82 MMMC, RahatBina, Port Baku Residence and many more): too many and too local for the built-in list; better learned from users (section A) or from the category word "MMC/MTK" in statements.
 How to use it: (1) built-in place list for typing suggestions, (2) category hints when reading bank statements and notifications, (3) the category gap list above. Status: NOT STARTED.
+
+
+## Added 12 Nov (owner question): what happens to money left over at the end of a month. PLAN ONLY.
+Facts from the code (App.jsx calcSafeToSpend, rolloverOffer; read 12 Nov):
+- Safe to Spend counts ONLY this month: income received this month, minus this month's spending, bills still due and the savings amount. Money left over from last month is not part of it. So on the 1st of a month, before the salary arrives, Safe to Spend can show nothing although the person still has last month's money.
+- The money is not lost: account balances add up everything since each account's opening balance, so the leftover is still in "Accounts and balances" (only for people who use accounts).
+- Run 50 added one thing: in the first 7 days of a month, if last month ended with at least 1 left over AND a goal is unfinished, Home offers to add the leftover to that goal. With no unfinished goal nothing is offered. And a goal's "saved" is a number typed by hand, not linked to any account, so this moves no money; it only changes the goal's number.
+- So the owner is mostly right: for someone who does not use accounts or goals, the leftover silently drops out of view.
+This is the open owner decision already noted on 6 Nov ("Safe to Spend model: month-flow now; the Figma prototype shows account funds").
+Plan (needs the owner's choice on the default):
+1. Month-start card (days 1 to 7) whenever last month ended with money left over, also when there is no goal: "October: you kept 230 ₼. What should happen to it?" with three plain choices:
+   a. "Keep it for this month": it is added to this month's Safe to Spend as "Left from October" (its own line in "How is this calculated?").
+   b. "Put it towards a goal": the existing rollover, extended to offer creating a goal (for example a cushion fund) when none exists. Becomes a real contribution once goal contributions are built (plan item C8).
+   c. "Leave it as savings": nothing changes in Safe to Spend; the month summary remembers it as saved.
+   The choice is remembered per month; it can be changed in that month. Overspent months: the same card offers to count the overspend against this month ("Overspent in October: 40 ₼").
+2. A setting to make the choice automatic ("Every month: keep it / move to goal X / leave as savings"), off by default so nobody gets a surprise.
+3. A running "Kept since you started" figure in Analytics (sum of every month's left-over minus overspends), so saving becomes visible.
+4. People who use accounts: Safe to Spend can alternatively be based on what the accounts hold (the account-funds model). Do not mix the two silently: offer it as a clear choice, with tests that money is never counted twice (carry-over plus account balance).
+Tests: month with left-over, overspent month, no income last month, a refund or savings withdrawal (not earnings) in the carried amount, choice changed later in the month, year boundary (December to January), choice remembered across restarts, backup and restore keeps the choices, no double counting with accounts.
+Status: NOT STARTED.
+
+## Added 12 Nov (owner): scope rule and new tools
+- Owner: the Privacy text change, the server and everything else that "learning from users" needs are made ONLY if that feature is actually built. Nothing changes before.
+- The owner added Supabase and Context7 to this workspace. Supabase (database and server functions) is the natural candidate for the "learning from users" server; creating a project or anything that costs money needs the owner's go-ahead first. Context7 serves current library documentation (useful for pdfjs, Capacitor, React).
