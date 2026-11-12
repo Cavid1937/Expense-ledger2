@@ -150,6 +150,9 @@ export function cleanMoneyText(raw, opts) {
 // Run 26: an in-app question instead of the browser's own confirm box (same look as the rest, animated, translated). askConfirm(text) gives
 // a promise of true/false; the <ConfirmHost/> in the app shell shows it. Without a host (never in the app) it falls back to window.confirm.
 let confirmHost=null;
+// Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
+// run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
+export const APP_RELEASE="53 (12.11.2026)";
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;

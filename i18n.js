@@ -652,6 +652,7 @@ export const MESSAGES = {
   "update.ready":     { en: "A new version of the app is ready", az: "Tətbiqin yeni versiyası hazırdır", ru: "Готова новая версия приложения" },
   "update.now":       { en: "Update", az: "Yenilə", ru: "Обновить" },
   "more.version":     { en: "Version {v}", az: "Versiya {v}", ru: "Версия {v}" },
+  "more.build":       { en: "build {v}", az: "yığım {v}", ru: "сборка {v}" },
   // ── Run 10: keeping the data safe
   "io.safety":        { en: "Data safety", az: "Məlumatların təhlükəsizliyi", ru: "Сохранность данных" },
   "io.protectTitle":  { en: "Storage protection", az: "Yaddaşın qorunması", ru: "Защита хранилища" },
