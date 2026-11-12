@@ -433,3 +433,25 @@ Two additions by Claude, because GPT's version only helps people who use account
 7. People who record entries without accounts get one gentle hint (once, dismissible) in Accounts and balances: "Add your cash or card as an account to see where unused money stays."
 Tests: budget resets each month; rollover on carries only the unused part, capped at one limit; overspend never carried; rollover off by default for new and existing budgets; the goal card off by default and on when chosen; December to January; backup and restore keeps each budget's rollover setting; old backups without the setting import as off.
 Status: DECIDED, NOT STARTED.
+
+
+## APPROVED 12 Nov (owner, with GPT's clarification): month-end leftover, exact definitions. Build when it reaches priority.
+Two different things, never mixed:
+- MONEY NOT SPENT in a month = money that really came in minus money that really went out. This is real money.
+- UNUSED BUDGET = a budget limit minus what was spent in that category. This is only a plan that was not used up. It is never called savings, never added to "not spent", never shown as money anyone has. Per-budget rollover moves only this planning amount; it creates no money.
+Definition of "money not spent" in month M (one function, used by the month line AND by the running total, so they always agree):
+- In: earned income dated in M and on or before today (salary, pension, scholarship, gifts and so on). NOT counted as income: refunds (they lower spending instead, as today), money taken out of savings (it was already counted when it was kept), loan money received, transfers between own accounts.
+- Out: spending dated in M and on or before today, at the cash date (a cost spread over months counts once, on the day it was paid), minus refunds already netted the way the month card does, and counting only the person's own share of a cost others will pay back.
+- Not spent = In minus Out. Can be negative (overspent).
+Running total "Not spent since you started":
+- The sum of "not spent" for every FINISHED month from the first month with any entry to last month. The current month is shown separately ("this month so far"), because it is not finished.
+- Each month is counted once; no month and no entry is counted twice; budgets and rollover do not enter it at all.
+- Shown with its working: tapping it lists every month with its in, out and result, and the total at the bottom.
+- Named "Not spent since you started" (not "savings", not "kept"), because the money may have been spent on nothing recorded, or moved to an account; the app only knows what was recorded.
+- Note under it: "Money in minus money out for each finished month, from what you recorded."
+Data safety and old files:
+- No existing entry, budget or goal is changed. The per-budget rollover choice is stored in a new optional field next to the budgets (not inside the budget amounts), so the budget data keeps exactly its current shape.
+- Old backups without the field import with rollover off for every budget. Check that an older app version opening newer data keeps the field (or at least loses nothing else) before release.
+- The Run 50 goal card turns off by default with no change to any goal.
+Regression tests to write first (from the approved list) plus: the month line equals the running total's row for that month; a refund, a savings withdrawal, a spread cost, a reimbursed cost and a transfer each counted exactly once and in the right place; a month with no entries is 0; an overspent month lowers the total; unused budget never appears in either figure; backup round trip with and without the new field.
+Status: APPROVED, NOT STARTED (waits for its place in the order).
