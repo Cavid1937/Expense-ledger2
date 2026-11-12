@@ -472,3 +472,7 @@ Decision (Claude recommends, owner agreed with the direction):
 7. Older app versions: an entry in "personal" is kept as it is by the loader (category ids a later version added are preserved, Run 36 rule); confirm with a downgrade test before release.
 Tests: old entries in gifts unchanged after the update; the move offers only the three personal subcategories, Undo restores exactly; Gifts page no longer shows a haircut; a budget on gifts unchanged; new category in pickers, budgets, analytics, CSV export and import, and backup round trip; az/ru names; older-version file opens with the new id intact.
 Status: DECIDED, NOT STARTED.
+
+
+## Added 12 Nov (owner): full category and subcategory audit. PLAN ONLY.
+Full proposal: handoff/CATEGORY_AUDIT_20261112.md (supersedes the 10 Nov 'expand categories' later-job section, and includes the Gifts & Personal split). Two correctness items found during the audit go first: the Gifts page counting personal care as gifts, and the statement import counting cash withdrawals and moves between own accounts as spending (the same money counted twice once the cash spending is also recorded). Status: PROPOSED, NOT STARTED.
