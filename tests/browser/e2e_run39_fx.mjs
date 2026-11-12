@@ -17,7 +17,10 @@ section("R39-B1. 100 EUR at the official rate is saved as 190.37 ₼, and rememb
   await setVal(page, ".amount-input", "100"); await wait(150);
   const l = await line(page);
   ok(/=\s*190\.37/.test(l) && /1 EUR = 1\.9037/.test(l) && /Central Bank of Azerbaijan/.test(l), "it shows = 190.37 ₼ · 1 EUR = 1.9037 ₼, from the Central Bank", l);
-  ok((await page.evaluate(() => window.__fxCalls)).every((u) => /base=EUR/.test(u) && /quotes=AZN/.test(u) && !/amount|100/.test(u.replace(/date=[0-9-]+/, ""))), "the request carries the currency and the date only", await page.evaluate(() => window.__fxCalls));
+  // Run 53: the app also fetches today's rates for a few currencies when it opens, so other codes may appear; EVERY request must still be
+  // exactly "a currency code and a date" (stricter than before: the whole address is checked), and the euro must be among them.
+  { const fxCalls = await page.evaluate(() => window.__fxCalls);
+    ok(fxCalls.some((u) => /base=EUR/.test(u)) && fxCalls.every((u) => /^https:\/\/api\.frankfurter\.dev\/v2\/rates\?base=[A-Z]{3}&providers=cbar&quotes=AZN&date=\d{4}-\d{2}-\d{2}$/.test(u)), "the request carries the currency and the date only", fxCalls); }
   await save(page); await wait(600);
   const x = (await state(page)).transactions.find((q) => q.fx);
   ok(x && x.amount === 190.37 && x.fx.cur === "EUR" && x.fx.amt === 100 && x.fx.rate === 1.9037 && x.fx.src === "cbar", "stored: 190.37 in manat, plus 100.00 EUR at 1.9037 (Central Bank)", x);
@@ -29,7 +32,9 @@ section("R39-B1. 100 EUR at the official rate is saved as 190.37 ₼, and rememb
 
 section("R39-B2. Offline: the person types the rate; nothing is saved without one");
 {
-  const page = await openPage(browser, { seed: baseSeed({ language: "en", currency: "₼" }) }); await phone(page); await settle(page); await openAdd(page);
+  // Run 53: the pages of one test browser share their storage, and the app now saves today's rates when it opens (section B1 above did).
+  // This section is about a phone that has NO saved rate, so the saved rates are removed before the app starts.
+  const page = await openPage(browser, { seed: baseSeed({ language: "en", currency: "₼" }), pre: () => { try { localStorage.removeItem("expense_ledger_v5__fxcache"); } catch {} } }); await phone(page); await settle(page); await openAdd(page);
   await page.evaluate(() => document.querySelector('[data-section="fx-cur"]').click()); await wait(350);
   await page.evaluate(() => document.querySelector('[data-section="fx-list"] [data-fx="USD"]').click()); await wait(800);
   await setVal(page, ".amount-input", "50"); await wait(150);
@@ -54,8 +59,10 @@ section("R39-B3. Editing keeps the currency; a ledger not in manat does not offe
   ok((await page.evaluate(() => document.querySelector(".amount-input").value)) === "100" && /EUR/.test(await page.evaluate(() => document.querySelector('[data-section="fx-cur"]').innerText)), "the form opens in EUR with 100 (not 190.37)");
   ok(/=\s*190\.37/.test(await line(page)), "using the remembered rate (no new request needed)");
   await page.close();
-  page = await openPage(browser, { seed: baseSeed({ language: "en", currency: "$" }) }); await settle(page); await openAdd(page);
-  ok(!(await page.$('[data-section="fx-cur"]')), "ledger in $: no currency button (rates are only for the manat)");
+  // Run 53 (owner: conversion must work both ways): a ledger in dollars now offers it too (tested in e2e_run53_quick). A ledger whose
+  // sign is not a known currency still has no currency button, because no rate exists for it.
+  page = await openPage(browser, { seed: baseSeed({ language: "en", currency: "pts" }) }); await settle(page); await openAdd(page);
+  ok(!(await page.$('[data-section="fx-cur"]')), "ledger in a made-up sign ('pts'): no currency button (no rate exists for it)");
   await page.close();
 }
 section("R39-B4. Quick-add link opens the filled form once and saves nothing by itself");

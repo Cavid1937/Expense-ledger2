@@ -700,10 +700,14 @@ export function debtCashFlow(list, mon) {
 // browser requests). Only the currency code and the date are sent. Offline or no answer: the person types the rate. Offered only when the
 // ledger currency is the manat.
 export const FX_CODES=["USD","EUR","RUB","TRY","GBP","GEL","AED","KZT","UAH","CNY","CHF","JPY"];
-export const fxBaseOk=(currency)=>currency==="₼" || currency==="AZN";
+// Run 53 (owner: "converting does not work in other currencies; it must work both ways"): the ledger's own currency as a code. The app stores
+// the currency as the sign the person chose; the signs below are the ones a rate can be found for. Any other sign: no conversion is offered.
+const LEDGER_CODES={ "₼":"AZN", "AZN":"AZN", "$":"USD", "USD":"USD", "€":"EUR", "EUR":"EUR", "£":"GBP", "GBP":"GBP", "₽":"RUB", "RUB":"RUB", "₺":"TRY", "TRY":"TRY", "₾":"GEL", "GEL":"GEL" };
+export const ledgerCode=(currency)=>{ const s=String(currency==null?"":currency).trim(); return LEDGER_CODES[s] || LEDGER_CODES[s.toUpperCase()] || ""; };
+export const fxBaseOk=(currency)=>!!ledgerCode(currency);
 export function cleanFx(v) {
   if (!isPlainObject(v)) return null;
-  const cur=typeof v.cur==="string" && /^[A-Z]{3}$/.test(v.cur) && v.cur!=="AZN" ? v.cur : null;
+  const cur=typeof v.cur==="string" && /^[A-Z]{3}$/.test(v.cur) ? v.cur : null;   // Run 53: the manat too (a dollar ledger can hold a payment made in manat)
   const amt=typeof v.amt==="number" ? v.amt : NaN, rate=typeof v.rate==="number" ? v.rate : NaN;
   if (!cur || !(amt>0) || amt>1e10 || Number(amt.toFixed(2))!==amt || !(rate>0) || rate>1e5) return null;
   return { cur, amt, rate:Number(rate.toPrecision(6)), on:isValidDateStr(v.on)?v.on:"", src:v.src==="manual"?"manual":"cbar" };
@@ -731,6 +735,48 @@ export async function fetchCbarRate(cur, date, fetchFn=(typeof fetch!=="undefine
   const out={ rate:Number(rec.rate.toPrecision(6)), on:isValidDateStr(rec.date)?rec.date:day };
   cache[key]=out; writeFxCache(cache);
   return out;
+}
+// Run 53: the rate of 1 <cur> in the LEDGER's currency <base>, for a ledger that is not in manat. The Central Bank publishes every currency
+// against the manat, so another pair is worked out through it: 1 EUR = 1.9037 AZN and 1 USD = 1.7 AZN give 1 EUR = 1.9037 / 1.7 = 1.11982 USD;
+// 1 AZN = 1 / 1.7 = 0.588235 USD. The day shown is the older of the two published days. -> { rate, on } or throws.
+export async function fetchLedgerRate(cur, date, base="AZN", fetchFn=(typeof fetch!=="undefined"?fetch:null)) {
+  if (!/^[A-Z]{3}$/.test(String(cur)) || !/^[A-Z]{3}$/.test(String(base)) || cur===base) throw new Error("bad");
+  if (base==="AZN") return fetchCbarRate(cur,date,fetchFn);
+  const b=await fetchCbarRate(base,date,fetchFn);
+  if (cur==="AZN") return { rate:Number((1/b.rate).toPrecision(6)), on:b.on };
+  const c=await fetchCbarRate(cur,date,fetchFn);
+  return { rate:Number((c.rate/b.rate).toPrecision(6)), on:c.on && b.on && b.on<c.on ? b.on : c.on };
+}
+// The newest rate the phone already holds for a currency (from any earlier day), for when there is no internet: it is offered with its date
+// and used only if the person says so; never silently.
+export function lastSavedRate(cur, base="AZN") {
+  const cache=readFxCache();
+  const newest=(code)=>{ let best=null; Object.keys(cache).forEach(k=>{ if (!k.startsWith(code+"|")) return; const r=cache[k]; if (r && r.rate>0 && isValidDateStr(r.on) && (!best || r.on>best.on)) best=r; }); return best; };
+  if (!/^[A-Z]{3}$/.test(String(cur)) || cur===base) return null;
+  if (base==="AZN") { const c=newest(cur); return c ? { rate:c.rate, on:c.on } : null; }
+  const b=newest(base); if (!b) return null;
+  if (cur==="AZN") return { rate:Number((1/b.rate).toPrecision(6)), on:b.on };
+  const c=newest(cur); return c ? { rate:Number((c.rate/b.rate).toPrecision(6)), on:b.on<c.on ? b.on : c.on } : null;
+}
+// Run 53 (owner: "the app should get the latest rates every day without being asked"): when the app is opened, today's official rates are
+// fetched for the dollar, the euro, the pound and every currency the person has used, so the add form shows them at once. One request per
+// currency per day at most (also when it fails: no retry storm on a bad connection). Only the currency code and the date leave the phone.
+const FX_WARM_KEY=KEY+"__fxwarm";
+export async function warmRates(transactions, currency, fetchFn=(typeof fetch!=="undefined"?fetch:null), now=new Date()) {
+  const base=ledgerCode(currency); if (!base || !fetchFn) return { asked:[] };
+  const day=localDateStr(now); let st=null; try { st=JSON.parse(localStorage.getItem(FX_WARM_KEY)||"null"); } catch {}
+  if (!isPlainObject(st) || st.day!==day || !Array.isArray(st.tried)) st={ day, tried:[] };
+  const want=new Set(["USD","EUR","GBP"]); (transactions||[]).forEach(x=>{ const c=x && x.fx && x.fx.cur; if (typeof c==="string" && /^[A-Z]{3}$/.test(c)) want.add(c); });
+  if (base!=="AZN") want.add(base); want.delete("AZN");
+  const cache=readFxCache(), todo=[...want].filter(c=>!st.tried.includes(c) && !(cache[c+"|"+day] && cache[c+"|"+day].rate>0)).slice(0,10);
+  if (!todo.length) return { asked:[] };
+  // A currency counts as "asked today" only once its request has ended (with a rate or with a failure). If the app is closed while a
+  // request is still on its way, that currency is simply asked again next time.
+  for (const c of todo) {
+    try { await fetchCbarRate(c,day,fetchFn); } catch { /* offline or no rate: the add form will ask or offer the last saved one */ }
+    st.tried.push(c); try { localStorage.setItem(FX_WARM_KEY,JSON.stringify(st)); } catch {}
+  }
+  return { asked:todo };
 }
 // ─── Run 39: quick-add link (owner: frictionless entry; Apple Shortcuts / NFC tag / home-screen bookmark) ─────────────────────────────────────
 // https://expense-ledger2.vercel.app/?add=expense&amount=4.50&merchant=Coffee&category=food opens the add form already filled in. It never saves
@@ -4350,6 +4396,13 @@ function AppInner() {
     document.addEventListener("visibilitychange",check); window.addEventListener("online",check);
     return ()=>{ clearTimeout(t0); clearInterval(iv); document.removeEventListener("visibilitychange",check); window.removeEventListener("online",check); };
   },[runningVersion]);
+  // Run 53: today's official rates are fetched quietly when the app is opened or comes back to the front (once per currency per day).
+  useEffect(()=>{
+    const warm=()=>{ if (document.visibilityState!=="visible" || navigator.onLine===false) return; warmRates(stateRef.current.transactions,stateRef.current.currency).catch(()=>{}); };
+    const t0=setTimeout(warm,1500);
+    document.addEventListener("visibilitychange",warm); window.addEventListener("online",warm);
+    return ()=>{ clearTimeout(t0); document.removeEventListener("visibilitychange",warm); window.removeEventListener("online",warm); };
+  },[]);
   const [installEvt, setInstallEvt] = useState(null);
   useEffect(()=>{
     const onBip=(e)=>{ e.preventDefault(); setInstallEvt(e); };

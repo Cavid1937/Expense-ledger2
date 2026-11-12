@@ -36,6 +36,8 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   "rolloverOffer","applyRollover","readRolloverSeen","writeRolloverSeen","sinkingCandidates","parseQuickText","giftLedger","planSetup","nextPayDate","recurringSuggestions","readRecSuggestDismissed","writeRecSuggestDismissed",
   // Run 51: merge and account-removal integrity
   "planMerge","planAccountMerge","remapEntryAccounts","mergeCounts","accountRemovalPlan","removeAccountSafely","restoreRemovedAccount","readAccounts","writeAccounts","findDoubleEntries","offerUndo","setUndoHost",
+  // Run 53: currency for any ledger, daily refresh
+  "ledgerCode","fetchLedgerRate","lastSavedRate","warmRates",
   // redesign (2026-10-27): the Home ring, the Analytics trend and the Home greeting
   "pctShares","donutSlices","cumulativeByDay","greetingKey",
   // Run 10: data safety

@@ -13,9 +13,10 @@ ok(fxToBase(9999999.99, 1.70001) === 17000099.98, "a large amount stays exact (9
 
 section("R39-2. What is kept");
 ok(eq(cleanFx({ cur: "EUR", amt: 100, rate: 1.903712, on: "2026-11-06", src: "cbar" }), { cur: "EUR", amt: 100, rate: 1.90371, on: "2026-11-06", src: "cbar" }), "a valid record; the rate kept to 6 significant digits");
-ok(cleanFx({ cur: "eur", amt: 1, rate: 1 }) === null && cleanFx({ cur: "AZN", amt: 1, rate: 1 }) === null && cleanFx({ cur: "EUR", amt: 1.234, rate: 1 }) === null && cleanFx({ cur: "EUR", amt: 0, rate: 1 }) === null && cleanFx({ cur: "EUR", amt: 1, rate: "2" }) === null && cleanFx("x") === null, "refused: lower-case code, AZN itself, 3 decimals, zero, a rate given as text, junk");
+// Run 53 (owner: conversion must work for ledgers in other currencies too): a payment made in manat is now a valid record (a dollar ledger can hold it).
+ok(cleanFx({ cur: "eur", amt: 1, rate: 1 }) === null && cleanFx({ cur: "AZN", amt: 1, rate: 1 }).cur === "AZN" && cleanFx({ cur: "EUR", amt: 1.234, rate: 1 }) === null && cleanFx({ cur: "EUR", amt: 0, rate: 1 }) === null && cleanFx({ cur: "EUR", amt: 1, rate: "2" }) === null && cleanFx("x") === null, "refused: lower-case code, 3 decimals, zero, a rate given as text, junk; the manat itself is kept (Run 53)");
 ok(cleanFx({ cur: "USD", amt: 5, rate: 1.7, src: "weird" }).src === "cbar" && cleanFx({ cur: "USD", amt: 5, rate: 1.7, src: "manual" }).src === "manual", "the source is either the Central Bank or the person's own rate");
-ok(fxBaseOk("₼") && fxBaseOk("AZN") && !fxBaseOk("$"), "offered only when the ledger currency is the manat");
+ok(fxBaseOk("₼") && fxBaseOk("AZN") && fxBaseOk("$") && !fxBaseOk("pts") && !fxBaseOk(""), "offered when the ledger currency is one a rate exists for (Run 53: no longer the manat only); never for a made-up sign");
 
 section("R39-3. Stored with the entry; totals use the manat amount");
 const e = T({ id: 1, amount: 190.37, date: "2026-10-05", fx: { cur: "EUR", amt: 100, rate: 1.90371, on: "2026-10-03", src: "cbar" } });

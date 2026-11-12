@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchCbarRate, fxBaseOk, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo } from "../App.jsx";
+import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
@@ -105,7 +105,9 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const isEditing=!!editId;
   const [type,     setType]     = useState(prefill?.type||"expense");
   // Run 39: paid in another currency. fxCur "" = the ledger's own currency. An entry that already has fx opens in that currency and rate.
-  const fxOk=fxBaseOk(currency), pfx=fxOk?cleanFx(prefill?.fx):null;
+  const baseCode=ledgerCode(currency), fxOk=!!baseCode, pfx0=fxOk?cleanFx(prefill?.fx):null, pfx=pfx0&&pfx0.cur!==baseCode?pfx0:null;   // Run 53: any ledger currency a rate exists for
+  const fxCodes=(baseCode==="AZN"?FX_CODES:["AZN",...FX_CODES]).filter(c=>c!==baseCode);
+  const [fxSaved, setFxSaved]=useState(null);   // Run 53: no internet: the newest rate this phone already holds, offered with its date
   const [amount,   setAmount]   = useState(pfx?String(pfx.amt):prefill?.amount?String(prefill.amount):"");
   const [fxCur, setFxCur]=useState(pfx?pfx.cur:"");
   const [fxPick, setFxPick]=useState(false);
@@ -132,6 +134,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [wallet,   setWallet]   = useState(isEditing ? walletId(prefill?.wallet) : (prefill && "wallet" in prefill ? walletId(prefill.wallet) : ""));   // Run 25: a new entry never starts with a wallet chosen for you (it used to repeat the last one, unseen under "More details")
   // Run 22: optional trip / group name (free text; earlier names are suggested). Editing keeps the entry's own.
   const [trip, setTrip] = useState(tripName(prefill?.trip));
+  const [spreadOwn, setSpreadOwn] = useState(false), [spreadText, setSpreadText] = useState("");   // Run 53: "Other": a typed number of months
   const [spread, setSpread] = useState(spreadMonths(prefill?.spread));   // Run 41: 0 = not spread; otherwise the number of months the cost is shown over
   // Run 43: part of an expense others will pay back (reimb = { amt, who }). Text while typing; empty = none.
   const [reimbAmt, setReimbAmt] = useState(cleanReimb(prefill?.reimb) ? String(cleanReimb(prefill.reimb).amt) : "");
@@ -243,7 +246,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
     if (!fxCur) return undefined;
     const k=fxCur+"|"+date; if (k===fxKey.current && fxRate) return undefined;
     fxKey.current=k; let alive=true; setFxState("loading");
-    fetchCbarRate(fxCur,date).then(r=>{ if (alive) { setFxRate({ ...r, src:"cbar" }); setFxState("ok"); } }).catch(()=>{ if (alive) { setFxRate(null); setFxState("fail"); } });
+    setFxSaved(null);
+    fetchLedgerRate(fxCur,date,baseCode).then(r=>{ if (alive) { setFxRate({ ...r, src:"cbar" }); setFxState("ok"); } }).catch(()=>{ if (alive) { setFxRate(null); setFxState("fail"); setFxSaved(lastSavedRate(fxCur,baseCode)); } });
     return ()=>{ alive=false; };
   },[fxCur,date]);   // eslint-disable-line react-hooks/exhaustive-deps
   const fxManualRate=(()=>{ const s=String(fxManual||"").trim().replace(",","."); if (!/^\d{1,6}(\.\d{1,6})?$/.test(s)) return null; const n=Number(s); return n>0 ? n : null; })();   // a rate may have up to 6 decimals
@@ -325,15 +329,18 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
         {/* Run 39: paid in another currency — choose it; the official rate of that day turns it into manat */}
         <Collapse open={fxPick} id="fx-pick">
           <div className="sub-strip" role="radiogroup" aria-label={t("fx.choose")} data-section="fx-list" style={{flexWrap:"wrap",overflowX:"visible",justifyContent:"center",marginBottom:8}}>
-            {["",...FX_CODES].map(c=>(<button key={c||"base"} type="button" role="radio" aria-checked={fxCur===c} data-fx={c||"base"} className={`sub-chip${fxCur===c?" sel":""}`} onClick={()=>{ setFxCur(c); setFxPick(false); if (!c) { setFxOwn(false); setFxState("idle"); } }}>{c||currency}</button>))}
+            {["",...fxCodes].map(c=>(<button key={c||"base"} type="button" role="radio" aria-checked={fxCur===c} data-fx={c||"base"} className={`sub-chip${fxCur===c?" sel":""}`} onClick={()=>{ setFxCur(c); setFxPick(false); if (!c) { setFxOwn(false); setFxState("idle"); } }}>{c||currency}</button>))}
           </div>
         </Collapse>
         {/* Run 40: the conversion line eases open and closed with the currency (it used to pop in and vanish) */}
         <Reveal when={fxCur} id="fx-line-wrap">{(fxCur)=>(
           <div className="list-sub" data-section="fx-line" role="status" style={{textAlign:"center",marginBottom:10,lineHeight:1.5}}>
-            {fxBase!==null ? t("fx.line",{ base:fmt(fxBase,currency), cur:fxCur, rate:String(fxEff.rate), date:fxEff.on?fmtDate(fxEff.on):"" }) : fxState==="loading" ? t("fx.loading") : fxState==="ok"&&!fxOwn ? t("fx.rateOnly",{ cur:fxCur, rate:String(fxRate.rate), date:fxRate.on?fmtDate(fxRate.on):"" }) : ""}
-            {fxEff&&<div style={{fontSize:11}}>{t(fxEff.src==="manual"?"fx.srcOwn":"fx.srcCbar")}</div>}
+            {fxBase!==null ? t("fx.line",{ base:fmt(fxBase,currency), cur:fxCur, rate:String(fxEff.rate), sym:currency, date:fxEff.on?fmtDate(fxEff.on):"" }) : fxState==="loading" ? t("fx.loading") : fxState==="ok"&&!fxOwn ? t("fx.rateOnly",{ cur:fxCur, rate:String(fxRate.rate), sym:currency, date:fxRate.on?fmtDate(fxRate.on):"" }) : ""}
+            {fxEff&&<div style={{fontSize:11}}>{t(fxEff.src==="manual"?"fx.srcOwn":baseCode==="AZN"?"fx.srcCbar":"fx.srcCross")}</div>}
             {fxState==="fail"&&!fxOwn&&<div role="alert" style={{color:"var(--warn)"}}>{t("fx.fail")}</div>}
+            {/* Run 53: no internet, but the phone holds an earlier official rate: it is offered with its date, and used only on a tap */}
+            {fxState==="fail"&&!fxOwn&&fxSaved&&(
+              <button type="button" className="chip" data-section="fx-saved" style={{marginTop:6,whiteSpace:"normal",height:"auto",minHeight:36,textAlign:"center"}} onClick={()=>{ setFxRate({ rate:fxSaved.rate, on:fxSaved.on, src:"cbar" }); setFxState("ok"); }}>{t("fx.useSaved",{ cur:fxCur, rate:String(fxSaved.rate), sym:currency, date:fmtDate(fxSaved.on) })}</button>)}
             {(fxOwn||fxState==="fail") ? (
               <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,marginTop:6}}>
                 <label htmlFor="fx-manual">{t("fx.ownLabel",{ cur:fxCur })}</label>
@@ -559,8 +566,18 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           <div className="field" data-section="add-spread">
             <label className="field-lbl" id="txn-spread-lbl">{t("spread.label")} {optional}</label>
             <div className="filter-bar" role="group" aria-labelledby="txn-spread-lbl" style={{flexWrap:"wrap",overflowX:"visible"}}>
-              {[...new Set([0,3,6,12,spread])].sort((a,b)=>a-b).map(n=>(<button key={n} type="button" className={`chip${spread===n?" on":""}`} aria-pressed={spread===n} data-spread={n} onClick={()=>setSpread(n)}>{n===0?t("spread.off"):tn("spread.months",n)}</button>))}
+              {[...new Set([0,3,6,12,spread])].sort((a,b)=>a-b).map(n=>(<button key={n} type="button" className={`chip${spread===n&&!spreadOwn?" on":""}`} aria-pressed={spread===n&&!spreadOwn} data-spread={n} onClick={()=>{ setSpread(n); setSpreadOwn(false); setSpreadText(""); }}>{n===0?t("spread.off"):tn("spread.months",n)}</button>))}
+              {/* Run 53 (owner: "what if the user wants 4 months?"): any whole number of months from 2 to 24 */}
+              <button type="button" className={`chip${spreadOwn?" on":""}`} aria-pressed={spreadOwn} aria-expanded={spreadOwn} data-spread="own" onClick={()=>{ setSpreadOwn(o=>!o); setSpreadText(spread>0?String(spread):""); }}>{t("spread.other")}</button>
             </div>
+            <Collapse open={spreadOwn} id="add-spread-own-wrap">
+              <div style={{marginTop:8}}>
+                <label className="field-lbl" htmlFor="txn-spread-own">{t("spread.ownLabel")}</label>
+                <input id="txn-spread-own" className="field-input" inputMode="numeric" autoComplete="off" maxLength={2} value={spreadText} aria-invalid={spreadText!==""&&!spreadMonths(spreadText)} aria-describedby="txn-spread-own-msg"
+                  onChange={e=>{ const v=e.target.value.replace(/\D/g,"").slice(0,2); setSpreadText(v); setSpread(spreadMonths(v)); }}/>
+                <div id="txn-spread-own-msg" role={spreadText!==""&&!spreadMonths(spreadText)?"alert":undefined} className="list-sub" style={{marginTop:4,color:spreadText!==""&&!spreadMonths(spreadText)?"var(--neg)":undefined}}>{spreadText!==""&&!spreadMonths(spreadText) ? t("spread.ownErr") : ""}</div>
+              </div>
+            </Collapse>
             <div className="list-sub" style={{lineHeight:1.5,marginTop:6}}>{spread>0 ? t("spread.on",{ months:spread, each:fmt(Math.floor(Math.round((amountOf(amount)||0)*100)/spread)/100,currency) }) : t("spread.hint")}</div>
           </div>
         </Collapse>

@@ -509,7 +509,8 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
     if (editTplId) onUpdateTemplate(editTplId,data); else onAddTemplate(data);
     setTplName("");setTplAmt("");setTplSubcat("");setTplMerchant("");setTplNote("");setShowNewTpl(false);setEditTplId(null);
   };
-  useBackStep(showNewTpl,()=>{ setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); setShowNewTpl(false); });   // Run 40: Back = the Cancel button
+  const cancelTpl=()=>{ setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); setShowNewTpl(false); };
+  useBackStep(showNewTpl,cancelTpl);   // Run 40: Back = the Cancel button
   const startEdit=(tpl)=>{ setEditTplId(tpl.id); setTplName(tpl.name||""); setTplAmt(String(tpl.amount)); setTplCatId(tpl.catId||"food"); setTplSubcat(tpl.subcat||""); setTplMerchant(tpl.merchant||""); setTplNote(tpl.note||""); setShowNewTpl(true); };
   const tplForm=(inList)=>(
         <div className={"reveal"+(inList?"":" card")} ref={revealFocus} data-section="tpl-form" style={inList?{padding:"12px 14px",borderBottom:"1px solid var(--rule)"}:undefined}>
@@ -530,7 +531,12 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
             <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-merchant">{t("add.merchant")}</label><input id="tpl-merchant" className="field-input" placeholder={t("set.optionalPh")} value={tplMerchant} onChange={e=>setTplMerchant(e.target.value)}/></div>
             <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-note">{t("set.noteOptional")}</label><input id="tpl-note" className="field-input" placeholder={t("set.tplNotePh")} value={tplNote} onChange={e=>setTplNote(e.target.value)}/></div>
           </div>
-          <button className="btn btn-primary btn-full" style={{marginTop:0,padding:"10px"}} onClick={saveTpl}>{t("set.saveTemplate")}</button>
+          {/* Run 53 (owner, Poco F6): the only Cancel sat at the top of the list and scrolled out of sight while editing a template further
+              down. Cancel is now inside the form, next to Save, so it is always where the person is working. */}
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-ghost" data-section="tpl-cancel" style={{flex:1,marginTop:0,padding:"10px"}} onClick={cancelTpl}>{t("common.cancel")}</button>
+            <button className="btn btn-primary" data-section="tpl-save" style={{flex:2,marginTop:0,padding:"10px"}} onClick={saveTpl}>{t("set.saveTemplate")}</button>
+          </div>
         </div>
   );
   return (

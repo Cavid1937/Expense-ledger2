@@ -547,6 +547,10 @@ html.launch-first .lang-hint{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 460
 .field-input,.date-input{transition:border-color 200ms ease-out,box-shadow 200ms ease-out,background-color 200ms ease-out}
 @media (prefers-reduced-motion:reduce){.toggle-knob,.toggle-track,.txn-row{transition:none}}
 .txn-row{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}   /* press-and-hold selects rows, not text */
+/* Run 53 (owner, Poco F6): a long press anywhere offered copy / select all. Text can be selected only where a person types or where text is
+   meant to be copied; everything else (labels, cards, buttons, numbers) is not selectable, like in a native app. */
+body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,textarea,select,[contenteditable="true"],.selectable,.selectable *{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .toast{animation:toastIn 280ms cubic-bezier(0.22,1,0.36,1),toastOut 200ms ease-in var(--toast-out,1500ms) forwards;border-radius:16px}   /* it fades out just before it is removed */
 /* Run 39b (owner: the "saved" message did not fit the screen): messages wrap onto more lines and never run past the screen edges */
 .toast{white-space:normal;max-width:calc(100vw - 32px);width:max-content;text-align:center;line-height:1.4;overflow-wrap:anywhere}
