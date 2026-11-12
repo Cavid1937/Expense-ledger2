@@ -61,3 +61,10 @@ A fault of mine that the new test caught before it reached you: my first version
 
 Tests: new `e2e_run55_detail` 20/20 (note label and no repeat, folded card in plain words, no old analytics words, real buttons, order, privacy mode hides the amounts, az and ru fit at 320 px). Changed because the wording changed: `e2e_run24_split` (az/ru button label), `e2e_run12` and `e2e_run9` (they tap the bill button by its text). Run alone and passing: e2e_run12 35, e2e_run24_split 12, e2e_run43 13, e2e_run39_fx 15, e2e_run9 55, e2e_bigtext 25, e2e_lang 57, e2e_run8 9, e2e_import 53. Logic 100 files, 2,040/0.
 Still "Merchant" in the field grid: waiting for your word.
+
+## Added later on 12 Nov: "Where you paid" instead of "Merchant" (owner decision)
+- English: the field is "Where you paid" for spending and "Who paid you" for income (the same field; for income "where you paid" would be wrong). The folded section says "Where you paid, note, date, …", the search box "Search place, note, amount…", Analytics "By place".
+- Azerbaijani and Russian: unchanged ("Satıcı / xidmət", "Продавец"), as with "entry"; only the new income label is translated ("Kimdən gəlib", "От кого").
+- The spreadsheet export keeps its "Merchant" column on purpose, so files already exported still import.
+- Tests: new `e2e_run56_place` 13/13. Run alone and passing: e2e_run17_addform 11, e2e_run55_detail 20, e2e_bigtext 25, e2e_lang 57. Logic 100 files 2,040/0.
+- Release number 56. Full browser suite on this commit: see PHASE_CHECKPOINT.md.
