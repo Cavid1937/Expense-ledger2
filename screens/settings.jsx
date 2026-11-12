@@ -6,6 +6,8 @@ import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
 import { applyLink, linkCandidates, undoLink } from "../App.jsx";
+import { buildWorkbookSheets, downloadFile, inNativeShell, readBudgetCarry, today as todayStr } from "../App.jsx";   // Run 64
+import { buildXlsx } from "../xlsxWrite.js";
 import { APP_RELEASE, accountName, accountRemovalPlan, findDoubleEntries, maskText, offerUndo, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, creditOwed, cleanWorkHours, readWorkHours, writeWorkHours, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
@@ -903,6 +905,16 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
           <button className="btn btn-sm" onClick={onExportCSV} style={{marginTop:8}}><Icon name="download" size={12}/>{t("io.exportCsv")}</button>
         </div>
       </div>
+      {/* Run 64 (owner batch E11): everything in one Excel workbook, for reading; a "Read me" sheet explains each sheet. Not in the Android app yet (its save bridge takes text only). */}
+      {!inNativeShell()&&(
+        <div className="card io-card" data-section="io-xlsx" style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
+          <span className="io-ico" style={{color:"var(--violet)",flexShrink:0}}><Icon name="download" size={24}/></span>
+          <div style={{minWidth:0,flex:1}}>
+            <div className="list-sub" style={{lineHeight:1.5}}>{t("xl.ioSub")}</div>
+            <button className="btn btn-sm" data-section="io-xlsx-go" style={{marginTop:8}} onClick={()=>{ try { const sheets=buildWorkbookSheets(state,{ accountData:readAccounts(), debtData:readDebts(), budgetCarry:readBudgetCarry() }); downloadFile(buildXlsx(sheets),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",`ledger-${todayStr()}.xlsx`); } catch { /* nothing to undo: no data was changed */ } }}><Icon name="download" size={12}/>{t("xl.ioBtn")}</button>
+          </div>
+        </div>
+      )}
 
       {onDeleteMany&&(<>
         <div className="section-title">{t("io2.doubleTitle")}</div>

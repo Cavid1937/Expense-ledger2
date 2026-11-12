@@ -1,3 +1,7 @@
+## 0000za. 2026-11-13 RUN 64 (latest). Local commit, NOT pushed. Read reports/Run 64 report.md.
+- Full suite on 538ce4e (Runs 62-63) reported 2 problem files, both caused by me: build.mjs broken mid-run by a `//` note (fixed), and 32 px toggle buttons under the 34 px rule (raised to 36). Both files pass alone now; a clean full suite is needed (next line).
+- Done: xlsxWrite.js (stored-zip workbook writer), buildWorkbookSheets (9 sheets, localized, xl.* keys), Import/Export card io-xlsx (browser only: inNativeShell hides it), saveTextFile for Gifts and Debts CSV (Android save bridge). tests/browser/build.mjs copies xlsxWrite.js. APP_RELEASE 64.
+- Tests: logic 107 files 2169/0/0 (run64xlsx 13; i18n 78->81). Browser: e2e_run64_xlsx 5 and 8 related files passing. Workbook opened in real Excel 16 (az sample): 9 sheets, amounts 12.50.
 ## 0000z. 2026-11-13 RUNS 62-63 (latest). Local commit, NOT pushed. Read "reports/Run 62-63 report.md".
 - Full browser suite on Run 61 (022bf66): 132 files, 2256 passed / 0 failed / 0 missing, 0 standby events.
 - Done: debtLeftAfter / loanLeftAfter / buildDebtsCsv (App.jsx); "left after" lines and "Download the full history" (debts.jsx); PaymentsFold under each repeating bill (recurring.jsx; each row now wrapped in data-section="rec-item"); BudgetHistory "Last months" (goals.jsx); D10 audit table in NEXT_WORK_PLAN. APP_RELEASE 63.

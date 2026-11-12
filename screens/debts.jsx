@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, downloadFile } from "../App.jsx";
+import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, saveTextFile } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";   // Run 38: forms, edits and the Debts / Loans switch ease in and out
 
@@ -347,7 +347,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
       </Swap>
       {/* Run 62 (owner batch D9): the whole history of every debt and loan, with what was left after each payment, as a spreadsheet */}
       {(data.debts.length>0||data.loans.length>0)&&(
-        <button type="button" className="btn btn-ghost btn-full" data-section="debts-export" style={{marginTop:14}} onClick={()=>{ downloadFile(buildDebtsCsv(data),"text/csv;charset=utf-8;",`debts-loans-${today()}.csv`); showToast(t("debt.exported")); }}>{t("debt.export")}</button>
+        <button type="button" className="btn btn-ghost btn-full" data-section="debts-export" style={{marginTop:14}} onClick={async ()=>{ const r=await saveTextFile(`debts-loans-${today()}.csv`,buildDebtsCsv(data)); if (r==="failed") showToast(t("io.saveFailed"),6000); else if (r!=="cancelled") showToast(t("debt.exported")); }}>{t("debt.export")}</button>
       )}
     </div>
   );

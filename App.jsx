@@ -152,7 +152,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="63 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="64 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -1908,6 +1908,16 @@ async function saveViaNative(native, filename, text, mime, pick=false) {
 // and Import / Export offers "Show my Downloads". Both exist only in the Android app (window.__ledgerNativeOpen / __ledgerNativeDownloads).
 export const nativeOpenHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeOpen==="function") ? window.__ledgerNativeOpen : null;
 export const nativeDownloadsHook=()=>(typeof window!=="undefined" && typeof window.__ledgerNativeDownloads==="function") ? window.__ledgerNativeDownloads : null;
+// Run 64: a text file (CSV) saved the same way everywhere: the Android app saves it into Downloads (or shares it), the browser downloads it.
+// Returns "saved" | "shared" | "downloaded" | "cancelled" | "failed". Used by the Gifts and Debts & loans exports, which used a plain
+// browser download that does nothing inside the Android app.
+export async function saveTextFile(filename, text, mime="text/csv") {
+  const save=nativeSaveHook(); if (save) { const r=await saveViaNative(save,filename,text,mime); return r.status==="saved" ? "saved" : r.status; }
+  const share=nativeShareHook(); if (share) return shareViaNative(share,filename,text,mime+";charset=utf-8;");
+  downloadFile(text,mime+";charset=utf-8;",filename); return "downloaded";
+}
+// Run 64: true inside the Android app (its save bridge takes text only, so binary files such as the Excel workbook are not offered there yet)
+export const inNativeShell=()=>!!(nativeSaveHook() || nativeShareHook());
 export function downloadFile(content, mime, filename) {
   const url=URL.createObjectURL(new Blob([content],{type:mime}));
   const a=document.createElement("a"); a.href=url; a.download=filename;
@@ -2344,6 +2354,48 @@ function buildBackup(state, now=new Date().toISOString()) {
     ...(Object.keys(prefs).length ? { preferences:prefs } : {}),
     ...(acc.accounts.length ? { accounts:acc.accounts, ...(acc.transfers.length ? { transfers:acc.transfers } : {}) } : {}),
     ...(dd.debts.length ? { debts:dd.debts } : {}), ...(dd.loans.length ? { loans:dd.loans } : {}), lastBackup:now };
+}
+
+// ─── Run 64 (owner batch E11, "one coherent export"): everything as one Excel workbook, for reading (the backup file is for moving data) ───
+// One sheet per kind of thing, headings in the app's own words and language, real numbers in amount cells, dates as YYYY-MM-DD, and ids
+// that link the sheets (an entry's account id is the Accounts sheet's id). A "Read me" sheet says what each sheet holds. Pure: everything
+// it shows comes from what is stored; nothing is written. `extra` = { accountData, debtData, budgetCarry, now }.
+export function buildWorkbookSheets(state, extra={}) {
+  const S=state||{}, tx=(S.transactions||[]).filter(Boolean), now=extra.now||new Date(), mon=localMonthStr(now), today_=localDateStr(now);
+  const acc=cleanAccountData(extra.accountData), accName=new Map(acc.accounts.map(a=>[a.id,a.name])), dd=cleanDebtData(extra.debtData);
+  const yes=t("xl.yes"), no=t("xl.no"), money=(v)=>Math.round((Number(v)||0)*100)/100, q=(c)=>Math.round(c)/100;
+  const col=(k)=>t("xl.col."+k), sheet=(k)=>t("xl.sheet."+k);
+  const sorted=[...tx].sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const entries=[[col("date"),col("type"),col("category"),col("subcategory"),col("place"),col("amount"),col("note"),col("account"),col("repeats"),col("trip"),col("id")],
+    ...sorted.map(x=>[String(x.date||""),t(x.type==="income"?"add.income":"add.expense"),catName(x.category),subName(x.subcategory||""),x.merchant||"",money(x.amount),x.note||"",
+      x.account ? (accName.get(x.account)||x.account) : "", x.recurring ? t("freq."+(x.recurFreq||"monthly")) : "", tripName(x.trip)||"", String(x.id)])];
+  const bal=accountBalances(acc,tx,today_);
+  const accounts=[[col("name"),col("kind"),col("opening"),col("openingDate"),col("balance"),col("hidden"),col("id")],
+    ...acc.accounts.map(a=>[a.name,t("acc.kind."+(["cash","card","wallet","bank","credit"].includes(a.kind)?a.kind:"other")),money(a.opening.amount),a.opening.date||"",money(bal[a.id]),a.hidden?yes:no,a.id])];
+  const transfers=[[col("date"),col("from"),col("to"),col("amount"),col("note")],
+    ...[...acc.transfers].sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>[x.date,accName.get(x.from)||x.from,accName.get(x.to)||x.to,money(x.amount),x.note||""])];
+  const budgets=S.budgets||{}, spend=calcCategorySpend(forSpending(tx),mon,now), carry=cleanBudgetCarry(extra.budgetCarry);
+  const budgetRows=[[col("category"),col("limit"),col("spentMonth"),col("carries")],
+    ...Object.entries(budgets).filter(([,v])=>v>0).map(([id,v])=>[catName(id),money(v),money(spend[id]||0),carry[id]?yes:no])];
+  const goals=(S.goals||[]).filter(Boolean);
+  const goalRows=[[col("name"),col("target"),col("saved"),col("reachedOn"),col("targetDate"),col("id")],
+    ...goals.map(g=>[g.name,money(g.target),money(g.saved),g.doneAt||"",g.targetDate||"",g.id])];
+  const what=(c)=>t(c.src==="leftover"?"goal.srcLeftover":c.src==="set"?"goal.srcSet":"goal.srcAdd")+(c.note?": "+c.note:"");
+  const goalHist=[[col("goal"),col("date"),col("amount"),col("what")],
+    ...goals.flatMap(g=>{ const h=goalHistory(g); return [...(Math.round(h.before*100)!==0?[[g.name,"",money(h.before),t("goal.histBefore")]]:[]), ...[...h.lines].reverse().map(c=>[g.name,c.date,c.amount,what(c)])]; })];
+  const debtRows=[[col("kind"),col("name"),col("direction"),col("event"),col("date"),col("amount"),col("leftAfter")]];
+  dd.debts.forEach(d=>{ const left=debtLeftAfter(d), dir=t(d.direction==="owe"?"debt.badgeOwe":"debt.badgeOwed");
+    debtRows.push([t("xl.debt"),d.name,dir,t("xl.start"),"",q(d.principal),q(d.principal)]);
+    d.payments.forEach((p,i)=>debtRows.push([t("xl.debt"),d.name,dir,t("xl.payment"),p.date,q(p.amount),q(left[i])])); });
+  dd.loans.forEach(l=>{ const left=loanLeftAfter(l), dir=t("debt.badgeOwe");
+    debtRows.push([t("xl.loan"),l.lender,dir,t("xl.start"),l.firstPayment||"",q(l.principal),q(l.principal)]);
+    l.payments.forEach((p,i)=>debtRows.push([t("xl.loan"),l.lender,dir,t("xl.payment"),p.date,q(p.amount),q(left[i])])); });
+  const billRows=[[col("name"),col("category"),col("amount"),col("howOften"),col("active"),col("id")],
+    ...(S.bills||[]).filter(Boolean).map(b=>[b.name,catName(b.category),money(b.amount),t("freq."+b.freq),b.active===false?no:yes,b.id])];
+  const parts=[["entries",entries,[12,10,22,18,24,12,28,16,12,14,18]],["accounts",accounts,[22,16,14,14,14,8,14]],["transfers",transfers,[12,20,20,12,24]],
+    ["budgets",budgetRows,[24,14,16,12]],["goals",goalRows,[24,12,12,14,14,14]],["goalHist",goalHist,[24,12,12,30]],["debts",debtRows,[10,22,18,12,12,12,12]],["bills",billRows,[24,22,12,14,8,14]]];
+  const readme=[[t("xl.readme.title"),""],...parts.map(([k,rows])=>[sheet(k),t("xl.readme."+k,{ n:Math.max(0,rows.length-1) })]),["",""],[t("xl.readme.backupH"),t("xl.readme.backup")],[t("xl.readme.madeH"),t("xl.readme.made",{ date:today_, version:APP_RELEASE })]];
+  return [{ name:sheet("readme"), rows:readme, widths:[26,80] }, ...parts.map(([k,rows,w])=>({ name:sheet(k), rows, widths:w }))];
 }
 
 // ─── Run 32 (backlog item 9): optional passphrase-encrypted backup ─────────────────────────────────────────────────────────────────────

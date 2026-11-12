@@ -240,7 +240,7 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
                     <button className="btn btn-sm" onClick={()=>setUpdGoal(null)} aria-label={t("common.cancel")}>✕</button>
                   </div>
                   {!setMode&&<input className="field-input" type="text" autoComplete="off" data-section="goal-update-note" maxLength={80} placeholder={t("goal.notePh")} aria-label={t("goal.notePh")} value={ug.note} onChange={e=>setUpdGoal({...ug,note:e.target.value})} style={{width:"100%",marginTop:7,padding:"8px 10px",fontSize:13,boxSizing:"border-box"}}/>}
-                  <button type="button" className="link-btn" data-section="goal-update-mode" onClick={()=>setUpdGoal({...ug,mode:setMode?"add":"set",val:setMode?"":String(goal.saved||0)})} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12.5,padding:"8px 0 0",cursor:"pointer",minHeight:32}}>{t(setMode?"goal.modeAdd":"goal.modeSet")}</button>
+                  <button type="button" className="link-btn" data-section="goal-update-mode" onClick={()=>setUpdGoal({...ug,mode:setMode?"add":"set",val:setMode?"":String(goal.saved||0)})} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12.5,padding:"8px 0 0",cursor:"pointer",minHeight:36}}>{t(setMode?"goal.modeAdd":"goal.modeSet")}</button>
                 </div>); })()}</Collapse>
               <div className="bud-bar-row" style={{marginTop:12}}>
                 <div className="bar"><div className="bar-fill" style={{width:`${pct}%`,background:"var(--accent)"}}/></div>
@@ -308,7 +308,7 @@ export function BudgetHistory({ catId, limit, transactions, currency, now }) {
   if (!rows.length) return null;
   return (
     <div data-section="bud-history" style={{paddingLeft:44}}>
-      <button type="button" data-section="bud-history-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12,padding:"4px 0",cursor:"pointer",minHeight:32}}>{t(open?"budget.histHide":"budget.histShow")}</button>
+      <button type="button" data-section="bud-history-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12,padding:"4px 0",cursor:"pointer",minHeight:36}}>{t(open?"budget.histHide":"budget.histShow")}</button>
       <Collapse open={open}>
         <div role="list" style={{fontSize:12.5}}>
           {rows.map(r=>(
@@ -335,7 +335,7 @@ export function GoalHistory({ goal, currency }) {
   return (
     <div data-section="goal-history" style={{marginTop:8}}>
       {took!==null&&took>0&&Math.round(h.before*100)===0&&<div className="list-sub" data-section="goal-took" style={{marginBottom:4}}>{tn("goal.took",took,{ amount:fmt(goal.saved||0,currency) })}</div>}
-      <button type="button" className="link-btn" data-section="goal-history-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12.5,padding:"4px 0",cursor:"pointer",minHeight:32}}>{t(open?"goal.histHide":"goal.histShow",{ n:h.lines.length })}</button>
+      <button type="button" className="link-btn" data-section="goal-history-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12.5,padding:"4px 0",cursor:"pointer",minHeight:36}}>{t(open?"goal.histHide":"goal.histShow",{ n:h.lines.length })}</button>
       <Collapse open={open}>
         <div role="list" data-section="goal-history-rows" style={{fontSize:12.5}}>
           {h.lines.map(c=>(

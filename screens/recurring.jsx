@@ -11,7 +11,7 @@ function PaymentsFold({ ids, byId, currency, onView }) {
   if (!list.length) return null;
   return (
     <div data-section="rec-payments" style={{padding:"0 14px",borderBottom:open?"1px solid var(--rule)":"none"}}>
-      <button type="button" data-section="rec-payments-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12,padding:"6px 0",cursor:"pointer",minHeight:32,fontFamily:"var(--font)"}}>{t(open?"rec.histHide":"rec.histShow",{ n:list.length })}</button>
+      <button type="button" data-section="rec-payments-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12,padding:"6px 0",cursor:"pointer",minHeight:36,fontFamily:"var(--font)"}}>{t(open?"rec.histHide":"rec.histShow",{ n:list.length })}</button>
       <Collapse open={open}>
         <div role="list" style={{paddingBottom:8}}>
           {list.map(p=>(

@@ -1,7 +1,7 @@
 // Run 50 (owner list #3): gift ledger. A read-only view over existing entries (see giftLedger in App.jsx); adding goes through the normal Add screen.
 import { useMemo, useState } from "react";
 import { t } from "../i18n.js";
-import { buildCsv, downloadFile, fmt, fmtDate, giftLedger, today } from "../App.jsx";
+import { buildCsv, saveTextFile, fmt, fmtDate, giftLedger, today } from "../App.jsx";
 
 export function GiftsPage({ transactions, currency, onView, onAdd, showToast }) {
   const [q, setQ] = useState("");
@@ -50,7 +50,7 @@ export function GiftsPage({ transactions, currency, onView, onAdd, showToast }) 
               </button>
             ))}
           </div>
-          <button type="button" className="btn btn-full" data-section="gifts-export" style={{ marginTop: 12 }} onClick={() => { downloadFile(buildCsv(L.rows.map(r => r.txn)), "text/csv;charset=utf-8;", `gifts-${today()}.csv`); showToast(t("gifts.exported")); }}>{t("gifts.export")}</button>
+          <button type="button" className="btn btn-full" data-section="gifts-export" style={{ marginTop: 12 }} onClick={async () => { const r = await saveTextFile(`gifts-${today()}.csv`, buildCsv(L.rows.map(r => r.txn))); if (r === "failed") showToast(t("io.saveFailed"), 6000); else if (r !== "cancelled") showToast(t("gifts.exported")); }}>{t("gifts.export")}</button>
         </>)}
     </div>
   );
