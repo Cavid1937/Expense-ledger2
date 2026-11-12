@@ -155,6 +155,7 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
                   <span className="bud-pct" style={{color:x.over?"var(--neg)":"var(--ink-3)"}}>{fmtPct(pct)}</span>
                   {editBtn(cat,x.base)}
                 </div>
+                <BudgetHistory catId={cat.id} limit={x.base} transactions={transactions} currency={currency} now={now}/>
                 {x.carried>0&&<div className="list-sub" data-section="carry-line" style={{marginTop:4,paddingLeft:44}}>{t("carry.line",{ base:fmt(x.base,currency), carried:fmt(x.carried,currency) })}</div>}
                 {editRow(cat,x.base)}
               </div>
@@ -289,6 +290,35 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
           <CategoryOrder onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
         </div>
       </>)}
+    </div>
+  );
+}
+
+// Run 63 (owner batch D10): a budget's last six finished months (spent against today's limit), folded. Only months since the first entry.
+// Read-only; the limit shown is the current one, because past limits are not kept (said in the note).
+export function BudgetHistory({ catId, limit, transactions, currency, now }) {
+  const [open,setOpen]=useState(false);
+  const rows=useMemo(()=>{
+    const first=(transactions||[]).reduce((m,x)=>x&&x.date&&(!m||x.date<m)?x.date:m,"").slice(0,7);
+    if (!first) return [];
+    const [y,mo]=now.split("-").map(Number), out=[];
+    for (let k=1;k<=6;k++) { const d=new Date(y,mo-1-k,1), ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`; if (ym<first) break; out.push({ ym, spent:calcCategorySpend(transactions,ym)[catId]||0 }); }
+    return out;
+  },[catId,transactions,now]);
+  if (!rows.length) return null;
+  return (
+    <div data-section="bud-history" style={{paddingLeft:44}}>
+      <button type="button" data-section="bud-history-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12,padding:"4px 0",cursor:"pointer",minHeight:32}}>{t(open?"budget.histHide":"budget.histShow")}</button>
+      <Collapse open={open}>
+        <div role="list" style={{fontSize:12.5}}>
+          {rows.map(r=>(
+            <div role="listitem" key={r.ym} data-mon={r.ym} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"5px 0",borderTop:"1px solid var(--rule)"}}>
+              <span>{monthName(r.ym)}</span>
+              <span style={{whiteSpace:"nowrap",fontWeight:600,color:r.spent>limit?"var(--neg)":"var(--ink)"}}>{fmt(r.spent,currency)} / {fmt(limit,currency)}</span>
+            </div>))}
+          <div className="list-sub" style={{padding:"4px 0 2px"}}>{t("budget.histNote")}</div>
+        </div>
+      </Collapse>
     </div>
   );
 }

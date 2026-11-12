@@ -104,6 +104,7 @@
     "run59leftover.test.mjs": 20,
     "run60balance.test.mjs": 6,
     "run61goals.test.mjs": 14,
+    "run62debts.test.mjs": 10,
     "run43pace.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
@@ -141,6 +142,7 @@
     "e2e_run60_balances.mjs": 8,
     "e2e_run61_downgrade.mjs": 4,
     "e2e_run61_goals.mjs": 11,
+    "e2e_run62_history.mjs": 7,
     "e2e_run57_paid.mjs": 26,
     "e2e_run9.mjs": 55,
     "e2e_run10.mjs": 16,

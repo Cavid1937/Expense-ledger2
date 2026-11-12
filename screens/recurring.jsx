@@ -1,7 +1,28 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { t, tn } from "../i18n.js";
+import { Collapse } from "./motion.jsx";
 import { CAT, CatIcon, Icon, activateKey, billPaymentsLeft, billsToIcs, buildSchedules, catName, daysBetween, downloadFile, fmt, fmtDate, localDateStr, localMonthStr, maskText, scheduleMonthStatus, scheduleMonthly, scheduleNextDue, subName, today } from "../App.jsx";
+
+// Run 63 (owner batch D10): every payment recorded for a repeating bill, newest first, folded under the bill. Read-only; tapping one opens it.
+function PaymentsFold({ ids, byId, currency, onView }) {
+  const [open,setOpen]=useState(false);
+  const list=(ids||[]).map(id=>byId.get(String(id))).filter(Boolean).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  if (!list.length) return null;
+  return (
+    <div data-section="rec-payments" style={{padding:"0 14px",borderBottom:open?"1px solid var(--rule)":"none"}}>
+      <button type="button" data-section="rec-payments-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12,padding:"6px 0",cursor:"pointer",minHeight:32,fontFamily:"var(--font)"}}>{t(open?"rec.histHide":"rec.histShow",{ n:list.length })}</button>
+      <Collapse open={open}>
+        <div role="list" style={{paddingBottom:8}}>
+          {list.map(p=>(
+            <button type="button" role="listitem" key={String(p.id)} data-section="rec-payment" onClick={()=>onView&&onView(p)} style={{display:"flex",justifyContent:"space-between",gap:8,width:"100%",background:"none",border:"none",borderTop:"1px solid var(--rule)",padding:"6px 0",fontSize:12.5,color:"var(--ink)",cursor:"pointer",textAlign:"left",fontFamily:"var(--font)"}}>
+              <span>{fmtDate(p.date)}</span><span style={{fontWeight:600,whiteSpace:"nowrap"}}>{p.type==="income"?"+":"−"}{fmt(p.amount,currency)}</span>
+            </button>))}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
 
 export function RecurringHub({ transactions, bills=[], currency, onView, onToggleSchedule, onRecordPayment, onConvert, onEditBill, onToggleBill, onAddBill, suggestions=[], onReviewSuggestion, onDismissSuggestion }) {
   const schedules=useMemo(()=>{
@@ -48,13 +69,14 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
 
   const ics=billsToIcs(outgoing,transactions,nowD,{ label:x=>maskText(x.merchant||x.note)||catName(x.category), amountText:x=>fmt(x.amount,currency) });   // Run 24
   const dueText=(x)=>{ if (!x.nextDue) return t("rec.noDate"); const d=daysBetween(nowD,x.nextDue); return d===0?t("rec.dueToday"):d===1?t("rec.dueTomorrow"):d<=60?tn("rec.dueInDays",d):t("rec.dueOn",{date:fmtDate(localDateStr(x.nextDue))}); };
+  const byId=new Map((transactions||[]).map(x=>[String(x.id),x]));
   const Row=({x})=>{
     const cat=CAT(x.category)||{id:"other",color:"#98A5B7"};
     const isInc=x.type==="income";
     const near=x.nextDue && daysBetween(nowD,x.nextDue)<=3;
-    return (
-      // A paused schedule is marked by its "Paused" text and a faded icon; its text keeps full contrast (fading the whole row
-      // made it 2.2–3.9:1, including the Reactivate button the user needs).
+    return (<div data-section="rec-item">
+      {/* A paused schedule is marked by its "Paused" text and a faded icon; its text keeps full contrast (fading the whole row
+          made it 2.2–3.9:1, including the Reactivate button the user needs). */}
       <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)"}}>
         <div aria-hidden="true" onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{width:38,height:38,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:x.isActive?1:0.5}}>
           <CatIcon catId={cat.id} size={16} color={cat.color}/>
@@ -86,7 +108,8 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
           </button>
         </div>
       </div>
-    );
+      <PaymentsFold ids={x.memberIds} byId={byId} currency={currency} onView={onView}/>
+    </div>);
   };
 
   return (

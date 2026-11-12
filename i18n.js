@@ -1562,6 +1562,16 @@ export const MESSAGES = {
   "notspent.total": { en: "Total", az: "Cəmi", ru: "Итого" },
   "acc.leftoverHint": { en: "Add your cash or card as an account to see where unused money stays.", az: "İstifadə olunmayan pulun harada qaldığını görmək üçün nağd pulunuzu və ya kartınızı hesab kimi əlavə edin.", ru: "Добавьте наличные или карту как счёт, чтобы видеть, где остаются неиспользованные деньги." },
   "acc.leftoverHintOk": { en: "Got it", az: "Aydındır", ru: "Понятно" },
+  // Runs 62-63: histories (debts and loans, repeating bills, budgets)
+  "debt.leftAfter": { en: "{amount} left after this", az: "Bundan sonra {amount} qalıb", ru: "После этого осталось {amount}" },
+  "loan.leftAfter": { en: "{amount} left after this (estimate)", az: "Bundan sonra {amount} qalıb (təxmini)", ru: "После этого осталось {amount} (оценка)" },
+  "debt.export":    { en: "Download the full history (spreadsheet)", az: "Bütün tarixçəni yüklə (cədvəl)", ru: "Скачать всю историю (таблица)" },
+  "debt.exported":  { en: "Debts and loans history downloaded", az: "Borc və kreditlərin tarixçəsi yükləndi", ru: "История долгов и кредитов скачана" },
+  "rec.histShow":   { en: "Payments ({n})", az: "Ödənişlər ({n})", ru: "Платежи ({n})" },
+  "rec.histHide":   { en: "Hide payments", az: "Ödənişləri gizlət", ru: "Скрыть платежи" },
+  "budget.histShow": { en: "Last months", az: "Son aylar", ru: "Последние месяцы" },
+  "budget.histHide": { en: "Hide last months", az: "Son ayları gizlət", ru: "Скрыть последние месяцы" },
+  "budget.histNote": { en: "Spent each month against today's limit (earlier limits are not kept).", az: "Hər ay xərclənən, bugünkü limitlə müqayisədə (əvvəlki limitlər saxlanmır).", ru: "Траты за каждый месяц в сравнении с текущим лимитом (прежние лимиты не сохраняются)." },
   // Run 61: money added to goals, with a history; the finished state
   "goal.addMoney":  { en: "Add money", az: "Pul əlavə et", ru: "Добавить деньги" },
   "goal.addBtn":    { en: "Add", az: "Əlavə et", ru: "Добавить" },

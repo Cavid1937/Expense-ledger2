@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts } from "../App.jsx";
+import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, downloadFile } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";   // Run 38: forms, edits and the Debts / Loans switch ease in and out
 
@@ -235,12 +235,13 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
               </div>
             )}</Reveal>
             {payMsg[d.id]&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginTop:6}}>{payMsg[d.id]}</div>}
-            {d.payments.map(p=>(
+            {d.payments.length>0&&<div className="list-sub" style={{marginTop:12}}>{t("loan.paymentsTitle")}</div>}
+            {(()=>{ const left=debtLeftAfter(d); return d.payments.map((p,i)=>(
               <div key={p.id} className="debt-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
-                <span className="list-sub">{fmtDate(p.date)}{p.txnId!==undefined?` · ${t("debt.linkedTag")}`:""}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
+                <span className="list-sub" style={{minWidth:0}}>{fmtDate(p.date)}{p.txnId!==undefined?` · ${t("debt.linkedTag")}`:""}<span data-section="pay-left" style={{display:"block"}}>{t("debt.leftAfter",{ amount:q(left[i]) })}</span></span><span style={{fontSize:13,fontWeight:600,marginLeft:"auto"}}>{q(p.amount)}</span>
                 <button className="topbar-btn debt-pay-del" style={{color:"var(--ink-4)"}} onClick={()=>delPayment(d,p.id)} aria-label={t("debt.deletePay",{amount:q(p.amount)})}><Icon name="trash" size={14}/></button>
               </div>
-            ))}
+            )); })()}
           </div>
         ); })}
       </>)}
@@ -333,17 +334,21 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
               })()}
               {!done&&<button className="btn btn-primary btn-full loan-paid-btn" style={{marginTop:10}} onClick={()=>markPaid(l,sc)}>{t("loan.markPaid")}</button>}
               {l.payments.length>0&&<div className="list-sub" style={{marginTop:12}}>{t("loan.paymentsTitle")}</div>}
-              {l.payments.map(p=>(
+              {(()=>{ const left=loanLeftAfter(l); return l.payments.map((p,i)=>(
                 <div key={p.id} className="loan-pay-row" style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"6px 0",borderTop:"1px solid var(--rule)",marginTop:6}}>
-                  <span className="list-sub">{fmtDate(p.date)}{p.txnId!==undefined?` · ${t("debt.linkedTag")}`:""}</span><span style={{fontSize:13,fontWeight:600}}>{q(p.amount)}</span>
+                  <span className="list-sub" style={{minWidth:0}}>{fmtDate(p.date)}{p.txnId!==undefined?` · ${t("debt.linkedTag")}`:""}<span data-section="pay-left" style={{display:"block"}}>{t("loan.leftAfter",{ amount:q(left[i]) })}</span></span><span style={{fontSize:13,fontWeight:600,marginLeft:"auto"}}>{q(p.amount)}</span>
                   <button className="topbar-btn loan-pay-del" style={{color:"var(--ink-4)"}} onClick={()=>delLoanPayment(l,p)} aria-label={t("loan.deletePay",{amount:q(p.amount)})}><Icon name="trash" size={14}/></button>
                 </div>
-              ))}
+              )); })()}
             </div>
           );
         })}
       </>)}
       </Swap>
+      {/* Run 62 (owner batch D9): the whole history of every debt and loan, with what was left after each payment, as a spreadsheet */}
+      {(data.debts.length>0||data.loans.length>0)&&(
+        <button type="button" className="btn btn-ghost btn-full" data-section="debts-export" style={{marginTop:14}} onClick={()=>{ downloadFile(buildDebtsCsv(data),"text/csv;charset=utf-8;",`debts-loans-${today()}.csv`); showToast(t("debt.exported")); }}>{t("debt.export")}</button>
+      )}
     </div>
   );
 }

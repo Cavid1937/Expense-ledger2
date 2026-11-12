@@ -152,7 +152,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="61 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="63 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -1220,6 +1220,25 @@ export function loanExtraEffect(l, extra) {
   return { monthsSaved:origMonths-months, interestSaved:origInterest-interest, newMonths:months, origMonths };
 }
 export function debtRemaining(d) { return Math.max(0,d.principal-(d.payments||[]).reduce((s,p)=>s+p.amount,0)); }
+// Run 62 (owner batch D9): what was still left after each payment, in whole qapik, in the order the payments were recorded.
+// A loan's balance after a payment is the schedule's estimate after that many instalments (the same figure the loan card shows).
+export function debtLeftAfter(d) { let paid=0; return (d.payments||[]).map(p=>{ paid+=p.amount; return Math.max(0,d.principal-paid); }); }
+export function loanLeftAfter(l) { const sc=loanSchedule(l); return (l.payments||[]).map((p,i)=>sc && sc.payments[i] ? sc.payments[i].balance : 0); }
+// One spreadsheet of every debt and loan with every payment and what was left after it (a person's history, not a backup: it is never imported).
+// Column names are the same words the app uses; amounts in money with 2 decimals; dates YYYY-MM-DD.
+export function buildDebtsCsv(data, labels) {
+  const L={ debt:"Debt", loan:"Loan", owe:"I owe", owed:"Owed to me", start:"Start", payment:"Payment", ...(labels||{}) };
+  const d=cleanDebtData(data), m=(q)=>(q/100).toFixed(2);
+  const rows=[["Kind","Name","Direction","Event","Date","Amount","LeftAfter","AlsoInEntries"]];
+  d.debts.forEach(x=>{ const left=debtLeftAfter(x);
+    rows.push([L.debt,x.name,L[x.direction]||x.direction,L.start,"",m(x.principal),m(x.principal),""]);   // a debt keeps no start date
+    x.payments.forEach((p,i)=>rows.push([L.debt,x.name,L[x.direction]||x.direction,L.payment,p.date,m(p.amount),m(left[i]),p.txnId!==undefined?"yes":""])); });
+  d.loans.forEach(x=>{ const left=loanLeftAfter(x);
+    rows.push([L.loan,x.lender,L.owe,L.start,x.firstPayment||"",m(x.principal),m(x.principal),""]);   // the first instalment's date
+    x.payments.forEach((p,i)=>rows.push([L.loan,x.lender,L.owe,L.payment,p.date,m(p.amount),m(left[i]),p.txnId!==undefined?"yes":""])); });
+  const safe=(v)=>{ const s=String(v); return /^[=+\-@\t\r]/.test(s) ? "'"+s : s; };   // same formula guard as buildCsv
+  return "﻿"+rows.map(r=>r.map(v=>`"${safe(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+}
 export function debtCanPay(d, amount) { return isQapik(amount) && amount<=debtRemaining(d); }
 // Run 28: net position = money in the visible accounts + money people owe you − what you owe − what is left on your loans. All in whole cents
 // (the debts store keeps cents as integers, so there is no unit conversion). Loan balances come from the repayment schedule after the payments

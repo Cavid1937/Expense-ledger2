@@ -476,3 +476,16 @@ Status: DECIDED, NOT STARTED.
 
 ## Added 12 Nov (owner): full category and subcategory audit. PLAN ONLY.
 Full proposal: handoff/CATEGORY_AUDIT_20261112.md (supersedes the 10 Nov 'expand categories' later-job section, and includes the Gifts & Personal split). Two correctness items found during the audit go first: the Gifts page counting personal care as gifts, and the statement import counting cash withdrawals and moves between own accounts as spending (the same money counted twice once the cash spending is also recorded). Status: PROPOSED, NOT STARTED.
+
+
+## Audit 13 Nov (owner batch D10, "see all progress with details, everywhere"). Done by reading the code.
+| Feature | History visible today | Gap |
+|---|---|---|
+| Goals | Yes (Run 61): every addition, corrections, "before the history", reached day | none |
+| Debts | Yes: each payment with date; Run 62 adds "left after" and an export | none after Run 62 |
+| Loans | Yes: each instalment with date; Run 62 adds "left after" and an export | none after Run 62 |
+| Gifts | Yes: Gifts page lists every gift given and received, per person, exportable | none |
+| Accounts | Yes: the account sheet lists its entries and balance | a per-account statement export could come later |
+| Repeating bills | Only "N payments recorded" and the last date | GAP: list each payment (date, amount) under the bill |
+| Budgets | Only this month | GAP: last 6 months (spent vs limit) per budget |
+Plan: Run 63 fills the two gaps, read-only views (no stored data changes).
