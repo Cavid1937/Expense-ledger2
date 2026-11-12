@@ -68,3 +68,6 @@ Still "Merchant" in the field grid: waiting for your word.
 - The spreadsheet export keeps its "Merchant" column on purpose, so files already exported still import.
 - Tests: new `e2e_run56_place` 13/13. Run alone and passing: e2e_run17_addform 11, e2e_run55_detail 20, e2e_bigtext 25, e2e_lang 57. Logic 100 files 2,040/0.
 - Release number 56. Full browser suite on this commit: see PHASE_CHECKPOINT.md.
+
+## Full browser run on the final code (Runs 54-56)
+125 files, 2,154 checks passed, 0 failed, 0 missing, computer awake the whole time. This is the one uninterrupted full run that was owed before any push.
