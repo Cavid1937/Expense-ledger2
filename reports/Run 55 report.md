@@ -46,3 +46,18 @@ All of it in English, Azerbaijani and Russian. The Azerbaijani and Russian lines
 
 ## Next action
 The entry detail sheet (your 10 Nov screenshots: unlabelled grey box, analytics words in the merchant card, actions that look like plain text).
+
+## Added later on 12 Nov: the entry detail sheet (your 10 Nov screenshots)
+| Your complaint | Now |
+|---|---|
+| An unlabelled grey box under the fields (the note) | It has the label "Note". It is not shown when it only repeats the place ("bus / metro" under "Bus/Metro") or when the note is already the title. |
+| "Merchant Profile": Visits, Avg spend, Visit frequency, Typical day, ±15%, Est. next visit, Detected pattern | A folded button "Your history at this place". Opened, it says in sentences: "You paid here 4 times, 2.40 in all. Almost always the same amount, about 0.60. About once every 4 days. The next one is likely around 16 Nov. In the last 30 days: 2.40." Shown only from 3 visits on. |
+| "Split into categories" and "This was a payment of a recurring bill" looked like plain text | Filled buttons, 44 px tall, with verbs: "Split between categories", "Mark as a bill payment" / "Mark as regular income". |
+| Weak order of actions | Edit and Duplicate first, then the other actions, Delete last and set apart, then Close. |
+
+Screenshots (made-up data): `reports/run55/detail-sheet-en.png`, `reports/run55/detail-sheet-az.png`.
+
+A fault of mine that the new test caught before it reached you: my first version of the history card crashed the app ("Something went wrong") as soon as an entry with enough history was opened, because one helper was not imported. Fixed; the new test opens exactly that case.
+
+Tests: new `e2e_run55_detail` 20/20 (note label and no repeat, folded card in plain words, no old analytics words, real buttons, order, privacy mode hides the amounts, az and ru fit at 320 px). Changed because the wording changed: `e2e_run24_split` (az/ru button label), `e2e_run12` and `e2e_run9` (they tap the bill button by its text). Run alone and passing: e2e_run12 35, e2e_run24_split 12, e2e_run43 13, e2e_run39_fx 15, e2e_run9 55, e2e_bigtext 25, e2e_lang 57, e2e_run8 9, e2e_import 53. Logic 100 files, 2,040/0.
+Still "Merchant" in the field grid: waiting for your word.
