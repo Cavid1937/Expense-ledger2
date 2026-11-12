@@ -152,7 +152,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="57 (2026-11-12)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="58 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -318,49 +318,55 @@ export const nMon    = (n) => { const now=new Date(); const d=new Date(now.getFu
 
 // ─── Category system ──────────────────────────────────────────────────────────
 export const CATEGORIES = [
+  // Run 58 (owner, 12-13 Nov: category audit, handoff/CATEGORY_AUDIT_20261112.md). Ids are never renamed or reused. A subcategory that now lives
+  // elsewhere moves to `retired`: it is no longer offered for NEW entries, but entries that already carry it keep it, still show its translated
+  // name and can still be filtered by it. The old English names stay importable (CATEGORY_MAP), so CSV files written by earlier versions still match.
   { id:"food",     name:"Food & Dining",        tile:"Food",      color:"#F0C46F", income:false,
-    subs:["Restaurants","Fast Food","Coffee","Groceries","Delivery","Snacks","Bakery","Market / Bazaar","Other"] },
+    subs:["Restaurants","Fast Food","Coffee","Groceries","Delivery","Snacks","Bakery","Market / Bazaar","Drinks","Water delivery","Other"] },
   { id:"transport",name:"Transport",             tile:"Transport", color:"#83B9F5", income:false,
-    subs:["Metro","Bus","Taxi / Ride-hailing","Fuel","Parking","Car Maintenance","Intercity","Public transport card","Other"] },
+    subs:["Metro","Bus","Taxi / Ride-hailing","Intercity","Public transport card","Train","Bike & scooter","Other"], retired:["Fuel","Parking","Car Maintenance"] },
   { id:"shopping", name:"Shopping",              tile:"Shopping",  color:"#B3A1FF", income:false,
     subs:["Clothing","Electronics","Personal Items","Home","Accessories","Online Shopping","Furniture","Appliances","Other"] },
-  { id:"gifts",    name:"Gifts & Personal",      tile:"Gifts",     color:"#C9A27E", income:false,
-    subs:["Gifts","Donations","Personal Care","Barber / Hair","Cosmetics","Other"] },
+  { id:"gifts",    name:"Gifts & Donations",     tile:"Gifts",     color:"#C9A27E", income:false,
+    subs:["Gifts","Donations","Weddings & parties","Other"], retired:["Personal Care","Barber / Hair","Cosmetics"] },
+  { id:"personal", name:"Personal Care",         tile:"Personal care", color:"#E3B5A4", income:false,
+    subs:["Barber / Hair","Cosmetics","Hygiene","Massage & spa","Other"] },
   { id:"entertain",name:"Entertainment",         tile:"Entertainment",   color:"#E7A3D6", income:false,
-    subs:["Cinema","Games","Events","Sports","Hobbies","Music","Other"] },
-  { id:"digital",  name:"Bills & Subscriptions", tile:"Bills & subs",     color:"#9FB4C7", income:false,
-    subs:["Mobile","Internet","Streaming","Software","Cloud Storage","Other Subs","Other"] },
+    subs:["Cinema","Games","Events","Sports","Hobbies","Music","Going out","Other"] },
+  { id:"digital",  name:"Phone & Subscriptions", tile:"Phone & subs",     color:"#9FB4C7", income:false,
+    subs:["Mobile","Internet","TV","Home phone","Streaming","Software","Cloud Storage","Other"], retired:["Other Subs"] },
   { id:"health",   name:"Health & Fitness",      tile:"Health",    color:"#F2A66E", income:false,
-    subs:["Gym","Sports Equipment","Pharmacy","Doctor / Dentist","Supplements","Eye care","Tests / Lab","Other"] },
+    subs:["Gym","Sports Equipment","Pharmacy","Doctor / Dentist","Hospital","Supplements","Eye care","Tests / Lab","Health insurance","Other"] },
   { id:"edu",      name:"Education",             tile:"Education", color:"#C9B8FF", income:false,
-    subs:["University","Books","Courses","Exams","Stationery","Tutoring","School / Kindergarten","Other"] },
+    subs:["University","Books","Courses","Language courses","Exams","Stationery","Tutoring","School / Kindergarten","Driving school","Other"] },
   { id:"travel",   name:"Travel",                tile:"Travel",    color:"#D8CB7E", income:false,
-    subs:["Flights","Hotels","Visa","Travel Food","Travel Transport","Activities","Other"] },
+    subs:["Flights","Hotels","Visa","Travel Food","Travel Transport","Activities","Travel insurance","Other"] },
   { id:"housing",  name:"Home",                  tile:"Home",      color:"#4CC9C4", income:false,
-    subs:["Rent","Utilities","Household","Repairs","Gas","Electricity","Water","Building fees","Other"] },
+    subs:["Rent","Mortgage","Utilities","Electricity","Gas","Water","Heating","Building fees","Household","Cleaning & laundry","Repairs","Home insurance","Other"] },
+  // "Transfers" stays offered: it is the place for money moved between your own accounts when it is recorded as an entry at all.
   { id:"finance",  name:"Finance",               tile:"Finance",   color:"#85D9D0", income:false,
-    subs:["Bank Fees","Transfers","Taxes","Insurance","Investments","Loan payment","Interest","Other"] },
+    subs:["Bank Fees","Money sent to people","Cash withdrawal","Transfers","Taxes","State fees","Insurance","Investments","Loan payment","Interest","Other"] },
   // Run 35: more everyday life. New ids only; every older id, name and subcategory is unchanged, so no stored entry moves.
   { id:"family",   name:"Family & Children",     tile:"Family",    color:"#F2A3B3", income:false,
     subs:["Childcare","Children's needs","Family support","School items","Toys & games","Other"] },
   // Run 38 (owner: "people who have a car, why was it not thought of?"): everything a car costs in one place. Transport keeps its own subcategories
   // (Fuel, Parking, Car Maintenance) so entries already recorded there do not change.
   { id:"car",      name:"Car",                   tile:"Car",       color:"#7FA7C9", income:false,
-    subs:["Fuel","Car insurance","Car Maintenance","Tyres & parts","Parking","Fines","Car wash","Car tax & inspection","Other"] },
+    subs:["Fuel","Car insurance","Car Maintenance","Tyres & parts","Parking","Fines","Car wash","Car tax & inspection","Car rental","Other"] },
   { id:"pets",     name:"Pets",                  tile:"Pets",      color:"#D7B98E", income:false,
     subs:["Pet food","Vet","Pet supplies","Pet grooming","Other"] },
   { id:"work",     name:"Work & Business",       tile:"Work",      color:"#8FA8D8", income:false,
     subs:["Tools & supplies","Business travel","Business services","Professional fees","Other"] },
   { id:"other",    name:"Other",                 tile:"Other",     color:"#A5B7B8", income:false,
-    subs:["Miscellaneous","Pets","Children"] },
+    subs:["Miscellaneous"], retired:["Pets","Children"] },
   // Income. "earned" is false for money that arrives but is not earnings (refunds, withdrawals from savings): it counts in account balances
   // but not in income totals, the same way loan money already works (see forSpending).
   { id:"salary",   name:"Salary",                tile:"Salary",    color:"#8BD97A", income:true, subs:["Wages","Bonus","Overtime","Commission"] },
-  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#7CCB9A", income:true, subs:["Consulting","Gig work","Temporary work"] },
+  { id:"freelance",name:"Freelance",             tile:"Freelance", color:"#7CCB9A", income:true, subs:["Consulting","Gig work","Temporary work","Cash work"] },
   { id:"business", name:"Business Income",       tile:"Business",  color:"#6FCF97", income:true, subs:["Business revenue","Business profit","Other business"] },
   { id:"stipend",  name:"Scholarship & Grants",  tile:"Scholarship", color:"#9BD6A6", income:true, subs:["Scholarship","Student stipend","Educational grant"] },
   { id:"pension",  name:"Pension",               tile:"Pension",   color:"#A5DC86", income:true, subs:["Retirement benefit"] },
-  { id:"benefits", name:"Social Support",        tile:"Social support", color:"#86D4B5", income:true, subs:["Social benefit","Allowance","Unemployment support","Other assistance"] },
+  { id:"benefits", name:"Social Support",        tile:"Social support", color:"#86D4B5", income:true, subs:["Social benefit","Targeted assistance","Child benefit","Allowance","Unemployment support","Other assistance"] },
   { id:"familyin", name:"Family Support",        tile:"From family", color:"#B6E08A", income:true, subs:["From family","Regular contribution","Remittance"] },
   { id:"alimony",  name:"Child Support & Alimony", tile:"Support",  color:"#8ED9C4", income:true, subs:["Child support","Alimony"] },
   { id:"rental",   name:"Rental Income",         tile:"Rental",    color:"#79CDB0", income:true, subs:["Rent received","Other property income"] },
@@ -378,21 +384,23 @@ export const catName = (id) => MESSAGES["cat."+CAT(id).id] ? t("cat."+CAT(id).id
 export const catTile = (id) => MESSAGES["tile."+CAT(id).id] ? t("tile."+CAT(id).id) : CAT(id).tile;
 // Built-in subcategory names are translated for display; anything the user typed is shown exactly as stored.
 export const subName = (s) => (s && MESSAGES["sub."+s]) ? t("sub."+s) : s;
+// Run 58: a one-line pointer under a category in the add form, where people often look for something that lives elsewhere ("" when none).
+export const catHint = (id) => MESSAGES["cathint."+id] ? t("cathint."+id) : "";
 
 const CATEGORY_MAP = {
   "food":"food","transport":"transport","housing":"housing","digital":"digital",
   "edu":"edu","other":"other","salary":"salary","freelance":"freelance",
-  "sport":"health","personal":"gifts","culture":"shopping",
+  "sport":"health","personal":"personal","culture":"shopping",
   "food & dining":"food","groceries & dining":"food","groceries":"food","dining":"food",
   "food and dining":"food","restaurant":"food","restaurants":"food","coffee":"food",
   "cafe":"food","lunch":"food","snacks":"food","breakfast":"food","dinner":"food",
   "sport & fitness":"health","sports":"health","fitness":"health","gym":"health",
   "football":"entertain","health & sport":"health","exercise":"health","workout":"health",
-  "personal care":"gifts","skincare":"gifts","health":"health","grooming":"gifts",
-  "pharmacy":"health","personal & health":"gifts","beauty":"gifts","medical":"health",
-  "doctor":"health","hygiene":"gifts","style & culture":"shopping","culture & style":"shopping",
+  "personal care":"personal","skincare":"personal","health":"health","grooming":"personal",
+  "pharmacy":"health","personal & health":"personal","beauty":"personal","medical":"health",
+  "doctor":"health","hygiene":"personal","style & culture":"shopping","culture & style":"shopping",
   "fashion":"shopping","style":"shopping","clothing":"shopping","clothes":"shopping",
-  "fragrance":"gifts","entertainment":"entertain","shopping":"shopping","games":"entertain",
+  "fragrance":"personal","entertainment":"entertain","shopping":"shopping","games":"entertain",
   "gaming":"entertain","cinema":"entertain","movies":"entertain","transportation":"transport",
   "travel":"travel","bus":"transport","taxi":"transport","uber":"transport","fuel":"transport",
   "petrol":"transport","metro":"transport","benzin":"transport","rent":"housing","home":"housing",
@@ -413,6 +421,9 @@ const CATEGORY_MAP = {
   "dividends":"investin","dividend":"investin","business":"business","business income":"business","sales":"sales","side work":"sales",
   "gift received":"giftin","gifts received":"giftin","refund":"refund","refunds":"refund","reimbursement":"refund","cashback":"refund",
   "from savings":"savout","savings withdrawal":"savout",
+  // Run 58: the names earlier versions wrote into CSV files, so their files still import into the same place; plus the words of the new category.
+  "gifts & personal":"gifts","bills & subscriptions":"digital","gifts":"gifts","donations":"gifts","barber":"personal","haircut":"personal",
+  "cosmetics":"personal","phone":"digital","phone & internet":"digital",
 };
 
 // Exact matches only (Run 8): an id, a category's English name or an alias, compared after lower-casing, collapsing spaces
@@ -2252,6 +2263,9 @@ export function cleanPrefs(raw) {
   if (typeof s.theme==="string") { const th=themeId(s.theme); if (th!=="sea" && THEME_IDS.includes(th)) out.theme=th; }   // Run 42: a backup that names a removed theme (Sapphire, Cocoa) keeps its closest one
   if (s.reduceEffects===true) out.reduceEffects=true;
   const cm=muteList(s.coachMute), pm=muteList(s.patternMute); if (cm.length) out.coachMute=cm; if (pm.length) out.patternMute=pm;
+  // Run 59: which budgets carry what was not used into the next month (off unless chosen), and the optional month-start goal offer
+  const bc=cleanBudgetCarry(s.budgetCarry); if (Object.keys(bc).length) out.budgetCarry=bc;
+  if (s.leftoverGoal===true) out.leftoverGoal=true;
   return out;
 }
 // Run 37: what an import plan carries, part by part ([key, count] or [key, null] for a part without a count). Shown in the import sheet.
@@ -2269,7 +2283,7 @@ export function fileParts(plan) {
   if (p.prefs && Object.keys(p.prefs).length) out.push(["prefs",null]);
   return out;
 }
-export function collectPrefs(state) { return cleanPrefs({ profileName:state&&state.profileName, setupHidden:state&&state.setupHidden, theme:readTheme(), reduceEffects:readFxOff(), workHours:readWorkHours(), coachMute:readMuteList(COACH_MUTE_KEY), patternMute:readMuteList(PAT_MUTE_KEY) }); }
+export function collectPrefs(state) { return cleanPrefs({ profileName:state&&state.profileName, setupHidden:state&&state.setupHidden, theme:readTheme(), reduceEffects:readFxOff(), workHours:readWorkHours(), coachMute:readMuteList(COACH_MUTE_KEY), patternMute:readMuteList(PAT_MUTE_KEY), budgetCarry:readBudgetCarry(), leftoverGoal:readLeftoverGoal() }); }
 function buildBackup(state, now=new Date().toISOString()) {
   const { transactions,budgets,templates,currency,goals,safeToSpend,bills=[],subcategories }=state;
   const subs=cleanSubcats(subcategories);   // Run 16: optional; absent when there are none, so such a file is identical to before
@@ -2390,9 +2404,9 @@ export const KNOWN_MERCHANTS=[
   ["Starbucks","food","Coffee"],["Coffeemania","food","Coffee"],["Gloria Jeans","food","Coffee"],
   ["McDonald's","food","Fast Food"],["KFC","food","Fast Food"],["Burger King","food","Fast Food"],["Papa John's","food","Fast Food"],["Domino's","food","Fast Food"],["Pizza Hut","food","Fast Food"],["Subway","food","Fast Food"],
   
-  ["Azərişıq","housing","Electricity"],["Azerishiq","housing","Electricity"],["Azersu","housing","Water"],["Azəriqaz","housing","Gas"],["Azerigaz","housing","Gas"],
+  ["Azərişıq","housing","Electricity"],["Azerishiq","housing","Electricity"],["Azersu","housing","Water"],["Azəriqaz","housing","Gas"],["Azerigaz","housing","Gas"],["Azəristilik","housing","Heating"],["Azeristilik","housing","Heating"],
   ["Kontakt","shopping","Electronics"],["Baku Electronics","shopping","Electronics"],
-  ["Amazon","shopping","Online Shopping"],["AliExpress","shopping","Online Shopping"],["Trendyol","shopping","Online Shopping"],["Temu","shopping","Online Shopping"],["Birmarket","shopping","Online Shopping"],["Umico","shopping","Online Shopping"],["Rossmann","gifts","Cosmetics"],["Avromed","health","Pharmacy"],["Gapgo","transport","Taxi / Ride-hailing"],["Azeronline","digital","Internet"],["iTicket","entertain","Events"],
+  ["Amazon","shopping","Online Shopping"],["AliExpress","shopping","Online Shopping"],["Trendyol","shopping","Online Shopping"],["Temu","shopping","Online Shopping"],["Birmarket","shopping","Online Shopping"],["Umico","shopping","Online Shopping"],["Rossmann","personal","Cosmetics"],["Avromed","health","Pharmacy"],["Gapgo","transport","Taxi / Ride-hailing"],["Azeronline","digital","Internet"],["iTicket","entertain","Events"],
   ["CinemaPlus","entertain","Cinema"],["Park Cinema","entertain","Cinema"],
 ];
 // Matches what is typed against the start of the name or of any word in it (at least 2 letters). Returns suggestion objects shaped like merchant-memory entries.
@@ -2614,6 +2628,39 @@ export function applyRollover(goals, goalId, amount) {
   });
 }
 
+// ─── Run 59 (owner-approved 12 Nov, NEXT_WORK_PLAN "APPROVED: month-end leftover, exact definitions") ─────────────────────────────
+// MONEY NOT SPENT in month M = money that really came in minus money that really went out, from what was recorded. One function for the
+// month line and for every row of the running total, so the two always agree. Unused BUDGET is a different thing and never enters here.
+// In:  earned income dated in M, on or before today. Not income: refunds (they lower spending), money taken from savings, loan money,
+//      repayments of person-to-person debts (left out of every spending view already), transfers between own accounts (not entries).
+// Out: spending dated in M, on or before today, at the day it was paid (a cost spread over months counts once, on its own date); only the
+//      person's own share of a cost others pay back; a loan instalment counts only its interest (the rest repays borrowed money, which was
+//      never counted as income either); refunds lower it (those tied to a category are netted the same way as everywhere else).
+function notSpentRows(list) { return netRefunds(netReimb(forSpendingRows(list))); }
+function notSpentOf(rows, mon, now) {
+  const done=happenedIn(mon,now), c=(x)=>Math.round((Number(x.amount)||0)*100);
+  let inC=0, outC=0;
+  for (const x of rows) {
+    if (!x || !isValidDateStr(String(x.date)) || !done(x)) continue;
+    if (x.type==="expense") outC+=c(x);
+    else if (x.type==="income") { if (x.category==="refund") outC-=c(x); else if (isEarnedCat(x.category)) inC+=c(x); }
+  }
+  return { mon, in:inC/100, out:outC/100, net:(inC-outC)/100 };
+}
+export function notSpentMonth(transactions, mon, now=new Date()) { return notSpentOf(notSpentRows(transactions), mon, now); }
+// Every FINISHED month from the first month that has an entry (dated on or before today) up to last month, one row each, plus the total
+// and this month so far (shown apart: it is not finished). A month with no entries is a row with 0. Budgets and rollover play no part.
+export function notSpentHistory(transactions, now=new Date()) {
+  const rows=notSpentRows(transactions), todayS=localDateStr(now), cur=localMonthStr(now);
+  let first="";
+  for (const x of rows) { const d=x && String(x.date); if (d && isValidDateStr(d) && d<=todayS && (!first || d.slice(0,7)<first)) first=d.slice(0,7); }
+  const months=[];
+  if (first && first<cur) { let [y,m]=first.split("-").map(Number); while (true) { const ym=`${y}-${String(m).padStart(2,"0")}`; if (ym>=cur) break; months.push(ym); m++; if (m>12) { m=1; y++; } if (months.length>600) break; } }
+  const list=months.map(mon=>notSpentOf(rows,mon,now));
+  const totalC=list.reduce((s,r)=>s+Math.round(r.net*100),0);
+  return { months:list, total:totalC/100, current:notSpentOf(rows,cur,now), last:list.length ? list[list.length-1] : null };
+}
+
 // ─── Run 50 (owner list #6): set money aside for a yearly bill ──────────────────────────────────────────────────────────
 // For each active, explicit YEARLY expense bill whose next due date is ahead, the amount to put aside every month so the whole
 // bill is ready on its due date (the same rounded-up figure the goals use). A bill whose name already matches a goal is left out,
@@ -2684,9 +2731,13 @@ export function parseQuickText(text, memory={}, now=new Date()) {
 // A view over entries that already exist: expenses in the "Gifts & Personal" category are gifts GIVEN, income in "Gifts Received" is gifts
 // RECEIVED. The merchant field is the person (or the occasion's host), the note or subcategory is the event ("Wedding", "Birthday").
 // Nothing new is stored; the page only reads. A search matches person, note, subcategory and amount, in any letter case.
+// Run 58 (fault found in the category audit): before Personal care became its own category, haircuts and cosmetics were recorded under
+// "Gifts & Personal" with these subcategories. They are not gifts, so the gift ledger leaves them out. The entries themselves are unchanged.
+export const GIFT_NOT_GIFT_SUBS=["Personal Care","Barber / Hair","Cosmetics"];
+const notGiftSub=new Set(GIFT_NOT_GIFT_SUBS.map(s=>s.toLowerCase()));
 export function giftLedger(transactions, query="") {
   const q=lc(String(query||"").trim());
-  const rows=(transactions||[]).filter(x=>x && ((x.type==="expense" && x.category==="gifts") || (x.type==="income" && x.category==="giftin")) && isValidDateStr(String(x.date)))
+  const rows=(transactions||[]).filter(x=>x && ((x.type==="expense" && x.category==="gifts" && !notGiftSub.has(String(x.subcategory||"").trim().toLowerCase())) || (x.type==="income" && x.category==="giftin")) && isValidDateStr(String(x.date)))
     .map(x=>({ txn:x, kind:x.type==="expense" ? "given" : "received", person:String(x.merchant||"").trim(), event:String(x.note||x.subcategory||"").trim(), cents:Math.round((Number(x.amount)||0)*100) }))
     .filter(r=>!q || lc(r.person).includes(q) || lc(r.event).includes(q) || lc(String(r.txn.subcategory||"")).includes(q) || String(r.txn.amount).includes(q))
     .sort((a,b)=>b.txn.date.localeCompare(a.txn.date) || String(b.txn.createdAt||"").localeCompare(String(a.txn.createdAt||"")));
@@ -2700,6 +2751,58 @@ export function giftLedger(transactions, query="") {
     .sort((a,b)=>(b.given+b.received)-(a.given+a.received) || a.name.localeCompare(b.name));
   const sum=k=>rows.filter(r=>r.kind===k).reduce((s,r)=>s+r.cents,0)/100;
   return { rows, people:list, given:sum("given"), received:sum("received") };
+}
+
+// ─── Run 58: "Tidy up categories" (owner-approved audit, rule 3: nothing moves by itself) ──────────────────────────────────────────
+// Older entries recorded where a thing used to live can be moved to its new place, but only the moves the person ticks, with Undo.
+// Never offered: repeating entries, bill payments, loan instalments and debt repayments, so a bill and its payments never split apart.
+// Only category and subcategory change; id, amount, date and everything else stay as they are.
+export const TIDY_MOVES=[
+  { key:"gifts-barber",    from:["gifts","Barber / Hair"],     to:["personal","Barber / Hair"] },
+  { key:"gifts-cosmetics", from:["gifts","Cosmetics"],         to:["personal","Cosmetics"] },
+  { key:"gifts-care",      from:["gifts","Personal Care"],     to:["personal",""] },
+  { key:"transport-fuel",  from:["transport","Fuel"],          to:["car","Fuel"] },
+  { key:"transport-park",  from:["transport","Parking"],       to:["car","Parking"] },
+  { key:"transport-maint", from:["transport","Car Maintenance"], to:["car","Car Maintenance"] },
+  { key:"other-pets",      from:["other","Pets"],              to:["pets",""] },
+  { key:"other-children",  from:["other","Children"],          to:["family","Children's needs"] },
+  { key:"digital-othersubs", from:["digital","Other Subs"],    to:["digital","Other"] },
+];
+export const TIDY_KEY=KEY+"__tidydismiss";
+const tidyLocked=(x)=>!!(x.recurring || x.billId || x.loan || x.debtLink);
+// What could be moved: one group per move that has at least one entry, with the count, the total and the newest entry as an example.
+// monthDelta: how this month's spending per category would change if every entry of the group moved (shown before applying).
+export function tidyPlan(transactions, mon=curMon()) {
+  const out=[];
+  for (const m of TIDY_MOVES) {
+    const sub=lc(m.from[1]);
+    const list=(transactions||[]).filter(x=>x && x.type==="expense" && x.category===m.from[0] && lc(String(x.subcategory||"").trim())===sub && !tidyLocked(x) && isValidDateStr(String(x.date)));
+    if (!list.length) continue;
+    const cents=list.reduce((s,x)=>s+Math.round((Number(x.amount)||0)*100),0);
+    const monCents=list.filter(x=>String(x.date).slice(0,7)===mon).reduce((s,x)=>s+Math.round((Number(x.amount)||0)*100),0);
+    const example=[...list].sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0];
+    out.push({ key:m.key, from:m.from, to:m.to, ids:list.map(x=>x.id), count:list.length, total:cents/100, monthTotal:monCents/100, example });
+  }
+  return out;
+}
+// Applies only the chosen groups. Returns the new list and what each moved entry was before, for Undo.
+export function applyTidy(transactions, plan, keys) {
+  const pick=new Set(keys||[]), move=new Map();
+  for (const g of plan||[]) if (pick.has(g.key)) for (const id of g.ids) move.set(String(id), g.to);
+  const before=[];
+  const next=(transactions||[]).map(x=>{
+    const to=x && move.get(String(x.id)); if (!to || tidyLocked(x)) return x;   // checked again: the list may have changed since the plan was made
+    before.push({ id:x.id, category:x.category, subcategory:x.subcategory, to });
+    return { ...x, category:to[0], subcategory:to[1] };
+  });
+  return { transactions:next, before, moved:before.length };
+}
+// Puts back exactly what applyTidy changed, on entries that still exist; an entry edited since (no longer where it was moved) keeps the later edit.
+export function undoTidy(transactions, before) {
+  const was=new Map((before||[]).map(b=>[String(b.id),b]));
+  return (transactions||[]).map(x=>{ const b=x && was.get(String(x.id)); if (!b) return x;
+    if (b.to && (x.category!==b.to[0] || x.subcategory!==b.to[1])) return x;
+    return { ...x, category:b.category, subcategory:b.subcategory }; });
 }
 
 // ─── Run 50 (owner list #9): suggest bills from repeated payments ───────────────────────────────────────────────────
@@ -2945,15 +3048,48 @@ function budgetCrossing(before, after, budgets, txn, now=new Date()) {
   return null;
 }
 
-export function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date()) {
+// Run 59 (owner-approved, month-end leftover item 4): a budget can carry what was NOT used last month into this month, if the person turned
+// that on for this budget (off by default). Only the unused part is carried, never more than one month's limit, and overspending is never
+// carried (an overspent month starts the next at the normal amount). This moves a planning figure only: no money is created or counted.
+// The choice is kept per budget with the month it was turned on; nothing is carried from months before that. The current limit is used
+// for every month (budget history is not kept). carry: { catId: "YYYY-MM" }.
+export const BUDGET_CARRY_KEY=KEY+"__budgetcarry", LEFTOVER_GOAL_KEY=KEY+"__leftovergoal";
+export function cleanBudgetCarry(v) {
+  const out={}; if (!isPlainObject(v)) return out;
+  for (const [k,m] of Object.entries(v)) { if (Object.keys(out).length>=60) break; if (/^(u_)?[a-z][a-z0-9_]{1,31}$/.test(k) && typeof m==="string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(m)) out[k]=m; }
+  return out;
+}
+export function readBudgetCarry() { try { return cleanBudgetCarry(JSON.parse(localStorage.getItem(BUDGET_CARRY_KEY)||"{}")); } catch { return {}; } }
+export function writeBudgetCarry(v) { try { const c=cleanBudgetCarry(v); if (Object.keys(c).length) localStorage.setItem(BUDGET_CARRY_KEY,JSON.stringify(c)); else localStorage.removeItem(BUDGET_CARRY_KEY); return true; } catch { return false; } }
+export function readLeftoverGoal() { try { return localStorage.getItem(LEFTOVER_GOAL_KEY)==="1"; } catch { return false; } }
+export function writeLeftoverGoal(on) { try { if (on) localStorage.setItem(LEFTOVER_GOAL_KEY,"1"); else localStorage.removeItem(LEFTOVER_GOAL_KEY); return true; } catch { return false; } }
+const monAdd=(ym,n)=>{ const [y,m]=ym.split("-").map(Number); const d=new Date(y,m-1+n,1); return localMonthStr(d); };
+// { catId: amount carried into `mon` } for every budget with carrying on (0 when nothing is left). `spendTxns` = the spending view.
+export function budgetCarried(spendTxns, budgets, carry, mon=curMon(), now=new Date()) {
+  const out={}, c=cleanBudgetCarry(carry);
+  for (const [catId,start] of Object.entries(c)) {
+    const limitC=Math.round((Number((budgets||{})[catId])||0)*100); if (!(limitC>0)) continue;
+    let carried=0, k=start, guard=0;
+    if (start>=mon) { out[catId]=0; continue; }
+    while (k<mon && guard++<240) {
+      const spentC=Math.round((calcCategorySpend(spendTxns||[],k,now)[catId]||0)*100);
+      carried=Math.min(limitC, Math.max(0, limitC+carried-spentC));
+      k=monAdd(k,1);
+    }
+    out[catId]=carried/100;
+  }
+  return out;
+}
+export function calcBudgetStatus(budgets, catSpend, mon=curMon(), now=new Date(), carried={}) {
   const p=monthProgress(mon,now);
   const pacePct=p.totalDays ? Math.round((p.daysPassed/p.totalDays)*100) : 0;
-  return Object.entries(budgets).filter(([,v])=>v>0).map(([catId,limit])=>{
+  return Object.entries(budgets).filter(([,v])=>v>0).map(([catId,base])=>{
+    const extra=Math.max(0,Number((carried||{})[catId])||0), limit=Math.round((base+extra)*100)/100;
     const spent=catSpend[catId]||0;
     const pct=Math.min((spent/limit)*100,100);
     const over=spent>limit, warn=pct>=80&&!over;
     const aheadOfPace=p.state==="current" && Math.round(pct)>pacePct+10;   // pace only means something while the month is under way
-    return { catId,limit,spent,pct,over,warn,aheadOfPace,daysLeft:p.daysRemaining,daysRemaining:p.daysRemaining,state:p.state };
+    return { catId,limit,base,carried:extra,spent,pct,over,warn,aheadOfPace,daysLeft:p.daysRemaining,daysRemaining:p.daysRemaining,state:p.state };
   });
 }
 
@@ -3546,15 +3682,17 @@ export function maskText(s) { return PRIVACY && s ? "•••••" : s; }
 // The person's own history decides a category first (only when the merchant name is exactly one they have used); then the bank's merchant
 // code, then words, then the built-in merchant list. Transfers and not-yet-posted rows are kept apart so the sheet can offer them as choices.
 const STATEMENT_BANKS={ abb:"ABB", unibank:"Unibank" };
-function statementPick(plan, opts) { return plan.stAll.filter(e=>{ const m=plan.stMeta[String(e.id)]||{}; if (m.pending && !opts.pending) return false; if ((m.kind==="transfer"||m.kind==="cash") && !opts.transfers) return false; return true; }); }
+// Run 58: "transfers" = money sent to (or received from) other people, on by default. "cash" = cash withdrawals and moves between the person's
+// own accounts, off by default: neither is spending, and counting a withdrawal AND the cash spending recorded later counts the same money twice.
+function statementPick(plan, opts) { return plan.stAll.filter(e=>{ const m=plan.stMeta[String(e.id)]||{}; if (m.pending && !opts.pending) return false; if (m.kind==="transfer" && !opts.transfers) return false; if ((m.kind==="cash"||m.kind==="own") && !opts.cash) return false; return true; }); }
 function statementPlan(res, filename, transactions) {
   const memory=buildMerchantMemory(transactions);
   const raw=statementEntries(res.bank,res.rows,{ known:KNOWN_MERCHANTS, suggest:(m,type)=>{ const s=merchantSuggest(m,memory,type); return s && lc(s.merchant||"")===lc(m||"") ? { category:s.category, subcategory:s.subcategory||"" } : null; } });
   const stMeta={}; raw.forEach(e=>{ stMeta[String(e.id)]=e._st; });
   const { good }=partitionTransactions(raw.map(({ _st, ...e })=>e),{ keepCategoryId:true });
   const left=res.problems.filter(p=>/^(rows|left):/.test(p)).reduce((s,p)=>s+Number(p.split(":")[1]),0);
-  const plan={ ok:true, kind:"statement", filename, stAll:good, stMeta, stOpts:{ transfers:true, pending:false, account:"" },
-    statement:{ bank:res.bank, check:res.check, left, sign:res.problems.includes("sign"), nTransfer:good.filter(e=>["transfer","cash"].includes((stMeta[String(e.id)]||{}).kind)).length, nPending:good.filter(e=>(stMeta[String(e.id)]||{}).pending).length },
+  const plan={ ok:true, kind:"statement", filename, stAll:good, stMeta, stOpts:{ transfers:true, cash:false, pending:false, account:"" },
+    statement:{ bank:res.bank, check:res.check, left, sign:res.problems.includes("sign"), nTransfer:good.filter(e=>(stMeta[String(e.id)]||{}).kind==="transfer").length, nCash:good.filter(e=>["cash","own"].includes((stMeta[String(e.id)]||{}).kind)).length, nPending:good.filter(e=>(stMeta[String(e.id)]||{}).pending).length },
     canReplace:false, skippedCount:0, skippedSummary:"", settings:{}, problems:[], warnings:[], subcategories:{}, debtData:{ debts:[], loans:[] }, accountData:{ accounts:[], transfers:[] } };
   plan.transactions=statementPick(plan,plan.stOpts);
   return plan;
@@ -3744,6 +3882,7 @@ const ICONS = {
   freelance:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 12h18"/><path d="M10 12v2h4v-2"/></svg>`,
   income:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 5 5 12"/></svg>`,
   car:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14v-4.5l-1.6-4.3A2 2 0 0 0 15.5 7h-7a2 2 0 0 0-1.9 1.2L5 12.5V17z"/><path d="M5 12.5h14"/><circle cx="8" cy="17" r="1.8"/><circle cx="16" cy="17" r="1.8"/></svg>`,   // Run 38
+  personal:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88"/><path d="M14.47 14.48 20 20"/><path d="M8.12 8.12 12 12"/></svg>`,   // Run 58: scissors
   // Run 35: icons for the new categories (same 24px line style)
   family:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M16 14.2a4 4 0 0 1 5 3.8v2"/></svg>`,
   pets:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="10" r="1.8"/><circle cx="10" cy="5.8" r="1.8"/><circle cx="14.5" cy="5.8" r="1.8"/><circle cx="18.5" cy="10" r="1.8"/><path d="M12.2 11c-3 0-5.6 3-5.6 5.4 0 1.7 1.5 2.4 3 2 1-.3 1.6-.5 2.6-.5s1.6.2 2.6.5c1.5.4 3-.3 3-2 0-2.4-2.6-5.4-5.6-5.4z"/></svg>`,
@@ -4653,7 +4792,7 @@ function AppInner() {
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
     const restore=(k,raw)=>{ try { if (raw===undefined) return; if (raw===null) localStorage.removeItem(k); else localStorage.setItem(k,raw); } catch {} };
-    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY), [THEME_KEY]:snap(THEME_KEY), [FX_KEY]:snap(FX_KEY), [WORKHOURS_KEY]:snap(WORKHOURS_KEY), [COACH_MUTE_KEY]:snap(COACH_MUTE_KEY), [PAT_MUTE_KEY]:snap(PAT_MUTE_KEY) };
+    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY), [THEME_KEY]:snap(THEME_KEY), [FX_KEY]:snap(FX_KEY), [WORKHOURS_KEY]:snap(WORKHOURS_KEY), [COACH_MUTE_KEY]:snap(COACH_MUTE_KEY), [PAT_MUTE_KEY]:snap(PAT_MUTE_KEY), [BUDGET_CARRY_KEY]:snap(BUDGET_CARRY_KEY), [LEFTOVER_GOAL_KEY]:snap(LEFTOVER_GOAL_KEY) };
     const catsHad=currentCustomCats();
     const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); applyCustomCats(catsHad); applyTheme(readTheme()); applyFx(readFxOff()); };
     // Run 24: the file's own categories are added to the ones on this phone (by id; a name already in use is skipped, never renamed).
@@ -4670,6 +4809,8 @@ function AppInner() {
       if (P.workHours && readWorkHours()===null) okp=writeWorkHours(P.workHours) && okp;
       if (P.coachMute && !readMuteList(COACH_MUTE_KEY).length) okp=writeMuteList(COACH_MUTE_KEY,P.coachMute) && okp;
       if (P.patternMute && !readMuteList(PAT_MUTE_KEY).length) okp=writeMuteList(PAT_MUTE_KEY,P.patternMute) && okp;
+      if (P.budgetCarry && !Object.keys(readBudgetCarry()).length) okp=writeBudgetCarry(P.budgetCarry) && okp;   // Run 59: same rule, never overwritten
+      if (P.leftoverGoal && !readLeftoverGoal()) okp=writeLeftoverGoal(true) && okp;
       if (!okp) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
       applyTheme(readTheme()); applyFx(readFxOff());
     }
@@ -4791,7 +4932,7 @@ function AppInner() {
             onSetupWizard={()=>setShowSetupQ(true)} onSetupGo={id=>id==="txn"?openAdd():id==="income"?openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null}):switchTab(id==="plan"?"goals":"io")}/>}
           {tab==="ledger"    && <LedgerPage transactions={transactions} currency={currency} onDelete={deleteTransaction} onDeleteMany={deleteMany} onGroupMany={groupMany} onEdit={txn=>openAdd(txn,txn.id)} onView={txn=>setViewTxn(txn)} onAdd={()=>openAdd()}/>}
           {tab==="monthly"   && <MonthlyView transactions={spendTxns} rawTransactions={transactions} currency={currency} budgets={budgets} bills={bills} onView={txn=>setViewTxn(txn&&txn.spreadSlice ? (transactions.find(x=>x.id===txn.spreadSlice.id)||txn) : txn)}/>}
-          {tab==="goals"     && <BudgetsGoalsPage state={spendState} rawState={state} onCatsChanged={()=>setCatVer(v=>v+1)} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd}
+          {tab==="goals"     && <BudgetsGoalsPage state={spendState} rawState={state} onCatsChanged={()=>setCatVer(v=>v+1)} showToast={showToast} seg={goalsSeg} onSeg={setGoalsSeg} addSignal={goalsAdd} tidyTools={accTools}
             onSetBudget={(catId,amount)=>setState(s=>({...s,budgets:{...s.budgets,[catId]:amount}}))}
             onRebalance={(plan)=>{ const prev=stateRef.current.budgets, next=applyRebalance(prev,plan); setState(s=>({...s,budgets:next})); showSnackbar(t("budget.rebalDone"),()=>setState(s=>s.budgets===next?{...s,budgets:prev}:s),6000,"rebalance"); }}
             onAddGoal={g=>setState(s=>({...s,goals:[...s.goals,{...g,id:"g"+Date.now()}]}))}
@@ -4899,6 +5040,7 @@ function AppInner() {
                           </select>
                         </label>)}
                       {s.nTransfer>0&&<label style={row}><input type="checkbox" data-st="transfers" checked={o.transfers} onChange={e=>setStOpt("transfers",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.transfers",s.nTransfer)}</span></label>}
+                      {s.nCash>0&&<label style={row}><input type="checkbox" data-st="cash" checked={!!o.cash} onChange={e=>setStOpt("cash",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.cash",s.nCash)}</span></label>}
                       {s.nPending>0&&<label style={row}><input type="checkbox" data-st="pending" checked={o.pending} onChange={e=>setStOpt("pending",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.pending",s.nPending)}</span></label>}
                       {/* every row that will be added, so nothing is taken on trust (a long statement scrolls inside this box) */}
                       <div style={{fontWeight:600,marginTop:10}}>{t("st.rowsTitle")}</div>

@@ -63,9 +63,12 @@ section("R52-B1. A PDF statement (ABB layout): read, checked, added, undone, and
   const before = await state(page);
   await upload(page, abbPdfFile);
   let sh = await sheet(page);
-  ok(/Bank statement: ABB/.test(sh) && /5 entries ready to import/.test(sh), "the PDF is recognised as an ABB statement with 5 rows", sh.slice(0, 500));
+  // Run 58: the cash withdrawal is its own choice, NOT ticked (the cash spent later is recorded separately, so it would count twice)
+  ok(/Bank statement: ABB/.test(sh) && /4 entries ready to import/.test(sh), "the PDF is recognised as an ABB statement; 4 rows are ready (the cash withdrawal waits for a tick)", sh.slice(0, 500));
   ok(/every row adds up/.test(sh) && (await page.evaluate(() => document.querySelector('[data-st="check"]').getAttribute("data-ok"))) === "true", "the sheet says the bank's running balance confirms every row");
-  ok(/Include 2 transfers, top-ups and cash withdrawals/.test(sh) && (await page.evaluate(() => document.querySelector('[data-st="transfers"]').checked)) && !(await page.$('[data-st="pending"]')), "the cash withdrawal and the money-in are offered as a choice (ticked); no 'not finished' rows in this file");
+  ok(/Include 1 transfer or top-up/.test(sh) && /Include 1 cash withdrawal or move between your own accounts/.test(sh) && (await page.evaluate(() => document.querySelector('[data-st="transfers"]').checked && !document.querySelector('[data-st="cash"]').checked)) && !(await page.$('[data-st="pending"]')), "the money-in is offered as a transfer (ticked); the cash withdrawal as a separate choice (not ticked); no 'not finished' rows");
+  await page.evaluate(() => document.querySelector('[data-st="cash"]').click()); await wait(200); sh = await sheet(page);
+  ok(/5 entries ready to import/.test(sh), "ticking it: 5 rows ready");
   ok(/New, will be added: 5/.test(sh) && /Add these entries/.test(sh) && !/Replace/.test(sh.replace(/Restore Backup/i, "")), "5 new entries; the button says 'Add these entries'; Replace is not offered for a statement", sh.slice(-400));
   const list = await page.evaluate(() => ({ title: document.querySelector(".sheet-title").innerText, n: document.querySelectorAll("[data-st-row]").length, text: document.querySelector('[data-st="rows"]').innerText }));
   ok(list.title === "Bank statement" && list.n === 5 && /BUS 594/.test(list.text) && /0\.90/.test(list.text) && /Karta m\*daxil/.test(list.text) && /\+/.test(list.text), "the sheet is titled 'Bank statement' and lists all 5 rows with merchant, category and amount before anything is added", list);
@@ -81,8 +84,9 @@ section("R52-B1. A PDF statement (ABB layout): read, checked, added, undone, and
   await page.evaluate(() => document.querySelector(".snackbar-undo").click()); await wait(500);
   ok(JSON.stringify((await state(page)).transactions) === JSON.stringify(before.transactions), "Undo: the entries are exactly as before");
   // add again, then the SAME statement as Excel: nothing new
-  await openData(page); await upload(page, abbPdfFile); await add(page);
-  await openData(page); await upload(page, abbXlsxFile);
+  const tickCash = () => page.evaluate(() => { const c = document.querySelector('[data-st="cash"]'); if (c && !c.checked) c.click(); }).then(() => wait(200));
+  await openData(page); await upload(page, abbPdfFile); await tickCash(); await add(page);
+  await openData(page); await upload(page, abbXlsxFile); await tickCash();
   sh = await sheet(page);
   ok(/Bank statement: ABB/.test(sh) && /Already here, left as they are: 5/.test(sh) && /New, will be added: 0/.test(sh), "the same statement as an Excel file: all 5 are recognised as already here", sh.slice(-500));
   await add(page);
@@ -97,10 +101,13 @@ section("R52-B2. A text file (Unibank layout): transfers and unfinished payments
   await upload(page, uniTxtFile);
   let sh = await sheet(page);
   ok(/Bank statement: Unibank/.test(sh) && /no running balance/.test(sh), "recognised as Unibank; the sheet says there is no running balance to check against", sh.slice(0, 500));
-  ok(/Include 2 transfers/.test(sh) && /Include 1 payment the bank has not finished yet/.test(sh) && (await page.evaluate(() => document.querySelector('[data-st="transfers"]').checked && !document.querySelector('[data-st="pending"]').checked)), "2 transfers (the wallet pair) ticked; 1 unfinished payment NOT ticked");
-  ok(/5 entries ready to import/.test(sh) && /New, will be added: 5/.test(sh), "5 of the 6 rows are ready (the unfinished one is left out)");
-  await page.evaluate(() => document.querySelector('[data-st="transfers"]').click()); await wait(200);
-  ok(/3 entries ready to import/.test(await sheet(page)) && /New, will be added: 3/.test(await sheet(page)) && (await page.evaluate(() => document.querySelectorAll("[data-st-row]").length)) === 3 && !/M10 WALLET/.test(await sheet(page)), "unticking transfers: 3 rows, and the list shows exactly those 3");
+  // Run 58: the wallet pair (out and back in within minutes) is money moved between the person's own accounts: a separate choice, not ticked
+  ok(/Include 2 cash withdrawals and moves between your own accounts/.test(sh) && /Include 1 payment the bank has not finished yet/.test(sh) && !(await page.$('[data-st="transfers"]')) && (await page.evaluate(() => !document.querySelector('[data-st="cash"]').checked && !document.querySelector('[data-st="pending"]').checked)), "the wallet pair (2 rows) is offered as a move between own accounts, NOT ticked; 1 unfinished payment NOT ticked; no other transfers");
+  ok(/3 entries ready to import/.test(sh) && /New, will be added: 3/.test(sh) && (await page.evaluate(() => document.querySelectorAll("[data-st-row]").length)) === 3 && !/M10 WALLET/.test(sh), "3 of the 6 rows are ready, and the list shows exactly those 3 (no wallet pair, no unfinished one)");
+  await page.evaluate(() => document.querySelector('[data-st="cash"]').click()); await wait(200);
+  ok(/5 entries ready to import/.test(await sheet(page)) && /M10 WALLET/.test(await sheet(page)), "ticking it adds the pair: 5 rows");
+  await page.evaluate(() => document.querySelector('[data-st="cash"]').click()); await wait(200);
+  ok(/3 entries ready to import/.test(await sheet(page)), "unticking it again: back to 3");
   await page.evaluate(() => document.querySelector('[data-st="pending"]').click()); await wait(200);
   ok(/4 entries ready to import/.test(await sheet(page)), "ticking the unfinished payment: 4 rows");
   await add(page);

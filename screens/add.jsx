@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo } from "../App.jsx";
+import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo, catHint } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
@@ -201,7 +201,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const moreSummary=[merchant.trim(), note.trim(), wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
 
   useEffect(()=>{ setTimeout(()=>amtRef.current?.focus(),60); },[]);
-  useEffect(()=>{ if(!prefill) setCatId(firstCat(type)); setCatQ(""); },[type]);
+  // Run 58: the subcategory resets with the category (it used to stay, so an expense's "Coffee" could be saved on a Salary entry)
+  useEffect(()=>{ if(!prefill) { setCatId(firstCat(type)); setSubcat(""); } setCatQ(""); },[type]);
 
   const merchantMatches=useMemo(()=>{
     if (!merchant.trim()) return [];
@@ -383,6 +384,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           </div>
           {/* Run 40: these notes and the refund link ease in and out (they used to pop) */}
           <Collapse open={!!catQ.trim()&&!catHits.length}><div className="list-sub" role="status" data-section="add-cat-none" style={{marginTop:6}}>{t("cat.searchNone")}</div></Collapse>
+          {/* Run 58: where people often look for something that lives in another category ("Electricity, gas and water are under Home") */}
+          <Collapse open={!catQ.trim()&&!!catHint(catId)}><div className="list-sub" data-section="add-cat-hint" style={{marginTop:6}}>{catHint(catId)}</div></Collapse>
           <Collapse open={type==="income"&&CAT(catId).earned===false}><div className="list-sub" data-section="add-not-income" style={{marginTop:6}}>{t(catId==="refund"&&refundFor?"add.refundNets":"add.notIncome")}</div></Collapse>
           <Collapse open={type==="income"&&catId==="refund"}>
             <div className="field" data-section="add-refund-for" style={{marginTop:8,marginBottom:0}}>
@@ -406,6 +409,10 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
                     <button type="button" className="sub-chip-x" aria-label={t("subcat.remove",{name:s})} style={{background:"none",border:"none",color:"var(--ink-4)",cursor:"pointer",padding:"6px 4px",minWidth:24,minHeight:24}} onClick={()=>removeMySub(s)}>×</button>
                   </span>
                 ))}
+                {/* Run 58: an older entry whose subcategory is no longer offered here (e.g. "Fuel" under Transport) keeps it, shown and selected */}
+                {subcat&&!(selectedCat?.subs||[]).includes(subcat)&&!(mySubs[catId]||[]).includes(subcat)&&(
+                  <button key={"keep-"+subcat} className="sub-chip sel" data-section="add-subcat-kept" aria-pressed={true} onClick={()=>setSubcat("")}>{subName(subcat)}</button>
+                )}
                 {(selectedCat?.subs||[]).map(s=>(
                   <button key={s} className={`sub-chip${subcat===s?" sel":""}`} aria-pressed={subcat===s} onClick={()=>setSubcat(subcat===s?"":s)}>{subName(s)}</button>
                 ))}

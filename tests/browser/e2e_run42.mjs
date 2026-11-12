@@ -88,9 +88,9 @@ section("R42-B4. Known places suggest a category");
   await page.evaluate(() => document.querySelector('[data-section="add-more-toggle"]').click()); await wait(300);
   await page.focus("#txn-merchant"); await page.type("#txn-merchant", "Netfl"); await wait(250);
   const sug = await page.evaluate(() => [...document.querySelectorAll(".merchant-sug-item")].map((e) => e.innerText.replace(/\s+/g, " ")));
-  ok(sug.length === 1 && /Netflix/.test(sug[0]) && /Bills/i.test(sug[0]) && /common place/.test(sug[0]), "typing Netfl offers Netflix with its category", sug);
+  ok(sug.length === 1 && /Netflix/.test(sug[0]) && /Phone & Subscriptions/.test(sug[0]) && /common place/.test(sug[0]), "typing Netfl offers Netflix with its category", sug);
   await page.evaluate(() => document.querySelector(".merchant-sug-item").dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))); await wait(250);
-  ok(await page.evaluate(() => document.querySelector("#txn-merchant").value) === "Netflix" && await page.evaluate(() => !!document.querySelector('.cat-tile.sel[aria-label^="Bills"]')), "choosing it fills the name and selects Bills & Subscriptions");
+  ok(await page.evaluate(() => document.querySelector("#txn-merchant").value) === "Netflix" && await page.evaluate(() => !!document.querySelector('.cat-tile.sel[aria-label^="Phone & Subscriptions"]')), "choosing it fills the name and selects Phone & Subscriptions (renamed in Run 58)");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }

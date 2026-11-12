@@ -75,12 +75,13 @@ ok(usedMissing.length === 0, `all ${new Set(direct).size} keys passed directly t
 const used = new Set(keys.filter((k) => src.includes(`"${k}"`)));
 const quotedLike = [...src.matchAll(/"((?:ins|home|safe|goals|budgets|pace|import|csv|load|settings|add|set|help|month|rec|an|mp|ledger|lang|banner|toast|common|date|wc|detail|unit)\.[\w.\- ]+)"/g)].map((m) => m[1]).filter((k) => !k.endsWith("."));
 ok(quotedLike.filter((k) => !MESSAGES[k]).length === 0, "every quoted key name in App.jsx (including ones picked by a condition) exists", quotedLike.filter((k) => !MESSAGES[k]));
-const CAT_IDS = CATEGORIES.map((c) => c.id), SUBS = [...new Set(CATEGORIES.flatMap((c) => c.subs))];
+// Run 58: retired subcategories are still shown on the entries that carry them, so their names must stay translated too.
+const CAT_IDS = CATEGORIES.map((c) => c.id), SUBS = [...new Set(CATEGORIES.flatMap((c) => [...c.subs, ...(c.retired || [])]))];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"], FREQ = ["weekly", "biweekly", "monthly", "yearly"];
 const REASONS = ["not a transaction record", "missing date", "invalid date", "missing amount", "invalid amount", "negative amount", "zero amount", "amount too large", "unsupported type", "invalid recurrence", "more than 2 decimal places", "invalid active flag", "invalid recurrence flag"];
 const dynamic = { "nav.": ["home", "ledger", "monthly", "goals", "more"], "cat.": CAT_IDS, "tile.": CAT_IDS, "sub.": SUBS, "dow.": DAYS, "dow.pl.": DAYS, "dow.cmp.": DAYS,
   "freq.": FREQ, "freqCap.": FREQ, "surplus.": ["Surplus", "Deficit", "Break-even"], "month.net.": ["Net surplus", "Net deficit", "Break-even"],
-  "an.perDay.": ["null", "same", "weekend", "weekday"], "paid.kind.": ["cash", "card", "mobile", "bank", "other"], "paid.short.": ["cash", "card", "mobile", "bank", "other"], "ledger.type.": ["all", "expense", "income"], "reason.": REASONS,
+  "an.perDay.": ["null", "same", "weekend", "weekday"], "paid.kind.": ["cash", "card", "mobile", "bank", "other"], "paid.short.": ["cash", "card", "mobile", "bank", "other"], "ledger.type.": ["all", "expense", "income"], "reason.": REASONS, "cathint.": ["digital", "housing", "transport", "gifts", "shopping"],
   "mon.": [...Array(12)].map((_, i) => String(i + 1)), "monGen.": [...Array(12)].map((_, i) => String(i + 1)), "monShort.": [...Array(12)].map((_, i) => String(i + 1)),
   "wdShort.": DAYS, "wdNarrow.": DAYS, "tpl.": ["t1", "t3", "t4", "t5"], "wallet.": ["cash", "card", "mobile", "other"], "theme.": ["sea", "nordic", "mist", "dusk", "graphite", "sand"], "subcat.err.": ["empty", "long", "dup", "full", "category"], "setupq.inc.": ["fixed", "variable", "none"], "setupq.err.": ["invalid", "required", "long"],
   "info.": ["how.title", "how.1.h", "how.1.b", "how.2.h", "how.2.b", "how.3.h", "how.3.b", "how.4.h", "how.4.b", "how.5.h", "how.5.b", "how.6.h", "how.6.b", "privacy.title", ...[1, 2, 3, 4, 5, 6, 7, 8].flatMap((i) => [`privacy.${i}.h`, `privacy.${i}.b`]), "safe.title", ...[1, 2, 3, 4, 5, 6].flatMap((i) => [`safe.${i}.h`, `safe.${i}.b`])] };   // Run 16: wallet names

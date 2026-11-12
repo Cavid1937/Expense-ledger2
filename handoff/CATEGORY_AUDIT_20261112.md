@@ -107,4 +107,8 @@ How it was checked: the real app was opened at 320 px with one entry and one bud
 3. Then the tidy-up screen.
 4. Display renames (#5) only after the owner approves the names.
 
-Status: PROPOSED, NOT STARTED.
+Status (13 Nov, Run 58, owner approved "I agree with your way"):
+- BUILT: #1 Personal Care split and Gifts page fix; #2 to #4 retired duplicates (kept as `retired` names: still shown, translated, filterable); #5 rename with the measured names (en "Phone & Subscriptions" / az "Rabitə və abunəliklər" / ru "Связь и подписки", tiles "Phone & subs" / "Rabitə" / "Связь"); #6 "Home" in Shopping shown as "Home goods" with a hint; #7 statement import (cash withdrawals and own-account moves are a separate choice, off by default; transfers to people are "Money sent to people"); the expansions (except the two left for the owner below); hints for Phone & Subscriptions, Home, Transport, Gifts, Shopping; merchant codes and built-in places.
+- BUILT too: the "Tidy up categories" card on Budgets & Goals > My categories (nothing ticked at first, month preview, Undo, "Not now" remembered; recurring, bill, loan and debt entries never offered).
+- LEFT FOR THE OWNER: "Lottery & betting" and "Alcohol & tobacco" subcategories (not added); family "Weddings" kept only under Gifts ("Weddings & parties") to avoid two places.
+- Wording: az/ru names are drafts until a native speaker reviews them.

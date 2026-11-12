@@ -28,7 +28,10 @@ ok(car && car.income === false && ["Fuel", "Car insurance", "Car Maintenance", "
 const imp = planImport("Date,Amount,Type,Category\n2026-10-01,20,expense,Car\n2026-10-02,15,expense,Fuel\n2026-10-03,5,expense,Car wash\n", "c.csv");
 ok(imp.ok && eq(imp.transactions.map((t) => t.category), ["car", "transport", "car"]), "import: 'Car' and 'Car wash' go to Car; 'Fuel' keeps meaning Transport as before", imp.transactions.map((t) => t.category));
 const transport = CATEGORIES.find((c) => c.id === "transport");
-ok(["Fuel", "Parking", "Car Maintenance"].every((s) => transport.subs.includes(s)), "Transport keeps its old subcategories (entries already there do not change)");
+// Run 58 (owner-approved category audit): these three now live only under Car for NEW entries. Entries already on Transport keep them
+// (the "retired" list keeps their names shown and translated; run58cats.test checks a stored entry stays exactly as it was).
+const carCat = CATEGORIES.find((c) => c.id === "car");
+ok(["Fuel", "Parking", "Car Maintenance"].every((s) => transport.retired.includes(s) && !transport.subs.includes(s) && carCat.subs.includes(s)), "Transport's old Fuel, Parking and Car Maintenance are kept as retired names (shown on old entries) and offered under Car");
 globalThis.__store.set("expense_ledger_v5", JSON.stringify({ transactions: [T({ id: 1, category: "car", subcategory: "Fines", amount: 40 })], language: "en" }));
 ok(migrateAndLoad().transactions[0].category === "car", "a saved Car entry loads unchanged");
 finish("run38");

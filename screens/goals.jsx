@@ -1,13 +1,13 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { locale, t, tn } from "../i18n.js";
-import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates } from "../App.jsx";
+import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates, tidyPlan, applyTidy, undoTidy, TIDY_KEY, subName } from "../App.jsx";
 import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
 import { Collapse, EditSwap, useBackStep, useLeave } from "./motion.jsx";
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
-export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, seg, onSeg, addSignal, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange, onRebalance }) {
+export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, seg, onSeg, addSignal, tidyTools, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange, onRebalance }) {
   const { transactions, budgets={}, goals=[], currency, templates=[], safeToSpend={} }=state;
   const setSeg=onSeg;
   const [editBudget,setEditBudget]=useState(null), [budgetVal,setBudgetVal]=useState("");
@@ -247,10 +247,53 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
             The "in use" check reads the full ledger (rawState), not the spending view, so a category used by any entry is never removable. */}
         <div data-section="gl-categories">
           <div className="section-title" style={{margin:"18px 2px 10px"}}>{t("mycat.title")}</div>
+          {tidyTools&&<TidyCategories transactions={(rawState||state).transactions} currency={currency} tools={tidyTools}/>}
           <MyCategories state={rawState||state} onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
           <CategoryOrder onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
         </div>
       </>)}
+    </div>
+  );
+}
+
+// Run 58: "Tidy up categories". Older entries recorded where a thing used to live (a haircut under Gifts, fuel under Transport) can be moved
+// to the new place. Nothing is ticked at first and nothing moves until the person presses the button; Undo is offered right after.
+// Repeating entries, bill payments, loan and debt payments are never offered (tidyPlan). "Not now" hides the moves shown at that moment.
+export function TidyCategories({ transactions, currency, tools }) {
+  const plan=useMemo(()=>tidyPlan(transactions),[transactions]);
+  const [hidden,setHidden]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(TIDY_KEY)||"[]"); return Array.isArray(v)?v:[]; } catch { return []; } });
+  const [picked,setPicked]=useState([]);
+  const shown=plan.filter(g=>!hidden.includes(g.key));
+  if (!shown.length) return null;
+  const place=([c,s])=>catName(c)+(s?" / "+subName(s):"");
+  const chosen=shown.filter(g=>picked.includes(g.key));
+  const monthLines=chosen.filter(g=>g.monthTotal>0).map(g=>t("tidy.month",{ from:catName(g.from[0]), to:catName(g.to[0]), amount:fmt(g.monthTotal,currency) }));
+  const move=()=>{
+    const r=applyTidy(tools.getTransactions(),shown,picked);
+    if (!r.moved) return;
+    tools.setTransactions(()=>r.transactions);
+    setPicked([]);
+    tools.showSnackbar(tn("tidy.done",r.moved),()=>tools.setTransactions(list=>undoTidy(list,r.before)),8000,"tidy");
+  };
+  const notNow=()=>{ const next=[...new Set([...hidden,...shown.map(g=>g.key)])]; setHidden(next); try { localStorage.setItem(TIDY_KEY,JSON.stringify(next)); } catch { /* shown again next time */ } };
+  return (
+    <div className="card" data-section="tidy-cats" style={{marginBottom:12}}>
+      <div className="a-card-title">{t("tidy.title")}</div>
+      <div className="list-sub" style={{marginBottom:8,lineHeight:1.5}}>{t("tidy.intro")}</div>
+      {shown.map(g=>(
+        <label key={g.key} data-tidy={g.key} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"8px 0",borderTop:"1px solid var(--rule)",lineHeight:1.45}}>
+          <input type="checkbox" checked={picked.includes(g.key)} onChange={e=>setPicked(p=>e.target.checked?[...p,g.key]:p.filter(k=>k!==g.key))} style={{marginTop:3,flexShrink:0}}/>
+          <span style={{minWidth:0}}>
+            <span style={{display:"block",overflowWrap:"anywhere"}}>{tn("tidy.row",g.count,{ from:place(g.from), to:place(g.to) })}</span>
+            <span className="list-sub" style={{display:"block"}}>{t("tidy.total",{ amount:fmt(g.total,currency) })}{g.example&&g.example.merchant?" · "+t("tidy.example",{ name:maskText(g.example.merchant) }):""}</span>
+          </span>
+        </label>
+      ))}
+      <Collapse open={monthLines.length>0}><div className="list-sub" data-section="tidy-month" style={{marginTop:6,lineHeight:1.5}}>{monthLines.map((l,i)=><div key={i}>{l}</div>)}</div></Collapse>
+      <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
+        <button type="button" className="btn btn-sm btn-sm-primary" data-section="tidy-move" disabled={!chosen.length} onClick={move}>{t("tidy.move")}</button>
+        <button type="button" className="btn btn-sm" data-section="tidy-later" onClick={notNow}>{t("tidy.later")}</button>
+      </div>
     </div>
   );
 }

@@ -268,9 +268,9 @@ export function statementCheck(rows) {
 // The bank's merchant type code. Only codes whose meaning is certain; anything else falls through to the words.
 const MCC = { 4111: ["transport", "Public transport card"], 4112: ["transport", "Intercity"], 4131: ["transport", "Bus"], 4121: ["transport", "Taxi / Ride-hailing"], 5411: ["food", "Groceries"], 5422: ["food", "Groceries"], 5441: ["food", "Snacks"], 5451: ["food", "Groceries"], 5462: ["food", "Bakery"], 5499: ["food", "Groceries"],
   5812: ["food", "Restaurants"], 5813: ["food", "Restaurants"], 5814: ["food", "Fast Food"], 5541: ["car", "Fuel"], 5542: ["car", "Fuel"], 5912: ["health", "Pharmacy"], 8011: ["health", "Doctor / Dentist"], 8021: ["health", "Doctor / Dentist"], 8062: ["health", "Doctor / Dentist"], 8099: ["health", "Doctor / Dentist"],
-  4812: ["digital", "Mobile"], 4814: ["digital", "Mobile"], 4816: ["digital", "Internet"], 4899: ["digital", "Streaming"], 5734: ["digital", "Software"], 5815: ["digital", "Streaming"], 5816: ["entertain", "Games"], 5817: ["digital", "Software"], 5818: ["digital", "Software"], 4900: ["housing", "Utilities"],
+  4812: ["digital", "Mobile"], 4814: ["digital", "Mobile"], 4816: ["digital", "Internet"], 4899: ["digital", "TV"], 5734: ["digital", "Software"], 5815: ["digital", "Streaming"], 5816: ["entertain", "Games"], 5817: ["digital", "Software"], 5818: ["digital", "Software"], 4900: ["housing", "Utilities"],
   5651: ["shopping", "Clothing"], 5691: ["shopping", "Clothing"], 5699: ["shopping", "Clothing"], 5661: ["shopping", "Clothing"], 5732: ["shopping", "Electronics"], 5722: ["shopping", "Appliances"], 5712: ["shopping", "Furniture"], 5942: ["edu", "Books"], 8211: ["edu", "School / Kindergarten"], 8220: ["edu", "University"], 8299: ["edu", "Courses"],
-  7832: ["entertain", "Cinema"], 7997: ["health", "Gym"], 7230: ["gifts", "Barber / Hair"], 5977: ["gifts", "Cosmetics"], 7011: ["travel", "Hotels"], 4511: ["travel", "Flights"], 6300: ["finance", "Insurance"], 9311: ["finance", "Taxes"] };
+  7832: ["entertain", "Cinema"], 7997: ["health", "Gym"], 7230: ["personal", "Barber / Hair"], 5977: ["personal", "Cosmetics"], 7011: ["travel", "Hotels"], 4511: ["travel", "Flights"], 6300: ["finance", "Insurance"], 9311: ["finance", "Taxes"] };
 const WORD_RULES = [
   [/\bmetro\b/i, "transport", "Metro"], [/^bus\b|\bbakubus\b|\btp bus\b/i, "transport", "Bus"], [/bak[iı\*]\s*\*?\s*kart|bakikart/i, "transport", "Public transport card"], [/\b(bolt|uber|yango|taxi|taksi)\b/i, "transport", "Taxi / Ride-hailing"],
   [/\b(azercell|bakcell|nar)\b/i, "digital", "Mobile"], [/\b(citynet|aztelekom|baktelekom|azeronline)\b/i, "digital", "Internet"],
@@ -292,7 +292,12 @@ export function statementEntries(bank, rows, opts = {}) {
     const mine = typeof opts.suggest === "function" ? opts.suggest(r.merchant, r.type) : null;
     if (mine && mine.category) { category = mine.category; subcategory = mine.subcategory || ""; }
     else if (r.kind === "cashback" && r.type === "income") { category = "refund"; subcategory = "Cashback"; }
-    else if (r.kind === "transfer" || r.kind === "cash" || r.pair) { if (r.type === "expense") { category = "finance"; subcategory = "Transfers"; } }
+    // Run 58: three different things, kept apart. Cash taken out (ATM) is not spending yet: what is bought with it is recorded later, so counting
+    // the withdrawal too would count the same money twice. A pair (out and back in within minutes, same amount) is money moved between the
+    // person's own accounts. Other transfers are money sent to someone else. The import sheet offers the first two separately, off by default.
+    else if (r.pair) { if (r.type === "expense") { category = "finance"; subcategory = "Transfers"; } }
+    else if (r.kind === "cash") { if (r.type === "expense") { category = "finance"; subcategory = "Cash withdrawal"; } }
+    else if (r.kind === "transfer") { if (r.type === "expense") { category = "finance"; subcategory = "Money sent to people"; } }
     else if (r.type === "expense") {
       const m = r.mcc && MCC[+r.mcc], w = !m && WORD_RULES.find(([re]) => re.test(r.merchant));
       const k = !m && !w && Array.isArray(opts.known) ? opts.known.find(([name]) => name.length > 2 && new RegExp("(^|[^\\p{L}\\p{N}])" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^\\p{L}\\p{N}])", "iu").test(r.merchant)) : null;
@@ -300,7 +305,7 @@ export function statementEntries(bank, rows, opts = {}) {
     }
     const note = [r.orig, r.city && r.city.toUpperCase() !== "BAKU" ? r.city : ""].filter(Boolean).join(", ").slice(0, 80);
     out.push({ id: "s" + hashKey(key) + (n ? "_" + n : ""), type: r.type, amount: r.cents / 100, category, subcategory, merchant: r.merchant, note, date: r.date, recurring: false, recurFreq: null, isActive: true,
-      ...(opts.account ? { account: opts.account } : {}), _st: { kind: r.pair ? "transfer" : r.kind, pending: !!r.pending } });
+      ...(opts.account ? { account: opts.account } : {}), _st: { kind: r.pair ? "own" : r.kind, pending: !!r.pending } });
   });
   return out;
 }
