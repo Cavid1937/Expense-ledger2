@@ -1,6 +1,6 @@
 // Run 57 (owner, 10 Nov screenshots: "Bank card" + "ABB Card" gave 0 of 257, "Cash" + "Nağd" gave 0): one "paid from" filter on the entry list,
 // and Analytics grouped the same way. Older entries marked Cash / Bank card and newer entries on Nağd / ABB Card belong together. Synthetic data only.
-import { launch, openPage, wait, ok, section, finish, settle, tab, baseSeed, TODAY } from "./lib.mjs";
+import { launch, openPage, wait, ok, section, finish, settle, tab, baseSeed, TODAY, state } from "./lib.mjs";
 const browser = await launch();
 const T = (id, o) => ({ id, type: "expense", amount: 10, category: "food", subcategory: "", merchant: "", note: "", date: TODAY, recurring: false, recurFreq: null, isActive: true, createdAt: TODAY + "T00:00:00.000Z", ...o });
 const ACC = `try{if(!sessionStorage.getItem("__a")){sessionStorage.setItem("__a","1");localStorage.setItem("expense_ledger_v5__accounts",JSON.stringify({version:1,accounts:[{id:"a_nagd01",name:"Nağd",kind:"cash",opening:{amount:0,date:""},hidden:false},{id:"a_abbc01",name:"ABB Card",kind:"card",opening:{amount:0,date:""},hidden:false}],transfers:[]}));}}catch(e){}`;
@@ -52,6 +52,37 @@ for (const [l, re] of [["az", /Bütün nağd\|Nağd\|Bütün kartlar\|ABB Card/]
   const c = (await chips(page)).join("|");
   ok(re.test(c), `${l}: the kind chips are translated`, c);
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${l}: the row does not push the page sideways at 320 px`);
+  await page.close();
+}
+section("R57-B4. Linking older Cash entries to Nağd: shown with the balance change, never before the opening date, with Undo");
+{
+  // Nağd opened 3 days ago with 50.00. Older Cash: 8.00 ten days ago (already inside the 50), 3.00 and 2.00 today. Bank card entries are never offered to Nağd.
+  const d = (n) => { const x = new Date(); x.setDate(x.getDate() - n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`; };
+  const OPEN = `try{if(!sessionStorage.getItem("__a")){sessionStorage.setItem("__a","1");localStorage.removeItem("expense_ledger_v5__linkdismiss");localStorage.setItem("expense_ledger_v5__accounts",JSON.stringify({version:1,accounts:[{id:"a_nagd01",name:"Nağd",kind:"cash",opening:{amount:50,date:"${d(3)}"},hidden:false}],transfers:[]}));}}catch(e){}`;
+  const s2 = baseSeed({ language: "en", transactions: [T(1790057100001, { merchant: "OldBefore", amount: 8, wallet: "cash", date: d(10) }), T(1790057100002, { merchant: "Fresh1", amount: 3, wallet: "cash" }), T(1790057100003, { merchant: "Fresh2", amount: 2, wallet: "cash" }), T(1790057100004, { merchant: "CardOne", amount: 99, wallet: "card" })] });
+  const page = await openPage(browser, { seed: s2, pre: new Function(OPEN) }); await settle(page);
+  await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(400);
+  await page.evaluate(() => document.querySelectorAll('[data-fold-head][aria-expanded="false"]').forEach((b) => b.click())); await wait(400);
+  const card = await page.evaluate(() => (document.querySelector('[data-section="acc-link"]') || {}).innerText || "");
+  ok(/2 older entries are marked “Cash” but have no account\. Link them to Nağd\?/.test(card), "the offer names the 2 recent Cash entries and the account", card);
+  ok(/from 50\.00 .* to 45\.00/.test(card), "it shows the balance change: 50.00 -> 45.00 (only 3 + 2 come off)", card);
+  ok(/1 entry dated before you added Nağd stays as it is/.test(card), "it says the older 8.00 entry stays out (already in the starting balance)", card);
+  const before = (await state(page)).transactions;
+  await page.evaluate(() => document.querySelector('[data-link="go"]').click()); await wait(500);
+  let st = await state(page), m = (n) => st.transactions.find((x) => x.merchant === n);
+  ok(m("Fresh1").account === "a_nagd01" && m("Fresh2").account === "a_nagd01" && !m("OldBefore").account && !m("CardOne").account && m("Fresh1").wallet === "cash", "linked: only the 2 recent Cash entries; the old one and the Bank card one untouched; the old 'Cash' mark kept");
+  ok(/45\.00/.test(await page.evaluate(() => (document.querySelector('[data-balance="a_nagd01"]') || {}).innerText || "")), "Nağd now shows 45.00");
+  ok(!(await page.$('[data-section="acc-link"]')), "the offer is gone (nothing left to link)");
+  ok(/2 entries linked to Nağd/.test(await page.evaluate(() => (document.querySelector(".snackbar") || {}).innerText || "")), "an Undo bar says what was done");
+  await page.evaluate(() => document.querySelector(".snackbar-undo").click()); await wait(500);
+  st = await state(page);
+  ok(JSON.stringify(st.transactions) === JSON.stringify(before), "Undo: every entry exactly as before");
+  await page.evaluate(() => document.querySelector('[data-link="later"]').click()); await wait(300);
+  ok(!(await page.$('[data-section="acc-link"]')), "'Not now' hides the offer");
+  await page.reload(); await settle(page); await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(400);
+  await page.evaluate(() => document.querySelectorAll('[data-fold-head][aria-expanded="false"]').forEach((b) => b.click())); await wait(400);
+  ok(!(await page.$('[data-section="acc-link"]')), "and it stays hidden after closing and opening the app");
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
 await finish("e2e_run57_paid", browser);

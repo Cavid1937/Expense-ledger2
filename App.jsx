@@ -152,7 +152,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="56 (2026-11-12)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="57 (2026-11-12)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -1105,6 +1105,36 @@ export function addTransfer(data, from, to, amount, date, note="") {
   return { data:cleanAccountData({ accounts:d.accounts, transfers:[{ id, from, to, amount:c/100, date, note },...d.transfers] }), added:true, reason:"", id };
 }
 // Removing an account is refused while any entry or transfer uses it (hide it instead), so nothing is ever orphaned silently.
+// ─── Run 57: linking older entries to an account (optional; the person decides; Undo) ───────────────────────────────────────────────
+// Entries recorded before accounts existed say only "Cash" or "Bank card". When the person has exactly ONE account of that kind, the app can
+// offer to link those entries to it, so its balance and its list include them. Money rules:
+//   - Only entries with no account at all and an old wallet of the matching kind (cash -> cash account; bank card -> card or credit-card
+//     account; mobile wallet -> mobile-wallet account). Nothing else is ever touched; the old wallet field and the ids stay exactly as they are.
+//   - Entries dated BEFORE the account's opening date are never linked: the opening balance the person typed already includes them.
+//   - The balance before and after is worked out first and shown, because linking changes it.
+const LINK_WALLET_FOR={ cash:"cash", card:"card", credit:"card", wallet:"mobile" };
+export function linkCandidates(data, transactions, accountId, asOf) {
+  const d=cleanAccountData(data), acc=d.accounts.find(a=>a.id===accountId), list=Array.isArray(transactions)?transactions:[];
+  if (!acc || !LINK_WALLET_FOR[acc.kind]) return null;
+  const want=LINK_WALLET_FOR[acc.kind];
+  if (d.accounts.filter(a=>!a.hidden && LINK_WALLET_FOR[a.kind]===want).length!==1 || acc.hidden) return null;   // never guess between two accounts
+  const from=acc.opening.date||"";
+  let before=0; const ids=[];
+  list.forEach(x=>{ if (!x || accId(x.account) || (WALLET_GROUP[walletId(x.wallet)]||"")!==want) return; if (from && String(x.date)<from) { before++; return; } ids.push(x.id); });
+  if (!ids.length) return null;
+  const idSet=new Set(ids.map(String)), after=list.map(x=>x && idSet.has(String(x.id)) ? { ...x, account:accountId } : x);
+  return { account:acc, kind:want, ids, skippedBefore:before, hasOpeningDate:!!from,
+    balanceBefore:accountBalances(d,list,asOf)[accountId]||0, balanceAfter:accountBalances(d,after,asOf)[accountId]||0 };
+}
+export function applyLink(transactions, ids, accountId) {
+  const idSet=new Set((ids||[]).map(String));
+  return (transactions||[]).map(x=>x && idSet.has(String(x.id)) && !accId(x.account) ? { ...x, account:accountId } : x);
+}
+// Undo against the list as it is NOW: the link is removed only where it is still exactly the one added (later edits are kept).
+export function undoLink(transactions, ids, accountId) {
+  const idSet=new Set((ids||[]).map(String));
+  return (transactions||[]).map(x=>{ if (!x || !idSet.has(String(x.id)) || x.account!==accountId) return x; const { account, ...rest }=x; return rest; });
+}
 export function accountInUse(data, id, transactions) { const d=cleanAccountData(data); return (transactions||[]).some(x=>x && x.account===id) || d.transfers.some(x=>x.from===id||x.to===id); }
 // ─── Debts and loans (Run 17) ─────────────────────────────────────────────────
 // Informal DEBTS (person to person) and formal LOANS (a rate and a schedule). All money is whole qapik (integers); interest is rounded

@@ -99,7 +99,7 @@
     "run51integrity.test.mjs": 50,
     "run52statement.test.mjs": 52,
     "run53currency.test.mjs": 28,
-    "run57paidfrom.test.mjs": 18,
+    "run57paidfrom.test.mjs": 30,
     "run43pace.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
@@ -131,7 +131,7 @@
     "e2e_run54_plain.mjs": 16,
     "e2e_run55_detail.mjs": 20,
     "e2e_run56_place.mjs": 13,
-    "e2e_run57_paid.mjs": 15,
+    "e2e_run57_paid.mjs": 26,
     "e2e_run9.mjs": 55,
     "e2e_run10.mjs": 16,
     "e2e_run12.mjs": 35,

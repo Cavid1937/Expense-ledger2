@@ -49,4 +49,34 @@ const w = calcWalletSpend(oct, "2026-10", new Date(2026, 9, 13, 12), accs);
 ok(w.byWallet.cash === 10 && w.byWallet.card === 20 && w.byWallet.none === 5 && w.total === 35 && w.used, "with accounts: cash 10 (Nağd 4 + older Cash 6), card 20, not set 5, total 35", w);
 const w0 = calcWalletSpend(oct, "2026-10", new Date(2026, 9, 13, 12));
 ok(w0.byWallet.cash === 6 && w0.byWallet.none === 29, "called the old way (no accounts): only the old wallet field counts, as before", w0);
+
+section("R57-5. Linking older entries to an account: only what the person agrees to, never before the opening date");
+const { linkCandidates, applyLink, undoLink, accountBalances } = H;
+// Nağd opened on 1 Nov with 50.00 typed in. Older Cash entries: 8.00 on 20 Oct (already inside the 50) and 3.00 + 2.00 in November.
+const nagd = { accounts: [A("a_nagd01", "Nağd", "cash")], transfers: [] }; nagd.accounts[0].opening = { amount: 50, date: "2026-11-01" };
+const L = [E(1, { wallet: "cash", amount: 8, date: "2026-10-20" }), E(2, { wallet: "cash", amount: 3, date: "2026-11-02" }), E(3, { wallet: "cash", amount: 2, date: "2026-11-03" }),
+  E(4, { wallet: "card", amount: 99, date: "2026-11-02" }), E(5, { account: "a_nagd01", amount: 1, date: "2026-11-04" }), E(6, { amount: 7, date: "2026-11-02" }), E(7, { wallet: "cash", type: "income", category: "salary", amount: 20, date: "2026-11-05" })];
+let c = linkCandidates(nagd, L, "a_nagd01", "2026-11-10");
+ok(c && eq(c.ids, [2, 3, 7]) && c.skippedBefore === 1, "offered: the 2 November Cash expenses and the November Cash income; the October one is left out (before the opening date)", c && [c.ids, c.skippedBefore]);
+ok(c.balanceBefore === 49 && c.balanceAfter === 64, "Nağd before: 50 - 1 = 49.00; after linking: 49 - 3 - 2 + 20 = 64.00 (the October 8.00 does NOT come off again)", [c.balanceBefore, c.balanceAfter]);
+let after = applyLink(L, c.ids, "a_nagd01");
+ok(eq(after.map((x) => x.account || ""), ["", "a_nagd01", "a_nagd01", "", "a_nagd01", "", "a_nagd01"]) && after.every((x, i) => x.wallet === L[i].wallet && x.id === L[i].id && x.amount === L[i].amount), "applied: exactly those 3 get the account; the old wallet, ids and amounts stay as they were");
+ok(accountBalances(nagd, after, "2026-11-10")["a_nagd01"] === 64, "the stored balance afterwards is the 64.00 that was shown");
+const back = undoLink(after, c.ids, "a_nagd01");
+ok(JSON.stringify(back) === JSON.stringify(L), "Undo: the list is exactly as before");
+const edited = after.map((x) => (x.id === 3 ? { ...x, account: "a_other1" } : x));
+ok(undoLink(edited, c.ids, "a_nagd01").find((x) => x.id === 3).account === "a_other1", "Undo later: an entry moved by hand since keeps its new account");
+// no opening date: everything is offered, and the balance change is shown so the person can judge
+const noDate = { accounts: [A("a_nagd01", "Nağd", "cash")], transfers: [] };
+c = linkCandidates(noDate, L, "a_nagd01", "2026-11-10");
+ok(c && eq(c.ids, [1, 2, 3, 7]) && c.skippedBefore === 0 && c.hasOpeningDate === false && c.balanceBefore === -1 && c.balanceAfter === 6, "no opening date: all 4 offered, and the shown change is -1.00 -> 6.00", c && [c.ids, c.balanceBefore, c.balanceAfter]);
+// never guess: two cash accounts, a hidden account, a kind with no old wallet, nothing to link
+const two = { accounts: [A("a_nagd01", "Nağd", "cash"), A("a_nagd02", "Pocket", "cash")], transfers: [] };
+ok(linkCandidates(two, L, "a_nagd01") === null, "two cash accounts: nothing is offered (the app never guesses which one)");
+const hid = { accounts: [A("a_nagd01", "Nağd", "cash")], transfers: [] }; hid.accounts[0].hidden = true;
+ok(linkCandidates(hid, L, "a_nagd01") === null && linkCandidates({ accounts: [A("a_bank01", "Savings", "bank")], transfers: [] }, L, "a_bank01") === null, "a hidden account, or a bank account (no older wallet means 'bank'): nothing is offered");
+ok(linkCandidates(nagd, [E(1, { wallet: "card" })], "a_nagd01") === null && linkCandidates(nagd, L, "a_nope99") === null && linkCandidates(null, null, "x") === null, "nothing matching, an unknown account, no data: nothing is offered");
+const card = linkCandidates({ accounts: [A("a_cred01", "Credit", "credit")], transfers: [] }, L, "a_cred01");
+ok(card && eq(card.ids, [4]), "a credit-card account takes the older 'Bank card' entries");
+ok(eq(applyLink([E(9, { wallet: "cash", account: "a_abbc01" })], [9], "a_nagd01")[0].account, "a_abbc01"), "an entry that got an account in the meantime is not overwritten");
 finish("run57paidfrom");

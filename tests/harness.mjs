@@ -39,7 +39,7 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   // Run 53: currency for any ledger, daily refresh
   "ledgerCode","fetchLedgerRate","lastSavedRate","warmRates",
   // Run 57: one "paid from" rule
-  "PAID_KINDS","accountsMap","paidFromAccount","paidFromKind","paidFromMatch","paidFromOptions",
+  "PAID_KINDS","accountsMap","paidFromAccount","paidFromKind","paidFromMatch","paidFromOptions","linkCandidates","applyLink","undoLink",
   // redesign (2026-10-27): the Home ring, the Analytics trend and the Home greeting
   "pctShares","donutSlices","cumulativeByDay","greetingKey",
   // Run 10: data safety

@@ -5,6 +5,7 @@ import { LAUNCH_GLYPH } from "./launch.js";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
+import { applyLink, linkCandidates, undoLink } from "../App.jsx";
 import { APP_RELEASE, accountName, accountRemovalPlan, findDoubleEntries, maskText, offerUndo, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, creditOwed, cleanWorkHours, readWorkHours, writeWorkHours, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
@@ -205,6 +206,15 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
       setData(readAccounts());
     },8000,"delete");
   };
+  // Run 57: the link offers, worked out from the entries as they are now; "Not now" is remembered per account under its own key.
+  const LINK_KEY="expense_ledger_v5__linkdismiss";
+  const [linkDismissed,setLinkDismissed]=useState(()=>{ try { const v=JSON.parse(localStorage.getItem(LINK_KEY)||"{}"); return v&&typeof v==="object"&&!Array.isArray(v)?v:{}; } catch { return {}; } });
+  const linkOffers=useMemo(()=>{ const out={}; if (!accTools) return out; const list=accTools.getTransactions(); data.accounts.forEach(a=>{ const c=linkCandidates(data,list,a.id); if (c) out[a.id]=c; }); return out; },[data,state.transactions,accTools]);
+  const dismissLink=(id)=>{ const next={ ...linkDismissed, [id]:true }; setLinkDismissed(next); try { localStorage.setItem(LINK_KEY,JSON.stringify(next)); } catch { /* shown again next time */ } };
+  const linkOld=(a,c)=>{
+    accTools.setTransactions(list=>applyLink(list,c.ids,a.id));
+    accTools.showSnackbar(tn("link.done",c.ids.length,{ name:a.name }),()=>accTools.setTransactions(list=>undoLink(list,c.ids,a.id)),8000,"link");
+  };
   const removeTransfer=(x)=>{
     const index=data.transfers.findIndex(y=>y.id===x.id);
     if (!commit({ accounts:data.accounts, transfers:data.transfers.filter(y=>y.id!==x.id) })) return;
@@ -270,6 +280,18 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
             </div>); })()}
         </div>
       }/>)}
+      {/* Run 57: older entries marked "Cash" / "Bank card" can be linked to the one matching account, if the person wants; Undo */}
+      {accTools&&shown.map(a=>{ const c=linkOffers[a.id]; return c&&!linkDismissed[a.id]&&(
+        <div key={"link-"+a.id} className="card" data-section="acc-link" data-account={a.id} style={{background:"var(--bg-warm)",padding:"12px 14px",margin:"8px 0",fontSize:13,lineHeight:1.5,color:"var(--ink-2)"}}>
+          <div style={{fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{tn("link.title",c.ids.length,{ kind:t("paid.short."+c.kind), name:a.name })}</div>
+          <div data-link="balance">{t("link.balance",{ name:a.name, before:fmt(c.balanceBefore,currency), after:fmt(c.balanceAfter,currency) })}</div>
+          {c.skippedBefore>0&&<div data-link="before" style={{color:"var(--ink-3)"}}>{tn("link.before",c.skippedBefore,{ name:a.name })}</div>}
+          {!c.hasOpeningDate&&<div data-link="nodate" style={{color:"var(--warn)"}}>{t("link.noDate")}</div>}
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button className="btn btn-ghost" style={{flex:1}} data-link="later" onClick={()=>dismissLink(a.id)}>{t("link.later")}</button>
+            <button className="btn btn-primary" style={{flex:1}} data-link="go" onClick={()=>linkOld(a,c)}>{t("link.go")}</button>
+          </div>
+        </div>); })}
       {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
       {owedCredit>0&&<div className="list-sub" data-section="acc-credit-owed" style={{margin:"4px 2px 8px"}}><strong>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</strong><br/>{t("acc.creditNote")}</div>}
       {np&&(<div className="list-sub" data-section="acc-net" style={{margin:"4px 2px 8px"}}><strong>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</strong><br/>{t("acc.netNote")}</div>)}
