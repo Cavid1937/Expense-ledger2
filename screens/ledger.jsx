@@ -298,7 +298,9 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
             <div className="sheet-grip"><div className="sheet-handle"/></div>
             <div className="sheet-title">{t("ledger.filterTitle")}</div>
             {[{id:"all",color:"#98A5B7"},...usedCats].map(cat=>(
-              <button key={cat.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",background:"none",border:"none",borderBottom:"1px solid var(--rule)",cursor:"pointer",width:"100%",textAlign:"left",font:"inherit"}}
+              /* Run 57 (owner: "the Category menu closes instantly"): choosing a category and Close are "closers", so the sheet slides away
+                 like every other sheet (~0.2 s) before the choice is applied, instead of vanishing in one frame */
+              <button key={cat.id} data-closer="1" data-cat-pick={cat.id} style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",background:"none",border:"none",borderBottom:"1px solid var(--rule)",cursor:"pointer",width:"100%",textAlign:"left",font:"inherit"}}
                 onClick={()=>{setCatFilter(cat.id==="all"?"all":cat.id);setShowCatSheet(false);}}>
                 <div style={{width:34,height:34,borderRadius:8,background:(cat.color||"#98A5B7")+"26",display:"flex",alignItems:"center",justifyContent:"center"}}>
                   <CatIcon catId={cat.id} size={16} color={cat.color}/>
@@ -307,7 +309,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
                 {catFilter===cat.id&&<span style={{color:"var(--accent)",fontWeight:700,fontSize:12}} aria-label={t("common.selected")}>✓</span>}
               </button>
             ))}
-            <button className="btn btn-ghost btn-full" style={{marginTop:14}} onClick={()=>setShowCatSheet(false)}>{t("common.close")}</button>
+            <button className="btn btn-ghost btn-full" data-closer="1" style={{marginTop:14}} onClick={()=>setShowCatSheet(false)}>{t("common.close")}</button>
           </div>
         </div>
       )}

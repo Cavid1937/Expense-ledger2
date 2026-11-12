@@ -25,7 +25,13 @@ On Accounts and balances, when you have exactly one cash account (or one card ac
 - Logic: 101 files, 2,072 checks passed, 0 failed. New `run57paidfrom.test.mjs` (30 checks, hand-worked), including your exact case and the starting-date rule.
 - Browser, alone on the final code: new `e2e_run57_paid` 26/26 (your case on screen, the counts adding up, Analytics figures, az/ru at 320 px, linking with balance 50.00 -> 45.00, Undo, Not now remembered). Rewritten for the single row, with the same strictness: `e2e_run16_wallet` 28, `e2e_run31_ledger` 15. Also passing: e2e_run22_trip 13, e2e_run24_accounts 13, e2e_run51_integrity 30, e2e_run9 55, e2e_lang 57, e2e_bigtext 25, e2e_run53_quick 32.
 - The language test's expected count went from 75 to 77 because two new groups of wording were added to what it checks (more checks, none removed).
-- Full browser suite: started after this report; result in PHASE_CHECKPOINT.md.
+- Full browser suite on commit ebf88cd: 126 files, 2,180 checks passed, 0 failed, 0 missing; the computer did not sleep during the run.
+
+## Part 3: the category menu now eases closed (your 10 Nov note)
+- Picking a category, or tapping Close, slides the menu down like every other sheet instead of making it vanish in one frame. The import sheet's Cancel and OK buttons do the same. With "reduce motion" switched on in the phone settings, menus still close at once.
+- Changed: `screens/ledger.jsx` (category menu rows and Close), `App.jsx` (import sheet buttons). 6 lines in total, no data touched.
+- New test `e2e_run57_catsheet` (9 checks). Its first version had a timing mistake of its own: it sometimes looked before the tap had landed, so it failed about 1 run in 5 even though the app was right (the app marked the menu "leaving" within 1 ms). I fixed the test so the tap and the watching happen in one step. It then passed 15 runs out of 15.
+- Also rerun on this code: e2e_import 53/53, e2e_run52_statement 35/35, e2e_run24_split 12/12; logic 2,072/0.
 
 ## Status
 | Item | Status |
@@ -34,7 +40,9 @@ On Accounts and balances, when you have exactly one cash account (or one card ac
 | Linking older entries (starting-date rule, Undo) | VERIFIED in tests |
 | On your phone with your real data | NOT ASSESSED |
 | az / ru wording of the new lines | IMPLEMENTED BUT UNVERIFIED |
+| Category menu and import sheet ease closed | VERIFIED in tests (15/15 repeat runs) |
+| Full browser suite (before the menu change) | VERIFIED: 2,180 / 0 |
 | The add form still offers the old cash/card choice only for entries that already have one | unchanged on purpose |
 
 ## Next action
-The category filter menu motion (it closes instantly instead of easing), then the next item in the plan.
+The category audit (handoff/CATEGORY_AUDIT_20261112.md) is written and waits for your go-ahead. When building starts, the two faults it found go first: the Gifts page counting personal care, and imported cash withdrawals being counted as spending.

@@ -4864,7 +4864,7 @@ function AppInner() {
               ):importPending.error?(
                 <>
                   <div role="alert" style={{background:"var(--neg-bg)",color:"var(--neg)",borderRadius:8,padding:"12px 14px",marginBottom:16,fontSize:13,lineHeight:1.55}}>{importPending.error}</div>
-                  <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>setImportPending(null)}>{t("common.ok")}</button>
+                  <button className="btn btn-primary btn-full" data-closer="1" style={{marginTop:0}} onClick={()=>setImportPending(null)}>{t("common.ok")}</button>
                 </>
               ):(
                 <>
@@ -4952,7 +4952,7 @@ function AppInner() {
                     : Object.keys(importPending.settings||{}).length>0
                       ? <button className="btn btn-ghost btn-full import-settings-only" style={{marginTop:8}} onClick={()=>commitImport("settings")}>{t("import.settingsOnlyBtn")}</button>
                       : null}
-                  <button className="btn btn-ghost btn-full" onClick={()=>setImportPending(null)}>{t("common.cancel")}</button>
+                  <button className="btn btn-ghost btn-full" data-closer="1" onClick={()=>setImportPending(null)}>{t("common.cancel")}</button>
                 </>
               )}
             </div>
