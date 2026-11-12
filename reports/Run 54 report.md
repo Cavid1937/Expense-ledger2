@@ -37,3 +37,11 @@ The plan said to move most of the Add form behind "More options". That is alread
 
 ## Next action
 Analytics and Coach wording, then "How it works", using `handoff/plain-story.md`.
+
+## Added later on 12 Nov: "entry" instead of "transaction" (owner decision)
+Owner: in English "entry" is better; in Azerbaijani and Russian use whichever word is natural, a mix is fine.
+- English: all 49 messages that said "transaction" now say "entry" (tab "Entries", "New Entry", "Entry recorded", "5 entries ready to import" and so on). Five sentences were reworded by hand so they read naturally.
+- Azerbaijani and Russian: not changed. They already mix "əməliyyat" / "qeyd" and "операция" / "запись". Which word fits each sentence is a question for the native review, not something I should decide by rule.
+- Tests: 37 patterns and 5 plain-text checks in 19 test files were changed to the new English words. No check was removed or loosened.
+- Run after the change: logic 100 files, 2,040 passed, 0 failed. 21 browser files that check English wording, run alone: all pass (e2e_import 53, e2e_run2 30, e2e_run9 55, e2e_run52_statement 35, and 17 others).
+- Full browser suite on commit 5f7f930: started 16:11; result is recorded in PHASE_CHECKPOINT.md when read.
