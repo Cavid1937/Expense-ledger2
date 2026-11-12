@@ -36,3 +36,9 @@ Azerbaijani and Russian for every new line are my drafts: IMPLEMENTED BUT UNVERI
 
 ## Next action
 The plain-language pass (Home, Add, Settings wording and a first-run explainer), which you called the main direction. Before that: one full browser run on the final code.
+
+## Full browser suite result (added 12 Nov, after the report above)
+Run on commit 6ebc2a5: 122 files, 2,051 checks passed, 3 failed, 51 not run. The computer slept during the run (6 standby events).
+- `e2e_ux` and `e2e_ux_keyboard` timed out because of the sleep. Rerun alone: 30/30 and 21/21.
+- `e2e_run9` failed 3 checks, and that was a real fault of mine: the new version label "53 (12.11.2026)" looked like an amount to the privacy-mode check. The label now uses a year-first date, "53 (2026-11-12)" (commit 4a81dc3). Rerun alone: 55/55; `e2e_run53_quick` 32/32; logic 100 files 2,040/0.
+- So every one of the 122 files has passed on the final code, but not in one uninterrupted run. One clean full run with the computer kept awake is still owed before any push.
