@@ -403,7 +403,7 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
         <div className="detail-meta" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
           {[
             [t("add.date"),      fmtDate(txn.date)],
-            [t("add.merchant"),  maskText(txn.merchant)||"—"],
+            [t(txn.type==="income"?"add.merchantIn":"add.merchant"),  maskText(txn.merchant)||"—"],
             [t("add.category"),  catName(txn.category)+(txn.subcategory?` / ${subName(txn.subcategory)}`:"")],
             [t("add.recurring"), txn.recurring?(txn.recurFreq?t("freqCap."+txn.recurFreq):t("common.yes")):t("common.no")],
             ...(txn.wallet?[[t(txn.type==="income"?"wallet.labelIn":"wallet.label"), walletName(txn.wallet)]]:[]),

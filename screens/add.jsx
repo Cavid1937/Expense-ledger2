@@ -473,7 +473,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
         )}
 
         <div className="field merchant-wrap">
-          <label className="field-lbl" htmlFor="txn-merchant">{t("add.merchant")} {optional}</label>
+          <label className="field-lbl" htmlFor="txn-merchant">{t(type==="income"?"add.merchantIn":"add.merchant")} {optional}</label>
           <input id="txn-merchant" className="field-input" placeholder={t("add.merchantPh")} autoComplete="off"
             value={merchant}
             onChange={e=>{setMerchant(e.target.value);setShowMerchantSugs(true);}}
