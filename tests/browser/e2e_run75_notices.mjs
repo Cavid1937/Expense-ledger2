@@ -33,5 +33,18 @@ section("R75-NB2. With access: the payment is offered in the usual review, never
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
+section("R75-NB3. A notice the app cannot read is kept only as a masked layout, and only with sharing on");
+{
+  // a credit notice in a format the reader does not know yet (invented)
+  const odd = [{ text: "Hesabınıza 50 AZN mədaxil olundu. Qalıq: 120 AZN", time: now - 60000, app: "bank" }];
+  const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }), fresh: true, pre: SHELL(true, odd) + `localStorage.setItem("expense_ledger_v5__notices","1");localStorage.setItem("expense_ledger_v5__learn",JSON.stringify({on:true,lastDay:"2099-01-01",sent:[],crashSent:""}));` });
+  await wait(1500);
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("expense_ledger_v5__layouts") || "[]"));
+  ok(kept.length === 1 && !/\d/.test(kept[0]) && /AZN/.test(kept[0]) && /mədaxil/.test(kept[0]) && /\[W\]/.test(kept[0]), "kept as a layout: banking words stay, numbers and other words are masked", kept);
+  const { openSettings } = await import("./lib.mjs"); await openSettings(page); await wait(300);
+  await page.evaluate(() => document.querySelector('[data-section="learn-preview-toggle"]').click()); await wait(400);
+  ok(/could not read \(masked\)/.test(await page.evaluate(() => document.querySelector('[data-section="learn-layouts"]').innerText)), "'Show what would be shared' lists it, masked, before anything is sent");
+  await page.close();
+}
 await browser.close();
 finish("e2e_run75_notices");

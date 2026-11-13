@@ -81,3 +81,18 @@ function settleRows(rows, skipped) {
   out.forEach((r) => { if (!r.type) r.type = "expense"; delete r._unsure; delete r._t; });
   return { bank: "notification", rows: out, problems };
 }
+
+// Run 75: a notice the reader could NOT understand, reduced to its bare layout so it can teach the app new bank formats (only with the
+// opt-in "Help improve the app"). Every digit becomes "#" and every word that is not a common banking word becomes "[W]", so no name,
+// place, card or amount can leave the phone: "Payment: -4.20 ₼ KAFE ARAZ **4321" -> "Payment: -#.## ₼ [W] [W] **####".
+const KEEP = new Set(("payment purchase paid debit credit card balance available amount refund transfer withdrawal deposit cash income expense " +
+  "with from to on at in for of the your account approved declined successful ödəniş ödənildi alış balans kart hesab mədaxil məxaric köçürmə " +
+  "mədaxil nağd uğurlu məbləğ qalıq оплата покупка списание зачисление баланс карта счёт счет доступно перевод возврат снятие пополнение сумма " +
+  "успешно azn usd eur rub my").split(/\s+/));
+export function maskNotice(text) {
+  return String(text || "").replace(/\d/g, "#").split(/(\s+)/).map((w) => {
+    if (/^\s+$/.test(w) || !/\p{L}/u.test(w)) return w;
+    const core = w.toLowerCase().replace(/^[^\p{L}]+|[^\p{L}]+$/gu, "");
+    return KEEP.has(core) ? w : w.replace(/\p{L}[\p{L}'’.-]*/gu, "[W]");
+  }).join("").replace(/(\[W\]\s*){3,}/g, "[W] [W] ").trim().slice(0, 400);
+}

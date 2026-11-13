@@ -11,7 +11,7 @@ import { applyLink, linkCandidates, undoLink } from "../App.jsx";
 import { buildWorkbookSheets, downloadFile, inNativeShell, readBudgetCarry, today as todayStr } from "../App.jsx";   // Run 64
 import { readLearn, writeLearn, learnPreview, readCrashLog } from "../App.jsx";
 // Run 75: report a problem
-import { sendFeedback, readScreenCounts, SCREENS_KEY } from "../App.jsx";
+import { sendFeedback, readScreenCounts, SCREENS_KEY, readLayouts, LAYOUTS_KEY } from "../App.jsx";
 // Run 70: theme preview cards
 import { THEME_MAIN, themePreview } from "../App.jsx";
 // Run 71: the Gifts row is shown only when this preference key is "1" (off for everyone by default)
@@ -555,8 +555,8 @@ export function RemindersSettings({ showToast, open, toggle }) {
 export function LearnSettings({ state, showToast }) {
   const [L,setL]=useState(()=>readLearn());
   const [show,setShow]=useState(false);
-  const pv=useMemo(()=>learnPreview(state.transactions,{ sent:L.sent, crashLog:readCrashLog(), crashSent:L.crashSent, screens:readScreenCounts(), lang:state.language||"en", version:APP_RELEASE, platform:inNativeShell()?"android":"web" }),[state.transactions,state.language,L]);
-  const flip=()=>{ const next={ ...readLearn(), on:!readLearn().on }; if (!writeLearn(next)) { showToast(t("carry.saveFailed")); return; } if (!next.on) { try { localStorage.removeItem(SCREENS_KEY); } catch {} } setL(readLearn()); try { window.dispatchEvent(new Event("ledger-learn-changed")); } catch {} showToast(t(next.on?"learn.onToast":"learn.offToast")); };
+  const pv=useMemo(()=>learnPreview(state.transactions,{ sent:L.sent, crashLog:readCrashLog(), crashSent:L.crashSent, screens:readScreenCounts(), layouts:readLayouts(), lang:state.language||"en", version:APP_RELEASE, platform:inNativeShell()?"android":"web" }),[state.transactions,state.language,L]);
+  const flip=()=>{ const next={ ...readLearn(), on:!readLearn().on }; if (!writeLearn(next)) { showToast(t("carry.saveFailed")); return; } if (!next.on) { try { localStorage.removeItem(SCREENS_KEY); localStorage.removeItem(LAYOUTS_KEY); } catch {} } setL(readLearn()); try { window.dispatchEvent(new Event("ledger-learn-changed")); } catch {} showToast(t(next.on?"learn.onToast":"learn.offToast")); };
   return (
     <div className="card" data-section="learn" style={{marginTop:12}}>
       <div className="settings-row" style={{alignItems:"flex-start"}}>
@@ -574,6 +574,7 @@ export function LearnSettings({ state, showToast }) {
           {pv.places.length>20&&<div className="list-sub">{t("learn.pvMore",{ n:pv.places.length-20 })}</div>}
           <div style={{marginTop:4}}>{tn("learn.pvCrashes",pv.crashes.length)}</div>
           <div style={{marginTop:4}} data-section="learn-screens">{tn("learn.pvScreens",pv.screens.length)}{pv.screens.length>0&&<span className="list-sub"> {pv.screens.map(x=>`${x.screen} ${x.opens}`).join(" · ")}</span>}</div>
+          <div style={{marginTop:4}} data-section="learn-layouts">{tn("learn.pvLayouts",pv.layouts.length)}{pv.layouts.map((x,i)=><div key={i} className="list-sub" style={{fontFamily:"monospace",whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>{x}</div>)}</div>
           <div className="list-sub" style={{marginTop:4}}>{t("learn.pvNote")}</div>
         </div>
       </Collapse>
