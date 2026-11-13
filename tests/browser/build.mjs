@@ -16,7 +16,8 @@ fs.copyFileSync(cand, path.join(out, "App.jsx"));
 { const scr = path.join(path.dirname(cand), "screens"); if (fs.existsSync(scr)) fs.cpSync(scr, path.join(out, "screens"), { recursive: true }); }   // Run 27: the screens beside App.jsx
 // Run 52: the statement reader and the PDF text reader sit next to App.jsx as their own files (copied, never written).
 // Run 64: xlsxWrite.js (the Excel workbook export) is copied too
-for (const extra of ["statement.js", "pdfText.js", "xlsxWrite.js"]) { const p = path.join(path.dirname(cand), extra); if (fs.existsSync(p)) fs.copyFileSync(p, path.join(out, extra)); }
+// Run 68: notify.js (pasted bank notifications) is copied too
+for (const extra of ["statement.js", "pdfText.js", "xlsxWrite.js", "notify.js"]) { const p = path.join(path.dirname(cand), extra); if (fs.existsSync(p)) fs.copyFileSync(p, path.join(out, extra)); }
 const stylesSrc =path.join(path.dirname(cand), "styles.js"); if (fs.existsSync(stylesSrc)) fs.copyFileSync(stylesSrc, path.join(out, "styles.js"));
 { const fontDir = path.join(path.dirname(cand), "public", "fonts");
   let total = 0;

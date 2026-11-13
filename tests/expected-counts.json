@@ -110,6 +110,7 @@
     "run65surplus.test.mjs": 12,
     "run66notif.test.mjs": 6,
     "run67map.test.mjs": 11,
+    "run68paste.test.mjs": 11,
     "run43pace.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
@@ -152,6 +153,7 @@
     "e2e_run65.mjs": 11,
     "e2e_run66_notif.mjs": 8,
     "e2e_run67_map.mjs": 11,
+    "e2e_run68_paste.mjs": 6,
     "e2e_run57_paid.mjs": 26,
     "e2e_run9.mjs": 55,
     "e2e_run10.mjs": 16,

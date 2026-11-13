@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Fragment, Component } from "react";
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
-import { readStatement, statementEntries, linesFromText, linesFromGrid, xlsxGrid, gridFromCsv, guessMap, readMapped } from "./statement.js";
+import { readStatement, statementEntries, statementCheck, linesFromText, linesFromGrid, xlsxGrid, gridFromCsv, guessMap, readMapped } from "./statement.js";
+import { readNotifications } from "./notify.js";   // Run 68
 import { CSS } from "./styles.js";
 import { LockGate, LockSheet } from "./screens/lock.jsx";
 import { HomePage } from "./screens/home.jsx";
@@ -4913,7 +4914,14 @@ function AppInner() {
     setSkipDup(true); setSkipSim(true);
     setImportPending({ ...plan, ...mergeCounts(stateRef.current.transactions, plan) });
   };
-  const importText=useCallback((text)=>{ openStatement(readStatement(linesFromText(text)), t("st.pasted")); },[]);
+  // Run 68: pasted text is read as statement rows first; when it holds none, as bank notifications (no dates in them: they are dated now)
+  const importText=useCallback((text)=>{
+    const st=readStatement(linesFromText(text));
+    if (st.rows.length) { openStatement(st, t("st.pasted")); return; }
+    const nt=readNotifications(text, new Date());
+    if (nt.rows.length) { openStatement({ ...nt, check:statementCheck(nt.rows) }, t("st.pastedNotif")); return; }
+    openStatement(st, t("st.pasted"));
+  },[]);
   const setStOpt=(k,v)=>setImportPending(p=>{ if (!p || p.kind!=="statement") return p; const stOpts={ ...p.stOpts, [k]:v }, transactions=statementPick(p,stOpts); return { ...p, stOpts, transactions, ...mergeCounts(stateRef.current.transactions,{ ...p, transactions }) }; });
 
   // Run 32: returns null when the file was opened (the normal review sheet then shows), otherwise the reason, so the sheet can say why.
@@ -5214,7 +5222,7 @@ function AppInner() {
                   {/* Run 52: a bank statement: which bank layout was recognised, whether the bank's own running balance confirms the rows, and three choices */}
                   {importPending.kind==="statement"&&(()=>{ const s=importPending.statement, o=importPending.stOpts, accs=readAccounts().accounts.filter(a=>!a.hidden), row={display:"flex",gap:8,alignItems:"flex-start",marginTop:8,lineHeight:1.45}; return (
                     <div data-section="import-statement" style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
-                      <div style={{fontWeight:600}} data-st="bank">{t("st.title",{ bank:STATEMENT_BANKS[s.bank]||t("st.bankOther") })}</div>
+                      <div style={{fontWeight:600}} data-st="bank">{s.bank==="notification" ? t("st.notifTitle") : t("st.title",{ bank:STATEMENT_BANKS[s.bank]||t("st.bankOther") })}</div>
                       <div data-st="check" data-ok={s.check.has?String(s.check.ok):"none"} style={s.check.has&&!s.check.ok?{color:"var(--warn)"}:null}>{!s.check.has ? t("st.checkNone") : s.check.ok ? t("st.checkOk") : t("st.checkBad",{n:s.check.breaks})}</div>
                       {s.left>0&&<div data-st="left" style={{color:"var(--warn)"}}>{t("st.left",{n:s.left})}</div>}
                       {s.sign&&<div data-st="sign" style={{color:"var(--warn)"}}>{t("st.sign")}</div>}
