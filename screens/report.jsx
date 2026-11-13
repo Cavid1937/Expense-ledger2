@@ -3,9 +3,11 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { t, tn } from "../i18n.js";
-import { Icon, KEY, fmt, monthName, monthReport, monthReportText, nativeShareHook, catName, localMonthStr } from "../App.jsx";
+import { Icon, fmt, monthName, monthReport, monthReportText, nativeShareHook, catName, localMonthStr } from "../App.jsx";
 
-const SEEN_KEY = KEY + "__reportseen";
+// Run 76 hotfix: written out, not built from KEY at load time. This file and App.jsx import each other, and in the real website build
+// KEY was not ready yet when this line ran, which stopped the whole app from opening ("Cannot access … before initialization").
+const SEEN_KEY = "expense_ledger_v5__reportseen";
 const lastMonth = (now = new Date()) => localMonthStr(new Date(now.getFullYear(), now.getMonth() - 1, 1));
 
 async function shareText(title, text) {
