@@ -99,6 +99,7 @@
     "run75report.test.mjs": 12,
     "run75notices.test.mjs": 5,
     "run75layouts.test.mjs": 6,
+    "run76loadorder.test.mjs": 1,
     "run50sinking.test.mjs": 9,
     "run50text.test.mjs": 30,
     "run50gifts.test.mjs": 13,
