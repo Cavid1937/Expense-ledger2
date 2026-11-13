@@ -2,6 +2,8 @@ import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Fra
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
 import { readStatement, statementEntries, statementCheck, linesFromText, linesFromGrid, xlsxGrid, gridFromCsv, guessMap, readMapped } from "./statement.js";
 import { readNotifications } from "./notify.js";   // Run 68
+// Run 74: optional Google Drive backup
+import { driveSave, driveLoad, driveToken, driveSignOut, driveHasToken, driveDue, backupFingerprint, cleanDrivePref } from "./drive.js";
 import { CSS } from "./styles.js";
 import { LockGate, LockSheet } from "./screens/lock.jsx";
 import { HomePage } from "./screens/home.jsx";
@@ -4091,6 +4093,10 @@ export function reminderMessage(item, prefs, currency) {
 // Never: amounts, dates of spending, notes, people's names, card or account numbers, balances, or anything that identifies the phone over time.
 // The person sees exactly what would be sent before turning it on (learnPreview). Sending is best effort: if the server is asleep (the free
 // plan pauses after a quiet week) or the phone is offline, nothing happens and the app is not affected.
+// Run 74: the Google Drive backup choice and last result (drive.js cleanDrivePref); a preference, never in the ledger or in backup files
+export const DRIVE_KEY=KEY+"__drive";
+export function readDrive() { try { return cleanDrivePref(JSON.parse(localStorage.getItem(DRIVE_KEY)||"null")); } catch { return cleanDrivePref(null); } }
+export function writeDrive(v) { try { localStorage.setItem(DRIVE_KEY,JSON.stringify(cleanDrivePref(v))); return true; } catch { return false; } }
 export const LEARN_KEY=KEY+"__learn";
 const LEARN_URL="https://qkztocsrxhubsljtsjpd.supabase.co/rest/v1/", LEARN_PUBLIC_KEY="sb_publishable_L1ADxl6MJw9fmRjroFsoMA_EUYqwIuD";
 const LEARN_SKIP_CATS=new Set(["gifts","family","finance","other","giftin","familyin","alimony","income","personal"]);
@@ -4926,6 +4932,52 @@ function AppInner() {
   const savedNotice=(r)=>{ const open=nativeOpenHook(); showSnackbar(t("io.savedTo",{where:r.where||"Downloads"}), open&&r.uri ? ()=>{ Promise.resolve(open(r.uri,r.mime||"application/json")).catch(()=>showToast(t("io.openFailed"),5000)); } : null, 10000, "saved", open&&r.uri ? t("io.openFile") : ""); };
   // Run 37: one complete backup text for every way of saving it (download, Downloads folder, share, encrypted).
   const backupText=(now)=>JSON.stringify(buildBackup({...state,subcategories:readSubcats(),debtData:readDebts(),customCats:readCustomCats(),catPrefs:readCatPrefs(),preferences:collectPrefs(state),accountData:readAccounts()},now),null,2);
+  // Run 74: Google Drive backup. One file in the app's hidden Drive folder, replaced each time. A backup Drive accepted counts as a confirmed
+  // backup (the server said it has it). Restoring opens the normal import preview: nothing changes until the person confirms.
+  const [drivePref,setDrivePref]=useState(()=>readDrive());
+  const [driveBusy,setDriveBusy]=useState("");
+  const driveBackupNow=useCallback(async ({ interactive=false, auto=false }={})=>{
+    const now=new Date().toISOString(), text=backupText(now), fp=backupFingerprint(text), day=localDateStr();
+    setDriveBusy("save");
+    try {
+      const tok=await driveToken({ interactive });
+      const res=await driveSave(tok,text);
+      const p={ ...readDrive(), on:true, lastAt:res.modifiedTime||now, lastDay:day, lastHash:fp, fails:0, lastError:"" };
+      writeDrive(p); setDrivePref(p);
+      setState(s=>({...s,lastBackup:now,backupConfirmedAt:now}));
+      if (!auto) showToast(t("drive.saved"));
+      return true;
+    } catch (e) {
+      const reason=(e&&e.reason)||"server", p0=readDrive();
+      // a cancelled sign-in is not a failure of the backup; anything else is counted so the card can warn after a few days
+      const p={ ...p0, fails:reason==="cancelled"?p0.fails:p0.fails+(p0.lastDay===day?0:1), lastError:reason };
+      if (p0.on) { writeDrive(p); setDrivePref(p); }
+      if (!auto) showToast(t("drive.err."+(["auth","offline","space","cancelled"].includes(reason)?reason:"server")),6000);
+      return false;
+    } finally { setDriveBusy(""); }
+  },[state,showToast]);
+  const driveConnect=useCallback(async ()=>{ const ok=await driveBackupNow({ interactive:true }); if (ok) showToast(t("drive.connected")); },[driveBackupNow,showToast]);
+  const driveRestore=useCallback(async ()=>{
+    setDriveBusy("load");
+    try {
+      const tok=await driveToken({ interactive:true }); const got=await driveLoad(tok);
+      if (!got) { showToast(t("drive.none"),6000); return; }
+      const name=t("drive.fileName");
+      const plan=planImportWithCats(got.text,name);
+      if (!plan.ok) { setImportPending({ error:plan.error, filename:name }); return; }
+      setSkipDup(true); setSkipSim(true);
+      setImportPending({ ...plan, filename:name, ...mergeCounts(stateRef.current.transactions, plan) });
+    } catch (e) { const reason=(e&&e.reason)||"server"; showToast(t("drive.err."+(["auth","offline","space","cancelled"].includes(reason)?reason:"server")),6000); }
+    finally { setDriveBusy(""); }
+  },[showToast]);
+  const driveDisconnect=useCallback(async ()=>{ await driveSignOut(); const p={ ...cleanDrivePref(null) }; writeDrive(p); setDrivePref(p); showToast(t("drive.disconnected")); },[showToast]);
+  // at most once a day, when the app opens or the data changes, only if connected and a sign-in is at hand without asking (the Android app;
+  // on the website only while the sign-in from this visit is still valid). Never interrupts: failures are counted for the card's warning.
+  useEffect(()=>{
+    const p=readDrive(); if (!p.on || typeof navigator!=="undefined" && navigator.onLine===false) return;
+    const tm=setTimeout(()=>{ const fp=backupFingerprint(backupText("x")); if (driveDue(p,fp,localDateStr()) && (driveHasToken() || (typeof window!=="undefined" && window.LedgerNative && window.LedgerNative.google))) driveBackupNow({ auto:true }); },4000);
+    return ()=>clearTimeout(tm);
+  },[state.transactions,state.budgets,state.goals,state.bills]);
   const exportCSV=useCallback(async ()=>{
     const save=nativeSaveHook();
     if (save) {   // Run 37: the Android app saves the spreadsheet into Downloads
@@ -5268,7 +5320,7 @@ function AppInner() {
           {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast} accTools={accTools}/></div>}
           {tab==="gifts"     && <GiftsPage transactions={transactions} currency={currency} showToast={showToast} onView={txn=>setViewTxn(txn)} onAdd={k=>openAdd(k==="received"?{type:"income",category:"giftin"}:{type:"expense",category:"gifts"})}/>}
           {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} onTakeEntries={takeEntries} onPutEntries={putEntries} showToast={showToast} showSnackbar={showSnackbar}/>}
-          {tab==="io"        && <ImportExportPage state={state} onDeleteMany={deleteMany} onImportText={importText} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
+          {tab==="io"        && <ImportExportPage drive={{ pref:drivePref, busy:driveBusy, onConnect:driveConnect, onBackup:()=>driveBackupNow({ interactive:true }), onRestore:driveRestore, onDisconnect:driveDisconnect }} state={state} onDeleteMany={deleteMany} onImportText={importText} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} onExportEncrypted={exportEncrypted} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
             onConfirmBackup={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}/>}

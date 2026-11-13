@@ -13,6 +13,15 @@ const exact = ["qkztocsrxhubsljtsjpd.supabase.co"];
 const strange = hosts.filter((h) => !exact.includes(h) && !allowed.some((a) => h === a || h.endsWith("." + a)));
 ok(strange.length === 0, "no unexpected host appears in App.jsx or screens/*.jsx", strange);
 
+section("R74-N1. The Google Drive backup file talks only to Google's sign-in and Drive addresses");
+{
+  const drv = fs.readFileSync(new URL("../../drive.js", import.meta.url), "utf8");
+  const dh = [...new Set([...drv.matchAll(/https?:\/\/[A-Za-z0-9._-]+/g)].map((m) => m[0].replace(/^https?:\/\//, "")))];
+  ok(dh.every((h) => ["www.googleapis.com", "accounts.google.com"].includes(h)) && dh.includes("www.googleapis.com"), "drive.js: only www.googleapis.com and accounts.google.com", dh);
+  ok(!/client_secret|GOCSPX/.test(drv + SRC), "no Google client secret anywhere in the app");
+  ok(/if \(!interactive\) throw new DriveError\("auth"\);\s*await loadGis\(\);/.test(drv), "Google's sign-in script is loaded only after a tap (never on its own)");
+}
+
 section("R69-N1. The opt-in sharing address is used only behind the person's own switch, and the Privacy page says so");
 ok((SRC.match(/qkztocsrxhubsljtsjpd\.supabase\.co/g) || []).length === 1, "the sharing address appears exactly once in the source");
 ok(/const L=readLearn\(\)[^\n]*\n\s*if \(!L\.on \|\|/.test(SRC), "the daily send returns at once unless the person turned sharing on");

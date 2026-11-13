@@ -920,7 +920,36 @@ function PasteStatement({ onImportText }) {
   );
 }
 
-export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFile, onImportText, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall, onDeleteMany }) {
+// Run 74: optional Google Drive backup. Off until the person connects; says what Google can and cannot see before anything happens.
+function DriveCard({ drive }) {
+  const [askOff,setAskOff]=useState(false);
+  if (!drive) return null;
+  const { pref={}, busy="", onConnect, onBackup, onRestore, onDisconnect }=drive;
+  return (
+    <div className="card" data-section="io-drive" style={{marginTop:12}}>
+      <div className="list-title" style={{display:"flex",alignItems:"center",gap:8}}><Icon name="upload" size={16}/>{t("drive.title")}</div>
+      <div className="list-sub" style={{lineHeight:1.55,marginTop:4}}>{t("drive.sub")}</div>
+      {!pref.on ? (<>
+        <div className="list-sub" style={{lineHeight:1.55,marginTop:8}}>{t("drive.what")}</div>
+        <button type="button" className="btn btn-primary" data-section="drive-connect" disabled={!!busy} style={{marginTop:12,width:"100%"}} onClick={onConnect}>{busy?t("drive.working"):t("drive.connect")}</button>
+        <button type="button" className="btn" data-section="drive-restore" disabled={!!busy} style={{marginTop:8,width:"100%"}} onClick={onRestore}>{t("drive.restore")}</button>
+      </>) : (<>
+        <div className="list-sub" data-section="drive-last" style={{marginTop:8,lineHeight:1.5}}>{pref.lastAt?t("drive.last",{date:fmtLongDate(pref.lastAt)}):t("drive.never")}</div>
+        {pref.fails>=3&&<div className="list-sub" data-section="drive-warn" role="status" style={{marginTop:6,color:"var(--warn)",lineHeight:1.5}}>{t("drive.failing",{n:pref.fails})}</div>}
+        <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("drive.auto")}</div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+          <button type="button" className="btn btn-primary" data-section="drive-backup" disabled={!!busy} style={{flex:"1 1 140px"}} onClick={onBackup}>{busy==="save"?t("drive.working"):t("drive.backupNow")}</button>
+          <button type="button" className="btn" data-section="drive-restore" disabled={!!busy} style={{flex:"1 1 140px"}} onClick={onRestore}>{busy==="load"?t("drive.working"):t("drive.restore")}</button>
+        </div>
+        {!askOff
+          ? <button type="button" className="btn btn-sm" data-section="drive-off" style={{marginTop:10}} onClick={()=>setAskOff(true)}>{t("drive.disconnect")}</button>
+          : <div data-section="drive-off-ask" style={{marginTop:10}}><div className="list-sub" style={{lineHeight:1.5}}>{t("drive.disconnectAsk")}</div>
+              <div style={{display:"flex",gap:8,marginTop:8}}><button type="button" className="btn btn-sm" data-section="drive-off-yes" onClick={()=>{ setAskOff(false); onDisconnect(); }}>{t("drive.disconnect")}</button><button type="button" className="btn btn-sm" onClick={()=>setAskOff(false)}>{t("common.cancel")}</button></div></div>}
+      </>)}
+    </div>
+  );
+}
+export function ImportExportPage({ drive, state, onExportCSV, onExportJSON, onImportFile, onImportText, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall, onDeleteMany }) {
   const fileRef=useRef();
   const { transactions, lastBackup, backupConfirmedAt }=state;
   const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
@@ -953,6 +982,7 @@ export function ImportExportPage({ state, onExportCSV, onExportJSON, onImportFil
         {onExportEncrypted&&<EncryptedBackup onExportEncrypted={onExportEncrypted}/>}
       </div>
 
+      <DriveCard drive={drive}/>
       <div className="section-title">{t("io2.importTitle")}</div>
       <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io2.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}} style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
         {/* Run 39c (owner: the backup is in Google Drive but the website's picker does not show it): no type filter anywhere. Drive and other apps often label
