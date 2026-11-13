@@ -40,5 +40,14 @@ for (const lang of ["az", "ru"]) {
   ok(!wide, `${lang}: the monthly surplus card and its notes stay inside the screen`);
   await page.close();
 }
+section("R65-B5. Gifts page in Azerbaijani: a built-in subcategory is shown in Azerbaijani (found in the review screenshots)");
+{
+  const page = await openPage(browser, { chooseLang: "az", seed: baseSeed({ language: "az", transactions: [tx({ merchant: "Aysel", category: "gifts", subcategory: "Gifts", amount: 50, date: TODAY })] }) });
+  await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(400);
+  await page.evaluate(() => [...document.querySelectorAll(".more-page .list-row, .more-page button")].find((x) => /Hədiyyə/.test(x.innerText)).click()); await page.waitForSelector('[data-section="gifts-row"]', { timeout: 4000 }); await wait(300);
+  const row = await page.evaluate(() => document.querySelector('[data-section="gifts-row"]').innerText);
+  ok(/Hədiyyələr/.test(row) && !/\bGifts\b/.test(row), "the row says 'Hədiyyələr', not the stored English 'Gifts'", row);
+  await page.close();
+}
 await browser.close();
 finish("e2e_run65");

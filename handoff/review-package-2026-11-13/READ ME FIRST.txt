@@ -1,0 +1,19 @@
+Expense Ledger: translation review package (Azerbaijani and Russian), 13 Nov 2026
+
+For the reviewer (you do not need to read any code):
+
+1. Open "Expense Ledger translation review.xlsx" (Excel, LibreOffice or Google Sheets).
+2. Read the sheet "How to review" first (short instructions in English, Azerbaijani and Russian).
+3. Then work through:
+   - "Glossary": the key money words. Please check these first, because they appear everywhere.
+   - "New and changed": 417 texts added or changed since 8 Nov 2026. These were never checked by a native speaker.
+   - "All texts": all 1,728 texts of the app, grouped by screen, if you have time.
+   - "Questions": a few choices only a native speaker can make (number format, dates, words).
+4. For each row, write OK in the Verdict column, or write a better version in "Corrected Azerbaijani" / "Corrected Russian".
+5. Keep anything in curly brackets, like {amount} or {n}. The app fills these in. You may move them inside the sentence.
+6. The folder "screenshots" shows the main screens in each language (home-az.png, home-ru.png and so on). The "Screenshot" column in the workbook says which picture shows a text.
+   Note: the pictures are taken as one long page, so the bottom menu bar can appear in the middle of a picture. That is only how the picture was taken.
+
+Send the filled-in workbook back. The app owner will pass it on; the corrections are then put into the app and checked on the screens in each language.
+
+Until this review and a screen check are done, the Azerbaijani and Russian versions are treated as NOT verified.

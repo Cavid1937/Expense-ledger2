@@ -1,7 +1,7 @@
 // Run 50 (owner list #3): gift ledger. A read-only view over existing entries (see giftLedger in App.jsx); adding goes through the normal Add screen.
 import { useMemo, useState } from "react";
 import { t } from "../i18n.js";
-import { buildCsv, saveTextFile, fmt, fmtDate, giftLedger, today } from "../App.jsx";
+import { buildCsv, saveTextFile, fmt, fmtDate, giftLedger, subName, today } from "../App.jsx";
 
 export function GiftsPage({ transactions, currency, onView, onAdd, showToast }) {
   const [q, setQ] = useState("");
@@ -44,7 +44,8 @@ export function GiftsPage({ transactions, currency, onView, onAdd, showToast }) 
               <button type="button" key={r.txn.id} className="list-row" data-section="gifts-row" data-kind={r.kind} onClick={() => onView(r.txn)} style={{ width: "100%", textAlign: "left" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="list-title">{r.person || t("gifts.noPerson")}</div>
-                  <div className="list-sub">{[r.event, fmtDate(r.txn.date)].filter(Boolean).join(" · ")}</div>
+                  {/* Run 65: a built-in subcategory is shown in the person's language (it showed the stored English name, e.g. "Gifts", in az/ru) */}
+                  <div className="list-sub">{[String(r.txn.note || "").trim() ? r.event : subName(r.event), fmtDate(r.txn.date)].filter(Boolean).join(" · ")}</div>
                 </div>
                 <div className="list-amount" style={{ color: r.kind === "received" ? "var(--pos)" : "var(--ink)" }}>{(r.kind === "received" ? "+" : "−") + fmt(r.txn.amount, currency)}</div>
               </button>
