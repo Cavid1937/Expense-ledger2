@@ -4138,8 +4138,14 @@ export function learnPreview(transactions, opts={}) {
   const places=[...count.entries()].filter(([k,n])=>n>=2 && !sent.has(k)).map(([k])=>({ key:k, ...pretty.get(k) })).slice(0,50);
   const crashes=(Array.isArray(opts.crashLog)?opts.crashLog:[]).filter(c=>c && typeof c.at==="string" && c.at>(opts.crashSent||"")).slice(-5)
     .map(c=>({ at:c.at, screen:"", message:String(c.message||"unknown").replace(/(["'`]).*?\1/g,"\"…\"").replace(/\d{4,}/g,"…").slice(0,200) }));
-  return { places, crashes, ping:{ lang:opts.lang||"en", app_version:String(opts.version||"").slice(0,40), platform:opts.platform==="android"?"android":"web" } };
+  // Run 75: how many times each main screen was opened since the last send (names and counts only)
+  const screens=Object.entries(opts.screens&&typeof opts.screens==="object"?opts.screens:{}).filter(([k,n])=>/^[a-z0-9_-]{1,30}$/.test(k)&&Number.isInteger(n)&&n>0).slice(0,20).map(([screen,n])=>({ screen, opens:Math.min(n,1000) }));
+  return { places, crashes, screens, ping:{ lang:opts.lang||"en", app_version:String(opts.version||"").slice(0,40), platform:opts.platform==="android"?"android":"web" } };
 }
+// Run 75: screen-open counts kept on the phone only while sharing is on; sent with the daily rows, then cleared
+export const SCREENS_KEY=KEY+"__screens";
+export function readScreenCounts() { try { const v=JSON.parse(localStorage.getItem(SCREENS_KEY)||"null"); return v&&typeof v==="object"&&!Array.isArray(v)?v:{}; } catch { return {}; } }
+export function countScreen(name) { try { if (!readLearn().on || !/^[a-z0-9_-]{1,30}$/.test(String(name))) return; const c=readScreenCounts(); c[name]=Math.min(1000,(Number.isInteger(c[name])?c[name]:0)+1); localStorage.setItem(SCREENS_KEY,JSON.stringify(c)); } catch { /* best effort */ } }
 export function readCrashLog() { try { const p=JSON.parse(localStorage.getItem(CRASH_LOG_KEY)||"[]"); return Array.isArray(p)?p.filter(isPlainObject):[]; } catch { return []; } }
 // Run 75 (owner, 13 Nov): "Report a problem / write to us". One row in the same free, add-only project (table feedback_reports: nobody
 // can read it through the app). The text is cleaned on the phone: long digit runs (card / account / phone numbers) become "…". At most
@@ -4170,6 +4176,7 @@ export async function sendLearning(preview, fetchFn=(typeof fetch!=="undefined"?
       post("usage_pings",[p.ping]),
       post("place_reports",p.places.map(x=>({ place:x.place, category:x.category, subcategory:x.subcategory, lang, app_version:v }))),
       post("crash_reports",p.crashes.map(c=>({ screen:c.screen, message:c.message, lang, app_version:v }))),
+      post("screen_opens",(p.screens||[]).map(x=>({ screen:x.screen, opens:x.opens, lang, app_version:v, platform:p.ping.platform }))),
     ]);
     return ok.every(Boolean);
   } catch { return false; }
@@ -4413,6 +4420,8 @@ function AppInner() {
   setLang(state.language||"en");
   useEffect(()=>{ document.documentElement.lang=state.language||"en"; },[state.language]);
   const [tab,      setTab]      = useState("home");
+  // Run 75: with "Help improve the app" on, each opened screen is counted on the phone (name and count only)
+  useEffect(()=>{ countScreen(tab); },[tab]);
   const [tabKey,   setTabKey]   = useState(0);
   // Privacy mode ("Hide amounts") is remembered across closing the app until the user changes it (Run 20; before that it started off every time).
   const [privacy,  setPrivacy]  = useState(()=>readPrivacy());
@@ -4871,10 +4880,10 @@ function AppInner() {
   useEffect(()=>{
     const L=readLearn(), day=localDateStr();
     if (!L.on || L.lastDay===day || (typeof navigator!=="undefined" && navigator.onLine===false)) return;
-    const pv=learnPreview(state.transactions,{ sent:L.sent, crashLog:readCrashLog(), crashSent:L.crashSent, lang:state.language||"en", version:APP_RELEASE, platform:remindersAvailable()?"android":"web" });
+    const pv=learnPreview(state.transactions,{ sent:L.sent, crashLog:readCrashLog(), crashSent:L.crashSent, screens:readScreenCounts(), lang:state.language||"en", version:APP_RELEASE, platform:remindersAvailable()?"android":"web" });
     // what was accepted is remembered even if the screen changed meanwhile, so the same rows are never sent twice
     sendLearning(pv).then(ok=>{ if (!ok) return; const cur=readLearn();
-      writeLearn({ ...cur, lastDay:day, sent:[...cur.sent,...pv.places.map(p=>p.key)].slice(-1000), crashSent:pv.crashes.length?pv.crashes[pv.crashes.length-1].at:cur.crashSent }); });
+      writeLearn({ ...cur, lastDay:day, sent:[...cur.sent,...pv.places.map(p=>p.key)].slice(-1000), crashSent:pv.crashes.length?pv.crashes[pv.crashes.length-1].at:cur.crashSent }); try { localStorage.removeItem(SCREENS_KEY); } catch { /* counted again next time */ } });
   },[learnTick]);
   // Run 30 (Android app only): long-press shortcuts on the app icon ("Add expense" / "Add income") open the add form.
   useEffect(()=>{
