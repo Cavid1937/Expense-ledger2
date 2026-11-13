@@ -33,7 +33,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .topbar-back{display:flex;align-items:center;gap:2px;min-width:0;margin-left:-8px}
 .topbar-back .wordmark{font-size:22px}
 .topbar-right{display:flex;align-items:center;gap:7px}
-.fab-add{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 14px);left:calc(50% + min(215px,50vw) - 72px);width:56px;height:56px;border:none;border-radius:50%;background:var(--accent-fill);color:var(--on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,0.38),0 2px 8px rgba(76,201,196,0.3);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent;z-index:55}
+.fab-add{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 14px);left:calc(50% + min(215px,50vw) - 72px);width:56px;height:56px;border:none;border-radius:50%;background:var(--accent-fill);color:var(--on-accent);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,0.38),0 2px 8px color-mix(in srgb,var(--accent-fill) 30%,transparent);transition:transform 120ms,background 120ms;-webkit-tap-highlight-color:transparent;z-index:55}
 .fab-add:active{transform:scale(0.92)}
 .fab-add.fab-hide{transform:translateY(96px);opacity:0;pointer-events:none}
 @media (prefers-reduced-motion:reduce){.fab-add{transition:none}}
@@ -312,8 +312,8 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 /* Snackbar / Toast */
 .snackbar{position:fixed;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 8px);left:50%;transform:translateX(-50%);background:var(--bg-warm);color:var(--ink);border:1px solid var(--rule-2);padding:11px 18px;border-radius:14px;font-size:13px;font-weight:600;z-index:200;display:flex;align-items:center;gap:14px;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,0.3),0 2px 6px rgba(0,0,0,0.15);animation:snackIn 300ms cubic-bezier(0.22,1,0.36,1)}
 @keyframes snackIn{from{opacity:0;transform:translateX(-50%) translateY(16px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
-.snackbar-undo{background:none;border:1px solid rgba(76,201,196,0.45);color:var(--accent-text);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:border-color 120ms}
-.snackbar-undo:hover{border-color:rgba(255,255,255,0.5)}
+.snackbar-undo{background:none;border:1px solid color-mix(in srgb,var(--accent-text) 45%,transparent);color:var(--accent-text);border-radius:6px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:border-color 120ms}
+.snackbar-undo:hover{border-color:var(--accent-text)}
 .toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--bg-warm);color:var(--ink);border:1px solid var(--rule-2);padding:9px 18px;border-radius:12px;font-size:12px;font-weight:600;z-index:300;white-space:nowrap;pointer-events:none;animation:toastIn 260ms cubic-bezier(0.22,1,0.36,1);box-shadow:0 4px 16px rgba(0,0,0,0.25)}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px) scale(0.95)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
 /* Staggered section entrance */
@@ -322,14 +322,14 @@ button:not(:disabled):active,[role="button"]:active{opacity:.74}   /* Run 23: ev
 .section-enter{animation:sectionIn 160ms ease-out both}
 .section-enter-1,.section-enter-2,.section-enter-3,.section-enter-4,.section-enter-5,.section-enter-6,.section-enter-7,.section-enter-8{animation-delay:0ms}
 @keyframes sectionIn{from{opacity:0}to{opacity:1}}
-.backup-banner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--warn-bg);border-bottom:1px solid rgba(240,196,111,0.35);font-size:11px;font-weight:600;color:var(--warn)}
+.backup-banner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--warn-bg);border-bottom:1px solid color-mix(in srgb,var(--warn) 35%,transparent);font-size:11px;font-weight:600;color:var(--warn)}
 .backup-banner span{flex:1}
 .backup-banner-btn{flex-shrink:0;padding:4px 10px;background:var(--warn);color:var(--bg);border:none;border-radius:4px;font-size:10px;font-weight:700;cursor:pointer;font-family:var(--font)}
 .backup-dismiss{background:none;border:none;color:var(--warn);font-size:15px;cursor:pointer;padding:2px;line-height:1;flex-shrink:0}
 .drop-zone{border:1.5px dashed var(--rule);border-radius:7px;padding:16px;text-align:center;cursor:pointer;transition:border-color 150ms,background 150ms;width:100%}
 .drop-zone:hover{border-color:var(--rule-2);background:var(--bg-warm)}
 .drop-zone input{display:none}
-.dupe-warn{display:flex;align-items:center;gap:7px;background:var(--warn-bg);border:1px solid rgba(240,196,111,0.35);border-radius:10px;padding:8px 11px;font-size:12px;font-weight:600;color:var(--warn);margin-bottom:11px}
+.dupe-warn{display:flex;align-items:center;gap:7px;background:var(--warn-bg);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:10px;padding:8px 11px;font-size:12px;font-weight:600;color:var(--warn);margin-bottom:11px}
 /* Monthly view */
 .month-selector{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
 .month-nav-btn{width:34px;height:34px;border-radius:8px;background:var(--bg-card);border:1px solid var(--rule);color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 120ms;font-size:16px;line-height:1}
@@ -680,7 +680,7 @@ input,textarea,select,[contenteditable="true"],.selectable,.selectable *{-webkit
 .btn-ghost{border-radius:14px;min-height:46px}
 /* Run 9: the routine backup reminder is a compact card under the screen edge, not a full-width amber bar above the title.
    Recovery notices and storage failures keep the strong full-width banner (Master Prompt §8). Dismissing lasts for this visit. */
-.backup-banner.backup-reminder{margin:8px 16px 0;border:1px solid rgba(240,196,111,0.35);border-radius:14px;background:var(--bg-card);color:var(--ink-2);font-weight:500;padding:8px 12px}
+.backup-banner.backup-reminder{margin:8px 16px 0;border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:14px;background:var(--bg-card);color:var(--ink-2);font-weight:500;padding:8px 12px}
 .backup-reminder .backup-banner-btn{border-radius:999px;padding:6px 12px}
 /* Run 9 privacy mode: numbers and names are replaced in the text itself (see fmt / maskText); graphics that would still
    reveal proportions are blurred. Navigation, titles and buttons are never blurred. */
@@ -704,7 +704,7 @@ input,textarea,select,[contenteditable="true"],.selectable,.selectable *{-webkit
   --lit-edge:inset 0 1px 0 color-mix(in srgb,var(--ink) 7%,transparent);
   --shadow-card:0 0 0 0 transparent;
   --shadow-float:0 12px 32px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3)}
-:root[data-theme="mist"],:root[data-theme="sand"]{--sunken-pct:5%;--raise-mix:#fff;--raise-pct:55%;--float-pct:85%;--lit-edge:0 0 0 0 transparent;
+:root[data-scheme="light"]{--cat-shade:42%;--heat-scale:0.8;--cal-hot-ink:var(--ink);--sunken-pct:5%;--raise-mix:#fff;--raise-pct:55%;--float-pct:85%;--lit-edge:0 0 0 0 transparent;
   --shadow-card:0 1px 2px rgba(25,29,35,0.10);--shadow-float:0 12px 32px rgba(25,29,35,0.20),0 2px 8px rgba(25,29,35,0.12)}
 :root[data-fx="off"]{--lit-edge:0 0 0 0 transparent;--shadow-card:0 0 0 0 transparent;--shadow-float:0 0 0 0 transparent}
 .card,.safe-card,.a-card,.pace-card,.helper-card,.month-stat,.stat-cell,.goal-card{box-shadow:var(--lit-edge),var(--shadow-card)}
@@ -862,5 +862,25 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--sat);ba
 .an-seg .seg-btn{flex:1 1 64px;min-width:0;padding:0 6px;overflow-wrap:anywhere}
 .tab-fade{animation:swapIn 240ms var(--ease-out) backwards}
 @media (prefers-reduced-motion:reduce){.tab-fade,.sel-bar,.privacy-toggle svg{animation:none}}
+/* Run 70: theme preview cards (Settings > Look). Each card draws a tiny screen in that theme's own colours; the selected card gets an accent
+   ring and a tick, so the choice never depends on colour alone. Three across from 320 px; they wrap to two rows if the names are long. */
+.theme-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px}
+.theme-card{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:8px;min-height:44px;border:1px solid var(--rule);border-radius:12px;background:var(--bg-card);color:var(--ink);font-family:var(--font);text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:border-color 160ms ease-out,box-shadow 160ms ease-out}
+.theme-card:hover:not(.on){border-color:var(--rule-2)}
+.theme-card.on{border-color:var(--accent-text);box-shadow:0 0 0 1px var(--accent-text)}
+.theme-card:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+.theme-mini{position:relative;display:block;height:58px;border-radius:8px;border:1px solid;overflow:hidden}
+.theme-mini-card{position:absolute;left:7px;right:7px;top:7px;height:30px;border-radius:5px;border:1px solid;display:flex;flex-direction:column;gap:3px;padding:5px 6px}
+.theme-mini-card>span:not(.theme-mini-nums){display:block;height:4px;border-radius:2px}
+.theme-mini-nums{display:flex;gap:4px}.theme-mini-nums>span{display:block;height:4px;width:22%;border-radius:2px}
+.theme-mini-btn{position:absolute;right:7px;bottom:6px;width:34%;height:9px;border-radius:5px}
+.theme-card-name{display:flex;align-items:center;gap:4px;font-size:13px;font-weight:700;line-height:1.25;overflow-wrap:anywhere}
+.theme-card-sub{font-size:11px;line-height:1.35;color:var(--ink-3);overflow-wrap:anywhere}
+@media (prefers-reduced-motion:reduce){.theme-card{transition:none}}
+/* Run 70: switching theme eases the page colour instead of jumping (no layout change; off with reduced motion) */
+html,body,.app{transition:background-color 200ms ease-out}
+@media (prefers-reduced-motion:reduce){html,body,.app{transition:none}}
+/* Run 70: strong spending days in the calendar: button-text colour on dark themes, page text on light ones (see analytics.jsx heat) */
+.cal-day.hot{color:var(--cal-hot-ink,var(--on-accent))}
 `;
 

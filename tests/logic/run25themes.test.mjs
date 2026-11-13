@@ -4,14 +4,16 @@ const { THEMES, THEME_IDS, THEME_KEY, themeId, readTheme, writeTheme } = H;
 reset();
 const lum = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
 const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-// The original look lives in the page's CSS, not in a theme; these are its documented values.
+// The original look (Run 70: the "caspian" choice) lives in the page's CSS, not in a theme; these are its documented values.
 const SEA = { "--bg": "#07151A", "--bg-card": "#0E2229", "--bg-warm": "#153039", "--ink": "#F3F7F6", "--ink-2": "#D3DFDE", "--ink-3": "#A5B7B8", "--ink-4": "#93A7A8", "--accent-text": "#4CC9C4", "--accent-fill": "#4CC9C4", "--on-accent": "#07151A", "--pos": "#8BD97A", "--neg": "#FF8188", "--warn": "#F0C46F", "--info": "#83B9F5" };
 
 section("R25-TH1. The themes");
-ok(THEME_IDS.join("|") === "sea|nordic|mist|dusk|graphite|sand", "six themes: the original plus the five palettes (Sapphire and Cocoa were replaced by Graphite and Sand in Run 42)", THEME_IDS);
-ok(Object.keys(THEMES.sea.vars).length === 0, "the original look has no overrides");
-ok(THEME_IDS.slice(1).every((id) => /^#[0-9A-F]{6}$/i.test(THEMES[id].vars["--bg"]) && /^#[0-9A-F]{6}$/i.test(THEMES[id].vars["--accent-fill"])), "every other theme sets a background and an accent as 6-digit colours");
-ok(new Set(THEME_IDS.slice(1).map((id) => Object.keys(THEMES[id].vars).sort().join())).size === 1, "every theme sets the same list of variables (none forgotten)");
+// Run 70: Graphite (redrawn), Ivory and a refined Sea glass lead; the original look is kept as "caspian" (no overrides); nothing was removed.
+const others = THEME_IDS.filter((id) => id !== "caspian");
+ok(THEME_IDS.join("|") === "graphite|ivory|sea|caspian|nordic|mist|dusk|sand", "eight themes: the three main ones, the original look (caspian) and the four earlier palettes", THEME_IDS);
+ok(Object.keys(THEMES.caspian.vars).length === 0, "the original look has no overrides");
+ok(others.every((id) => /^#[0-9A-F]{6}$/i.test(THEMES[id].vars["--bg"]) && /^#[0-9A-F]{6}$/i.test(THEMES[id].vars["--accent-fill"])), "every other theme sets a background and an accent as 6-digit colours");
+ok(new Set(others.map((id) => Object.keys(THEMES[id].vars).sort().join())).size === 1, "every theme sets the same list of variables (none forgotten)");
 
 section("R25-TH2. Readable on every theme (WCAG 4.5:1 for text)");
 for (const id of THEME_IDS) {
@@ -23,11 +25,13 @@ for (const id of THEME_IDS) {
 }
 
 section("R25-TH3. The choice is a plain preference");
-ok(readTheme() === "sea", "nothing saved: the original look");
+// Run 70: a phone with nothing at all stored is a fresh install (Graphite); the tests' empty store is such a phone.
+ok(readTheme() === "graphite", "nothing saved on a fresh install: Graphite");
 ok(writeTheme("dusk") && readTheme() === "dusk" && localStorage.getItem(THEME_KEY) === "dusk", "saving dusk stores just its id");
-ok(themeId("nope") === "sea" && themeId(undefined) === "sea" && themeId("__proto__") === "sea" && themeId("constructor") === "sea", "unknown or hostile values fall back to the original look");
-localStorage.setItem(THEME_KEY, "junk"); ok(readTheme() === "sea", "a damaged saved value reads as the original look");
-writeTheme("sea"); ok(localStorage.getItem(THEME_KEY) === null, "choosing the original look removes the key");
+localStorage.removeItem(THEME_KEY);
+ok(themeId("nope") === "graphite" && themeId(undefined) === "graphite" && themeId("__proto__") === "graphite" && themeId("constructor") === "graphite", "unknown or hostile values fall back to the default look");
+localStorage.setItem(THEME_KEY, "junk"); ok(readTheme() === "graphite", "a damaged saved value reads as the default look");
+writeTheme("sea"); ok(localStorage.getItem(THEME_KEY) === "sea", "choosing Sea glass is stored by name (so it can be told apart from the default)");
 ok(themeId("sapphire") === "dusk" && themeId("cocoa") === "nordic", "a removed theme (saved earlier, or named in a backup) maps to its closest remaining one");
 globalThis.__failKeys = ["__theme"]; ok(writeTheme("graphite") === false, "a storage failure is reported, not hidden"); globalThis.__failKeys = [];
 section("R25-TH4. Income and expense colours stay apart for colour-blind users (simulated)");

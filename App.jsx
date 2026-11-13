@@ -1467,8 +1467,24 @@ function isBillId(v) { return typeof v==="string" && v.trim()!=="" && v.trim().l
 // spending, warning) stay readable on every theme: tests/logic/run25themes checks the contrast of every text colour on every surface.
 const THEME_KEY=`${KEY}__theme`;
 const DARK_MEANING={ "--violet":"#B3A1FF","--info":"#83B9F5","--pos":"#8BD97A","--pos-bg":"#173622","--neg":"#FF8188","--neg-bg":"#3B1C22","--warn":"#F0C46F","--warn-bg":"#352B14" };
+// Run 70 (owner's three-theme brief, 13 Nov): Graphite (main dark, the default for new installs), Ivory (its light counterpart, the same
+// layout) and a refined Sea Glass (charcoal with a sea-green undertone; green only on selected states and small accents). The owner's
+// starting values are used except where measured contrast needed a small change (tests/logic/run25themes and run70themes):
+//   Graphite button #42627C -> #4D7090 (button edge 3.2:1 on cards; white text 5.2:1);  Sea Glass button #456F65 -> #4E7D72 (3.35:1, white 4.67:1);
+//   Ivory secondary text #626B70 -> #5C656A (4.86:1 on input fields).  #6D9C91 is never used for text on Sea Glass (4.2:1 on raised cards).
+// The original look of the app (the Caspian palette in styles.js, until now called "Sea glass") is kept as its own choice, "caspian".
+const LIGHT_MEANING={ "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1B6B3A","--pos-bg":"#D9E8D6","--neg":"#A8360A","--neg-bg":"#F3DDD6","--warn":"#7A5200","--warn-bg":"#EFE2C2" };
 export const THEMES={
-  sea:{ swatch:["#07151A","#4CC9C4"], dark:true, vars:{} },
+  graphite:{ swatch:["#101419","#4D7090"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#101419","--bg-card":"#171E24","--bg-warm":"#202A32","--bg-inset":"#29343D","--ink":"#EDF1F3","--ink-2":"#D3DAE0","--ink-3":"#A5B0B8","--ink-4":"#98A3AC","--ink-5":"#35414B",
+    "--rule":"#2A353F","--rule-2":"#66757F","--accent":"#8FA9BF","--accent-light":"#22303C","--accent-mid":"#B4C6D5","--accent-text":"#8FA9BF","--accent-fill":"#4D7090","--on-accent":"#FFFFFF" } },
+  ivory:{ swatch:["#F3F1EB","#496A83"], dark:false, vars:{ ...LIGHT_MEANING,
+    "--bg":"#F3F1EB","--bg-card":"#F9F8F4","--bg-warm":"#FFFFFF","--bg-inset":"#EAE8E1","--ink":"#252B2F","--ink-2":"#3A4246","--ink-3":"#5C656A","--ink-4":"#5B6469","--ink-5":"#C9CBC6",
+    "--rule":"#DCD9D0","--rule-2":"#848A8E","--accent":"#496A83","--accent-light":"#DFE6EB","--accent-mid":"#8A9EAD","--accent-text":"#3F5F78","--accent-fill":"#496A83","--on-accent":"#FFFFFF" } },
+  sea:{ swatch:["#101B1B","#6D9C91"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#101B1B","--bg-card":"#192625","--bg-warm":"#243432","--bg-inset":"#2D3D3A","--ink":"#E9F0ED","--ink-2":"#CEDBD6","--ink-3":"#A6B8B0","--ink-4":"#9BAEA6","--ink-5":"#33443F",
+    "--rule":"#2A3A38","--rule-2":"#617D76","--accent":"#6D9C91","--accent-light":"#1F3532","--accent-mid":"#B0C7BE","--accent-text":"#8DB8AD","--accent-fill":"#4E7D72","--on-accent":"#FFFFFF" } },
+  caspian:{ swatch:["#07151A","#4CC9C4"], dark:true, vars:{} },
   nordic:{ swatch:["#1F2933","#A68A64"], dark:true, vars:{ ...DARK_MEANING,
     "--bg":"#171E26","--bg-card":"#1F2933","--bg-warm":"#2B3745","--bg-inset":"#232D39","--ink":"#F7F7F2","--ink-2":"#E2E3DE","--ink-3":"#B3B8BF","--ink-4":"#A0A7AF","--ink-5":"#3A4756",
     "--rule":"#34414F","--rule-2":"#4B5B6C","--accent":"#C2A57C","--accent-light":"#3A3226","--accent-mid":"#D6BE9C","--accent-text":"#C2A57C","--accent-fill":"#A68A64","--on-accent":"#14181D" } },
@@ -1479,31 +1495,57 @@ export const THEMES={
   dusk:{ swatch:["#0B132B","#D97706"], dark:true, vars:{ ...DARK_MEANING,
     "--bg":"#0B132B","--bg-card":"#1C2541","--bg-warm":"#26365A","--bg-inset":"#16203D","--ink":"#FBF1E3","--ink-2":"#EAD9C0","--ink-3":"#B7C3D9","--ink-4":"#A3B0C8","--ink-5":"#3A506B",
     "--rule":"#2C3A5E","--rule-2":"#46608A","--accent":"#F0A44B","--accent-light":"#38281A","--accent-mid":"#F4D6B0","--accent-text":"#F0A44B","--accent-fill":"#D97706","--on-accent":"#0B132B" } },
-  // Run 42 (owner: "Sapphire and Cocoa are too much, I don't like them"): replaced by two quieter palettes. Graphite is a neutral near-black with a
-  // warm-white accent (calm, easy on the eyes at night); Sand is a warm light theme (the only other light theme, Mist, is cool grey).
-  graphite:{ swatch:["#121315","#CFC9B8"], dark:true, vars:{ ...DARK_MEANING,
-    "--bg":"#121315","--bg-card":"#1B1D20","--bg-warm":"#272A2F","--bg-inset":"#202327","--ink":"#F4F5F6","--ink-2":"#DEE0E3","--ink-3":"#B0B5BC","--ink-4":"#9EA4AC","--ink-5":"#3C4148",
-    "--rule":"#2D3036","--rule-2":"#4A4F57","--accent":"#D9D4C7","--accent-light":"#2B2A26","--accent-mid":"#E6E2D6","--accent-text":"#D9D4C7","--accent-fill":"#BDB7A6","--on-accent":"#121315" } },
+  // Run 42 (owner: "Sapphire and Cocoa are too much, I don't like them"): replaced by two quieter palettes, Graphite and Sand. Run 70 redrew
+  // Graphite from the owner's new palette (same id, so anyone who chose it keeps it); Sand is a warm light theme.
   sand:{ swatch:["#EFE8DB","#8A4B14"], dark:false, vars:{
     "--bg":"#EFE8DB","--bg-card":"#F8F4EA","--bg-warm":"#E6DECE","--bg-inset":"#F1EBDF","--ink":"#231F18","--ink-2":"#3A342A","--ink-3":"#554D3F","--ink-4":"#5A5244","--ink-5":"#C4BAA7",
     "--rule":"#DCD3C1","--rule-2":"#BDB29C","--accent":"#7A4410","--accent-light":"#EAD9BF","--accent-mid":"#A8691F","--accent-text":"#7A4410","--accent-fill":"#8A4B14","--on-accent":"#FFFFFF",
     "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1B6B3A","--pos-bg":"#D9E6D0","--neg":"#A8360A","--neg-bg":"#F0D9D0","--warn":"#7A5200","--warn-bg":"#EBDDB9" } },
 };
 export const THEME_IDS=Object.keys(THEMES);
+// Run 70: the three main looks get preview cards in Settings; the others stay available as smaller choices underneath.
+export const THEME_MAIN=["graphite","ivory","sea"];
+// The colours a theme's preview card is drawn with (the original look keeps its values in styles.js, repeated here for the preview only).
+const CASPIAN_BASE={ "--bg":"#07151A","--bg-card":"#0E2229","--ink":"#F3F7F6","--ink-3":"#A5B7B8","--rule":"#24414A","--accent-fill":"#4CC9C4","--accent-text":"#4CC9C4","--pos":"#8BD97A","--neg":"#FF8188" };
+export function themePreview(id) { const v={ ...CASPIAN_BASE, ...(THEMES[id]?THEMES[id].vars:{}) }; return { bg:v["--bg"], card:v["--bg-card"], ink:v["--ink"], ink3:v["--ink-3"], rule:v["--rule"], fill:v["--accent-fill"], acc:v["--accent-text"], pos:v["--pos"], neg:v["--neg"] }; }
 // Anyone who had picked a removed theme (or a backup that names one) lands on the closest remaining one instead of the default.
 const LEGACY_THEMES={ sapphire:"dusk", cocoa:"nordic" };
-const themeId=(v)=>typeof v==="string" && Object.prototype.hasOwnProperty.call(THEMES,v) ? v : (typeof v==="string" && Object.prototype.hasOwnProperty.call(LEGACY_THEMES,v) ? LEGACY_THEMES[v] : "sea");
-export function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return "sea"; } }
-export function writeTheme(id) { try { if (themeId(id)==="sea") localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY,themeId(id)); return true; } catch { return false; } }
+// A known id (or a removed one mapped to its closest), else null.
+const knownTheme=(v)=>typeof v==="string" && Object.prototype.hasOwnProperty.call(THEMES,v) ? v : (typeof v==="string" && Object.prototype.hasOwnProperty.call(LEGACY_THEMES,v) ? LEGACY_THEMES[v] : null);
+// Run 70: which look applies when nothing usable is saved. Until Run 69 the original look was stored as "no key", so on a phone that already
+// has ledger data "no key" may well have been a deliberate choice of Sea glass: such phones get Sea glass (now the refined palette; the
+// untouched original is the "caspian" choice). Only a phone with no ledger data at all (a fresh install) starts on Graphite.
+export function themeFallback(store=(typeof localStorage!=="undefined"?localStorage:null)) {
+  try { if (!store) return "graphite"; for (let i=0;i<store.length;i++) { const k=store.key(i); if (k && k!==THEME_KEY && k!==THEME_KEY+"_auto" && (k===KEY || k.startsWith(KEY+"__"))) return "sea"; } return "graphite"; } catch { return "graphite"; }
+}
+const themeId=(v)=>knownTheme(v)||themeFallback();
+export function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return "graphite"; } }
+// Every choice is stored by name from Run 70 on (Sea glass too), so a saved choice can always be told apart from the default.
+export function writeTheme(id) { try { localStorage.setItem(THEME_KEY,themeId(id)); localStorage.removeItem(THEME_AUTO_KEY); return true; } catch { return false; } }
+// Run 70: on start, a phone with no saved choice gets the one it is shown (see themeFallback) written down once, so the look cannot change
+// later just because ledger data appeared. A saved choice is never overwritten; a damaged one is left for the person to change.
+// THEME_AUTO_KEY marks a theme the app picked (not the person), so restoring a backup may still bring the backup's theme (Run 37 rule).
+export const THEME_AUTO_KEY=THEME_KEY+"_auto";
+export function settleTheme() { try { if (localStorage.getItem(THEME_KEY)===null) { localStorage.setItem(THEME_KEY,themeFallback()); localStorage.setItem(THEME_AUTO_KEY,"1"); } } catch { /* storage blocked: the default is shown */ } }
+export function themeIsAuto() { try { return localStorage.getItem(THEME_KEY)===null || localStorage.getItem(THEME_AUTO_KEY)==="1"; } catch { return true; } }
 export function applyTheme(id) {   // sets (or clears) the colour variables on the page root; safe to call before the app renders
   if (typeof document==="undefined" || !document.documentElement) return;
-  const th=THEMES[themeId(id)], root=document.documentElement, all=new Set(Object.values(THEMES).flatMap(x=>Object.keys(x.vars)));
+  const tid=themeId(id), th=THEMES[tid], root=document.documentElement, all=new Set(Object.values(THEMES).flatMap(x=>Object.keys(x.vars)));
   all.forEach(k=>root.style.removeProperty(k));
   Object.entries(th.vars).forEach(([k,v])=>root.style.setProperty(k,v));
-  root.style.colorScheme=th.dark?"dark":"light"; root.setAttribute("data-theme",themeId(id));
+  // Run 70: the phone's "more contrast" setting. The stylesheet's stronger set only reaches the original look (theme colours are set here, on
+  // the page root, and win over it), so each theme gets its own stronger set: secondary text and borders moved toward the main text colour.
+  let hc=false; try { hc=!!(window.matchMedia && window.matchMedia("(prefers-contrast: more)").matches); } catch { hc=false; }
+  if (hc && th.vars["--ink"]) { const v=th.vars; [["--ink-3",0.4],["--ink-4",0.4],["--rule",0.3],["--rule-2",0.35]].forEach(([k,f])=>root.style.setProperty(k,mixHex(v[k],v["--ink"],f))); }
+  // data-scheme carries light/dark to the stylesheet (layer depth, shadows, category icon shading) for every theme, not by theme name
+  root.style.colorScheme=th.dark?"dark":"light"; root.setAttribute("data-theme",tid); root.setAttribute("data-scheme",th.dark?"dark":"light");
   const m=document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content",th.vars["--bg"]||th.swatch[0]);
 }
-if (typeof document!=="undefined") applyTheme(readTheme());
+// a #RRGGBB colour moved the fraction f of the way toward another (plain sRGB mix, rounded)
+export function mixHex(a,b,f) { const p=(h,i)=>parseInt(h.slice(i,i+2),16), c=[1,3,5].map(i=>Math.round(p(a,i)+(p(b,i)-p(a,i))*f)); return "#"+c.map(x=>x.toString(16).padStart(2,"0")).join("").toUpperCase(); }
+if (typeof document!=="undefined") { settleTheme(); applyTheme(readTheme());
+  // turning "more contrast" on or off on the phone re-applies the theme at once
+  try { const mq=window.matchMedia && window.matchMedia("(prefers-contrast: more)"); if (mq && mq.addEventListener) mq.addEventListener("change",()=>applyTheme(readTheme())); } catch { /* no media queries: nothing to follow */ } }
 if (typeof document!=="undefined") startLaunch();   // Run 40: the opening mark (screens/launch.js); after the theme, so it takes the theme's colours
 // Run 40 (owner: "Yes, I meant visitor counting - add it"): the Android app counts its own opening with the website's Vercel Web Analytics.
 // The app's page lives at https://localhost inside the phone, and Vercel's collector does not accept data from another address, so the app
@@ -2309,7 +2351,7 @@ export function cleanPrefs(raw) {
   const wh=cleanWorkHours(s.workHours); if (wh!==null) out.workHours=wh;
   const n=cleanProfileName(s.profileName); if (n) out.profileName=n;
   if (s.setupHidden===true) out.setupHidden=true;
-  if (typeof s.theme==="string") { const th=themeId(s.theme); if (th!=="sea" && THEME_IDS.includes(th)) out.theme=th; }   // Run 42: a backup that names a removed theme (Sapphire, Cocoa) keeps its closest one
+  if (typeof s.theme==="string") { const th=knownTheme(s.theme); if (th) out.theme=th; }   // Run 42: a backup that names a removed theme (Sapphire, Cocoa) keeps its closest one
   if (s.reduceEffects===true) out.reduceEffects=true;
   const cm=muteList(s.coachMute), pm=muteList(s.patternMute); if (cm.length) out.coachMute=cm; if (pm.length) out.patternMute=pm;
   // Run 59: which budgets carry what was not used into the next month (off unless chosen), and the optional month-start goal offer
@@ -4179,9 +4221,12 @@ export function Icon({ name, size=16, color="currentColor", style={} }) {
       dangerouslySetInnerHTML={{__html:ICONS[name]||ICONS.other}} aria-hidden="true"/>
   );
 }
+// Run 70: category colours are light pastels made for dark screens. On a light theme the stylesheet sets --cat-shade (styles.js), and every
+// category icon, bar and chart slice is drawn this much darker so it stays visible on near-white cards; on dark themes the colour is unchanged.
+export function catInk(c) { return c ? `color-mix(in oklab, ${c}, #000 var(--cat-shade, 0%))` : "var(--ink-3)"; }
 export function CatIcon({ catId, size=16, color }) {
   const cat=CAT(catId);
-  return <Icon name={catId} size={size} color={color||cat?.color||"#98A5B7"}/>;
+  return <Icon name={catId} size={size} color={catInk(color||cat?.color||"#98A5B7")}/>;
 }
 
 // ─── CSS ──────────────────────────────────────────────────────────────────────
@@ -4310,10 +4355,10 @@ class ErrorBoundary extends Component {
   render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <div className="crash-screen" role="alert" style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:"24px 28px",textAlign:"center",background:"#07151A",color:"#E8F1F2",fontFamily:"system-ui,sans-serif"}}>
+      <div className="crash-screen" role="alert" style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:"24px 28px",textAlign:"center",background:"var(--bg,#07151A)",color:"var(--ink,#E8F1F2)",fontFamily:"system-ui,sans-serif"}}>
         <h1 style={{fontSize:22,margin:0}}>{t("crash.title")}</h1>
         <p style={{fontSize:15,lineHeight:1.5,margin:0,maxWidth:340,opacity:0.85}}>{t("crash.body")}</p>
-        <button onClick={()=>window.location.reload()} style={{minHeight:48,padding:"0 24px",border:"none",borderRadius:14,background:"#4CC9C4",color:"#07151A",fontSize:16,fontWeight:700}}>{t("crash.reload")}</button>
+        <button onClick={()=>window.location.reload()} style={{minHeight:48,padding:"0 24px",border:"none",borderRadius:14,background:"var(--accent-fill,#4CC9C4)",color:"var(--on-accent,#07151A)",fontSize:16,fontWeight:700}}>{t("crash.reload")}</button>
       </div>
     );
   }
@@ -5048,7 +5093,7 @@ function AppInner() {
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
     const restore=(k,raw)=>{ try { if (raw===undefined) return; if (raw===null) localStorage.removeItem(k); else localStorage.setItem(k,raw); } catch {} };
-    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY), [THEME_KEY]:snap(THEME_KEY), [FX_KEY]:snap(FX_KEY), [WORKHOURS_KEY]:snap(WORKHOURS_KEY), [COACH_MUTE_KEY]:snap(COACH_MUTE_KEY), [PAT_MUTE_KEY]:snap(PAT_MUTE_KEY), [BUDGET_CARRY_KEY]:snap(BUDGET_CARRY_KEY), [LEFTOVER_GOAL_KEY]:snap(LEFTOVER_GOAL_KEY) };
+    const auxBefore={ [SUBCAT_KEY]:snap(SUBCAT_KEY), [DEBTS_KEY]:snap(DEBTS_KEY), [CCAT_KEY]:snap(CCAT_KEY), [ACC_KEY]:snap(ACC_KEY), [CPREF_KEY]:snap(CPREF_KEY), [THEME_KEY]:snap(THEME_KEY), [THEME_AUTO_KEY]:snap(THEME_AUTO_KEY),[FX_KEY]:snap(FX_KEY), [WORKHOURS_KEY]:snap(WORKHOURS_KEY), [COACH_MUTE_KEY]:snap(COACH_MUTE_KEY), [PAT_MUTE_KEY]:snap(PAT_MUTE_KEY), [BUDGET_CARRY_KEY]:snap(BUDGET_CARRY_KEY), [LEFTOVER_GOAL_KEY]:snap(LEFTOVER_GOAL_KEY) };
     const catsHad=currentCustomCats();
     const undoAux=()=>{ for (const k of Object.keys(auxBefore)) restore(k,auxBefore[k]); applyCustomCats(catsHad); applyTheme(readTheme()); applyFx(readFxOff()); };
     // Run 24: the file's own categories are added to the ones on this phone (by id; a name already in use is skipped, never renamed).
@@ -5060,7 +5105,7 @@ function AppInner() {
     // Run 37: theme, "reduce effects" and hidden tips from the file are used only where this phone still has the default (never overwritten).
     if (plan.prefs) {
       const P=plan.prefs; let okp=true;
-      if (P.theme && readTheme()==="sea") okp=writeTheme(P.theme) && okp;
+      if (P.theme && themeIsAuto()) okp=writeTheme(P.theme) && okp;
       if (P.reduceEffects && !readFxOff()) okp=writeFxOff(true) && okp;
       if (P.workHours && readWorkHours()===null) okp=writeWorkHours(P.workHours) && okp;
       if (P.coachMute && !readMuteList(COACH_MUTE_KEY).length) okp=writeMuteList(COACH_MUTE_KEY,P.coachMute) && okp;

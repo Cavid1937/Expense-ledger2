@@ -1179,6 +1179,13 @@ export const MESSAGES = {
   "fx.title":        { en: "Reduce effects", az: "Effektləri azalt", ru: "Меньше эффектов" },
   "fx.sub":          { en: "Turns off shadows and highlights. Layers stay visible through colour and edges.", az: "Kölgələri və işıqlanmanı söndürür. Qatlar rəng və kənarlar vasitəsilə görünməyə davam edir.", ru: "Отключает тени и подсветку. Слои остаются заметны по цвету и границам." },
   "theme.sea":       { en: "Sea glass", az: "Dəniz şüşəsi", ru: "Морское стекло" },
+  // Run 70: the three main looks, the original look kept by name, and the heading over the earlier looks
+  "theme.ivory":     { en: "Ivory", az: "Fil sümüyü", ru: "Слоновая кость" },
+  "theme.caspian":   { en: "Caspian (original)", az: "Xəzər (ilkin)", ru: "Каспий (исходная)" },
+  "theme.d.graphite": { en: "Calm dark grey", az: "Sakit tünd boz", ru: "Спокойный тёмно-серый" },
+  "theme.d.ivory":   { en: "Soft light", az: "Yumşaq açıq", ru: "Мягкая светлая" },
+  "theme.d.sea":     { en: "Dark with a sea-green touch", az: "Dəniz yaşılı çalarlı tünd", ru: "Тёмная с оттенком морской волны" },
+  "theme.more":      { en: "More themes", az: "Digər temalar", ru: "Другие темы" },
   "theme.nordic":    { en: "Nordic", az: "Şimal", ru: "Север" },
   "theme.mist":      { en: "Mist (light)", az: "Duman (açıq)", ru: "Дымка (светлая)" },
   "theme.dusk":      { en: "Dusk", az: "Qürub", ru: "Сумерки" },

@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { t, tn } from "../i18n.js";
 import { Collapse } from "./motion.jsx";
 import { CAT, CatIcon, Icon, activateKey, billPaymentsLeft, billsToIcs, buildSchedules, catName, daysBetween, downloadFile, fmt, fmtDate, localDateStr, localMonthStr, maskText, scheduleMonthStatus, scheduleMonthly, scheduleNextDue, subName, today } from "../App.jsx";
+// Run 70: category colours drawn darker on light themes
+import { catInk } from "../App.jsx";
 
 // Run 63 (owner batch D10): every payment recorded for a repeating bill, newest first, folded under the bill. Read-only; tapping one opens it.
 function PaymentsFold({ ids, byId, currency, onView }) {
@@ -167,7 +169,7 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
             const sorted=Object.entries(ct).sort((a,b)=>b[1]-a[1]); const maxV=sorted[0]?.[1]||1;
             return sorted.map(([catId,mo])=>{
               const cat=CAT(catId)||{id:"other",color:"#98A5B7"};
-              return (<div key={catId} className="cat-bar"><div className="cat-bar-name"><CatIcon catId={cat.id} size={12} color={cat.color}/>{catName(catId)}</div><div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(mo/maxV)*100}%`,background:cat.color}}/></div><div className="cat-bar-amt">{fmt(mo*12,currency)}</div></div>);
+              return (<div key={catId} className="cat-bar"><div className="cat-bar-name"><CatIcon catId={cat.id} size={12} color={cat.color}/>{catName(catId)}</div><div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(mo/maxV)*100}%`,background:catInk(cat.color)}}/></div><div className="cat-bar-amt">{fmt(mo*12,currency)}</div></div>);
             });
           })()}
         </div>

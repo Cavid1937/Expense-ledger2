@@ -8,7 +8,8 @@ const base = { transactions: [], budgets: {}, templates: [], currency: "₼", go
 section("R42-IO1. A removed theme named in a backup maps to its closest remaining theme");
 ok(cleanPrefs({ theme: "sapphire" }).theme === "dusk" && cleanPrefs({ theme: "cocoa" }).theme === "nordic", "Sapphire -> Dusk, Cocoa -> Nordic");
 ok(cleanPrefs({ theme: "graphite" }).theme === "graphite" && cleanPrefs({ theme: "sand" }).theme === "sand", "the two new themes are kept as they are");
-ok(!("theme" in cleanPrefs({ theme: "sea" })) && !("theme" in cleanPrefs({ theme: "nope" })) && !("theme" in cleanPrefs({ theme: "__proto__" })), "the default and unknown names are not written");
+// Run 70: every choice is written by name (Graphite is now the default for new phones, so "sea" is a real choice to carry)
+ok(cleanPrefs({ theme: "sea" }).theme === "sea" && !("theme" in cleanPrefs({ theme: "nope" })) && !("theme" in cleanPrefs({ theme: "__proto__" })) && !("theme" in cleanPrefs({ theme: "constructor" })), "Sea glass is written by name; unknown and hostile names are not written");
 
 section("R42-IO2. Round trip of the newest features");
 const e1 = T({ id: 1, type: "expense", category: "shopping", amount: 600, date: "2026-10-05", spread: 6 });

@@ -49,7 +49,7 @@ section("R42-B2. No straight line under the language and theme labels");
   ok(w.lang === "0px", "language label has no bottom line", w);
   ok(w.theme === "0px", "theme label has no bottom line", w);
   const ids = await page.evaluate(() => [...document.querySelectorAll("[data-theme-id]")].map((e) => e.getAttribute("data-theme-id")));
-  ok(ids.join() === "sea,nordic,mist,dusk,graphite,sand", "six themes, Sapphire and Cocoa gone", ids);
+  ok(ids.join() === "graphite,ivory,sea,caspian,nordic,mist,dusk,sand", "eight themes (Run 70 order: the three main looks first), Sapphire and Cocoa gone", ids);
   for (const id of ["graphite", "sand"]) {
     await page.evaluate((i) => document.querySelector(`[data-theme-id="${i}"]`).click(), id); await wait(300);
     ok(await page.evaluate(() => document.documentElement.getAttribute("data-theme")) === id && await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${id}: applied, no sideways scroll`);

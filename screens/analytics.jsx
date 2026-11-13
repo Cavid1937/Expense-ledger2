@@ -3,7 +3,12 @@ import { useMemo, useRef, useState } from "react";
 import { Collapse, Swap, useLeave } from "./motion.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, KEY, isEarnedCat, refundsNetted, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
-import { accountsMap, readAccounts } from "../App.jsx";   // Run 57: Analytics groups spending by the same "paid from" rule as the entry filter
+import { accountsMap, readAccounts } from "../App.jsx";
+// Run 70: category colours drawn darker on light themes
+import { catInk } from "../App.jsx";
+// Run 70: the spending calendar is tinted with the theme's own button colour (opaque, so the day number stays measurable); light themes
+// tint less (--heat-scale) so the dark day number stays readable, and dark themes switch the number to the button text colour on strong days.
+const heat=(x)=>`color-mix(in srgb, var(--accent-fill) calc(${Math.round(x*100)}% * var(--heat-scale, 1)), var(--bg-card))`;   // Run 57: Analytics groups spending by the same "paid from" rule as the entry filter
 import { budgetCarried, readBudgetCarry, notSpentHistory } from "../App.jsx";   // Run 59
 
 // Run 59 (owner-approved): money not spent = money in minus money out, from what was recorded (notSpentHistory in App.jsx has the exact rule).
@@ -57,8 +62,8 @@ export function SpendDonut({ catSpend, total, currency }) {
         <svg viewBox="0 0 120 120" width="100%" height="100%" aria-hidden="true">
           <circle cx="60" cy="60" r={R} fill="none" stroke="var(--bg-inset)" strokeWidth="14"/>
           {slices.map(s=>{ const len=C*s.amt/total, gap=slices.length>1?Math.min(2,len/3):0; const on=cur&&cur.id===s.id; const el=(
-            <circle key={s.id} className="donut-slice" data-id={s.id} cx="60" cy="60" r={R} fill="none" stroke={s.color} strokeWidth={on?20:14} strokeDasharray={`${Math.max(len-gap,0.01)} ${C}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"
-              style={{opacity:cur&&!on?0.35:1,cursor:"pointer"}} onClick={()=>toggle(s.id)}/>
+            <circle key={s.id} className="donut-slice" data-id={s.id} cx="60" cy="60" r={R} fill="none" strokeWidth={on?20:14} strokeDasharray={`${Math.max(len-gap,0.01)} ${C}`} strokeDashoffset={-off} transform="rotate(-90 60 60)"
+              style={{stroke:catInk(s.color),opacity:cur&&!on?0.35:1,cursor:"pointer"}} onClick={()=>toggle(s.id)}/>
           ); off+=len; return el; })}
         </svg>
         {cur
@@ -68,7 +73,7 @@ export function SpendDonut({ catSpend, total, currency }) {
       <ul className="donut-legend">
         {slices.map(s=>(
           <li key={s.id}><button type="button" className="donut-row" data-id={s.id} aria-pressed={!!cur&&cur.id===s.id} onClick={()=>toggle(s.id)} style={{opacity:cur&&cur.id!==s.id?0.55:1}}>
-            <span className="dot" style={{background:s.color}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{fmtPct(s.pct)}</span></button></li>
+            <span className="dot" style={{background:catInk(s.color)}}/><span className="donut-name">{s.name}</span><span className="donut-pct">{fmtPct(s.pct)}</span></button></li>
         ))}
       </ul>
     </div>
@@ -444,7 +449,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
                   <div style={{fontSize:11,color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:600,flexShrink:0}}>{t("an.pctUsed",{pct:PRIVACY?"••":Math.round(pct)})}</div>
                 </div>
                 <div style={{height:3,background:"var(--rule)",borderRadius:99,overflow:"hidden",marginBottom:4}}>
-                  <div style={{height:"100%",width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":(cat?.color||"var(--ink-3)"),borderRadius:99}}/>
+                  <div style={{height:"100%",width:`${pct}%`,background:over?"var(--neg)":warn?"var(--warn)":catInk(cat?.color),borderRadius:99}}/>
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:11}}>
                   <span style={{color:over?"var(--neg)":warn?"var(--warn)":"var(--ink-3)",fontWeight:over||warn?600:400}}>
@@ -466,7 +471,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           {catData.map((cat,i)=>(
             <div key={i} className="cat-bar">
               <div className="cat-bar-name"><CatIcon catId={cat.id} size={13} color={cat.color}/>{catName(cat.id)}</div>
-              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(cat.amt/maxCat)*100}%`,background:cat.color}}/></div>
+              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(cat.amt/maxCat)*100}%`,background:catInk(cat.color)}}/></div>
               <div className="cat-bar-amt">{fmt(cat.amt,currency)}</div>
               <div className="cat-bar-pct">{fmtPct(curExp>0?Math.round((cat.amt/curExp)*100):0)}</div>
             </div>
@@ -677,9 +682,9 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
             {Array.from({length:calLead},(_,i)=><div key={"b"+i} className="cal-blank"/>)}
             {calDays.map(c=>{
               const on=calDay===c.date, intensity=c.amt>0?Math.max(0.15,(c.amt/maxDay)*0.85):0;
-              return <button key={c.date} type="button" data-date={c.date} className={`cal-day${c.amt>0?" has-spend":""}${c.future?" future":""}${c.isToday?" today":""}${on?" sel":""}`}
+              return <button key={c.date} type="button" data-date={c.date} className={`cal-day${c.amt>0?" has-spend":""}${intensity>=0.5?" hot":""}${c.future?" future":""}${c.isToday?" today":""}${on?" sel":""}`}
                 aria-current={c.isToday?"date":undefined} aria-pressed={on} aria-label={`${fmtDate(c.date)}: ${c.amt>0?fmt(c.amt,currency):t("an.noSpending")}`}
-                style={c.amt>0?{background:`rgba(76,201,196,${intensity})`,...(intensity>=0.4?{color:"#06201e"}:null)}:undefined}
+                style={c.amt>0?{background:heat(intensity)}:undefined}
                 onClick={e=>{ e.stopPropagation(); setCalDay(on?null:c.date); setActiveBar(null); }}>{c.day}</button>;
             })}
           </div>
@@ -690,7 +695,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
             </div>); })()}</Collapse>
           <div style={{display:"flex",alignItems:"center",gap:6,marginTop:10,justifyContent:"flex-end"}}>
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.less")}</span>
-            {[0.15,0.35,0.6,0.85].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:`rgba(76,201,196,${o})`}}/>)}
+            {[0.15,0.35,0.6,0.85].map(o=><div key={o} style={{width:10,height:10,borderRadius:2,background:heat(o)}}/>)}
             <span style={{fontSize:9,color:"var(--ink-4)"}}>{t("an.moreTap")}</span>
           </div>
         </div>

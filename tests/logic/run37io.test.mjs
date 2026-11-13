@@ -6,7 +6,7 @@ reset();
 const base = { transactions: [], budgets: {}, templates: [], currency: "₼", goals: [], safeToSpend: { enabled: false, savingsTarget: 0 }, bills: [] };
 
 section("R37-1. Preferences are cleaned and only what was chosen is written");
-ok(eq(cleanPrefs(null), {}) && eq(cleanPrefs({ theme: "sea", profileName: "  ", reduceEffects: false, coachMute: [] }), {}), "defaults give nothing (a file without choices is unchanged)");
+ok(eq(cleanPrefs(null), {}) && eq(cleanPrefs({ theme: "nope", profileName: "  ", reduceEffects: false, coachMute: [] }), {}) && eq(cleanPrefs({ theme: "sea" }), { theme: "sea" }), "defaults and unknown values give nothing (a file without choices is unchanged); from Run 70 Sea glass is a real choice and is kept");
 ok(eq(cleanPrefs({ profileName: " Javid ", theme: "dusk", setupHidden: true, reduceEffects: true, coachMute: ["loanDue", "loanDue", "<script>"], patternMute: ["weekend"] }), { profileName: "Javid", setupHidden: true, theme: "dusk", reduceEffects: true, coachMute: ["loanDue"], patternMute: ["weekend"] }), "name tidied, a real theme kept, duplicates and junk ids dropped");
 ok(!("theme" in cleanPrefs({ theme: "hacker" })) && !("profileName" in cleanPrefs({ profileName: 5 })), "an unknown theme or a non-text name is ignored");
 ok(!("preferences" in buildBackup(base)), "no choices: the backup file has no preferences part");

@@ -189,10 +189,13 @@ ok(gone !== null && gone < 250, `reduced motion: a long swipe still dismisses, w
 if (await page.$(".sheet")) { await page.keyboard.press("Escape"); await wait(400); }
 await media([{ name: "prefers-reduced-motion", value: "no-preference" }, { name: "prefers-reduced-transparency", value: "reduce" }]);
 const glass = await page.evaluate(() => { const t = getComputedStyle(document.querySelector(".topbar")); return { blur: t.backdropFilter, bg: t.backgroundColor }; });
-ok(glass.blur === "none" && /rgb\(7, 21, 26\)/.test(glass.bg), "reduced transparency: the top bar is solid (no blur, opaque background)", glass);
+// Run 70: the page colour depends on the theme (a phone with data starts on Sea glass, #101B1B); the bar must be that colour, fully opaque
+const pageBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+ok(glass.blur === "none" && glass.bg === pageBg && /^rgb\(/.test(glass.bg), "reduced transparency: the top bar is solid (no blur, opaque, the page colour)", { glass, pageBg });
 await media([{ name: "prefers-reduced-transparency", value: "no-preference" }, { name: "prefers-contrast", value: "more" }]);
 const hc = await page.evaluate(() => { const cs = getComputedStyle(document.documentElement); return { ink3: cs.getPropertyValue("--ink-3").trim(), rule2: cs.getPropertyValue("--rule-2").trim() }; });
-ok(hc.ink3 === "#C6D4D4" && hc.rule2 === "#6E959E"   /* redesign: the dark theme's stronger set */, "increased contrast: text and border tokens switch to the stronger set", hc);
+// Run 70: each theme has its own stronger set (applyTheme); Sea glass, the theme this phone is on, moves to these exact values
+ok(await page.evaluate(() => document.documentElement.getAttribute("data-theme")) === "sea" && hc.ink3 === "#C1CEC8" && hc.rule2 === "#91A5A0", "increased contrast: text and border tokens switch to the stronger set", hc);
 await page.close();
 
 section("S7. Small screens and the on-screen keyboard");
