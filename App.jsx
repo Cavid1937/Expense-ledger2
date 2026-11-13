@@ -3967,13 +3967,14 @@ const REMIND_KEY=KEY+"__reminders";
 const REMIND_EVENT="ledger-reminders-changed";
 // Run 40 (owner: "it strictly sends at 21:00; I set the time and it didn't come then"): the daily check-in has its own time (dailyTime);
 // "time" stays the time for bill and recurring reminders. A saved file without dailyTime keeps 21:00, exactly as before.
-export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", dailyTime:"21:00", hideAmount:false, exact:false });   // Run 38: exact = "remind at the exact time"
+// Run 66: enabled = the main switch over all reminders (on unless the person turns it off; older saved choices have no field and stay on)
+export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", dailyTime:"21:00", hideAmount:false, exact:false, enabled:true });   // Run 38: exact = "remind at the exact time"
 const HHMM=/^([01]\d|2[0-3]):[0-5]\d$/;
 export function cleanReminderPrefs(raw) {
   const r=raw && typeof raw==="object" ? raw : {};
   const time=typeof r.time==="string" && HHMM.test(r.time) ? r.time : REMIND_DEFAULT.time;
   const dailyTime=typeof r.dailyTime==="string" && HHMM.test(r.dailyTime) ? r.dailyTime : REMIND_DEFAULT.dailyTime;
-  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, dailyTime, hideAmount:r.hideAmount===true, exact:r.exact===true };
+  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, dailyTime, hideAmount:r.hideAmount===true, exact:r.exact===true, enabled:r.enabled!==false };
 }
 export function readReminders() { try { return cleanReminderPrefs(JSON.parse(localStorage.getItem(REMIND_KEY)||"null")); } catch { return { ...REMIND_DEFAULT }; } }
 export function writeReminders(p) {
@@ -3983,6 +3984,7 @@ export const remindersAvailable=()=>{ try { const n=window.LedgerNative; return 
 function reminderId(s) { let h=5381; for (let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0; return (h%2147483000)+1; }   // stable positive int per (kind, schedule, date)
 export function reminderPlan(schedules, transactions, prefs, now=new Date(), opts={}) {
   const p=cleanReminderPrefs(prefs), horizon=opts.horizon||30, cap=opts.cap||60, out=[];
+  if (!p.enabled) return out;   // Run 66: the main switch is off: nothing is planned (the choices themselves are kept)
   const [hh,mm]=p.time.split(":").map(Number), todayStr=localDateStr(now);
   const endStr=localDateStr(new Date(now.getFullYear(),now.getMonth(),now.getDate()+horizon));
   const at=(dStr,h,m)=>{ const d=parseLocalDate(dStr); return new Date(d.getFullYear(),d.getMonth(),d.getDate(),h,m,0,0); };

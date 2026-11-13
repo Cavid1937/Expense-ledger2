@@ -729,6 +729,13 @@ export const MESSAGES = {
   "st.foldLook": { en: "Appearance", az: "Görünüş", ru: "Внешний вид" },
   // Run 30 (Android app only): reminders. az / ru written by Claude, NOT yet reviewed by a native speaker.
   "remind.title":      { en: "Reminders", az: "Xatırlatmalar", ru: "Напоминания" },
+  // Run 66: one main switch over all reminders, and what the phone allows
+  "remind.master":     { en: "Reminders from this app", az: "Bu tətbiqdən xatırlatmalar", ru: "Напоминания от приложения" },
+  "remind.masterOn":   { en: "On. Choose below what you want to be reminded about.", az: "Açıqdır. Nə barədə xatırlatmaq lazım olduğunu aşağıda seçin.", ru: "Включено. Ниже выберите, о чём напоминать." },
+  "remind.masterOff":  { en: "Off: no reminders arrive. Your choices are kept for when you turn it back on.", az: "Söndürülüb: heç bir xatırlatma gəlmir. Seçimləriniz saxlanılır və yenidən yandıranda qayıdır.", ru: "Выключено: напоминания не приходят. Ваш выбор сохранится, когда вы снова включите." },
+  "remind.allOff":     { en: "All reminders are off", az: "Bütün xatırlatmalar söndürülüb", ru: "Все напоминания выключены" },
+  "remind.permOk":     { en: "The phone allows notifications from this app.", az: "Telefon bu tətbiqdən bildirişlərə icazə verir.", ru: "Телефон разрешает уведомления от этого приложения." },
+  "remind.permAsk":    { en: "The phone will ask you to allow notifications when you turn a reminder on.", az: "Xatırlatmanı yandıranda telefon bildirişlərə icazə istəyəcək.", ru: "Когда вы включите напоминание, телефон попросит разрешить уведомления." },
   "remind.sub":        { en: "Get a nudge before a bill or a recurring payment is due. Nothing leaves your phone.", az: "Ödəniş vaxtı çatmamış xəbər alın. Heç nə telefondan çıxmır.", ru: "Напомним до срока платежа. Ничего не покидает ваш телефон." },
   "remind.bills":      { en: "Bills due", az: "Ödəniş günü", ru: "Срок счетов" },
   "remind.billsSub":   { en: "On the due day", az: "Ödəniş günü", ru: "В день платежа" },

@@ -453,6 +453,9 @@ export function RemindersSettings({ showToast, open, toggle }) {
   const [p, setP]=useState(()=>readReminders());
   const [blocked, setBlocked]=useState(false);
   const [exactMsg, setExactMsg]=useState("");
+  // Run 66: what the phone itself allows ("granted" / "denied" / "prompt"), shown honestly; only if this version of the Android app can tell
+  const [perm, setPerm]=useState("");
+  useEffect(()=>{ let live=true; try { const f=window.LedgerNative && window.LedgerNative.reminders && window.LedgerNative.reminders.permissionState; if (typeof f==="function") Promise.resolve(f()).then(s=>{ if (live && ["granted","denied","prompt"].includes(s)) setPerm(s); }).catch(()=>{}); } catch { /* not in the Android app */ } return ()=>{ live=false; }; },[blocked]);
   if (!remindersAvailable()) return null;
   // Run 38: switching "exact time" ON asks Android (settings page "Alarms & reminders"); it stays off if the user does not allow it there.
   const flipExact=async ()=>{
@@ -476,10 +479,18 @@ export function RemindersSettings({ showToast, open, toggle }) {
       <div className={`toggle-track${p[k]?" on":""}`} data-section={`rem-${k}`} onClick={()=>flip(k)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(k); } }} role="switch" aria-checked={!!p[k]} aria-labelledby={`set-rem-${k}`} tabIndex={0}><div className="toggle-knob"/></div>
     </div>
   );
+  // Run 66 (plan: myUNEC-style settings): one main switch over all reminders; turning it off keeps the choices below for later
+  const flipAll=()=>save({ enabled:!readReminders().enabled });
   return (
-    <Fold id="reminders" icon="calendar" title={t("remind.title")} sub={(()=>{ const n=["bills","recurring","daily"].filter(k=>p[k]).length; return n?t("st.sumRem",{n}):t("st.sumRemNone"); })()} open={open.reminders} onToggle={()=>toggle("reminders")}>
+    <Fold id="reminders" icon="calendar" title={t("remind.title")} sub={(()=>{ if (!p.enabled) return t("remind.allOff"); const n=["bills","recurring","daily"].filter(k=>p[k]).length; return n?t("st.sumRem",{n}):t("st.sumRemNone"); })()} open={open.reminders} onToggle={()=>toggle("reminders")}>
       <div className="card st-card" data-section="st-reminders">
-        <div className="list-sub" style={{marginBottom:8}}>{t("remind.sub")}</div>
+        <div className="settings-row">
+          <div><div className="settings-row-title" id="set-rem-master" style={{fontWeight:700}}>{t("remind.master")}</div><div className="settings-row-sub">{t(p.enabled?"remind.masterOn":"remind.masterOff")}</div></div>
+          <div className={`toggle-track${p.enabled?" on":""}`} data-section="rem-master" onClick={flipAll} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flipAll(); } }} role="switch" aria-checked={!!p.enabled} aria-labelledby="set-rem-master" tabIndex={0}><div className="toggle-knob"/></div>
+        </div>
+        {perm&&<div className="list-sub" data-section="rem-perm" data-perm={perm} style={{margin:"2px 0 6px",color:perm==="denied"?"var(--neg)":undefined}}>{t(perm==="granted"?"remind.permOk":perm==="denied"?"remind.denied":"remind.permAsk")}</div>}
+        <Collapse open={p.enabled} id="rem-all-wrap">
+        <div className="list-sub" style={{margin:"6px 0 8px"}}>{t("remind.sub")}</div>
         <Row k="bills" title={t("remind.bills")} sub={t("remind.billsSub")}/>
         <Row k="recurring" title={t("remind.recurring")} sub={t("remind.recurringSub")}/>
         {/* Run 40: the bill/recurring time sits with those two switches; the daily check-in has its own time, shown when it is on. */}
@@ -504,6 +515,7 @@ export function RemindersSettings({ showToast, open, toggle }) {
         )}
         {blocked && <div className="list-sub" role="alert" data-section="rem-denied" style={{marginTop:8}}>{t("remind.denied")}</div>}
         <div className="list-sub" style={{marginTop:8}}>{t("remind.battery")}</div>
+        </Collapse>
       </div>
     </Fold>
   );

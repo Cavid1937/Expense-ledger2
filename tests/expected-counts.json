@@ -108,6 +108,7 @@
     "run64xlsx.test.mjs": 13,
     "run65cats.test.mjs": 9,
     "run65surplus.test.mjs": 12,
+    "run66notif.test.mjs": 6,
     "run43pace.test.mjs": 10,
   "run18coach.test.mjs": 9
   },
@@ -148,6 +149,7 @@
     "e2e_run62_history.mjs": 7,
     "e2e_run64_xlsx.mjs": 5,
     "e2e_run65.mjs": 11,
+    "e2e_run66_notif.mjs": 8,
     "e2e_run57_paid.mjs": 26,
     "e2e_run9.mjs": 55,
     "e2e_run10.mjs": 16,
