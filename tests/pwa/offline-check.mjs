@@ -53,11 +53,12 @@ try {
     await p.close(); srv.kill(); await wait(500);
     srv = serve(out); await up();
     p = await ctx.newPage(); await p.goto(URL2, { waitUntil: "load" }); await p.waitForSelector(".tabbar, .lang-screen");
-    const after = await p.evaluate(async () => { for (let i = 0; i < 40; i++) { const k = await caches.keys(); if (k.includes("ledger-shell-v2") && !k.includes("ledger-shell-v1")) break; await new Promise((r) => setTimeout(r, 250)); }
+    const after = await p.evaluate(async () => { for (let i = 0; i < 40; i++) { const k = await caches.keys(); if (k.includes("ledger-shell-v3") && !k.includes("ledger-shell-v1")) break; await new Promise((r) => setTimeout(r, 250)); }
       await new Promise((r) => setTimeout(r, 1000)); const out = {}; for (const k of await caches.keys()) out[k] = (await (await caches.open(k)).keys()).map((r) => new URL(r.url).pathname);
       return { caches: out, needs: [...document.querySelectorAll("script[src]")].map((s) => new URL(s.src).pathname) }; });
     await p.close(); srv.kill(); await wait(300);
-    const v2files = after.caches["ledger-shell-v2"] || [];
+    // Run 75: the cache has been "ledger-shell-v3" since Run 20 (new icons); this check still expected v2
+    const v2files = after.caches["ledger-shell-v3"] || [];
     ok(v1.includes("ledger-shell-v1") && !after.caches["ledger-shell-v1"] && after.needs.every((n) => v2files.includes(n)), "a phone with the old v1 worker: opening the app once online replaces it, and the app's code is now saved", after);
     srv = null;
     const p3 = await ctx.newPage(); const p3log = []; p3.on("requestfailed", (r) => p3log.push("failed " + new URL(r.url()).pathname + " " + (r.failure() || {}).errorText)); p3.on("pageerror", (e) => p3log.push("error " + String(e).slice(0, 120))); p3.on("console", (m) => p3log.push("console " + m.text().slice(0, 120)));
@@ -90,7 +91,7 @@ try {
     const before = await p.evaluate(() => ({ banner: !!document.querySelector(".update-banner"), v: [...document.scripts].map((s) => s.src).find((s) => /index-/.test(s)) }));
     await p.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(200);
     const label = await p.evaluate(() => document.querySelector(".app-version")?.innerText || "");
-    ok(!before.banner && /^Version [\w-]+$/.test(label) && before.v.includes(label.replace("Version ", "")), "no notice while the site serves the same version; More shows the running version", { before, label });
+    ok(!before.banner && /^Version .+ · build ([\w-]+)$/.test(label) && before.v.includes(label.match(/build ([\w-]+)$/)[1]), "no notice while the site serves the same version; More shows the running version", { before, label });
     srv.kill(); await wait(500); srv = serve(vB); await up(); await wait(22000);   // release B; the check runs at most every 20 s (clear margin)
     const vis = await p.evaluate(async () => { const r = await fetch(`/?v=${Date.now()}`, { cache: "no-store" }); const t = await r.text(); return { state: document.visibilityState, got: (t.match(/index-[\w-]+\.js/) || [""])[0], status: r.status, ctrl: !!navigator.serviceWorker.controller }; }); await p.bringToFront();
     await p.evaluate(() => document.dispatchEvent(new Event("visibilitychange"))); await wait(1500);
@@ -108,7 +109,7 @@ try {
   await page.evaluateOnNewDocument((k) => { if (!localStorage.getItem(k)) localStorage.setItem(k, JSON.stringify({ language: "en", transactions: [{ id: 1, type: "expense", amount: 12.34, category: "food", merchant: "Offlinecafe", date: new Date().toISOString().slice(0, 10), recurring: false, recurFreq: null, isActive: true }], budgets: {}, templates: [], currency: "₼", goals: [], safeToSpend: { enabled: false, savingsTarget: 0 } })); }, KEY);
   await page.goto(URL0, { waitUntil: "load" }); await page.waitForSelector(".tabbar");
   const man = await page.evaluate(async () => { const l = document.querySelector('link[rel="manifest"]'); const r = await fetch(l.href); const j = await r.json(); return { href: l.getAttribute("href"), ok: r.ok, name: j.name, bg: j.background_color, display: j.display, icons: j.icons.length }; });
-  ok(man.ok && man.href === "/manifest.webmanifest" && man.name === "Expense Ledger" && man.bg === "#07151A" && man.display === "standalone" && man.icons === 2, "the page links a working manifest with the dark colours, standalone display and two icons", man);
+  ok(man.ok && man.href === "/manifest.webmanifest" && man.name === "Expense Ledger" && man.bg === "#07151A" && man.display === "standalone" && man.icons === 3, "the page links a working manifest with the dark colours, standalone display and three icons (Run 20 added the maskable one)", man);
   const sw = await page.evaluate(async () => { const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(() => r(null), 8000))]); return { active: !!(reg && reg.active), scope: reg && reg.scope }; });
   ok(sw.active, "the service worker is installed and active", sw);
   await page.reload({ waitUntil: "load" }); await page.waitForSelector(".tabbar");
@@ -122,7 +123,7 @@ try {
   const stored = await page.evaluate((k) => JSON.parse(localStorage.getItem(k)).transactions.length, KEY);
   ok(stored === 1, "the saved data is untouched (the worker never reads or writes it)");
   const caches0 = await page.evaluate(async () => { const keys = await caches.keys(); const c = await caches.open(keys[0]); return { keys, n: (await c.keys()).map((r) => new URL(r.url).pathname) }; });
-  ok(caches0.keys.length === 1 && caches0.n.every((p) => p === "/" || p.startsWith("/assets/") || /^\/(manifest\.webmanifest|icon-\d+\.png)$/.test(p)), "only the app's own files are cached (no data, no other sites)", caches0);
+  ok(caches0.keys.length === 1 && caches0.n.every((p) => p === "/" || p.startsWith("/assets/") || /^\/(manifest\.webmanifest|icon-\d+\.png|icon-maskable-\d+\.png|apple-touch-icon\.png|icon\.svg|fonts\/[\w-]+\.woff2)$/.test(p)), "only the app's own files are cached: page, code, icons and fonts (no data, no other sites)", caches0);
   await page.setOfflineMode(false);
   // Run 73: the site now has a public privacy page. Opening it online must not replace the app's saved start page, or the app would
   // open offline as the privacy text (the worker used to save every page it served as "/").

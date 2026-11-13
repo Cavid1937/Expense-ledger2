@@ -109,6 +109,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const fxCodes=(baseCode==="AZN"?FX_CODES:["AZN",...FX_CODES]).filter(c=>c!==baseCode);
   const [fxSaved, setFxSaved]=useState(null);   // Run 53: no internet: the newest rate this phone already holds, offered with its date
   const [amount,   setAmount]   = useState(pfx?String(pfx.amt):prefill?.amount?String(prefill.amount):"");
+  // Run 75: the largest the amount may be drawn; smaller on narrow phones so it never hides behind the calculator keys
+  const amtCap=(typeof window!=="undefined" && window.innerWidth<=360) ? 38 : 50;
   const [fxCur, setFxCur]=useState(pfx?pfx.cur:"");
   const [fxPick, setFxPick]=useState(false);
   const [fxRate, setFxRate]=useState(pfx?{ rate:pfx.rate, on:pfx.on, src:pfx.src }:null);
@@ -307,13 +309,14 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           {!editId&&onOtherKind&&["loans","debts"].map(k=><button key={k} type="button" className="type-pick" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}><span className="type-dot" style={{background:k==="loans"?"var(--info)":"var(--warn)"}} aria-hidden="true"/>{t(k==="loans"?"add.loan":"add.debt")}</button>)}
         </div>
         {!editId&&!prefill&&onSaveMany&&<QuickTextPanel currency={currency} memory={merchantMemory} onSaveMany={onSaveMany}/>}
+        {/* Run 75: on narrow phones (≤360 px) the amount is drawn at most 38 px tall, so "0.00" fits beside the calculator keys (it was cut off) */}
         <div className="amount-zone" onClick={()=>amtRef.current?.focus()}>
           <div className="amount-line">
             <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off" autoFocus={!editId}
               placeholder="0.00" value={amount} onChange={e=>{ const v=e.target.value; setAmount(isExprText(v) ? cleanExprText(v) : cleanMoneyText(v)); setErr(""); }}
               onPaste={e=>{ const p=(e.clipboardData&&e.clipboardData.getData("text"))||""; if (!p) return; e.preventDefault(); setAmount(isExprText(p) ? cleanExprText(p) : cleanMoneyText(p,{paste:true})); setErr(""); }}
               min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}
-              style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(50,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
+              style={{width:`${Math.max(4.3,Math.min(14,String(amount||"0.00").length*1.08))}ch`,fontSize:`${Math.max(30,Math.min(amtCap,240/(Math.max(4,String(amount||"0.00").length)*0.62)))}px`}}/>
             {fxOk
               ? <button type="button" className="amount-cur amount-cur-btn" data-section="fx-cur" aria-expanded={fxPick} aria-label={t("fx.choose")+": "+(fxCur||currency)} onClick={e=>{ e.stopPropagation(); setFxPick(p=>!p); }}>{fxCur||currency} <Icon name={fxPick?"chevUp":"chevDown"} size={11}/></button>
               : <span className="amount-cur">{currency}</span>}
