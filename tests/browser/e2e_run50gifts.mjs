@@ -9,8 +9,15 @@ const seed = baseSeed({ transactions: [
 ] });
 const text = (page, sel) => page.evaluate((s) => (document.querySelector(s) || {}).innerText || "", sel);
 
-section("R50-GB1. Open the page from More");
-const page = await openPage(browser, { seed });
+section("R71-G0. Hidden by default (owner, 13 Nov)");
+{
+  const p0 = await openPage(browser, { seed });
+  await p0.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await p0.waitForSelector(".more-page"); await wait(400);
+  ok(!(await p0.$('.more-page [data-more="gifts"]')) && (await p0.$('.more-page [data-more="debts"]')), "Settings shows no Gifts row (Debts and the rest are still there)");
+  await p0.close();
+}
+section("R50-GB1. Open the page from More (the hidden page is switched back on for this test)");
+const page = await openPage(browser, { seed, pre: () => localStorage.setItem("expense_ledger_v5__show_gifts", "1") });
 await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(400);
 await clickText(page, ".list-row, button", /^Gifts/); await page.waitForSelector('[data-section="gifts-page"]', { timeout: 4000 }); await wait(400);
 ok(/130/.test(await text(page, '[data-section="gifts-given"]')), "Given shows 130.10 (100 + 30.10); the 999 food entry is not a gift", await text(page, '[data-section="gifts-given"]'));

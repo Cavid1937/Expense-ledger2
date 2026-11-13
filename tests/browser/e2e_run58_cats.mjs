@@ -50,7 +50,7 @@ section("R58-B4. The Gifts page leaves out haircuts recorded under the old 'Gift
 {
   const seed = baseSeed({ language: "en", transactions: [tx({ merchant: "Aysel", category: "gifts", subcategory: "Gifts", amount: 100, date: TODAY }),
     tx({ merchant: "Salon", category: "gifts", subcategory: "Barber / Hair", amount: 15, date: TODAY }), tx({ merchant: "Shop", category: "gifts", subcategory: "Cosmetics", amount: 25, date: TODAY })] });
-  const page = await openPage(browser, { seed });
+  const page = await openPage(browser, { seed, pre: () => localStorage.setItem("expense_ledger_v5__show_gifts", "1") });   /* Run 71: the Gifts page is hidden by default */
   await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(400);
   await clickText(page, ".list-row, button", /^Gifts/); await page.waitForSelector('[data-section="gifts-page"]', { timeout: 4000 }); await wait(400);
   const given = await page.evaluate(() => document.querySelector('[data-section="gifts-given"]').innerText);

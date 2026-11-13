@@ -10,6 +10,8 @@ import { buildWorkbookSheets, downloadFile, inNativeShell, readBudgetCarry, toda
 import { readLearn, writeLearn, learnPreview, readCrashLog } from "../App.jsx";
 // Run 70: theme preview cards
 import { THEME_MAIN, themePreview } from "../App.jsx";
+// Run 71: the Gifts row is shown only when this preference key is "1" (off for everyone by default)
+const giftsShown=()=>{ try { return localStorage.getItem("expense_ledger_v5__show_gifts")==="1"; } catch { return false; } };
 // Run 69: the "Help improve the app" card above imports these
 import { buildXlsx } from "../xlsxWrite.js";
 import { APP_RELEASE, accountName, accountRemovalPlan, findDoubleEntries, maskText, offerUndo, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
@@ -735,7 +737,9 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         {/* Run 26/27: grouped (Money / Data and safety / App); every row has a name for tests and links. Accounts and Preferences are no longer rows: they are open on this page. */}
         <ListRow id="recurring" icon="repeat" title={t("rec.title")} sub={t("more.recurringSub")} onClick={()=>onOpen("recurring")}/>
         <ListRow id="debts" icon="finance" title={t("debt.title")} sub={t("debt.rowSub")} onClick={()=>onOpen("debts")}/>
-          <ListRow id="gifts" icon="gifts" title={t("gifts.title")} sub={t("gifts.rowSub")} onClick={()=>onOpen("gifts")}/>
+          {/* Run 71 (owner, 13 Nov: "separate gifts section is unnecessary for now"): the Gifts page is hidden, not deleted. Gift entries stay
+          ordinary entries (Entries > Category > Gifts). The page returns when the key below is "1" (the tests use it, so the page keeps working). */}
+      {giftsShown()&&<ListRow id="gifts" icon="gifts" title={t("gifts.title")} sub={t("gifts.rowSub")} onClick={()=>onOpen("gifts")}/>}
       </div>
       {/* Run 31: language moved next to Appearance: both are about how the app looks and reads, not about money. */}
       <div className="settings-section-lbl more-group-lbl">{t("st.groupLook")}</div>
