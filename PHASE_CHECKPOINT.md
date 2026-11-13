@@ -1,3 +1,4 @@
+## 0000zg. 2026-11-13 RUN 72 (latest). Local, NOT pushed. FAB returns only after >=60 px upward scroll or y<=80 (App.jsx onScroll); e2e_run18_fab 9/9. Full browser suite still NOT run since Run 70 (needed before publishing).
 ## 0000zf. 2026-11-13 RUN 71 (latest). Local commits 4a44afb, 435cc63, cf62378 on Run 70, NOT pushed. Read "reports/Run 71 report.md".
 - Done: rarer screens checked in the 3 themes (0 contrast/teal findings); Gifts row hidden (key expense_ledger_v5__show_gifts="1" shows it; tests use it); NotSpentCard moved to Trends without the month line (6 notspent.soFar*/month* keys removed); leftover-to-goal is a slim switch row (data-section leftover-switch).
 - Tests: logic 114 files 2296/0/0; browser singles e2e_run50gifts 10, e2e_run58_cats 25, e2e_run65 11, e2e_run16_info 15, e2e_run59_leftover 16. Full suite NOT run on Run 71 (weekly usage 96%); run it before any publish.

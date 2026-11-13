@@ -45,6 +45,11 @@ Local commits: 4a44afb, 435cc63 and cf62378, on top of Run 70. Nothing is pushed
 | Gifts page hidden | VERIFIED (browser) |
 | "Not spent" moved to Trends | VERIFIED (browser) |
 | Slim leftover setting | VERIFIED (browser and screenshots) |
-| + button overlap mid-scroll | NEEDS YOUR DECISION (hide on scroll, or leave) |
+| + button overlap mid-scroll | VERIFIED: Run 72 change, see below |
 | Full browser suite on these commits | NOT RUN; needed before publishing |
 | Everything else in the owner queue (items 1–7) | Not started |
+
+## Run 72 (owner: "hide on scroll")
+- **Already there:** the + button already slid away while scrolling down (since Run 18). It came back on the smallest nudge up, often right over the button being aimed at, which is what your screenshot showed.
+- **Now:** it comes back only after a clear move up (60 px in one go) or near the top of the screen. Scrolling down still hides it at once.
+- **Test:** e2e_run18_fab gained 4 checks (5 → 9) and passes 9/9. The full browser suite has still not been run since Run 70.
