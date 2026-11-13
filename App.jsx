@@ -3417,7 +3417,18 @@ export function validateBill(b) {
   if (!id || !name || name.length>80 || !type || amount===null || !RECUR_FREQS.has(b.freq) || !anchor || !dueDayOk || !endOk || (b.active!==undefined && typeof b.active!=="boolean")) return null;
   const ids=CATEGORIES.map(c=>c.id);
   return { id, name, type, category:ids.includes(b.category) ? b.category : "other", subcategory:txt(b.subcategory).slice(0,40), amount, freq:b.freq,
-    anchorDate:anchor, ...(b.dueDay!==undefined ? { dueDay:b.dueDay } : {}), ...(endRaw!==null ? { endDate:endRaw } : {}), active:b.active!==false, createdAt:typeof b.createdAt==="string" ? b.createdAt : "" };
+    anchorDate:anchor, ...(b.dueDay!==undefined ? { dueDay:b.dueDay } : {}), ...(endRaw!==null ? { endDate:endRaw } : {}), active:b.active!==false, createdAt:typeof b.createdAt==="string" ? b.createdAt : "",
+    // Run 75: optional "sub" (subscription) / "bill" (other repeating payment); absent = decided by isSubscription. Older files have none.
+    ...(b.kind==="sub"||b.kind==="bill" ? { kind:b.kind } : {}) };
+}
+// Run 75 (owner, 13 Nov: "subscriptions separate from repeating payments"): which repeating outgoing payments count as subscriptions.
+// The person's own choice on the bill wins; otherwise Phone & Subscriptions, or a name / subcategory that says so (Netflix, Spotify, iCloud…).
+const SUB_WORDS=/subscri|abunə|подписк|stream|netflix|spotify|youtube|apple|icloud|google one|disney|megogo|ivi\b|okko|chatgpt|openai|adobe|music|musiqi|музык|cloud|bulud|облак/i;
+export function isSubscription(x) {
+  if (!x || x.type==="income") return false;
+  const kind=x.bill&&x.bill.kind || x.kind;
+  if (kind==="sub") return true; if (kind==="bill") return false;
+  return x.category==="digital" || SUB_WORDS.test(String(x.subcategory||"")) || SUB_WORDS.test(String(x.merchant||x.name||""));
 }
 function newBillId(taken) { let id; do { id="b"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); } while (taken && taken.has(id)); return id; }
 

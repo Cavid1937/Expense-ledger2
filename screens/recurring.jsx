@@ -5,6 +5,8 @@ import { Collapse } from "./motion.jsx";
 import { CAT, CatIcon, Icon, activateKey, billPaymentsLeft, billsToIcs, buildSchedules, catName, daysBetween, downloadFile, fmt, fmtDate, localDateStr, localMonthStr, maskText, scheduleMonthStatus, scheduleMonthly, scheduleNextDue, subName, today } from "../App.jsx";
 // Run 70: category colours drawn darker on light themes
 import { catInk } from "../App.jsx";
+// Run 75: subscriptions apart from other repeating payments
+import { isSubscription } from "../App.jsx";
 
 // Run 63 (owner batch D10): every payment recorded for a repeating bill, newest first, folded under the bill. Read-only; tapping one opens it.
 function PaymentsFold({ ids, byId, currency, onView }) {
@@ -146,11 +148,20 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
           ); })}
         </div>
       )}
-      {active.length>0&&(<>
-        <div className="label-sm" style={{marginBottom:8}}>{t("rec.active")}</div>
-        <div className="rec-hint" style={{fontSize:12,color:"var(--ink-3)",lineHeight:1.5,margin:"-2px 2px 10px"}}>{t("rec.recordHint")}</div>
-        <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>{active.map(x=><Row key={x.key} x={x}/>)}</div>
-      </>)}
+      {/* Run 75 (owner, 13 Nov): subscriptions are listed apart from the other repeating payments, in the same place, with their own totals */}
+      {active.length>0&&(()=>{ const subs=active.filter(isSubscription), rest=active.filter(x=>!isSubscription(x)); const subMo=subs.reduce((a,x)=>a+x.monthly,0); const box={background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}; return (<>
+        {subs.length===0&&<div className="label-sm" style={{marginBottom:8}}>{t("rec.active")}</div>}
+        <div className="rec-hint" style={{fontSize:12,color:"var(--ink-3)",lineHeight:1.5,margin:subs.length?"0 2px 10px":"-2px 2px 10px"}}>{t("rec.recordHint")}</div>
+        {subs.length>0&&(<div data-section="rec-subs">
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:8,flexWrap:"wrap",marginBottom:8}}>
+            <div className="label-sm">{t("sub.title")}</div>
+            <div className="list-sub" data-section="rec-subs-total">{t("sub.totals",{ m:fmt(subMo,currency), y:fmt(subMo*12,currency) })}</div>
+          </div>
+          <div style={box}>{subs.map(x=><Row key={x.key} x={x}/>)}</div>
+        </div>)}
+        {subs.length>0&&rest.length>0&&<div className="label-sm" style={{marginBottom:8}} data-section="rec-others-title">{t("sub.others")}</div>}
+        {rest.length>0&&<div style={box} data-section={subs.length?"rec-others":undefined}>{rest.map(x=><Row key={x.key} x={x}/>)}</div>}
+      </>); })()}
       {paused.length>0&&(<>
         <div className="label-sm" style={{marginBottom:8}}>{t("rec.paused")}</div>
         <div style={{background:"var(--bg-card)",border:"1px solid var(--rule)",borderRadius:8,overflow:"hidden",marginBottom:14}}>{paused.map(x=><Row key={x.key} x={x}/>)}</div>

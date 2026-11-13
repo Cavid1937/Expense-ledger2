@@ -22,10 +22,12 @@ export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast
   const [category,setCategory]=useState(bill?.category||"housing"), [freq,setFreq]=useState(bill?.freq||"monthly");
   const [anchor,setAnchor]=useState(bill?.anchorDate||today()), [active,setActive]=useState(bill?bill.active!==false:true);
   const [endDate,setEndDate]=useState(bill?.endDate||"");
+  // Run 75: subscription, other repeating payment, or decided by the app ("auto": no kind stored)
+  const [kind,setKind]=useState(bill?.kind==="sub"||bill?.kind==="bill" ? bill.kind : "auto");
   const cats=pickerCats(type==="income",readCatPrefs(),[bill?.category,category]);   // Run 36: user's order; hidden ones only if this bill uses it
   const save=()=>{
     const b=validateBill({ id:bill?.id||"tmp", name, type, category:cats.some(c=>c.id===category)?category:cats[0].id, subcategory:bill?.subcategory||"",
-      amount:formMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), endDate, active, createdAt:bill?.createdAt||new Date().toISOString() });
+      amount:formMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), endDate, active, createdAt:bill?.createdAt||new Date().toISOString(), ...(type==="expense"&&kind!=="auto" ? { kind } : {}) });
     if (!b) { showToast(t(endDate && endDate<anchor ? "bill.endDateBad" : "bill.invalid"),3500); return; }
     onSave(isNew ? { ...b, id:null } : b);
   };
@@ -49,6 +51,11 @@ export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast
           <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><PickDate id="bill-date" className="field-input" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/>
             {isValidDateStr(anchor)&&<div className="list-sub" style={{marginTop:4}}>{fmtLongDate(parseLocalDate(anchor))}</div>}</div>
         </div>
+        {type==="expense"&&(
+          <div className="field"><label className="field-lbl" htmlFor="bill-kind">{t("bill.kind")}</label>
+            <PickSelect id="bill-kind" className="field-input field-select" value={kind} onChange={e=>setKind(e.target.value)}>{["auto","sub","bill"].map(k=><option key={k} value={k}>{t("bill.kind."+k)}</option>)}</PickSelect>
+            <div className="list-sub" style={{marginTop:4}}>{t("bill.kindSub")}</div></div>
+        )}
         <div className="field"><label className="field-lbl" htmlFor="bill-end">{t("bill.endDate")}</label><PickDate id="bill-end" className="field-input" lang={locale()} value={endDate} min={isValidDateStr(anchor)?anchor:undefined} onChange={e=>setEndDate(e.target.value)}/>
           <div className="list-sub" style={{marginTop:4}}>{t("bill.endDateSub")}</div></div>
         {!isNew&&(

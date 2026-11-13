@@ -1895,6 +1895,15 @@ export const MESSAGES = {
   "help.anomalyTitle":  { en: "Unusual Entry", az: "Qeyri-adi əməliyyat", ru: "Необычная операция" },
   "help.anomalyText":   { en: "{who} on {date}: {amount} — {reason}.", az: "{who}, {date}: {amount} — {reason}.", ru: "{who}, {date}: {amount} — {reason}." },
   "help.anomalyImpact": { en: "This is significantly above your normal spend for {cat}. Was this expected?", az: "Bu, «{cat}» üçün adi xərcinizdən xeyli çoxdur. Bu gözlənilən idimi?", ru: "Это заметно больше ваших обычных расходов в категории «{cat}». Вы этого ожидали?" },
+  // Run 75: subscriptions apart from other repeating payments
+  "sub.title":      { en: "Subscriptions", az: "Abunəliklər", ru: "Подписки" },
+  "sub.others":     { en: "Other repeating payments", az: "Digər təkrarlanan ödənişlər", ru: "Другие регулярные платежи" },
+  "sub.totals":     { en: "{m} a month · {y} a year", az: "ayda {m} · ildə {y}", ru: "{m} в месяц · {y} в год" },
+  "bill.kind":      { en: "Kind", az: "Növ", ru: "Тип" },
+  "bill.kind.auto": { en: "Decide automatically", az: "Avtomatik müəyyən et", ru: "Определить автоматически" },
+  "bill.kind.sub":  { en: "Subscription", az: "Abunəlik", ru: "Подписка" },
+  "bill.kind.bill": { en: "Other repeating payment", az: "Digər təkrarlanan ödəniş", ru: "Другой регулярный платёж" },
+  "bill.kindSub":   { en: "Subscriptions are listed apart, with their own monthly and yearly total.", az: "Abunəliklər ayrıca, öz aylıq və illik cəmi ilə göstərilir.", ru: "Подписки показываются отдельно, со своей суммой за месяц и за год." },
   // Run 75: the app's own date and option pickers
   "pick.choose":    { en: "Choose", az: "Seçin", ru: "Выберите" },
   "pick.date":      { en: "Choose a date", az: "Tarix seçin", ru: "Выберите дату" },
