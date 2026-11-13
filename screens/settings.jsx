@@ -434,7 +434,7 @@ export function LookSettings({ showToast, open, toggle }) {
   const [theme, setTheme]=useState(()=>readTheme());
   const [fxOff, setFxOff]=useState(()=>readFxOff());
   const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
-  const pick=(id)=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; } applyTheme(id); setTheme(id); showToast(t("theme.changed")); };
+  const pick=(id)=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; } applyTheme(id); setTheme(id); showToast(t("theme.changed")); try { window.dispatchEvent(new Event("ledger-widget-changed")); } catch {} };
   return (
     <Fold id="look" icon="eye" title={t("st.foldLook")} sub={fxOff?t("st.sumLookFx",{theme:t("theme."+theme)}):t("theme."+theme)} open={open.look} onToggle={()=>toggle("look")}>
     <div className="card st-card" data-section="st-look">
@@ -810,17 +810,23 @@ function WidgetSettings({ showToast }) {
   const [can,setCan]=useState(false), [p,setP]=useState(()=>readWidgetPrefs());
   useEffect(()=>{ if (!w || typeof w.canPin!=="function") return; let alive=true; Promise.resolve(w.canPin()).then(v=>{ if (alive) setCan(v===true); }).catch(()=>{}); return ()=>{ alive=false; }; },[]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!w) return null;
-  const add=async ()=>{ let ok=false; try { ok=(await w.requestPin())===true; } catch { ok=false; } showToast&&showToast(t(ok?"wdg.asked":"wdg.manual"),6000); };
-  const flip=()=>{ const n={ showSafe:!p.showSafe }; if (writeWidgetPrefs(n)) setP(n); else showToast&&showToast(t("scr.fail")); };
+  const add=async (kind)=>{ let ok=false; try { ok=(await w.requestPin(kind))===true; } catch { ok=false; } showToast&&showToast(t(ok?"wdg.asked":"wdg.manual"),6000); };
+  const flipHide=()=>{ const n={ ...p, hideAmounts:!p.hideAmounts }; if (writeWidgetPrefs(n)) setP(n); else showToast&&showToast(t("scr.fail")); };
+  const flip=()=>{ const n={ ...p, showSafe:!p.showSafe }; if (writeWidgetPrefs(n)) setP(n); else showToast&&showToast(t("scr.fail")); };
   return (
     <div className="card st-card" data-section="widget">
       <div className="list-title">{t("wdg.title")}</div>
       <div className="list-sub" style={{lineHeight:1.5}}>{t("wdg.sub")}</div>
-      {can&&<button className="btn btn-ghost btn-full" data-section="widget-add" onClick={add} style={{marginTop:10}}>{t("wdg.add")}</button>}
+      {/* Run 76: five widgets; each can be placed from here (the launcher still asks) or from the home screen's widget list */}
+      {can&&<div data-section="widget-list" style={{marginTop:10}}>{["safe","summary","budget","accounts","quick"].map(k=>(<div key={k} className="settings-row" style={{padding:"8px 0"}}><div style={{minWidth:0}}><div className="settings-row-title">{t("wdgx.name."+k)}</div><div className="settings-row-sub">{t("wdgx.desc."+k)}</div></div><button type="button" className="btn btn-sm btn-ghost" data-section={"widget-add-"+k} onClick={()=>add(k)}>{t("wdgx.add")}</button></div>))}</div>}
       {!can&&<div className="list-sub" data-section="widget-manual" style={{marginTop:8,lineHeight:1.5}}>{t("wdg.manual")}</div>}
       <div className="settings-row" style={{marginTop:10}}>
         <div><div className="settings-row-title" id="set-wdg-lbl">{t("wdg.show")}</div><div className="settings-row-sub">{t("wdg.showSub")}</div></div>
         <div className={`toggle-track${p.showSafe?" on":""}`} data-section="widget-show" onClick={flip} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(); } }} role="switch" aria-checked={p.showSafe} aria-labelledby="set-wdg-lbl" tabIndex={0}><div className="toggle-knob"/></div>
+      </div>
+      <div className="settings-row">
+        <div><div className="settings-row-title" id="set-wdg-hide">{t("wdgx.hide")}</div><div className="settings-row-sub">{t("wdgx.hideSub")}</div></div>
+        <div className={`toggle-track${p.hideAmounts?" on":""}`} data-section="widget-hide" onClick={flipHide} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flipHide(); } }} role="switch" aria-checked={!!p.hideAmounts} aria-labelledby="set-wdg-hide" tabIndex={0}><div className="toggle-knob"/></div>
       </div>
     </div>
   );

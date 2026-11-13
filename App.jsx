@@ -4025,9 +4025,45 @@ export function restoreCheck(stored, current) {
 const WIDGET_KEY=KEY+"__widget";
 const WIDGET_EVENT="ledger-widget-changed";
 export const widgetNative=()=>{ try { const n=window.LedgerNative; return n && n.widget && typeof n.widget.set==="function" ? n.widget : null; } catch { return null; } };
-export function readWidgetPrefs() { try { const p=JSON.parse(localStorage.getItem(WIDGET_KEY)||"null"); return { showSafe:!!(p && p.showSafe===true) }; } catch { return { showSafe:false }; } }
-export function writeWidgetPrefs(p) { try { localStorage.setItem(WIDGET_KEY,JSON.stringify({ showSafe:!!(p && p.showSafe) })); if (typeof window!=="undefined") window.dispatchEvent(new Event(WIDGET_EVENT)); return true; } catch { return false; } }
+// Run 76: hideAmounts = show "••••" instead of amounts on all widgets (off by default; widgets also hide amounts while an app lock is set)
+export function readWidgetPrefs() { try { const p=JSON.parse(localStorage.getItem(WIDGET_KEY)||"null"); return { showSafe:!!(p && p.showSafe===true), hideAmounts:!!(p && p.hideAmounts===true) }; } catch { return { showSafe:false, hideAmounts:false }; } }
+export function writeWidgetPrefs(p) { try { localStorage.setItem(WIDGET_KEY,JSON.stringify({ showSafe:!!(p && p.showSafe), hideAmounts:!!(p && p.hideAmounts) })); if (typeof window!=="undefined") window.dispatchEvent(new Event(WIDGET_EVENT)); return true; } catch { return false; } }
 // The widget's line: the safe-to-spend amount, only when switched on, Safe to Spend itself is on and can be worked out, and privacy mode is off. "" hides the line.
+// Run 76 (owner: "build widgets 100%"): everything the home-screen widgets show, worked out here with the app's own rules and handed to the
+// Android app as one package. The widgets only display it: amounts already formatted in the person's currency, labels in their language,
+// colours from their theme. Amounts become "••••" when the app's own "hide amounts" is on, when the person hid them on widgets, or while
+// an app lock is set (a home screen is visible to others); the widgets then still work as shortcuts.
+export function widgetSnapshot(state, spendTxns, opts={}, now=new Date()) {
+  const s=state||{}, cur=s.currency, tx=Array.isArray(spendTxns)?spendTxns:[], mon=localMonthStr(now);
+  const hide=!!(opts.hide || opts.locked || PRIVACY);
+  const money=(v,neg)=>hide?"••••":((neg||v<0)?"−":"")+fmt(Math.abs(Number(v)||0),cur);
+  const v=THEMES[readTheme()]?.vars||{}, base={ "--bg":"#07151A","--bg-card":"#0E2229","--bg-warm":"#153039","--ink":"#F3F7F6","--ink-3":"#A5B7B8","--rule":"#24414A","--accent-text":"#4CC9C4","--accent-fill":"#4CC9C4","--on-accent":"#07151A","--pos":"#8BD97A","--neg":"#FF8188","--warn":"#F0C46F" }, col=(k)=>v[k]||base[k];
+  const theme={ bg:col("--bg"), card:col("--bg-card"), raised:col("--bg-warm"), ink:col("--ink"), ink3:col("--ink-3"), rule:col("--rule"), accent:col("--accent-text"), fill:col("--accent-fill"), onFill:col("--on-accent"), pos:col("--pos"), neg:col("--neg"), warn:col("--warn"), dark:THEMES[readTheme()]?THEMES[readTheme()].dark!==false:true };
+  // Safe to Spend (or, when it is off, what was spent this month)
+  const ms=calcMonthSummary(tx,mon,localMonthStr(new Date(now.getFullYear(),now.getMonth()-1,1)),now);
+  const p=monthProgress(mon,now);
+  const safeOn=!!(s.safeToSpend&&s.safeToSpend.enabled);
+  const info=safeOn ? calcSafeToSpend(tx,s.safeToSpend,s.goals||[],now,s.bills||[]) : null;
+  const usable=info&&info.feasible;
+  const safePct=usable&&info.disposable>0 ? Math.max(0,Math.min(100,Math.round(((info.disposable-Math.max(0,info.remaining))/info.disposable)*100))) : 0;
+  const schedules=buildSchedules(s.transactions||[],s.bills||[]).filter(x=>x.isActive&&x.type==="expense").map(x=>({ x, due:scheduleNextDue(x,s.transactions||[],now) })).filter(o=>o.due).sort((a,b)=>a.due-b.due);
+  const nb=schedules[0];
+  const nextBill=nb ? t("wdgx.nextBill",{ name:maskText(nb.x.merchant||nb.x.note)||catName(nb.x.category), date:fmtDate(localDateStr(nb.due)), amount:money(nb.x.amount) }) : "";
+  // budgets this month (all limits together)
+  const cs=calcCategorySpend(tx,mon,now), bs=calcBudgetStatus(s.budgets||{},cs,mon,now,budgetCarried(tx,s.budgets||{},readBudgetCarry(),mon,now));
+  const bTotal=bs.reduce((a,b)=>a+b.limit,0), bSpent=bs.reduce((a,b)=>a+Math.min(b.spent,b.limit*10),0), bPct=bTotal>0?Math.round((bSpent/bTotal)*100):0;
+  const over=bs.filter(b=>b.over).length;
+  // accounts (the person's own; none means the widget invites them to add one)
+  const acc=readAccounts(), bal=accountBalances(acc,s.transactions||[]);
+  const accounts=acc.accounts.slice(0,3).map(a=>({ name:String(a.name||accountName(a.id)||"").slice(0,24), amount:money(bal[a.id]||0), neg:(bal[a.id]||0)<0 }));
+  return { v:1, asOf:localDateStr(now), hide, theme, lang:s.language||"en",
+    safe:{ title:t(usable?"wdgx.safeTitle":"wdgx.spentTitle"), amount:usable?money(info.remaining):money(ms.curExp), neg:!!(usable&&info.remaining<0), sub:usable?t("wdgx.safeSub"):t("wdgx.spentSub",{ month:monthName(mon) }), pct:usable?safePct:Math.max(0,Math.min(100,Math.round(((p.daysPassed||0)/(p.totalDays||30))*100))), days:String(p.daysRemaining||0), daysLabel:tn("wdgx.daysLeft",p.daysRemaining||0), nextBill, budgetPct:bTotal>0?bPct:-1, budgetLabel:t("wdgx.budget") },
+    month:{ title:t("wdgx.monthTitle",{ month:monthName(mon) }), inc:money(ms.curInc+ms.curRefundIn), exp:money(ms.curExp), bal:money(ms.curNet), balNeg:ms.curNet<0, incL:t("wdgx.income"), expL:t("wdgx.expenses"), balL:t(ms.curNet<0?"wdgx.deficit":"wdgx.surplus") },
+    budget:{ title:t("wdgx.budgetTitle"), has:bTotal>0, pct:bPct, spent:money(bSpent), total:money(bTotal), line:bTotal>0?(over?tn("wdgx.over",over):t("wdgx.onTrack")):t("wdgx.noBudget") },
+    accounts:{ title:t("wdgx.accTitle"), list:accounts, empty:t("wdgx.accEmpty") },
+    quick:{ title:t("wdgx.quickTitle"), expense:t("wdgx.qExpense"), income:t("wdgx.qIncome"), transfer:t("wdgx.qTransfer"), entries:t("wdgx.qEntries") },
+    open:t("wdgx.open") };
+}
 export function widgetLine(state, spendTxns, prefs, now=new Date()) {
   try {
     if (!prefs || !prefs.showSafe || !state || !state.safeToSpend || !state.safeToSpend.enabled) return { label:"", amount:"" };
@@ -4936,17 +4972,24 @@ function AppInner() {
       off=nat.onShortcut(k=>{
         if (k==="expense") openAdd();
         else if (k==="income") openAdd({type:"income",amount:"",category:"salary",subcategory:"",merchant:"",note:"",recurring:false,recurFreq:null});
+        // Run 76: widget buttons
+        else if (k==="transfer") switchTab("accounts");
+        else if (k==="entries") switchTab("ledger");
+        else if (k==="budgets") switchTab("goals");
+        else if (k==="home") switchTab("home");
       });
     } catch { /* same */ }
     return ()=>{ try { if (typeof off==="function") off(); } catch { /* same */ } };
-  },[openAdd]);
+  },[openAdd,switchTab]);
   // Run 33 (Android app only): keep the home-screen widget's optional line in step with the ledger and the setting.
   const [widgetTick,setWidgetTick]=useState(0);
   useEffect(()=>{ const f=()=>setWidgetTick(n=>n+1); window.addEventListener(WIDGET_EVENT,f); return ()=>window.removeEventListener(WIDGET_EVENT,f); },[]);
   useEffect(()=>{
     const w=widgetNative(); if (!w) return;
     try { Promise.resolve(w.set(widgetLine(state,forSpending(state.transactions||[]),readWidgetPrefs()))).catch(()=>{ /* the shell is unavailable: the ledger is not affected */ }); } catch { /* same */ }
-  },[state.transactions,state.bills,state.goals,state.safeToSpend,state.currency,state.language,widgetTick,privacy]);
+    // Run 76: the data package for all home-screen widgets (only when the Android app knows how to take it)
+    try { if (typeof w.update==="function") { const wp=readWidgetPrefs(); Promise.resolve(w.update(JSON.stringify(widgetSnapshot(state,forSpending(state.transactions||[]),{ hide:wp.hideAmounts, locked:!!readLock() })))).catch(()=>{ /* same */ }); } } catch { /* same */ }
+  },[state.transactions,state.bills,state.goals,state.budgets,state.safeToSpend,state.currency,state.language,widgetTick,privacy]);
   // Run 33 (Android app only): text shared into the app from another app opens the add form with what could be read from it. Never saved by itself.
   useEffect(()=>{
     const nat=window.LedgerNative; if (!nat || typeof nat.onSharedText!=="function") return;

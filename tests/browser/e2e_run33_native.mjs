@@ -89,20 +89,21 @@ const WSHELL = (can) => `window.__w=[];window.__pin=0;window.LedgerNative={insta
   const calls = () => page.evaluate(() => window.__w);
   const c0 = await calls();
   ok(c0.length > 0 && c0.every((x) => x.amount === ""), "by default every update sent to the widget has NO amount (the line stays hidden)", c0);
-  ok(await page.evaluate(() => !!document.querySelector('[data-section="widget-add"]')) && await page.evaluate(() => document.querySelector('[data-section="widget-show"]').getAttribute("aria-checked")) === "false", "the Add button is offered and 'show amount' is off");
+  // Run 76: five Add buttons now; the Run 33 widget is 'quick'
+ok(await page.evaluate(() => !!document.querySelector('[data-section="widget-add-quick"]')) && await page.evaluate(() => document.querySelector('[data-section="widget-show"]').getAttribute("aria-checked")) === "false", "the Add button is offered and 'show amount' is off");
   await page.evaluate(() => document.querySelector('[data-section="widget-show"]').click()); await wait(400);
   const c1 = (await calls()).pop();
   ok(c1 && c1.label === "Safe to Spend" && /\d/.test(c1.amount) && /₼/.test(c1.amount), "switching the amount on sends label 'Safe to Spend' and a number with the currency", c1);
   await page.evaluate(() => document.querySelector('[data-section="widget-show"]').click()); await wait(400);
   ok((await calls()).pop().amount === "", "switching it off sends an empty amount again");
-  await page.evaluate(() => document.querySelector('[data-section="widget-add"]').click()); await wait(400);
+  await page.evaluate(() => document.querySelector('[data-section="widget-add-quick"]').click()); await wait(400);
   ok((await page.evaluate(() => window.__pin)) === 1 && /Your phone will ask you to confirm/.test(await bodyText(page)), "Add to home screen asks the launcher once and tells the user to confirm");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "ru" }), pre: WSHELL(false) }); await settle(page); await openSettings(page);
-  ok(await page.evaluate(() => !document.querySelector('[data-section="widget-add"]')) && /Чтобы добавить самому/.test(await bodyText(page)), "ru: a launcher that cannot be asked shows the how-to-add-by-hand text instead of a button");
+  ok(await page.evaluate(() => !document.querySelector('[data-section="widget-list"]')) && /Чтобы добавить самому/.test(await bodyText(page)), "ru: a launcher that cannot be asked shows the how-to-add-by-hand text instead of a button");
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "ru: no horizontal scroll");
   await page.close();
 }await finish("e2e_run33_native", browser);
