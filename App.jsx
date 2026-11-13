@@ -4606,10 +4606,16 @@ function AppInner() {
   useEffect(()=>{
     // Run 26d: the screens scroll inside their own box (.page), and scroll events do not bubble to the window - listen in the capture phase
     // so the button really does slide away while the list moves down (it used to stay on top of amounts and buttons).
-    let last=0, lastEl=null;
+    // Run 72 (owner, 13 Nov: "hide on scroll"): it already slid away going down, but the smallest nudge back up returned it, often right on
+    // top of the button being aimed at (the owner's screenshot: savings-floor Save). It now returns only after a clear move up (60 px in
+    // one go, counted from where the upward move began) or near the top of the screen; small corrections leave it away.
+    let last=0, lastEl=null, upFrom=null;
     const onScroll=(e)=>{ const el=e.target; const y=el===document||el===window||el===document.documentElement?(window.scrollY||0):(el.scrollTop||0);
-      if (el!==lastEl) { lastEl=el; last=y; return; }
-      if (y>last+8 && y>80) setFabHidden(true); else if (y<last-8 || y<=80) setFabHidden(false); last=y; };
+      if (el!==lastEl) { lastEl=el; last=y; upFrom=null; return; }
+      if (y<=80) { upFrom=null; setFabHidden(false); }
+      else if (y>last+8) { upFrom=null; setFabHidden(true); }
+      else if (y<last) { if (upFrom===null) upFrom=last; if (upFrom-y>=60) setFabHidden(false); }
+      last=y; };
     window.addEventListener("scroll",onScroll,{ passive:true, capture:true }); return ()=>window.removeEventListener("scroll",onScroll,{ capture:true });
   },[]);
   // Run 12: the add form may say which bill a recurring entry pays ("new" = make a bill from it, or a bill id). An entry
