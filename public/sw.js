@@ -43,7 +43,9 @@ self.addEventListener("fetch", (e) => {
   if (url.origin !== self.location.origin) return;            // other sites are never cached
   if (req.mode === "navigate") {
     e.respondWith(fetch(req).then((res) => {
-      if (res.ok) e.waitUntil(caches.open(CACHE).then((c) => savePage(c, res.clone())).catch(() => {}));
+      // Run 73: only the app's own start page is kept for offline use; other pages on the site (privacy.html, app-open.html) are never saved over it
+      const p = new URL(req.url).pathname;
+      if (res.ok && (p === "/" || p === "/index.html")) e.waitUntil(caches.open(CACHE).then((c) => savePage(c, res.clone())).catch(() => {}));
       return res;
     }).catch(async () => (await caches.match("/", { ignoreVary: true })) || Response.error()));
     return;
