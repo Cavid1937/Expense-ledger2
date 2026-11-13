@@ -154,7 +154,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="65 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="69 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -4039,6 +4039,62 @@ export function reminderMessage(item, prefs, currency) {
   const name=hide ? t("remind.aPayment") : item.name;
   return { title:t(item.kind==="bill"?"remind.billTitle":"remind.recurTitle",{name}), body:hide ? t("remind.bodyHidden") : t("remind.body",{amount:fmt(item.amount,currency)}) };
 }
+// ─── Run 69: "Help improve the app" (owner: only if the app stays free; plan 12 Nov section A) ─────────────────────────────────────────
+// OFF unless the person turns it on. When on, at most once a day and only with a connection, the app ADDS three kinds of rows to its own
+// free Supabase project (the public key can only add rows, never read them):
+//   - place names the person used at least twice, with the category they chose (cleaned on the phone; anything that looks like a person,
+//     a phone or card number or an address is dropped; gifts, family, money-to-people and debt entries are never looked at);
+//   - crash messages from this phone's own crash log (quoted text and long numbers removed);
+//   - one "the app was used today" line: language, app version, web or Android.
+// Never: amounts, dates of spending, notes, people's names, card or account numbers, balances, or anything that identifies the phone over time.
+// The person sees exactly what would be sent before turning it on (learnPreview). Sending is best effort: if the server is asleep (the free
+// plan pauses after a quiet week) or the phone is offline, nothing happens and the app is not affected.
+export const LEARN_KEY=KEY+"__learn";
+const LEARN_URL="https://qkztocsrxhubsljtsjpd.supabase.co/rest/v1/", LEARN_PUBLIC_KEY="sb_publishable_L1ADxl6MJw9fmRjroFsoMA_EUYqwIuD";
+const LEARN_SKIP_CATS=new Set(["gifts","family","finance","other","giftin","familyin","alimony","income","personal"]);
+export function readLearn() { try { const v=JSON.parse(localStorage.getItem(LEARN_KEY)||"null"); return { on:!!(v&&v.on===true), lastDay:v&&typeof v.lastDay==="string"?v.lastDay:"", sent:Array.isArray(v&&v.sent)?v.sent.filter(x=>typeof x==="string").slice(-1000):[], crashSent:v&&typeof v.crashSent==="string"?v.crashSent:"" }; } catch { return { on:false, lastDay:"", sent:[], crashSent:"" }; } }
+export function writeLearn(v) { try { localStorage.setItem(LEARN_KEY,JSON.stringify(v)); return true; } catch { return false; } }
+// A place name as it may leave the phone, or "" when it must not.
+export function cleanPlace(s) {
+  const v=String(s||"").replace(/(\*{2,}|\.{2})\s?\d{2,}/g," ").replace(/\s+/g," ").trim();
+  if (v.length<2 || v.length>40) return "";
+  if (/\d{4,}/.test(v) || /@/.test(v) || /\+?\d[\d\s()-]{6,}\d/.test(v)) return "";                                // card, account or phone numbers, e-mails
+  // addresses; the letter checks work for az and ru letters too (a plain \b only knows English letters)
+  if (/(?<!\p{L})(küç|küçəsi|kuc|street|str\.|st\.|avenue|ул\.?|улица|prospekt|пр-т|mənzil|menzil|кв\.|ev\s*\d|blok)(?!\p{L})/iu.test(v)) return "";
+  // money to or from people
+  if (/^(to|from|для|от|к)\s/iu.test(v) || /(?<!\p{L})(transfer|köçürmə|kocurme|перевод|card to card)(?!\p{L})/iu.test(v)) return "";
+  if (/^[A-ZƏÖÜÇŞĞIİ][a-zəöüçşğıi]+\s+[A-ZƏÖÜÇŞĞIİ][a-zəöüçşğıi]+(\s+(oğlu|qızı))?$/.test(v) && !/\b(market|kafe|cafe|restoran|aptek|shop|store|mall|taxi|bank)\b/i.test(v)) return "";   // "Firstname Lastname"
+  return v;
+}
+export function learnPreview(transactions, opts={}) {
+  const sent=new Set(opts.sent||[]), count=new Map(), pretty=new Map();
+  (transactions||[]).forEach(x=>{
+    if (!x || x.type!=="expense" || LEARN_SKIP_CATS.has(x.category) || x.debtLink || x.loan) return;
+    const place=cleanPlace(x.merchant); if (!place) return;
+    const key=place.toLowerCase()+"|"+x.category+"|"+String(x.subcategory||"");
+    count.set(key,(count.get(key)||0)+1); if (!pretty.has(key)) pretty.set(key,{ place, category:x.category, subcategory:String(x.subcategory||"").slice(0,40) });
+  });
+  const places=[...count.entries()].filter(([k,n])=>n>=2 && !sent.has(k)).map(([k])=>({ key:k, ...pretty.get(k) })).slice(0,50);
+  const crashes=(Array.isArray(opts.crashLog)?opts.crashLog:[]).filter(c=>c && typeof c.at==="string" && c.at>(opts.crashSent||"")).slice(-5)
+    .map(c=>({ at:c.at, screen:"", message:String(c.message||"unknown").replace(/(["'`]).*?\1/g,"\"…\"").replace(/\d{4,}/g,"…").slice(0,200) }));
+  return { places, crashes, ping:{ lang:opts.lang||"en", app_version:String(opts.version||"").slice(0,40), platform:opts.platform==="android"?"android":"web" } };
+}
+export function readCrashLog() { try { const p=JSON.parse(localStorage.getItem(CRASH_LOG_KEY)||"[]"); return Array.isArray(p)?p.filter(isPlainObject):[]; } catch { return []; } }
+// Sends one day's rows. Returns true only when every part was accepted. fetchFn is the browser's fetch (a stand-in in tests).
+export async function sendLearning(preview, fetchFn=(typeof fetch!=="undefined"?fetch:null)) {
+  if (!fetchFn) return false;
+  const post=(table,rows)=>rows.length ? fetchFn(LEARN_URL+table,{ method:"POST", headers:{ apikey:LEARN_PUBLIC_KEY, Authorization:"Bearer "+LEARN_PUBLIC_KEY, "Content-Type":"application/json", Prefer:"return=minimal" }, body:JSON.stringify(rows) }).then(r=>!!r && r.ok) : Promise.resolve(true);
+  const p=preview, lang=p.ping.lang, v=p.ping.app_version;
+  try {
+    const ok=await Promise.all([
+      post("usage_pings",[p.ping]),
+      post("place_reports",p.places.map(x=>({ place:x.place, category:x.category, subcategory:x.subcategory, lang, app_version:v }))),
+      post("crash_reports",p.crashes.map(c=>({ screen:c.screen, message:c.message, lang, app_version:v }))),
+    ]);
+    return ok.every(Boolean);
+  } catch { return false; }
+}
+
 // ─── SVG icon system ──────────────────────────────────────────────────────────
 const ICONS = {
   food:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v7"/><path d="M7 2v7"/><path d="M10 2v7"/><path d="M4 7a3 3 0 0 0 6 0"/><path d="M7 10v12"/><path d="M17 2c-2.2 2-3 4.5-3 7v2h6V9c0-2.5-.8-5-3-7Z"/><path d="M17 11v11"/></svg>`,
@@ -4711,6 +4767,9 @@ function AppInner() {
   // Run 30 (Android app only): keep the phone's reminders equal to reminderPlan() whenever the ledger, language, currency or the reminder settings change.
   const [remindTick,setRemindTick]=useState(0);
   useEffect(()=>{ const f=()=>setRemindTick(n=>n+1); window.addEventListener(REMIND_EVENT,f); return ()=>window.removeEventListener(REMIND_EVENT,f); },[]);
+  // Run 69: turning "Help improve the app" on (Settings) sends the first day's rows without waiting for the next start
+  const [learnTick,setLearnTick]=useState(0);
+  useEffect(()=>{ const f=()=>setLearnTick(n=>n+1); window.addEventListener("ledger-learn-changed",f); return ()=>window.removeEventListener("ledger-learn-changed",f); },[]);
   useEffect(()=>{
     if (!remindersAvailable()) return;
     try {
@@ -4719,6 +4778,15 @@ function AppInner() {
       Promise.resolve(window.LedgerNative.reminders.sync({ items, exact:readReminders().exact })).catch(()=>{ /* the shell is unavailable: the ledger is not affected */ });
     } catch { /* same */ }
   },[state.transactions,state.bills,state.currency,state.language,remindTick]);
+  // Run 69: "Help improve the app": nothing at all unless the person turned it on; then at most once a day, with a connection, best effort.
+  useEffect(()=>{
+    const L=readLearn(), day=localDateStr();
+    if (!L.on || L.lastDay===day || (typeof navigator!=="undefined" && navigator.onLine===false)) return;
+    const pv=learnPreview(state.transactions,{ sent:L.sent, crashLog:readCrashLog(), crashSent:L.crashSent, lang:state.language||"en", version:APP_RELEASE, platform:remindersAvailable()?"android":"web" });
+    // what was accepted is remembered even if the screen changed meanwhile, so the same rows are never sent twice
+    sendLearning(pv).then(ok=>{ if (!ok) return; const cur=readLearn();
+      writeLearn({ ...cur, lastDay:day, sent:[...cur.sent,...pv.places.map(p=>p.key)].slice(-1000), crashSent:pv.crashes.length?pv.crashes[pv.crashes.length-1].at:cur.crashSent }); });
+  },[learnTick]);
   // Run 30 (Android app only): long-press shortcuts on the app icon ("Add expense" / "Add income") open the add form.
   useEffect(()=>{
     const nat=window.LedgerNative; if (!nat || typeof nat.onShortcut!=="function") return;
@@ -5463,4 +5531,4 @@ export function calcHelperCards(transactions, budgets, goals, safeToSpend, curre
   // Limit to 4 most impactful cards
   return cards.slice(0, 4);
 }
-
+

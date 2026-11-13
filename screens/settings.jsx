@@ -7,6 +7,8 @@ import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
 import { applyLink, linkCandidates, undoLink } from "../App.jsx";
 import { buildWorkbookSheets, downloadFile, inNativeShell, readBudgetCarry, today as todayStr } from "../App.jsx";   // Run 64
+import { readLearn, writeLearn, learnPreview, readCrashLog } from "../App.jsx";
+// Run 69: the "Help improve the app" card above imports these
 import { buildXlsx } from "../xlsxWrite.js";
 import { APP_RELEASE, accountName, accountRemovalPlan, findDoubleEntries, maskText, offerUndo, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, creditOwed, cleanWorkHours, readWorkHours, writeWorkHours, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
@@ -520,6 +522,35 @@ export function RemindersSettings({ showToast, open, toggle }) {
     </Fold>
   );
 }
+// Run 69: "Help improve the app" (off unless turned on). The card says what is sent and what never is, and shows exactly what THIS phone would
+// send today before anything is switched on.
+export function LearnSettings({ state, showToast }) {
+  const [L,setL]=useState(()=>readLearn());
+  const [show,setShow]=useState(false);
+  const pv=useMemo(()=>learnPreview(state.transactions,{ sent:L.sent, crashLog:readCrashLog(), crashSent:L.crashSent, lang:state.language||"en", version:APP_RELEASE, platform:inNativeShell()?"android":"web" }),[state.transactions,state.language,L]);
+  const flip=()=>{ const next={ ...readLearn(), on:!readLearn().on }; if (!writeLearn(next)) { showToast(t("carry.saveFailed")); return; } setL(readLearn()); try { window.dispatchEvent(new Event("ledger-learn-changed")); } catch {} showToast(t(next.on?"learn.onToast":"learn.offToast")); };
+  return (
+    <div className="card" data-section="learn" style={{marginTop:12}}>
+      <div className="settings-row" style={{alignItems:"flex-start"}}>
+        <div><div className="settings-row-title" id="set-learn" style={{fontWeight:700}}>{t("learn.title")}</div><div className="settings-row-sub" style={{lineHeight:1.5}}>{t("learn.sub")}</div></div>
+        <div className={`toggle-track${L.on?" on":""}`} data-section="learn-toggle" onClick={flip} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(); } }} role="switch" aria-checked={L.on} aria-labelledby="set-learn" tabIndex={0}><div className="toggle-knob"/></div>
+      </div>
+      <div className="list-sub" style={{lineHeight:1.5,marginTop:6}}><strong>{t("learn.sentH")}</strong> {t("learn.sent")}</div>
+      <div className="list-sub" style={{lineHeight:1.5,marginTop:4}}><strong>{t("learn.neverH")}</strong> {t("learn.never")}</div>
+      <button type="button" className="btn btn-sm" data-section="learn-preview-toggle" aria-expanded={show} style={{marginTop:10}} onClick={()=>setShow(s=>!s)}>{t(show?"learn.hidePreview":"learn.showPreview")}</button>
+      <Collapse open={show}>
+        <div data-section="learn-preview" style={{marginTop:8,fontSize:12.5,lineHeight:1.5}}>
+          <div>{t("learn.pvPing",{ lang:pv.ping.lang, version:pv.ping.app_version })}</div>
+          <div style={{marginTop:4,fontWeight:600}}>{tn("learn.pvPlaces",pv.places.length)}</div>
+          {pv.places.slice(0,20).map(p=><div key={p.key} data-section="learn-place" style={{overflowWrap:"anywhere"}}>{p.place} → {catName(p.category)}{p.subcategory?` / ${subName(p.subcategory)}`:""}</div>)}
+          {pv.places.length>20&&<div className="list-sub">{t("learn.pvMore",{ n:pv.places.length-20 })}</div>}
+          <div style={{marginTop:4}}>{tn("learn.pvCrashes",pv.crashes.length)}</div>
+          <div className="list-sub" style={{marginTop:4}}>{t("learn.pvNote")}</div>
+        </div>
+      </Collapse>
+    </div>
+  );
+}
 export function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToast }) {
   const [savingsT,setSavingsT]=useState(String(safeToSpend.savingsTarget||0));
   if (!safeToSpend.enabled) return null;
@@ -709,6 +740,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       </div>
       <ScreenSecurity showToast={showToast}/>
       <WidgetSettings showToast={showToast}/>
+      <LearnSettings state={state} showToast={showToast}/>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupApp")}</div>
       <div className="card list-card" data-section="more-app">
         <ListRow id="how" icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
