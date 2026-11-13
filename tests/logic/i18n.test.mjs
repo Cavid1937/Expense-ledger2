@@ -37,11 +37,12 @@ const nBad = keys.filter((k) => !k.startsWith("unit.") && LANGS.some((l) => { co
 ok(nBad.length === 0, "every plural form for counts other than one shows the number {n}", nBad);
 const cyr = /[Ѐ-ӿ]/, latin = /[A-Za-zƏəĞğİıÖöŞşÜüÇç]/;
 const ruNoCyr = keys.filter((k) => forms(MESSAGES[k].ru).some((s) => !cyr.test(s.replace(/\{\w+\}/g, "")) && latin.test(s.replace(/\{\w+\}/g, ""))));
-const ruAllow = ["common.ok", "sub.Metro", "an.median"].filter((k) => keys.includes(k));
+// Run 75: report.heading is only the app's name and the month ("Expense Ledger: {month}")
+const ruAllow = ["common.ok", "sub.Metro", "an.median", "report.heading"].filter((k) => keys.includes(k));
 ok(ruNoCyr.filter((k) => !ruAllow.includes(k)).length === 0, "Russian text is written in Cyrillic (no English left in the ru column)", ruNoCyr);
 ok(keys.every((k) => forms(MESSAGES[k].az).every((s) => !cyr.test(s))), "Azerbaijani text uses the Latin alphabet (no Cyrillic)");
 const sameAsEn = keys.filter((k) => forms(MESSAGES[k].az).join("|") === forms(MESSAGES[k].en).join("|") && /[a-z]{3}/.test(forms(MESSAGES[k].en).join("")));
-const azAllow = ["sub.Metro", "sub.Internet", "an.median", "sub.Visa", "fx.line", "fx.ownLabel", "tidy.row"];   // Run 58: tidy.row is only "{from} → {to}"   // Run 39: fx.* are only placeholders and symbols ("= {base} · 1 {cur} = {rate} ₼")
+const azAllow = ["sub.Metro", "sub.Internet", "an.median", "sub.Visa", "fx.line", "fx.ownLabel", "tidy.row", "report.heading"];   // Run 58: tidy.row is only "{from} → {to}"   // Run 39: fx.* are only placeholders and symbols ("= {base} · 1 {cur} = {rate} ₼")
 ok(sameAsEn.filter((k) => !azAllow.includes(k)).length === 0, "no Azerbaijani entry is just a copy of the English", sameAsEn);
 ok(/[əğıİöşüç]/.test(Object.values(MESSAGES).map((e) => forms(e.az).join(" ")).join(" ")) && /[ƏəĞğIıİiÖöŞşÜüÇç]/.test(I18N_SRC), "Azerbaijani letters (ə ğ ı İ ö ş ü ç) are present and the file is UTF-8");
 

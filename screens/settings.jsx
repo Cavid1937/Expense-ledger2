@@ -512,7 +512,7 @@ export function RemindersSettings({ showToast, open, toggle }) {
   // Run 66 (plan: myUNEC-style settings): one main switch over all reminders; turning it off keeps the choices below for later
   const flipAll=()=>save({ enabled:!readReminders().enabled });
   return (
-    <Fold id="reminders" icon="calendar" title={t("remind.title")} sub={(()=>{ if (!p.enabled) return t("remind.allOff"); const n=["bills","recurring","daily"].filter(k=>p[k]).length; return n?t("st.sumRem",{n}):t("st.sumRemNone"); })()} open={open.reminders} onToggle={()=>toggle("reminders")}>
+    <Fold id="reminders" icon="calendar" title={t("remind.title")} sub={(()=>{ if (!p.enabled) return t("remind.allOff"); const n=["bills","recurring","daily","report"].filter(k=>p[k]).length; return n?t("st.sumRem",{n}):t("st.sumRemNone"); })()} open={open.reminders} onToggle={()=>toggle("reminders")}>
       <div className="card st-card" data-section="st-reminders">
         <div className="settings-row">
           <div><div className="settings-row-title" id="set-rem-master" style={{fontWeight:700}}>{t("remind.master")}</div><div className="settings-row-sub">{t(p.enabled?"remind.masterOn":"remind.masterOff")}</div></div>
@@ -528,7 +528,7 @@ export function RemindersSettings({ showToast, open, toggle }) {
           <div><div className="settings-row-title" id="set-rem-time">{t("remind.time")}</div></div>
           <input className="field-input" type="time" value={p.time} aria-labelledby="set-rem-time" data-section="rem-time" onChange={e=>{ if (e.target.value) save({ time:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
         </div>
-        <Row k="daily" title={t("remind.daily")} sub={t("remind.dailySub",{ time:p.dailyTime })}/>
+        <Row k="daily" title={t("remind.daily")} sub={t("remind.dailySub",{ time:p.dailyTime })}/><Row k="report" title={t("remind.report")} sub={t("remind.reportSub",{ time:p.time })}/>
         <Collapse open={p.daily} id="rem-dtime-wrap">
           <div className="settings-row">
             <div><div className="settings-row-title" id="set-rem-dtime">{t("remind.dailyTime")}</div></div>

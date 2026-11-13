@@ -4042,13 +4042,14 @@ const REMIND_EVENT="ledger-reminders-changed";
 // Run 40 (owner: "it strictly sends at 21:00; I set the time and it didn't come then"): the daily check-in has its own time (dailyTime);
 // "time" stays the time for bill and recurring reminders. A saved file without dailyTime keeps 21:00, exactly as before.
 // Run 66: enabled = the main switch over all reminders (on unless the person turns it off; older saved choices have no field and stay on)
-export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, time:"09:00", dailyTime:"21:00", hideAmount:false, exact:false, enabled:true });   // Run 38: exact = "remind at the exact time"
+export const REMIND_DEFAULT=Object.freeze({ bills:false, recurring:false, daily:false, report:false, time:"09:00", dailyTime:"21:00", hideAmount:false, exact:false, enabled:true });   // Run 38: exact = "remind at the exact time"
 const HHMM=/^([01]\d|2[0-3]):[0-5]\d$/;
 export function cleanReminderPrefs(raw) {
   const r=raw && typeof raw==="object" ? raw : {};
   const time=typeof r.time==="string" && HHMM.test(r.time) ? r.time : REMIND_DEFAULT.time;
   const dailyTime=typeof r.dailyTime==="string" && HHMM.test(r.dailyTime) ? r.dailyTime : REMIND_DEFAULT.dailyTime;
-  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, time, dailyTime, hideAmount:r.hideAmount===true, exact:r.exact===true, enabled:r.enabled!==false };
+  // Run 75: report = "your monthly summary is ready" on the 1st (off unless chosen)
+  return { bills:r.bills===true, recurring:r.recurring===true, daily:r.daily===true, report:r.report===true, time, dailyTime, hideAmount:r.hideAmount===true, exact:r.exact===true, enabled:r.enabled!==false };
 }
 export function readReminders() { try { return cleanReminderPrefs(JSON.parse(localStorage.getItem(REMIND_KEY)||"null")); } catch { return { ...REMIND_DEFAULT }; } }
 export function writeReminders(p) {
@@ -4087,14 +4088,46 @@ export function reminderPlan(schedules, transactions, prefs, now=new Date(), opt
       push("daily","d",ds,new Date(d.getFullYear(),d.getMonth(),d.getDate(),dh,dm,0,0),{});
     }
   }
+  // Run 75: on the 1st of the coming months, at the reminder time: "Your summary of last month is ready" (no amounts on the lock screen)
+  if (p.report) for (let i=0;i<=2;i++) { const ds=localDateStr(new Date(now.getFullYear(),now.getMonth()+i,1)); push("report","m",ds,at(ds,hh,mm),{}); }
   return out.sort((a,b)=>a.atMs-b.atMs || a.id-b.id).slice(0,cap);
 }
 // The text of one notification (shown on the lock screen). With "hide amounts" on, or the app's own privacy mode, no amount is written.
 export function reminderMessage(item, prefs, currency) {
   if (item.kind==="daily") return { title:t("remind.dailyTitle"), body:t("remind.dailyBody") };
+  if (item.kind==="report") return { title:t("remind.reportTitle"), body:t("remind.reportBody") };
   const hide=cleanReminderPrefs(prefs).hideAmount || PRIVACY;
   const name=hide ? t("remind.aPayment") : item.name;
   return { title:t(item.kind==="bill"?"remind.billTitle":"remind.recurTitle",{name}), body:hide ? t("remind.bodyHidden") : t("remind.body",{amount:fmt(item.amount,currency)}) };
+}
+// ─── Run 75: monthly summary, built on the phone (owner chose this over a server e-mail: no data leaves the phone unless the person shares it)
+// The figures use the app's own rules: earned income and refunds in, spending out (calcMonthSummary); budgets over their limit
+// (calcBudgetStatus); goals as they stand. mon = "YYYY-MM" (normally last month). Amounts in whole cents, then back to money.
+export function monthReport(state, mon, now=new Date()) {
+  const tx=(state&&Array.isArray(state.transactions)?state.transactions:[]).filter(x=>x&&typeof x.date==="string");
+  const [y,m]=mon.split("-").map(Number), prv=localMonthStr(new Date(y,m-2,1)), endOfMon=new Date(y,m,0,23,59,59);
+  const asOf=now<endOfMon ? now : endOfMon;
+  const s=calcMonthSummary(tx,mon,prv,asOf);
+  const cs=calcCategorySpend(tx,mon,asOf), top=Object.entries(cs).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([cat,amt])=>({ cat, amt }));
+  const bs=calcBudgetStatus((state&&state.budgets)||{},cs,mon,asOf);
+  const over=(bs||[]).filter(b=>b && b.over).map(b=>({ cat:b.catId, spent:b.spent, limit:b.limit }));
+  const goals=((state&&state.goals)||[]).filter(g=>g&&g.name).slice(0,5).map(g=>({ name:g.name, saved:Number(g.saved)||0, target:Number(g.target)||0 }));
+  const count=tx.filter(x=>x.date.startsWith(mon)).length;
+  return { mon, earned:s.curInc, refunds:s.curRefundIn, spent:s.curExp, net:s.curNet, prevSpent:s.prevFullExp, top, over, goals, count };
+}
+// The same summary as plain text, in the app's language, for sharing or e-mailing to oneself.
+export function monthReportText(r, currency, catLabel=(c)=>catName(c)) {
+  const L=[t("report.heading",{ month:monthName(r.mon) }), ""];
+  L.push(t("report.earned",{ amount:fmt(r.earned,currency) }));
+  if (r.refunds>0) L.push(t("report.refunds",{ amount:fmt(r.refunds,currency) }));
+  L.push(t("report.spent",{ amount:fmt(r.spent,currency) }));
+  L.push(t(r.net>=0?"report.surplus":"report.deficit",{ amount:fmt(Math.abs(r.net),currency) }));
+  if (r.prevSpent>0) { const d=Math.round((r.spent-r.prevSpent)*100)/100; L.push(t(d>0?"report.moreThan":d<0?"report.lessThan":"report.sameAs",{ amount:fmt(Math.abs(d),currency) })); }
+  if (r.top.length) { L.push("", t("report.top")); r.top.forEach(x=>L.push(`• ${catLabel(x.cat)}: ${fmt(x.amt,currency)}`)); }
+  if (r.over.length) { L.push("", t("report.over")); r.over.forEach(x=>L.push(`• ${catLabel(x.cat)}: ${fmt(x.spent,currency)} / ${fmt(x.limit,currency)}`)); }
+  if (r.goals.length) { L.push("", t("report.goals")); r.goals.forEach(g=>L.push(`• ${g.name}: ${fmt(g.saved,currency)} / ${fmt(g.target,currency)}`)); }
+  L.push("", tn("report.count",r.count), t("report.footer"));
+  return L.join("\n");
 }
 // ─── Run 69: "Help improve the app" (owner: only if the app stays free; plan 12 Nov section A) ─────────────────────────────────────────
 // OFF unless the person turns it on. When on, at most once a day and only with a connection, the app ADDS three kinds of rows to its own
@@ -4872,7 +4905,7 @@ function AppInner() {
     if (!remindersAvailable()) return;
     try {
       const prefs=readReminders(), tx=state.transactions||[], bl=state.bills||[], cur=state.currency;
-      const items=(prefs.bills||prefs.recurring||prefs.daily) ? reminderPlan(buildSchedules(tx,bl),tx,prefs,new Date()).map(i=>({ ...i, ...reminderMessage(i,prefs,cur) })) : [];
+      const items=(prefs.bills||prefs.recurring||prefs.daily||prefs.report) ? reminderPlan(buildSchedules(tx,bl),tx,prefs,new Date()).map(i=>({ ...i, ...reminderMessage(i,prefs,cur) })) : [];
       Promise.resolve(window.LedgerNative.reminders.sync({ items, exact:readReminders().exact })).catch(()=>{ /* the shell is unavailable: the ledger is not affected */ });
     } catch { /* same */ }
   },[state.transactions,state.bills,state.currency,state.language,remindTick]);
@@ -5325,7 +5358,7 @@ function AppInner() {
         </header>
 
         <main className={(SUBPAGE_PARENT[tab]?"page page-sub":"page")+(pageOut?" page-out":"")+(pfCount.current>0?(pfCount.current%2?" pf-a":" pf-b"):"")} key={tabKey}>
-          {tab==="home"      && <HomePage transactions={spendTxns} accountTxns={transactions} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+          {tab==="home"      && <HomePage showToast={showToast} transactions={spendTxns} accountTxns={transactions} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
             rollover={{ offer:readLeftoverGoal() ? rolloverOffer(spendTxns,goals,rolloverSeen) : null /* Run 59: only when turned on (Budgets & Goals > Goals) */, onSkip:()=>{ const m=rolloverOffer(spendTxns,goals,rolloverSeen)?.month; if (m) { writeRolloverSeen(m); setRolloverSeen(m); } },
               onApply:(g)=>{ const o=rolloverOffer(spendTxns,goals,rolloverSeen); if (!o) return; setState(s=>({...s,goals:applyRollover(s.goals,g.id,g.amount)})); writeRolloverSeen(o.month); setRolloverSeen(o.month); showToast(t("rollover.done",{ amount:fmt(g.amount,currency), goal:g.name||t("rollover.goalFallback") })); } }}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}

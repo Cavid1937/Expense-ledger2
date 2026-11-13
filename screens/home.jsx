@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useState } from "react";
+// Run 75: monthly summary
+import { MonthReportCard } from "./report.jsx";
 import { t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
@@ -139,7 +141,7 @@ export function WelcomeCard({ show }) {
   );
 }
 
-export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
+export function HomePage({ showToast, transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,curIn,curNet,curRefundIn,curSavOut,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -164,6 +166,8 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
   return (
     <div>
       <WelcomeCard show={!(accountTxns||transactions).length}/>
+      {/* Run 75: last month's summary, in the first week of a month */}
+      <MonthReportCard transactions={transactions} budgets={budgets} goals={goals} currency={currency} showToast={showToast}/>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
       <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={accountsHeld(accountTxns||transactions)}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
