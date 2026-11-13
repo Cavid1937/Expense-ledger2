@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+// Run 75: the app's own date and option pickers
+import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates, tidyPlan, applyTidy, undoTidy, TIDY_KEY, subName, readBudgetCarry, writeBudgetCarry, budgetCarried, readLeftoverGoal, writeLeftoverGoal, readRolloverSeen, goalAddMoney, goalSetTotal, goalHistory, daysBetween, parseLocalDate, today } from "../App.jsx";import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
@@ -74,7 +76,7 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
       </div>
       <div className="field-row" style={{marginBottom:10}}>
         <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-monthly">{t("set.monthlyContribution")}</label><input id="goal-monthly" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.optionalPh")} value={goalMonthly} onChange={e=>setGoalMonthly(cleanMoneyText(e.target.value))}/></div>
-        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-date">{t("set.targetDate")}</label><input id="goal-date" className="field-input" lang={locale()} type="date" value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
+        <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="goal-date">{t("set.targetDate")}</label><PickDate id="goal-date" className="field-input" lang={locale()} value={goalDate} onChange={e=>setGoalDate(e.target.value)}/></div>
       </div>
       <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={saveGoal}>{t("set.saveGoal")}</button>
     </div>
@@ -109,9 +111,9 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
             <div className="card-title" style={{marginBottom:10}}>{t("goals.addBudget")}</div>
             <div className="field-row" style={{marginBottom:10}}>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-cat">{t("add.category")}</label>
-                <select id="nb-cat" className="field-input field-select" value={nb.catId} onChange={e=>setNewBudget(b=>({...b,catId:e.target.value}))}>
+                <PickSelect id="nb-cat" className="field-input field-select" value={nb.catId} onChange={e=>setNewBudget(b=>({...b,catId:e.target.value}))}>
                   {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}{budgets[c.id]>0?` (${fmt(budgets[c.id],currency)})`:""}</option>)}
-                </select></div>
+                </PickSelect></div>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="nb-val">{t("set.monthlyLimit")}</label>
                 <input id="nb-val" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={nb.val} onChange={e=>setNewBudget(b=>({...b,val:cleanMoneyText(e.target.value)}))}/></div>
             </div>

@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useState } from "react";
+// Run 75: the app's own date and option pickers
+import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, saveTextFile } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
@@ -181,7 +183,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-name">{t("debt.person")}</label><input id="debt-name" name="name" className="field-input" value={dForm.name} maxLength={60} onChange={upd(setDForm)}/></div>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-amt">{t("debt.amount")}</label><input id="debt-amt" name="amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={dForm.amt} onChange={e=>setDForm(f=>({...f,amt:cleanMoneyText(e.target.value)}))}/></div>
             </div>
-            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-due">{t("debt.due")}</label><input id="debt-due" name="due" className="field-input" lang={locale()} type="date" value={dForm.due} onChange={upd(setDForm)}/></div>
+            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-due">{t("debt.due")}</label><PickDate id="debt-due" name="due" className="field-input" lang={locale()} value={dForm.due} onChange={upd(setDForm)}/></div>
             {dMsg&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginBottom:8}}>{dMsg}</div>}
             <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="debt-save" onClick={addDebt}>{t("common.save")}</button>
           </div>
@@ -205,7 +207,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
                   <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-name">{t("debt.person")}</label><input id="debt-edit-name" className="field-input" value={de.name} maxLength={60} onChange={e=>setDEdit({...de,name:e.target.value})}/></div>
                   <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="debt-edit-amt">{t("debt.amount")}</label><input id="debt-edit-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" value={de.amt} onChange={e=>setDEdit({...de,amt:cleanMoneyText(e.target.value)})}/></div>
                 </div>
-                <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-edit-due">{t("debt.due")}</label><input id="debt-edit-due" className="field-input" lang={locale()} type="date" value={de.due} onChange={e=>setDEdit({...de,due:e.target.value})}/></div>
+                <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="debt-edit-due">{t("debt.due")}</label><PickDate id="debt-edit-due" className="field-input" lang={locale()} value={de.due} onChange={e=>setDEdit({...de,due:e.target.value})}/></div>
                 <div style={{display:"flex",gap:8}}>
                   <button className="btn btn-ghost" style={{flex:1}} onClick={()=>setDEdit(null)}>{t("common.cancel")}</button>
                   <button className="btn btn-primary" style={{flex:1}} data-section="debt-edit-save" onClick={saveDebtEdit}>{t("common.save")}</button>
@@ -254,16 +256,16 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
           <div className="card" data-section="loan-form">
             <div className="field-row" style={{marginBottom:10}}>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-lender">{t("loan.lender")}</label><input id="loan-lender" name="lender" className="field-input" value={lForm.lender} maxLength={60} onChange={upd(setLForm)}/></div>
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-kind">{t("loan.kind")}</label><select id="loan-kind" name="kind" className="field-input field-select" value={lForm.kind} onChange={upd(setLForm)}>{LOAN_KINDS.map(k=><option key={k} value={k}>{t(LOAN_KIND_KEY[k])}</option>)}</select></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-kind">{t("loan.kind")}</label><PickSelect id="loan-kind" name="kind" className="field-input field-select" value={lForm.kind} onChange={upd(setLForm)}>{LOAN_KINDS.map(k=><option key={k} value={k}>{t(LOAN_KIND_KEY[k])}</option>)}</PickSelect></div>
             </div>
             <div className="field-row" style={{marginBottom:10}}>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-amt">{t("loan.amount")}</label><input id="loan-amt" name="amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={lForm.amt} onChange={e=>setLForm(f=>({...f,amt:cleanMoneyText(e.target.value)}))}/></div>
               <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-months">{t("loan.months")}</label><input id="loan-months" name="months" className="field-input" type="text" inputMode="numeric" autoComplete="off" value={lForm.months} onChange={e=>setLForm(f=>({...f,months:e.target.value.replace(/[^0-9]/g,"")}))}/></div>
             </div>
-            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-type">{t("loan.rateType")}</label><select id="loan-type" name="type" className="field-input field-select" value={lForm.type} onChange={upd(setLForm)}>{LOAN_RATE_TYPES.map(k=><option key={k} value={k}>{t(LOAN_RT_KEY[k])}</option>)}</select></div>
+            <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-type">{t("loan.rateType")}</label><PickSelect id="loan-type" name="type" className="field-input field-select" value={lForm.type} onChange={upd(setLForm)}>{LOAN_RATE_TYPES.map(k=><option key={k} value={k}>{t(LOAN_RT_KEY[k])}</option>)}</PickSelect></div>
             <div className="field-row" style={{marginBottom:10}}>
               {lForm.type!=="none"&&<div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-rate">{t("loan.rate")}</label><input id="loan-rate" name="rate" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0" value={lForm.rate} onChange={e=>setLForm(f=>({...f,rate:cleanMoneyText(e.target.value)}))}/></div>}
-              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-first">{t("loan.first")}</label><input id="loan-first" name="first" className="field-input" lang={locale()} type="date" value={lForm.first} onChange={upd(setLForm)}/></div>
+              <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="loan-first">{t("loan.first")}</label><PickDate id="loan-first" name="first" className="field-input" lang={locale()} value={lForm.first} onChange={upd(setLForm)}/></div>
             </div>
             <div className="field" style={{marginBottom:10}}><label className="field-lbl" htmlFor="loan-bank">{t("loan.bank")}</label><input id="loan-bank" name="bank" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={lForm.bank} onChange={e=>setLForm(f=>({...f,bank:cleanMoneyText(e.target.value)}))}/><div className="list-sub" style={{marginTop:4}}>{t("loan.bankHint")}</div></div>
             {lMsg&&<div role="alert" className="list-sub" style={{color:"var(--neg)",marginBottom:8}}>{lMsg}</div>}

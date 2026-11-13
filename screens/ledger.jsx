@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
+// Run 75: the app's own date and option pickers
+import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { pickerCats, readCatPrefs, cleanReimb, reimbOwedMap, reimbStatus } from "../App.jsx";
 import { accountsMap, paidFromMatch, paidFromOptions, paidKindName, readAccounts } from "../App.jsx";
@@ -232,8 +234,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
       </Collapse>
       <Collapse open={!!showDates} id="tx-dates">
         <div className="date-inputs">
-          <label className="date-input-wrap"><span className="date-lbl">{t("ledger.from")}</span><input type="date" lang={locale()} className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
-          <label className="date-input-wrap"><span className="date-lbl">{t("ledger.to")}</span><input type="date" lang={locale()} className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
+          <label className="date-input-wrap"><span className="date-lbl">{t("ledger.from")}</span><PickDate lang={locale()} className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
+          <label className="date-input-wrap"><span className="date-lbl">{t("ledger.to")}</span><PickDate lang={locale()} className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
         </div>
       </Collapse>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,margin:"2px 2px 12px"}}>
@@ -336,9 +338,9 @@ export function SplitPanel({ txn, currency, onSplit }) {
           <div className="list-sub" style={{marginBottom:8}}>{t("split.sub",{ total:fmt(txn.amount,currency) })}</div>
           {parts.map((p,i)=>(
             <div key={i} style={{display:"flex",gap:8,marginBottom:8}}>
-              <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("split.partCat",{ n:i+1 })} value={p.category} onChange={e=>set(i,"category",e.target.value)}>
+              <PickSelect className="field-input" style={{flex:1,minWidth:0}} aria-label={t("split.partCat",{ n:i+1 })} value={p.category} onChange={e=>set(i,"category",e.target.value)}>
                 {sameKind.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}
-              </select>
+              </PickSelect>
               <input className="field-input" style={{width:110}} inputMode="decimal" aria-label={t("split.partAmt",{ n:i+1 })} placeholder="0.00" value={p.amount} onChange={e=>set(i,"amount",e.target.value)}/>
             </div>
           ))}

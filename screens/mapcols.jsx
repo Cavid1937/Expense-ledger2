@@ -2,6 +2,8 @@
 // recognise, the person says which column is the date, what it was, and the amount. A live preview shows what would be read. Nothing is added
 // here: "Continue" opens the usual statement review sheet (counts, choices, Undo).
 import { useMemo, useState } from "react";
+// Run 75: the app's own date and option pickers
+import { PickSelect, PickDate } from "./pickers.jsx";
 import { t, tn } from "../i18n.js";
 import { readMapped } from "../statement.js";
 import { fmt, fmtDate, maskText } from "../App.jsx";
@@ -19,10 +21,10 @@ export function ColumnMapper({ grid, initial, filename, currency, onUse, onCance
   const Pick = ({ id, k, labelKey, optional }) => (
     <div className="field" style={{ marginBottom: 10 }}>
       <label className="field-lbl" htmlFor={id}>{t(labelKey)}</label>
-      <select id={id} data-map={k} className="field-input field-select" value={m[k]} onChange={(e) => set(k, Number(e.target.value))}>
+      <PickSelect id={id} data-map={k} className="field-input field-select" value={m[k]} onChange={(e) => set(k, Number(e.target.value))}>
         {optional ? <option value={-1}>{t("map.none")}</option> : m[k] < 0 && <option value={-1}>{t("map.choose")}</option>}
         {Array.from({ length: width }, (_, c) => <option key={c} value={c}>{label(c)}</option>)}
-      </select>
+      </PickSelect>
     </div>
   );
   const shown = grid.slice(Math.max(0, m.header), Math.max(0, m.header) + 6);
@@ -38,10 +40,10 @@ export function ColumnMapper({ grid, initial, filename, currency, onUse, onCance
       </div>
       <div className="field" style={{ marginBottom: 10 }}>
         <label className="field-lbl" htmlFor="map-header">{t("map.header")}</label>
-        <select id="map-header" data-map="header" className="field-input field-select" value={m.header} onChange={(e) => set("header", Number(e.target.value))}>
+        <PickSelect id="map-header" data-map="header" className="field-input field-select" value={m.header} onChange={(e) => set("header", Number(e.target.value))}>
           <option value={-1}>{t("map.noHeader")}</option>
           {grid.slice(0, 15).map((r, i) => <option key={i} value={i}>{t("map.row", { n: i + 1 })}: {r.filter(Boolean).slice(0, 3).join(" · ").slice(0, 40)}</option>)}
-        </select>
+        </PickSelect>
       </div>
       <Pick id="map-date" k="date" labelKey="map.date"/>
       <Pick id="map-desc" k="desc" labelKey="map.desc" optional/>

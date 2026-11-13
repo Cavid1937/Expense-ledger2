@@ -1,4 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Fragment, Component } from "react";
+// Run 75: the app's own date and option pickers
+import { PickSelect, PickDate } from "./screens/pickers.jsx";
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
 import { readStatement, statementEntries, statementCheck, linesFromText, linesFromGrid, xlsxGrid, gridFromCsv, guessMap, readMapped } from "./statement.js";
 import { readNotifications } from "./notify.js";   // Run 68
@@ -5399,9 +5401,9 @@ function AppInner() {
                       {s.sign&&<div data-st="sign" style={{color:"var(--warn)"}}>{t("st.sign")}</div>}
                       {accs.length>0&&(
                         <label style={{display:"block",marginTop:8}}>{t("st.account")}
-                          <select className="field-input" data-st="account" style={{marginTop:4}} value={o.account} onChange={e=>setStOpt("account",e.target.value)}>
+                          <PickSelect className="field-input" data-st="account" style={{marginTop:4}} value={o.account} onChange={e=>setStOpt("account",e.target.value)}>
                             <option value="">{t("acc.rm.noAccount")}</option>{accs.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
-                          </select>
+                          </PickSelect>
                         </label>)}
                       {s.nTransfer>0&&<label style={row}><input type="checkbox" data-st="transfers" checked={o.transfers} onChange={e=>setStOpt("transfers",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.transfers",s.nTransfer)}</span></label>}
                       {s.nCash>0&&<label style={row}><input type="checkbox" data-st="cash" checked={!!o.cash} onChange={e=>setStOpt("cash",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.cash",s.nCash)}</span></label>}

@@ -1895,6 +1895,16 @@ export const MESSAGES = {
   "help.anomalyTitle":  { en: "Unusual Entry", az: "Qeyri-adi əməliyyat", ru: "Необычная операция" },
   "help.anomalyText":   { en: "{who} on {date}: {amount} — {reason}.", az: "{who}, {date}: {amount} — {reason}.", ru: "{who}, {date}: {amount} — {reason}." },
   "help.anomalyImpact": { en: "This is significantly above your normal spend for {cat}. Was this expected?", az: "Bu, «{cat}» üçün adi xərcinizdən xeyli çoxdur. Bu gözlənilən idimi?", ru: "Это заметно больше ваших обычных расходов в категории «{cat}». Вы этого ожидали?" },
+  // Run 75: the app's own date and option pickers
+  "pick.choose":    { en: "Choose", az: "Seçin", ru: "Выберите" },
+  "pick.date":      { en: "Choose a date", az: "Tarix seçin", ru: "Выберите дату" },
+  "pick.close":     { en: "Close", az: "Bağla", ru: "Закрыть" },
+  "pick.today":     { en: "Today", az: "Bu gün", ru: "Сегодня" },
+  "pick.yesterday": { en: "Yesterday", az: "Dünən", ru: "Вчера" },
+  "pick.clear":     { en: "No date", az: "Tarixsiz", ru: "Без даты" },
+  "pick.none":      { en: "No date", az: "Tarix yoxdur", ru: "Дата не выбрана" },
+  "pick.prev":      { en: "Previous month", az: "Əvvəlki ay", ru: "Предыдущий месяц" },
+  "pick.next":      { en: "Next month", az: "Növbəti ay", ru: "Следующий месяц" },
   // Run 74: optional Google Drive backup
   "drive.title":      { en: "Google Drive backup", az: "Google Drive ehtiyat nüsxəsi", ru: "Резервная копия в Google Drive" },
   "drive.sub":        { en: "Keeps a copy of your data in your own Google Drive, so a lost or reset phone does not mean lost records.", az: "Məlumatlarınızın surətini öz Google Drive-ınızda saxlayır ki, telefon itəndə və ya sıfırlananda qeydlər itməsin.", ru: "Хранит копию ваших данных в вашем Google Drive, чтобы потеря или сброс телефона не означали потерю записей." },

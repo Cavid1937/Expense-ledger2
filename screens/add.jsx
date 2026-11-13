@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useMemo, useRef, useState } from "react";
+// Run 75: the app's own date and option pickers
+import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo, catHint } from "../App.jsx";
 import { Collapse, Reveal } from "./motion.jsx";
@@ -39,15 +41,15 @@ export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast
         <div className="field-row">
           <div className="field"><label className="field-lbl" htmlFor="bill-amount">{t("add.amount")} ({currency})</label><input id="bill-amount" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={amount} onChange={e=>setAmount(cleanMoneyText(e.target.value))}/></div>
           <div className="field"><label className="field-lbl" htmlFor="bill-freq">{t("add.frequency")}</label>
-            <select id="bill-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)}>{["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}</select></div>
+            <PickSelect id="bill-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)}>{["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}</PickSelect></div>
         </div>
         <div className="field-row">
           <div className="field"><label className="field-lbl" htmlFor="bill-cat">{t("add.category")}</label>
-            <select id="bill-cat" className="field-input field-select" value={cats.some(c=>c.id===category)?category:cats[0].id} onChange={e=>setCategory(e.target.value)}>{cats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</select></div>
-          <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><input id="bill-date" className="field-input" type="date" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/>
+            <PickSelect id="bill-cat" className="field-input field-select" value={cats.some(c=>c.id===category)?category:cats[0].id} onChange={e=>setCategory(e.target.value)}>{cats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</PickSelect></div>
+          <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><PickDate id="bill-date" className="field-input" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/>
             {isValidDateStr(anchor)&&<div className="list-sub" style={{marginTop:4}}>{fmtLongDate(parseLocalDate(anchor))}</div>}</div>
         </div>
-        <div className="field"><label className="field-lbl" htmlFor="bill-end">{t("bill.endDate")}</label><input id="bill-end" className="field-input" type="date" lang={locale()} value={endDate} min={isValidDateStr(anchor)?anchor:undefined} onChange={e=>setEndDate(e.target.value)}/>
+        <div className="field"><label className="field-lbl" htmlFor="bill-end">{t("bill.endDate")}</label><PickDate id="bill-end" className="field-input" lang={locale()} value={endDate} min={isValidDateStr(anchor)?anchor:undefined} onChange={e=>setEndDate(e.target.value)}/>
           <div className="list-sub" style={{marginTop:4}}>{t("bill.endDateSub")}</div></div>
         {!isNew&&(
           <div className="settings-row">
@@ -393,10 +395,10 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           <Collapse open={type==="income"&&catId==="refund"}>
             <div className="field" data-section="add-refund-for" style={{marginTop:8,marginBottom:0}}>
               <label className="field-lbl" htmlFor="txn-refund-for">{t("add.refundFor")} {optional}</label>
-              <select id="txn-refund-for" className="field-input field-select" value={expCats.some(c=>c.id===refundFor)?refundFor:""} onChange={e=>setRefundFor(e.target.value)}>
+              <PickSelect id="txn-refund-for" className="field-input field-select" value={expCats.some(c=>c.id===refundFor)?refundFor:""} onChange={e=>setRefundFor(e.target.value)}>
                 <option value="">{t("add.refundForNone")}</option>
                 {expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}
-              </select>
+              </PickSelect>
             </div>
           </Collapse>
           {(selectedCat?.subs?.length>0 || (mySubs[catId]||[]).length>0 || selectedCat)&&(
@@ -450,7 +452,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
         <div id="add-more-body" data-section="add-more" className={"keep-collapse"+(more?" is-open":"")} aria-hidden={more?undefined:true}><div className="keep-collapse-in">
         <div className="field">
           <label className="field-lbl" htmlFor="txn-date">{t("add.date")}</label>
-          <input id="txn-date" className="field-input" lang={locale()} type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+          <PickDate id="txn-date" className="field-input" lang={locale()} value={date} onChange={e=>setDate(e.target.value)}/>
           {/* Run 7, V3: the date box is the phone's own control and follows the phone's language, not the app's, so the chosen date is
               repeated here in the interface language. Display only: the stored value stays YYYY-MM-DD. */}
           {isValidDateStr(date)&&<div className="date-readout" style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmtLongDate(parseLocalDate(date))}</div>}
@@ -539,18 +541,18 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
             {!bills.some(b=>b.id===billChoice&&b.type===type)&&(
               <div className="field" style={{marginTop:8,marginBottom:0}}>
                 <label className="field-lbl" htmlFor="txn-freq">{t("add.frequency")}</label>
-                <select id="txn-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)} aria-label={t("add.frequency")}>
+                <PickSelect id="txn-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)} aria-label={t("add.frequency")}>
                   {["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}
-                </select>
+                </PickSelect>
               </div>
             )}
             {(!hasInferred||bills.some(b=>b.type===type))&&(
               <div className="field" style={{marginTop:10,marginBottom:0}}>
                 <label className="field-lbl" htmlFor="txn-bill">{t("bill.which")}</label>
-                <select id="txn-bill" className="field-input field-select bill-choice" value={bills.some(b=>b.id===billChoice&&b.type===type)?billChoice:(hasInferred?"auto":"new")} onChange={e=>setBillChoice(e.target.value)}>
+                <PickSelect id="txn-bill" className="field-input field-select bill-choice" value={bills.some(b=>b.id===billChoice&&b.type===type)?billChoice:(hasInferred?"auto":"new")} onChange={e=>setBillChoice(e.target.value)}>
                   {hasInferred ? <option value="auto">{t("bill.autoGroup")}</option> : <option value="new">{t("bill.newFromEntry")}</option>}
                   {bills.filter(b=>b.type===type).map(b=><option key={b.id} value={b.id}>{maskText(b.name)} · {fmt(b.amount,currency)} · {t("freq."+b.freq)}</option>)}
-                </select>
+                </PickSelect>
               </div>
             )}
             {recur&&hasInferred&&<div className="list-sub" style={{marginTop:8,lineHeight:1.45}}>{t("bill.convertFirst")}</div>}

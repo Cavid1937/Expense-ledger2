@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+// Run 75: the app's own date and option pickers
+import { PickSelect, PickDate } from "./pickers.jsx";
 import { Collapse, EditSwap, motionOff, useBackStep, useFlip, useLeave } from "./motion.jsx";
 import { LAUNCH_GLYPH } from "./launch.js";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
@@ -278,10 +280,10 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
               {p.entries===0&&p.transfers===0&&<div data-rm="unused">{t("acc.rm.unused")}</div>}
               {p.entries>0&&canMove&&(<>
                 <div data-rm="entries" style={{marginTop:4}}>{tn("acc.rm.entries",p.entries)}</div>
-                <select className="field-input" data-rm="move-to" aria-label={t("acc.rm.moveTo")} style={{marginTop:6}} value={removing.moveTo} onChange={e=>setRemoving({ id:a.id, moveTo:e.target.value })}>
+                <PickSelect className="field-input" data-rm="move-to" aria-label={t("acc.rm.moveTo")} style={{marginTop:6}} value={removing.moveTo} onChange={e=>setRemoving({ id:a.id, moveTo:e.target.value })}>
                   <option value="">{t("acc.rm.noAccount")}</option>
                   {others.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
-                </select>
+                </PickSelect>
               </>)}
               {p.entries>0&&!canMove&&<div data-rm="in-use">{t("acc.inUse")}</div>}
               {p.transfers>0&&<div data-rm="transfers" style={{marginTop:4,color:"var(--warn)"}}>{tn("acc.rm.transfers",p.transfers)}</div>}
@@ -331,8 +333,8 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
           <div className="settings-section-lbl">{t("acc.transferTitle")}</div>
           <div className="list-sub" style={{marginBottom:8}}>{t("acc.transferSub")}</div>
           <div style={{display:"flex",gap:8,marginBottom:8}}>
-            <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("acc.from")} value={from||shown[0].id} onChange={e=>setFrom(e.target.value)}>{shown.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
-            <select className="field-input" style={{flex:1,minWidth:0}} aria-label={t("acc.to")} value={to||shown[1].id} onChange={e=>setTo(e.target.value)}>{shown.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select>
+            <PickSelect className="field-input" style={{flex:1,minWidth:0}} aria-label={t("acc.from")} value={from||shown[0].id} onChange={e=>setFrom(e.target.value)}>{shown.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</PickSelect>
+            <PickSelect className="field-input" style={{flex:1,minWidth:0}} aria-label={t("acc.to")} value={to||shown[1].id} onChange={e=>setTo(e.target.value)}>{shown.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</PickSelect>
           </div>
           <div style={{display:"flex",gap:8}}>
             <input className="field-input" style={{flex:1}} inputMode="decimal" aria-label={t("acc.amount")} placeholder="0.00" value={amt} onChange={e=>setAmt(cleanMoneyText(e.target.value))}/>
@@ -621,13 +623,13 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
             <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-amt">{t("add.amount")}</label><input id="tpl-amt" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={tplAmt} onChange={e=>setTplAmt(cleanMoneyText(e.target.value))}/></div>
           </div>
           <div className="field-row" style={{marginBottom:10}}>
-            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-cat">{t("add.category")}</label><select id="tpl-cat" className="field-input field-select" value={tplCatId} onChange={e=>{ setTplCatId(e.target.value); setTplSubcat(""); }}>{expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</select></div>
+            <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-cat">{t("add.category")}</label><PickSelect id="tpl-cat" className="field-input field-select" value={tplCatId} onChange={e=>{ setTplCatId(e.target.value); setTplSubcat(""); }}>{expCats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</PickSelect></div>
             <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-subcat">{t("add.subcategory")}</label>
-              <select id="tpl-subcat" className="field-input field-select" value={tplSubcat} onChange={e=>setTplSubcat(e.target.value)}>
+              <PickSelect id="tpl-subcat" className="field-input field-select" value={tplSubcat} onChange={e=>setTplSubcat(e.target.value)}>
                 <option value="">{t("set.noSubcat")}</option>
                 {myOwn.map(s=><option key={"my-"+s} value={s}>{s}</option>)}
                 {builtIn.map(s=><option key={s} value={s}>{subName(s)}</option>)}
-              </select></div>
+              </PickSelect></div>
           </div>
           <div className="field-row" style={{marginBottom:10}}>
             <div className="field" style={{marginBottom:0}}><label className="field-lbl" htmlFor="tpl-merchant">{t("add.merchant")}</label><input id="tpl-merchant" className="field-input" placeholder={t("set.optionalPh")} value={tplMerchant} onChange={e=>setTplMerchant(e.target.value)}/></div>

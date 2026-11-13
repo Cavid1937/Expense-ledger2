@@ -882,5 +882,29 @@ html,body,.app{transition:background-color 200ms ease-out}
 @media (prefers-reduced-motion:reduce){html,body,.app{transition:none}}
 /* Run 70: strong spending days in the calendar: button-text colour on dark themes, page text on light ones (see analytics.jsx heat) */
 .cal-day.hot{color:var(--cal-hot-ink,var(--on-accent))}
+/* Run 75: the app's own pickers (screens/pickers.jsx). The real control stays in the page, hidden; the button and sheet follow the theme. */
+.pick-wrap{position:relative;display:block;min-width:0}
+.pick-native{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none;border:0;padding:0;margin:0}
+.pick-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;cursor:pointer;color:var(--ink);font-family:var(--font)}
+.pick-btn .pick-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick-btn>span[aria-hidden]{color:var(--ink-3);flex-shrink:0}
+.pick-close{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--rule);border-radius:50%;background:transparent;color:var(--ink);cursor:pointer;flex-shrink:0}
+.pick-list{display:flex;flex-direction:column;margin-top:12px;max-height:min(60vh,520px);overflow-y:auto}
+.pick-opt{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:10px 4px;border:0;border-bottom:1px solid var(--rule);background:transparent;color:var(--ink);font:500 15px/1.35 var(--font);text-align:left;cursor:pointer}
+.pick-opt.on{color:var(--accent-text);font-weight:700}.pick-opt:disabled{color:var(--ink-4);cursor:default}
+.pick-opt:focus-visible,.pick-day:focus-visible,.pick-btn:focus-visible{outline:2px solid var(--accent-text);outline-offset:2px}
+.pick-quick{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}.pick-quick .chip{min-height:36px;font-size:13px;padding:6px 14px;border-radius:999px}
+.pick-month{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:8px 0}
+.pick-month .icon-btn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--rule);border-radius:50%;background:transparent;color:var(--ink);cursor:pointer}
+.pick-month-name{font-weight:700;font-size:16px;text-align:center;flex:1}
+.pick-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.pick-dow{font-size:11px;font-weight:700;color:var(--ink-3);text-align:center;padding:4px 0}
+.pick-day{min-height:42px;border:0;border-radius:10px;background:transparent;color:var(--ink);font:600 14px var(--font);font-variant-numeric:tabular-nums;cursor:pointer}
+.pick-day.today{box-shadow:inset 0 0 0 1.5px var(--rule-2)}
+.pick-day.on{background:var(--accent-fill);color:var(--on-accent)}
+.pick-day:disabled{color:var(--ink-5);cursor:default}
+.pick-sheet{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+/* above the Add screen (100), below notices (200+) and the lock screen (1000) */
+.sheet-overlay.pick-overlay{z-index:150}
 `;
 
