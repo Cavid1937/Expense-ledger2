@@ -271,12 +271,19 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
         })}
         {/* Run 59 (owner-approved): the month-start "add last month's leftover to a goal" question is off by default; it is only offered when turned on here */}
         {goals.length>0&&(
-          <div className="card" data-section="leftover-goal" style={{marginBottom:12}}>
-            <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45}}>
-              <input type="checkbox" checked={leftoverOn} onChange={e=>{ const on=e.target.checked; if (!writeLeftoverGoal(on)) { showToast(t("carry.saveFailed")); return; } setLeftoverOn(on); }} style={{marginTop:3,flexShrink:0}}/>
-              <span><span style={{display:"block",fontWeight:600}}>{t("leftover.toggle")}</span><span className="list-sub" style={{display:"block"}}>{t("leftover.help")}</span>
-                {!leftoverOn&&readRolloverSeen()&&<span className="list-sub" data-section="leftover-was" style={{display:"block",marginTop:4}}>{t("leftover.wasAsked")}</span>}</span>
-            </label>
+          // Run 71 (owner, 13 Nov: "too rude and big"): a slim settings row with a switch, like the other settings; same key, same meaning
+          <div className="card" data-section="leftover-goal" style={{marginBottom:12,padding:"4px 16px"}}>
+            {(()=>{ const flip=()=>{ const on=!leftoverOn; if (!writeLeftoverGoal(on)) { showToast(t("carry.saveFailed")); return; } setLeftoverOn(on); }; return (
+              <div className="settings-row" style={{borderBottom:"none",padding:"10px 0"}}>
+                <div style={{minWidth:0}}>
+                  <div className="settings-row-title" id="leftover-goal-lbl" style={{fontWeight:500,fontSize:14,lineHeight:1.35}}>{t("leftover.toggle")}</div>
+                  <div className="settings-row-sub" style={{lineHeight:1.4}}>{t("leftover.help")}</div>
+                  {!leftoverOn&&readRolloverSeen()&&<div className="settings-row-sub" data-section="leftover-was" style={{marginTop:3}}>{t("leftover.wasAsked")}</div>}
+                </div>
+                <div className={`toggle-track${leftoverOn?" on":""}`} data-section="leftover-switch" role="switch" aria-checked={leftoverOn} aria-labelledby="leftover-goal-lbl" tabIndex={0}
+                  onClick={flip} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(); } }}><div className="toggle-knob"/></div>
+              </div>
+            ); })()}
           </div>
         )}
         <SavingsFloorCard safeToSpend={safeToSpend} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>

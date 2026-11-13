@@ -52,9 +52,10 @@ section("R59-B2. Budgets: carrying is off until chosen, and the carried amount i
 section("R59-B3. Goals: the month-start leftover offer is a setting, off by default");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await openGoals(page, "goals");
-  const s = await page.evaluate(() => { const c = document.querySelector('[data-section="leftover-goal"]'); return c ? { text: c.innerText, on: c.querySelector("input").checked } : null; });
-  ok(s && !s.on && /Off by default/.test(s.text), "the setting is there and off", s);
-  await page.evaluate(() => document.querySelector('[data-section="leftover-goal"] input').click()); await wait(200);
+  // Run 71: a slim row with a switch (was a big tick box)
+  const s = await page.evaluate(() => { const c = document.querySelector('[data-section="leftover-goal"]'); const sw = c && c.querySelector('[role="switch"]'); return c ? { text: c.innerText, on: sw ? sw.getAttribute("aria-checked") === "true" : null, h: Math.round(c.getBoundingClientRect().height) } : null; });
+  ok(s && s.on === false && /Off by default/.test(s.text) && s.h <= 120, "the setting is there as a switch, off, in a slim row", s);
+  await page.evaluate(() => document.querySelector('[data-section="leftover-switch"]').click()); await wait(200);
   ok((await page.evaluate(() => localStorage.getItem("expense_ledger_v5__leftovergoal"))) === "1", "turning it on is remembered");
   await page.close();
 }
