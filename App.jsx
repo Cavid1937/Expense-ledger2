@@ -4141,6 +4141,25 @@ export function learnPreview(transactions, opts={}) {
   return { places, crashes, ping:{ lang:opts.lang||"en", app_version:String(opts.version||"").slice(0,40), platform:opts.platform==="android"?"android":"web" } };
 }
 export function readCrashLog() { try { const p=JSON.parse(localStorage.getItem(CRASH_LOG_KEY)||"[]"); return Array.isArray(p)?p.filter(isPlainObject):[]; } catch { return []; } }
+// Run 75 (owner, 13 Nov): "Report a problem / write to us". One row in the same free, add-only project (table feedback_reports: nobody
+// can read it through the app). The text is cleaned on the phone: long digit runs (card / account / phone numbers) become "…". At most
+// 3 a day per phone. Returns "sent" | "empty" | "limit" | "offline" | "failed".
+export const FEEDBACK_KEY=KEY+"__feedback";
+export function cleanFeedbackText(s, max=2000) { return String(s||"").replace(/\d[\d\s-]{7,}\d/g,"…").replace(/\s+\n/g,"\n").trim().slice(0,max); }
+export async function sendFeedback({ message, contact, details, lang, version, platform }, fetchFn=(typeof fetch!=="undefined"?fetch:null), now=new Date()) {
+  const msg=cleanFeedbackText(message); if (!msg) return "empty";
+  const day=localDateStr(now); let rec={ day:"", n:0 };
+  try { const v=JSON.parse(localStorage.getItem(FEEDBACK_KEY)||"null"); if (v && v.day===day && Number.isInteger(v.n)) rec=v; } catch { /* start fresh */ }
+  if (rec.day===day && rec.n>=3) return "limit";
+  if (!fetchFn) return "failed";
+  const row={ message:msg, contact:contact?String(contact).trim().slice(0,120)||null:null, details:details?cleanFeedbackText(details,600)||null:null, lang:String(lang||"en").slice(0,5), app_version:String(version||"").slice(0,40), platform:platform==="android"?"android":"web" };
+  try {
+    const r=await fetchFn(LEARN_URL+"feedback_reports",{ method:"POST", headers:{ apikey:LEARN_PUBLIC_KEY, Authorization:"Bearer "+LEARN_PUBLIC_KEY, "Content-Type":"application/json", Prefer:"return=minimal" }, body:JSON.stringify(row) });
+    if (!r || !r.ok) return "failed";
+  } catch { return "offline"; }
+  try { localStorage.setItem(FEEDBACK_KEY,JSON.stringify({ day, n:(rec.day===day?rec.n:0)+1 })); } catch { /* the limit is best effort */ }
+  return "sent";
+}
 // Sends one day's rows. Returns true only when every part was accepted. fetchFn is the browser's fetch (a stand-in in tests).
 export async function sendLearning(preview, fetchFn=(typeof fetch!=="undefined"?fetch:null)) {
   if (!fetchFn) return false;

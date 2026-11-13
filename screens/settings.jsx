@@ -10,6 +10,8 @@ import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggl
 import { applyLink, linkCandidates, undoLink } from "../App.jsx";
 import { buildWorkbookSheets, downloadFile, inNativeShell, readBudgetCarry, today as todayStr } from "../App.jsx";   // Run 64
 import { readLearn, writeLearn, learnPreview, readCrashLog } from "../App.jsx";
+// Run 75: report a problem
+import { sendFeedback } from "../App.jsx";
 // Run 70: theme preview cards
 import { THEME_MAIN, themePreview } from "../App.jsx";
 // Run 71: the Gifts row is shown only when this preference key is "1" (off for everyone by default)
@@ -708,6 +710,7 @@ export function InfoSheet({ kind, onClose }) {
 }
 
 export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, accTools, scrollTo="", onScrolled }) {
+  const [fbOpen,setFbOpen]=useState(false);
   // Run 42: the pill answers the touch at once (cheap local state, painted first); the whole app switches language one frame later.
   const [picked, setPicked]=useState(null);
   useEffect(()=>{ if (picked && picked===language) setPicked(null); },[picked,language]);
@@ -772,6 +775,8 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       <div className="settings-section-lbl more-group-lbl">{t("st.groupApp")}</div>
       <div className="card list-card" data-section="more-app">
         <ListRow id="how" icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
+      {/* Run 75: write to us / report a problem (free, add-only; see sendFeedback in App.jsx) */}
+      <ListRow id="feedback" icon="list" title={t("fb.row")} sub={t("fb.rowSub")} onClick={()=>setFbOpen(true)}/>{fbOpen&&<FeedbackSheet lang={language} showToast={showToast} onClose={()=>setFbOpen(false)}/>}
       </div>
       {/* Run 53 (owner's video: the version read "SNjTvbhv"): a version a person can read and compare; the build code stays, small, for support */}
       <div className="list-sub app-version" data-section="app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:APP_RELEASE})}{version&&<span data-section="app-build" style={{opacity:0.65}}> · {t("more.build",{v:version})}</span>}</div>
@@ -922,6 +927,39 @@ function PasteStatement({ onImportText }) {
   );
 }
 
+// Run 75: "Report a problem / write to us". Says what is sent before sending; nothing from the ledger unless the person writes it.
+function FeedbackSheet({ lang, showToast, onClose }) {
+  const [msg,setMsg]=useState(""), [contact,setContact]=useState(""), [tech,setTech]=useState(true), [busy,setBusy]=useState(false);
+  const details=()=>{ const log=readCrashLog(); const last=log[log.length-1]; return JSON.stringify({ v:APP_RELEASE, w:typeof window!=="undefined"?window.innerWidth:0, h:typeof window!=="undefined"?window.innerHeight:0, err:last?String(last.message||"").slice(0,300):"" }); };
+  const send=async ()=>{
+    setBusy(true);
+    const r=await sendFeedback({ message:msg, contact, details:tech?details():"", lang, version:APP_RELEASE, platform:inNativeShell()?"android":"web" });
+    setBusy(false);
+    if (r==="sent") { showToast(t("fb.sent")); onClose(); return; }
+    showToast(t("fb.err."+r),6000);
+  };
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("fb.title")} data-section="fb-sheet">
+        <div className="sheet-grip"><div className="sheet-handle"/></div>
+        <div className="sheet-title">{t("fb.title")}</div>
+        <div className="list-sub" style={{lineHeight:1.55,marginBottom:12}}>{t("fb.sub")}</div>
+        <div className="field"><label className="field-lbl" htmlFor="fb-msg">{t("fb.msg")}</label>
+          <textarea id="fb-msg" className="field-input" rows={5} maxLength={2000} value={msg} onChange={e=>setMsg(e.target.value)} placeholder={t("fb.msgPh")} style={{width:"100%",resize:"vertical",minHeight:110}}/>
+          <div className="list-sub" style={{marginTop:4}}>{t("fb.private")}</div></div>
+        <div className="field"><label className="field-lbl" htmlFor="fb-contact">{t("fb.contact")} <span style={{fontWeight:400,color:"var(--ink-3)"}}>{t("add.optional")}</span></label>
+          <input id="fb-contact" className="field-input" maxLength={120} value={contact} onChange={e=>setContact(e.target.value)} placeholder={t("fb.contactPh")}/>
+          <div className="list-sub" style={{marginTop:4}}>{t("fb.contactSub")}</div></div>
+        <div className="settings-row" style={{borderBottom:"none"}}>
+          <div style={{minWidth:0}}><div className="settings-row-title" id="fb-tech-lbl">{t("fb.tech")}</div><div className="settings-row-sub">{t("fb.techSub")}</div></div>
+          <div className={`toggle-track${tech?" on":""}`} data-section="fb-tech" role="switch" aria-checked={tech} aria-labelledby="fb-tech-lbl" tabIndex={0} onClick={()=>setTech(v=>!v)} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); setTech(v=>!v); } }}><div className="toggle-knob"/></div>
+        </div>
+        <button type="button" className="btn btn-primary btn-full" data-section="fb-send" disabled={busy||!msg.trim()} onClick={send} style={{marginTop:8}}>{busy?t("drive.working"):t("fb.send")}</button>
+        <button type="button" className="btn btn-ghost btn-full" data-closer="1" onClick={onClose}>{t("common.cancel")}</button>
+      </div>
+    </div>
+  );
+}
 // Run 74: optional Google Drive backup. Off until the person connects; says what Google can and cannot see before anything happens.
 function DriveCard({ drive }) {
   const [askOff,setAskOff]=useState(false);
