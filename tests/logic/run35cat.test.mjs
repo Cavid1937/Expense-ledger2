@@ -49,7 +49,10 @@ ok(forSpending(mixed).filter((x) => x.type === "income").length === 3 && mixed.l
 const living = [inc("giftin", 120), inc("savout", 300), inc("familyin", 80), exp("food", 200)];
 const safe = calcSafeToSpend(forSpending(living), { enabled: true, savingsTarget: 0 }, [], now);
 ok(safe.curInc === 500, "living on savings: Safe-to-Spend counts the 300 taken from savings as money available (120 + 300 + 80)", safe.curInc);
-ok(month(living).surplusRate === 60, "and the kept share is (500 - 200) / 500 = 60%, not a false deficit", month(living).surplusRate);
+// Run 65 (owner decision 13 Nov: the monthly surplus is recognised income minus recognised spending): the 300 taken from savings is no
+// longer counted as income in the surplus share. Earned 120 + 80 = 200, spent 200: 0% (break-even), and the card says 300 came from savings.
+// Safe to Spend above still counts the 300 as money available (unchanged).
+ok(month(living).surplusRate === 0 && month(living).curSavOut === 300, "and the surplus share is (200 - 200) / 200 = 0%, with the 300 from savings shown apart (Run 65 rule)", [month(living).surplusRate, month(living).curSavOut]);
 
 section("R35-5. Saved data with the new ids loads unchanged");
 globalThis.__store.set("expense_ledger_v5", JSON.stringify({ transactions: [T({ id: 1, type: "income", category: "pension", amount: 300 }), T({ id: 2, category: "pets", amount: 20 }), T({ id: 3, type: "income", category: "savout", amount: 5 })], language: "en" }));

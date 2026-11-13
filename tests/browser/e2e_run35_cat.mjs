@@ -28,17 +28,18 @@ for (const [lang, w] of Object.entries(langs)) {
   ok((await hint(page)) === "", `${lang}: an earnings category shows no note`, await hint(page));
   await page.close();
 }
-section("R35-B2. Run 35b: on screen, income is earnings only; the net and Balance count every money-in entry");
+// Run 65 (owner decision 13 Nov): the monthly surplus is earned income + refunds - spending; money taken from savings is shown apart, not counted.
+section("R35-B2. On screen, income is earnings only; the monthly surplus counts refunds but not money taken from savings");
 {
   const seed = baseSeed({ language: "en", transactions: [tx({ type: "income", category: "salary", amount: 100, date: TODAY }), tx({ type: "income", category: "refund", amount: 50, date: TODAY }), tx({ type: "income", category: "savout", amount: 25, date: TODAY }), tx({ category: "food", amount: 10, date: TODAY })] });
   const page = await openPage(browser, { seed }); await page.setViewport({ width: 400, height: 860, deviceScaleFactor: 1, isMobile: true, hasTouch: true }); await settle(page);
-  const home = await page.evaluate(() => { const h = document.querySelector('[data-section="home-month"]'); return { stats: [...h.querySelectorAll(".hero-stat")].map((s) => s.innerText.replace(/\s+/g, " ").trim()), note: (h.querySelector('[data-section="home-other-in"]') || {}).innerText || "" }; });
+  const home = await page.evaluate(() => { const h = document.querySelector('[data-section="home-month"]'); return { stats: [...h.querySelectorAll(".hero-stat")].map((s) => s.innerText.replace(/\s+/g, " ").trim()), note: (h.querySelector('[data-section="home-other-in"]') || {}).innerText || "", sav: (h.querySelector('[data-section="home-savings-out"]') || {}).innerText || "" }; });
   ok(/100/.test(home.stats[0]) && /Income/i.test(home.stats[0]) && !/175/.test(home.stats[0]), "Home: Income shows 100, not 175", home.stats);
-  ok(/94%/.test(home.stats[2]), "Home: the kept share uses all money in: (175 - 10) / 175 = 94%", home.stats);
-  ok(/75\.00/.test(home.note), "Home: a note says 75.00 of refunds or savings is included, not counted as income", home.note);
+  ok(/93%/.test(home.stats[2]), "Home: the surplus share is (100 + 50 - 10) / (100 + 50) = 93% (the 25 from savings is not income)", home.stats);
+  ok(/50\.00/.test(home.note) && /25\.00/.test(home.sav), "Home: one note for the 50.00 of refunds, one for the 25.00 taken from savings (not counted)", [home.note, home.sav]);
   await tab(page, "Monthly"); await wait(400);
   const an = await page.evaluate(() => (document.querySelector('[data-section="an-summary"]') || {}).innerText || "");
-  ok(/100\.00/.test(an) && /165\.00/.test(an) && /Left over/.test(an) && /75\.00/.test(an), "Analytics: income 100.00, net surplus 165.00, and the 75.00 note", an);
+  ok(/100\.00/.test(an) && /140\.00/.test(an) && /Monthly surplus/.test(an) && /50\.00/.test(an) && /25\.00/.test(an) && !/Left over/.test(an), "Analytics: income 100.00, monthly surplus 140.00, the 50.00 refunds note and the 25.00 savings note", an);
   await page.close();
 }
 await browser.close();

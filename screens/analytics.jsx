@@ -199,7 +199,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
   const nextM = () => { if (idx > 0) { setDir(1); setSelectedMon(allMonths[idx - 1]); } };
   const prv = useMemo(() => { const [y,m]=selectedMon.split("-").map(Number); return localMonthStr(new Date(y,m-2,1)); }, [selectedMon]);
 
-  const { curExp, curInc, curIn, curOther, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
+  const { curExp, curInc, curNet, curRefundIn, curSavOut, hasSpread, surplusRate, prevExp, prevFullExp, momDiff, plannedExp, plannedInc, cmpKind, cmpDays } = calcMonthSummary(transactions, selectedMon, prv);
   const catSpend    = calcCategorySpend(transactions, selectedMon);
   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon, new Date(), budgetCarried(transactions, budgets || {}, readBudgetCarry(), selectedMon));   // Run 59: same limits as Budgets
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
@@ -282,14 +282,17 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         <div className="month-stat">
           <div className="month-stat-val" style={{color:"var(--pos)"}}><MoneyText v={fmt(curInc,currency)}/></div>
           <div className="month-stat-lbl">{t("home.income")}</div>
-          {curIn>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
-            {fmtPct(Math.round(((curIn-curExp)/curIn)*100))} {t("surplus."+surplusLabel(curIn,curExp)).toLowerCase()}
+          {surplusRate!==null&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>
+            {fmtPct(surplusRate)} {t("surplus."+surplusLabel(curNet,0)).toLowerCase()}
           </div>}
         </div>
-        <div className="month-stat" style={{gridColumn:"1 / -1"}}>
-          <div className="month-stat-val" style={{color:surplusColor(curIn,curExp)}}><MoneyText v={fmt(Math.abs(curIn-curExp),currency)}/></div>
-          <div className="month-stat-lbl">{t("month.net."+(curIn>curExp?"Net surplus":curIn<curExp?"Net deficit":"Break-even"))}</div>
-          {curOther>0&&<div className="list-sub" data-section="an-other-in" style={{marginTop:4}}>{t("month.otherIn",{amount:fmt(curOther,currency)})}</div>}
+        {/* Run 65 (owner decision 13 Nov): the monthly surplus / deficit = earned income minus spending (money taken from savings is not income) */}
+        <div className="month-stat" style={{gridColumn:"1 / -1"}} data-section="an-month-net">
+          <div className="month-stat-val" style={{color:surplusColor(curNet,0)}}><MoneyText v={fmt(Math.abs(curNet),currency)}/></div>
+          <div className="month-stat-lbl">{t("month.net."+(curNet>0?"Net surplus":curNet<0?"Net deficit":"Break-even"))}</div>
+          {curRefundIn>0&&<div className="list-sub" data-section="an-other-in" style={{marginTop:4}}>{t("month.otherIn",{amount:fmt(curRefundIn,currency)})}</div>}
+          {curSavOut>0&&<div className="list-sub" data-section="an-savings-out" style={{marginTop:4}}>{t("month.savingsOut",{amount:fmt(curSavOut,currency)})}</div>}
+          {hasSpread&&<div className="list-sub" data-section="an-spread-note" style={{marginTop:4}}>{t("month.spreadNote")}</div>}
           {refundLow>0&&<div className="list-sub" data-section="an-refund-net" style={{marginTop:4}}>{t("month.refundNet",{amount:fmt(refundLow,currency)})}</div>}
           {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
           {momDiff!==null&&cmpKind==="same"&&<div className="cmp-window" style={{fontSize:11,color:"var(--ink-3)",marginTop:2}}>{t("cmp.window",{d:cmpDays})}</div>}
@@ -525,11 +528,12 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
       {/* Run 27d: the all-time overview sits with the other not-month-specific part (Trends), below the selected month, so the page starts with the month the picker shows */}
       <AnPanel id="trends" seg={seg}>
         {transactions.length>0&&(()=>{
-          const allIn=transactions.filter(x=>x.type==="income").reduce(addAmt,0), totalInc=transactions.filter(x=>x.type==="income"&&isEarnedCat(x.category)).reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
+          // Run 65: the all-time surplus uses the same rule as the month (earned income and refunds in; money taken from savings is not income)
+          const allIn=transactions.filter(x=>x.type==="income"&&(isEarnedCat(x.category)||x.category==="refund")).reduce(addAmt,0), totalInc=transactions.filter(x=>x.type==="income"&&isEarnedCat(x.category)).reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
           return (
             <div className="a-card" data-section="an-overview">
               <div className="a-card-title">{t("set.overview")}</div>
-              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("month.net."+(allIn>totalExp?"Net surplus":allIn<totalExp?"Net deficit":"Break-even")),fmt(Math.abs(allIn-totalExp),currency),surplusColor(allIn,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
+              {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("surplus."+surplusLabel(allIn,totalExp)),fmt(Math.abs(allIn-totalExp),currency),surplusColor(allIn,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
                 <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
                   <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>
                   <span style={{fontSize:13,fontWeight:700,color:col,whiteSpace:"nowrap"}}>{val}</span>

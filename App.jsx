@@ -152,7 +152,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="64 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="65 (2026-11-13)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -322,17 +322,17 @@ export const CATEGORIES = [
   // elsewhere moves to `retired`: it is no longer offered for NEW entries, but entries that already carry it keep it, still show its translated
   // name and can still be filtered by it. The old English names stay importable (CATEGORY_MAP), so CSV files written by earlier versions still match.
   { id:"food",     name:"Food & Dining",        tile:"Food",      color:"#F0C46F", income:false,
-    subs:["Restaurants","Fast Food","Coffee","Groceries","Delivery","Snacks","Bakery","Market / Bazaar","Drinks","Water delivery","Other"] },
+    subs:["Restaurants","Fast Food","Coffee","Groceries","Delivery","Snacks","Bakery","Market / Bazaar","Drinks","Alcohol","Water delivery","Other"] },
   { id:"transport",name:"Transport",             tile:"Transport", color:"#83B9F5", income:false,
     subs:["Metro","Bus","Taxi / Ride-hailing","Intercity","Public transport card","Train","Bike & scooter","Other"], retired:["Fuel","Parking","Car Maintenance"] },
   { id:"shopping", name:"Shopping",              tile:"Shopping",  color:"#B3A1FF", income:false,
-    subs:["Clothing","Electronics","Personal Items","Home","Accessories","Online Shopping","Furniture","Appliances","Other"] },
+    subs:["Clothing","Electronics","Personal Items","Home","Accessories","Online Shopping","Furniture","Appliances","Tobacco & vaping","Other"] },
   { id:"gifts",    name:"Gifts & Donations",     tile:"Gifts",     color:"#C9A27E", income:false,
     subs:["Gifts","Donations","Weddings & parties","Other"], retired:["Personal Care","Barber / Hair","Cosmetics"] },
   { id:"personal", name:"Personal Care",         tile:"Personal care", color:"#E3B5A4", income:false,
     subs:["Barber / Hair","Cosmetics","Hygiene","Massage & spa","Other"] },
   { id:"entertain",name:"Entertainment",         tile:"Entertainment",   color:"#E7A3D6", income:false,
-    subs:["Cinema","Games","Events","Sports","Hobbies","Music","Going out","Other"] },
+    subs:["Cinema","Games","Events","Sports","Hobbies","Music","Going out","Lottery & betting","Other"] },
   { id:"digital",  name:"Phone & Subscriptions", tile:"Phone & subs",     color:"#9FB4C7", income:false,
     subs:["Mobile","Internet","TV","Home phone","Streaming","Software","Cloud Storage","Other"], retired:["Other Subs"] },
   { id:"health",   name:"Health & Fitness",      tile:"Health",    color:"#F2A66E", income:false,
@@ -2682,9 +2682,15 @@ export function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=
   const prevFullExp=sum(transactions.filter(t=>isExp(t)&&happenedIn(prv,now)(t)));
   const momDiff=cw.kind&&prevExp>0?curExp-prevExp:null;
   const curIn=sum(transactions.filter(t=>isIn(t)&&done(t))), curOther=Math.round((curIn-curInc)*100)/100;
-  // Negative when expenses exceed money in — don't clamp, show the deficit (money in, as before Run 35: a refund or savings withdrawal is spendable)
-  const surplusRate=curIn>0?Math.round(((curIn-curExp)/curIn)*100):null;
-  return { curExp,curInc,curIn,curOther,plannedExp,plannedInc,totalExp,totalInc,prevExp,prevInc,prevFullExp,momDiff,surplusRate,cmpKind:cw.kind,cmpDays:cw.days };
+  // Run 65 (owner decision 13 Nov): the monthly surplus / deficit is EARNED income minus spending, by the app's own classification. A refund
+  // still counts (it gives spending back); money taken from savings does not (it was counted when it was earned). Before Run 65 the month
+  // net used all money in, so someone living on savings saw a surplus. curIn stays "all money in" for the figures that mean that.
+  const curRefundIn=sum(transactions.filter(t=>isIn(t)&&done(t)&&t.category==="refund"));
+  const curSavOut=Math.round((curOther-curRefundIn)*100)/100;
+  const netIn=Math.round((curInc+curRefundIn)*100)/100, curNet=Math.round((netIn-curExp)*100)/100;
+  const surplusRate=netIn>0?Math.round((curNet/netIn)*100):null;   // negative when spending is larger: the deficit is shown, never clamped
+  const hasSpread=transactions.some(t=>isExp(t)&&done(t)&&t.spreadSlice);
+  return { curExp,curInc,curIn,curOther,curRefundIn,curSavOut,curNet,hasSpread,plannedExp,plannedInc,totalExp,totalInc,prevExp,prevInc,prevFullExp,momDiff,surplusRate,cmpKind:cw.kind,cmpDays:cw.days };
 }
 
 export function calcCategorySpend(transactions, mon=curMon(), now=new Date()) {
@@ -2707,7 +2713,7 @@ export function rolloverOffer(transactions, goals, seenYm="", now=new Date()) {
   const prv=localMonthStr(new Date(now.getFullYear(),now.getMonth()-1,1));
   if (seenYm===prv) return null;
   const s=calcMonthSummary(transactions||[], prv, localMonthStr(new Date(now.getFullYear(),now.getMonth()-2,1)), now);
-  const kept=Math.round((s.curIn-s.curExp)*100)/100;
+  const kept=s.curNet;   // Run 65: the same monthly surplus as the month card (money taken from savings is not offered back to a goal)
   if (!(kept>=1)) return null;
   const open=(goals||[]).map(g=>({ id:g.id, name:String(g.name||""), remaining:Math.round(((Number(g.target)||0)-(Number(g.saved)||0))*100)/100 }))
     .filter(g=>g.id && g.remaining>0).slice(0,3)

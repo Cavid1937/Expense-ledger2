@@ -14,7 +14,8 @@ ok(!calcHelperCards([spend(40, "2026-10-05")], { food: 310 }, [], { enabled: fal
 section("2. Break-even label and colour");
 ok(surplusLabel(1000, 800) === "Surplus" && surplusLabel(1000, 1000) === "Break-even" && surplusLabel(1000, 1200) === "Deficit", "label: surplus / break-even / deficit");
 ok(surplusColor(1000, 1000) === "var(--ink)" && surplusColor(1000, 900) === "var(--pos)" && surplusColor(1000, 1100) === "var(--neg)", "colour: green / neutral / red");
-ok(SRC.includes('curIn>curExp?"Net surplus":curIn<curExp?"Net deficit":"Break-even"') && !SRC.includes('"Net saved"'), "Monthly net label has all three states; 'Net saved' is gone");
+// Run 65: the month card's figure is curNet (earned income minus spending); the label still has its three states
+ok(SRC.includes('curNet>0?"Net surplus":curNet<0?"Net deficit":"Break-even"') && !SRC.includes('"Net saved"'), "Monthly net label has all three states; 'Net saved' is gone");
 
 section("3. Goal guard in Safe to Spend");
 reset(); setNow(2026, 9, 13);

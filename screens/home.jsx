@@ -141,7 +141,7 @@ export function WelcomeCard({ show }) {
 
 export function HomePage({ transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
   const now=curMon(), prv=prevMon();
-  const { curExp,curInc,curIn,curOther,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
+  const { curExp,curInc,curIn,curNet,curRefundIn,curSavOut,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
   const budgetTotal =Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const spentToDate =calcSpentToDate(transactions,now);
@@ -188,14 +188,16 @@ export function HomePage({ transactions, accountTxns, latest=[], bills=[], budge
             <div className="hero-stat-lbl">{t("home.spent")}</div>
           </div>
           <div className="hero-stat">
-            {hasIncome?(
-              <><div className={`hero-stat-val${(surplusRate||0)>=20?" pos":(surplusRate||0)<0?" neg":""}`}>{fmtPct(surplusRate??0)}</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curIn,curExp))}</div></>
+            {/* Run 65 (owner decision 13 Nov): one monthly surplus / deficit, earned income minus spending (money taken from savings is not income) */}
+            {surplusRate!==null?(
+              <><div className={`hero-stat-val${surplusRate>=20?" pos":surplusRate<0?" neg":""}`}>{fmtPct(surplusRate)}</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curNet,0))}</div></>
             ):(
-              <><div className={`hero-stat-val${curIn>curExp?" pos":curIn<curExp?" neg":""}`}>{curIn<curExp?"−":""}{fmtShort(Math.abs(curIn-curExp),currency)}</div><div className="hero-stat-lbl">{t("home.balance")}</div></>
+              <><div className={`hero-stat-val${curNet>0?" pos":curNet<0?" neg":""}`}>{curNet<0?"−":""}{fmtShort(Math.abs(curNet),currency)}</div><div className="hero-stat-lbl">{t("month.net."+(curNet>0?"Net surplus":curNet<0?"Net deficit":"Break-even"))}</div></>
             )}
           </div>
         </div>
-        {curOther>0&&<div className="list-sub" data-section="home-other-in" style={{marginTop:8}}>{t("month.otherIn",{amount:fmt(curOther,currency)})}</div>}
+        {hasIncome&&curRefundIn>0&&<div className="list-sub" data-section="home-other-in" style={{marginTop:8}}>{t("month.otherIn",{amount:fmt(curRefundIn,currency)})}</div>}
+        {curSavOut>0&&<div className="list-sub" data-section="home-savings-out" style={{marginTop:4}}>{t("month.savingsOut",{amount:fmt(curSavOut,currency)})}</div>}
         <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
       </div>
 

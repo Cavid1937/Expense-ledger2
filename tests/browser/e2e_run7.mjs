@@ -71,7 +71,8 @@ ok(/Overspent\s*500\.00/.test(txt), "income 400, expenses 900 → 'Net deficit 5
 await page.close();
 page = await openPage(browser, { seed: baseSeed({ transactions: [tx({ amount: 100 }), tx({ type: "income", category: "salary", amount: 400 })] }) });
 await tab(page, "Monthly"); await wait(400); txt = await page.evaluate(() => (document.querySelector('[data-section="an-overview"]') || {}).innerText || "");
-ok(/Left over\s*300\.00/.test(txt), "income 400, expenses 100 → 'Net surplus 300.00'", txt.match(/.{0,20}Net.{0,30}/)?.[0]);
+// Run 65: the all-time overview's label is "Not spent" (it is not a month figure, so it does not say "Monthly surplus")
+ok(/Not spent\s*300\.00/.test(txt), "income 400, expenses 100 → 'Not spent 300.00'", txt.match(/.{0,20}(Not spent|Net).{0,30}/)?.[0]);
 await page.close();
 
 section("R7-6. V4: Home tiles show exact amounts below 10,000, and they fit at 320 px");
