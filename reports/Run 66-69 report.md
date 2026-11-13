@@ -89,7 +89,23 @@ You said to add it only if the app stays free, and it does: the free Supabase pl
   - when on, the request bodies hold the place name but no amount, note, date or gift place;
   - nothing is sent twice in one day.
 - **Build:** `vite build` passed.
-- **Full browser suite:** GATE_RESULT_PLACEHOLDER
+- **Full browser suite:** `node tests\run-browser.mjs` on 06c6fa1: **139 files, 2,313 checks passed, 0 failed, 0 missing**, 0 standby events.
+
+## Published
+- **Live site:** pushed to main as a fast-forward, 84 commits (038a6c6 → 8a8efab).
+- **Checks on https://expense-ledger2.vercel.app:**
+  - the live page serves release 69 (bundle index-Cf3BJ2C0.js);
+  - in a fresh browser with no data, the More page shows "Version 69 (2026-11-13)" and the sharing switch is off;
+  - no errors, and no request to Supabase.
+- **Roll back if needed:** in Vercel, promote the previous production deployment (commit 038a6c6), or reset main to 038a6c6.
+
+## New APK
+- **File:** Expense-Ledger-release-69.apk (8,016,397 bytes), built from 8a8efab, same code as the live site.
+- **Contents checked:** I opened it and confirmed it holds release 69 and the reminder permission bridge.
+- **One problem on the way:** the first build silently packed the old 8 Nov app, because the Android project was missing the PDF library that the statement reader needs.
+  - I installed the same version, pdfjs-dist 3.11.174.
+  - The build script now stops instead of packing an old app.
+- **Not yet tried:** the APK has not been run on a phone. Please install it on your Poco F6 over the old one.
 
 ## Status
 - Run 66 reminder switch: **IMPLEMENTED BUT UNVERIFIED** on a real phone. The browser test uses a stand-in for the Android shell, and the permission line needs the new APK.
