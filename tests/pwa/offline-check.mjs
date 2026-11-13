@@ -124,6 +124,17 @@ try {
   const caches0 = await page.evaluate(async () => { const keys = await caches.keys(); const c = await caches.open(keys[0]); return { keys, n: (await c.keys()).map((r) => new URL(r.url).pathname) }; });
   ok(caches0.keys.length === 1 && caches0.n.every((p) => p === "/" || p.startsWith("/assets/") || /^\/(manifest\.webmanifest|icon-\d+\.png)$/.test(p)), "only the app's own files are cached (no data, no other sites)", caches0);
   await page.setOfflineMode(false);
+  // Run 73: the site now has a public privacy page. Opening it online must not replace the app's saved start page, or the app would
+  // open offline as the privacy text (the worker used to save every page it served as "/").
+  section("PWA-3. Opening the privacy page does not replace the app kept for offline use");
+  await page.goto(URL0 + "privacy.html", { waitUntil: "load" });
+  ok(/Privacy policy/.test(await page.evaluate(() => document.body.innerText)) && /Məxfilik siyasəti/.test(await page.evaluate(() => document.body.innerText)), "the privacy page opens (az, ru, en on one page)");
+  await new Promise((r) => setTimeout(r, 1200));
+  await page.setOfflineMode(true);
+  await page.goto(URL0, { waitUntil: "load" }).catch(() => {});
+  const back = await page.waitForSelector(".tabbar", { timeout: 8000 }).then(() => true).catch(() => false);
+  ok(back && /Offlinecafe/.test(await page.evaluate(() => document.body.innerText).catch(() => "")), "…then, with no network, the app (not the privacy page) opens with its data");
+  await page.setOfflineMode(false);
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
 } finally { stop(); }
 await finish("pwa-offline", browser);
