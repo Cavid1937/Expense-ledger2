@@ -42,7 +42,7 @@ for (const lang of ["az", "ru"]) {
 }
 section("R65-B5. Gifts page in Azerbaijani: a built-in subcategory is shown in Azerbaijani (found in the review screenshots)");
 {
-  const page = await openPage(browser, { chooseLang: "az", seed: baseSeed({ language: "az", transactions: [tx({ merchant: "Aysel", category: "gifts", subcategory: "Gifts", amount: 50, date: TODAY })] }) });
+  const page = await openPage(browser, { chooseLang: "az", pre: () => localStorage.setItem("expense_ledger_v5__show_gifts", "1"), seed: baseSeed({ language: "az", transactions: [tx({ merchant: "Aysel", category: "gifts", subcategory: "Gifts", amount: 50, date: TODAY })] }) });   /* Run 71: the Gifts page is hidden by default */
   await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(400);
   await page.evaluate(() => [...document.querySelectorAll(".more-page .list-row, .more-page button")].find((x) => /Hədiyyə/.test(x.innerText)).click()); await page.waitForSelector('[data-section="gifts-row"]', { timeout: 4000 }); await wait(300);
   const row = await page.evaluate(() => document.querySelector('[data-section="gifts-row"]').innerText);

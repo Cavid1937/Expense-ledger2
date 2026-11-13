@@ -8,7 +8,8 @@ const entries = [tx({ type: "income", category: "salary", amount: 1000, date: M2
   tx({ type: "income", category: "salary", amount: 800, date: M1 + "-05", merchant: "Employer" }), tx({ amount: 900, date: M1 + "-10", merchant: "Market" }),
   tx({ type: "income", category: "savout", amount: 500, date: M1 + "-12", merchant: "Savings" }),
   tx({ type: "income", category: "salary", amount: 100, date: TODAY.slice(0, 7) + "-01", merchant: "Employer" })];
-const card = (page) => page.evaluate(() => { const c = document.querySelector('[data-section="an-notspent"]'); return c ? { text: c.innerText, total: c.querySelector('[data-section="notspent-total"]').innerText, month: (c.querySelector('[data-section="notspent-month"]') || {}).innerText || "" } : null; });
+// Run 71: the card sits under Trends and no longer repeats the month's figure; that figure is the Overview "Monthly surplus" card (an-month-net)
+const card = (page) => page.evaluate(() => { const c = document.querySelector('[data-section="an-notspent"]'); const m = document.querySelector('[data-section="an-month-net"]'); return c ? { text: c.innerText, total: c.querySelector('[data-section="notspent-total"]').innerText, month: (c.querySelector('[data-section="notspent-month"]') || {}).innerText || "", panel: (c.closest(".an-panel") || { dataset: {} }).dataset.panel, monthCard: m ? m.textContent.replace(/\s+/g, " ") : "" } : null; });
 
 section("R59-B1. Analytics: money not spent, month by month and since the start");
 {
@@ -16,13 +17,13 @@ section("R59-B1. Analytics: money not spent, month by month and since the start"
   let c = await card(page);
   // two months ago: 1000 - 300 = 700; last month: 800 - 900 = -100 (the 500 taken from savings is not income); total 600; this month so far 100
   ok(c && /600\.00/.test(c.total) && !/1,100|1100/.test(c.total), "since the start: 700 - 100 = 600.00 (money taken from savings is not counted as money in; the unused 2,000 budget is not counted)", c && c.total);
-  ok(c && /This month so far: 100\.00 ₼ not spent/.test(c.month), "this month is shown apart, as 'so far'", c && c.month);
+  ok(c && c.panel === "trends" && c.month === "" && /100\.00/.test(c.monthCard) && /surplus/i.test(c.monthCard), "the card is under Trends and does not repeat this month's 100.00; the Overview month card shows it as the surplus", c && { panel: c.panel, month: c.month, monthCard: c.monthCard.slice(0, 120) });
   await page.evaluate(() => document.querySelector('[data-section="notspent-toggle"]').click()); await wait(450);
   const rows = await page.evaluate(() => [...document.querySelectorAll('[data-section="notspent-rows"] [data-mon]')].map((r) => [r.getAttribute("data-mon"), r.innerText.replace(/\s+/g, " ")]));
   ok(rows.length === 2 && rows[0][0] === M1 && /−100\.00/.test(rows[0][1]) && /out 900\.00/.test(rows[0][1]) && rows[1][0] === M2 && /700\.00/.test(rows[1][1]), "the working: each finished month with money in, money out and the result, newest first", rows);
   await page.evaluate(() => document.querySelector(".month-nav-btn").click()); await wait(500); await settle(page);
   c = await card(page);
-  ok(c && /100\.00 ₼ overspent/.test(c.month) && /600\.00/.test(c.total), "last month's line says it was overspent by 100.00; the total stays 600.00", c && c.month);
+  ok(c && c.month === "" && /100\.00/.test(c.monthCard) && /deficit/i.test(c.monthCard) && /600\.00/.test(c.total), "last month: the month card shows the 100.00 deficit; the card's total since the start stays 600.00", c && { month: c.month, monthCard: c.monthCard.slice(0, 120), total: c.total });
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
