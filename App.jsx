@@ -3,7 +3,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Fra
 import { PickSelect, PickDate } from "./screens/pickers.jsx";
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
 import { readStatement, statementEntries, statementCheck, linesFromText, linesFromGrid, xlsxGrid, gridFromCsv, guessMap, readMapped } from "./statement.js";
-import { readNotifications } from "./notify.js";   // Run 68
+import { readNotifications, readNoticeItems } from "./notify.js";   // Run 68; Run 75 readNoticeItems
 // Run 74: optional Google Drive backup
 import { driveSave, driveLoad, driveToken, driveSignOut, driveHasToken, driveDue, backupFingerprint, cleanDrivePref } from "./drive.js";
 import { CSS } from "./styles.js";
@@ -4139,6 +4139,10 @@ export function monthReportText(r, currency, catLabel=(c)=>catName(c)) {
 // Never: amounts, dates of spending, notes, people's names, card or account numbers, balances, or anything that identifies the phone over time.
 // The person sees exactly what would be sent before turning it on (learnPreview). Sending is best effort: if the server is asleep (the free
 // plan pauses after a quiet week) or the phone is offline, nothing happens and the app is not affected.
+// Run 75: "offer payments from bank notifications" (Android): off unless the person turns it on
+export const NOTICES_KEY=KEY+"__notices";
+export function readNoticesPref() { try { return localStorage.getItem(NOTICES_KEY)==="1"; } catch { return false; } }
+export function writeNoticesPref(on) { try { if (on) localStorage.setItem(NOTICES_KEY,"1"); else localStorage.removeItem(NOTICES_KEY); return true; } catch { return false; } }
 // Run 74: the Google Drive backup choice and last result (drive.js cleanDrivePref); a preference, never in the ledger or in backup files
 export const DRIVE_KEY=KEY+"__drive";
 export function readDrive() { try { return cleanDrivePref(JSON.parse(localStorage.getItem(DRIVE_KEY)||"null")); } catch { return cleanDrivePref(null); } }
@@ -5167,6 +5171,27 @@ function AppInner() {
     if (nt.rows.length) { openStatement({ ...nt, check:statementCheck(nt.rows) }, t("st.pastedNotif")); return; }
     openStatement(st, t("st.pasted"));
   },[]);
+  // Run 75 (owner: "must have"): payments from bank notifications. Only in the Android app, only when the person turned it on here AND gave
+  // notification access in Android's settings. Kept notices are read when the app opens, comes back to the screen, or a new one arrives,
+  // and shown in the usual review (duplicates recognised, nothing added without the person's OK). Never while another review is open.
+  const [noticesOn,setNoticesOn]=useState(()=>readNoticesPref());
+  const pendingRef=useRef(null); pendingRef.current=importPending;
+  const pullNotices=useCallback(async ()=>{
+    const n=typeof window!=="undefined" && window.LedgerNative && window.LedgerNative.notices;
+    if (!n || !readNoticesPref() || pendingRef.current) return;
+    let items=[]; try { items=await n.take(); } catch { return; }
+    if (!items.length) return;
+    const res=readNoticeItems(items);
+    if (res.rows.length) openStatement({ ...res, check:statementCheck(res.rows) }, t("st.notifAuto"));
+  },[]);
+  useEffect(()=>{
+    const n=typeof window!=="undefined" && window.LedgerNative && window.LedgerNative.notices; if (!n || !noticesOn) return;
+    pullNotices();
+    const vis=()=>{ if (document.visibilityState==="visible") pullNotices(); }; document.addEventListener("visibilitychange",vis);
+    let sub=null; try { Promise.resolve(n.onAdded(()=>pullNotices())).then(h=>{ sub=h; }); } catch { /* no live updates: picked up on the next open */ }
+    return ()=>{ document.removeEventListener("visibilitychange",vis); try { sub&&sub.remove&&sub.remove(); } catch {} };
+  },[noticesOn,pullNotices]);
+  useEffect(()=>{ if (!importPending && noticesOn) pullNotices(); },[importPending]);
   const setStOpt=(k,v)=>setImportPending(p=>{ if (!p || p.kind!=="statement") return p; const stOpts={ ...p.stOpts, [k]:v }, transactions=statementPick(p,stOpts); return { ...p, stOpts, transactions, ...mergeCounts(stateRef.current.transactions,{ ...p, transactions }) }; });
 
   // Run 32: returns null when the file was opened (the normal review sheet then shows), otherwise the reason, so the sheet can say why.
@@ -5394,7 +5419,7 @@ function AppInner() {
           {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast} accTools={accTools}/></div>}
           {tab==="gifts"     && <GiftsPage transactions={transactions} currency={currency} showToast={showToast} onView={txn=>setViewTxn(txn)} onAdd={k=>openAdd(k==="received"?{type:"income",category:"giftin"}:{type:"expense",category:"gifts"})}/>}
           {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} onTakeEntries={takeEntries} onPutEntries={putEntries} showToast={showToast} showSnackbar={showSnackbar}/>}
-          {tab==="io"        && <ImportExportPage drive={{ pref:drivePref, busy:driveBusy, onConnect:driveConnect, onBackup:()=>driveBackupNow({ interactive:true }), onRestore:driveRestore, onDisconnect:driveDisconnect }} state={state} onDeleteMany={deleteMany} onImportText={importText} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
+          {tab==="io"        && <ImportExportPage notices={{ on:noticesOn, set:(v)=>{ if (writeNoticesPref(v)) setNoticesOn(v); } }} drive={{ pref:drivePref, busy:driveBusy, onConnect:driveConnect, onBackup:()=>driveBackupNow({ interactive:true }), onRestore:driveRestore, onDisconnect:driveDisconnect }} state={state} onDeleteMany={deleteMany} onImportText={importText} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} onExportEncrypted={exportEncrypted} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
             onConfirmBackup={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}/>}

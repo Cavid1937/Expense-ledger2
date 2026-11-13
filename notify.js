@@ -55,10 +55,21 @@ export function readNotifications(text, now = new Date()) {
   const blocks = String(text || "").replace(/\r/g, "").split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
   const rows = []; let skipped = 0;
   blocks.forEach((b) => { const r = readNotification(b, now); if (r) rows.push(r); else skipped++; });
+  return settleRows(rows, skipped);
+}
+// Run 75: notices kept by the Android listener, each with the time it arrived ({ text, time }). Each is dated by its own time; the bank's
+// and the wallet's notice about one payment become one entry only when they arrived within 5 minutes of each other.
+export function readNoticeItems(items) {
+  const rows = []; let skipped = 0;
+  (Array.isArray(items) ? items : []).filter((x) => x && typeof x.text === "string" && Number.isFinite(Number(x.time))).sort((a, b) => a.time - b.time)
+    .forEach((x) => { const r = readNotification(x.text, new Date(Number(x.time))); if (r) rows.push({ ...r, _t: Number(x.time) }); else skipped++; });
+  return settleRows(rows, skipped);
+}
+function settleRows(rows, skipped) {
   // same payment twice: same amount, and one merchant starts with the other (e.g. "8 Noyabr" and "8 Noyabr Metro")
   const out = [];
   for (const r of rows) {
-    const twin = out.find((o) => o.cents === r.cents && (o.type === r.type || !o.type || !r.type) && o.merchant && r.merchant && (o.merchant.toLowerCase().startsWith(r.merchant.toLowerCase()) || r.merchant.toLowerCase().startsWith(o.merchant.toLowerCase())));
+    const twin = out.find((o) => o.cents === r.cents && (o._t === undefined || r._t === undefined || Math.abs(o._t - r._t) <= 300000) && (o.type === r.type || !o.type || !r.type) && o.merchant && r.merchant && (o.merchant.toLowerCase().startsWith(r.merchant.toLowerCase()) || r.merchant.toLowerCase().startsWith(o.merchant.toLowerCase())));
     if (twin) { if (!twin.type) twin.type = r.type; if (twin.balance === null) twin.balance = r.balance; if (r.merchant.length > twin.merchant.length) { twin.merchant = r.merchant; twin.desc = r.merchant; } continue; }
     out.push({ ...r });
   }
@@ -67,6 +78,6 @@ export function readNotifications(text, now = new Date()) {
   const dir = fits(1) >= fits(-1) ? 1 : -1;
   out.forEach((r, i) => { if (r.type) return; const p = out[i + dir]; if (p && r.balance !== null && p.balance !== null && Math.abs(r.balance - p.balance) === r.cents) r.type = r.balance < p.balance ? "expense" : "income"; });
   const problems = []; if (out.some((r) => !r.type)) problems.push("sign"); if (skipped) problems.push("rows:" + skipped);
-  out.forEach((r) => { if (!r.type) r.type = "expense"; delete r._unsure; });
+  out.forEach((r) => { if (!r.type) r.type = "expense"; delete r._unsure; delete r._t; });
   return { bank: "notification", rows: out, problems };
 }

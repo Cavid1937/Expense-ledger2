@@ -928,6 +928,29 @@ function PasteStatement({ onImportText }) {
   );
 }
 
+// Run 75: payments from bank notifications (Android app only). Explains what Android lets the app see and what it keeps, before anything.
+function NoticesCard({ notices }) {
+  const native=typeof window!=="undefined" && window.LedgerNative && window.LedgerNative.notices;
+  const [allowed,setAllowed]=useState(null);
+  useEffect(()=>{ if (!native) return; let live=true; const check=()=>Promise.resolve(native.status()).then(a=>{ if (live) setAllowed(!!a); }).catch(()=>{ if (live) setAllowed(false); });
+    check(); const vis=()=>{ if (document.visibilityState==="visible") check(); }; document.addEventListener("visibilitychange",vis); return ()=>{ live=false; document.removeEventListener("visibilitychange",vis); }; },[native]);
+  if (!native || !notices) return null;
+  const flip=()=>{ const on=!notices.on; notices.set(on); if (on && allowed===false) Promise.resolve(native.openSettings()).catch(()=>{}); };
+  return (
+    <div className="card" data-section="io-notices" style={{marginTop:12}}>
+      <div className="settings-row" style={{borderBottom:"none",paddingTop:0}}>
+        <div style={{minWidth:0}}><div className="settings-row-title" id="notices-lbl" style={{fontWeight:700}}>{t("notices.title")}</div><div className="settings-row-sub" style={{lineHeight:1.5}}>{t("notices.sub")}</div></div>
+        <div className={`toggle-track${notices.on?" on":""}`} data-section="notices-toggle" role="switch" aria-checked={notices.on} aria-labelledby="notices-lbl" tabIndex={0} onClick={flip} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(); } }}><div className="toggle-knob"/></div>
+      </div>
+      <div className="list-sub" style={{lineHeight:1.55}}>{t("notices.what")}</div>
+      {notices.on&&allowed===false&&(<div data-section="notices-need" style={{marginTop:10}}>
+        <div className="list-sub" style={{color:"var(--warn)",lineHeight:1.5}}>{t("notices.needAccess")}</div>
+        <button type="button" className="btn btn-sm btn-sm-primary" data-section="notices-open" style={{marginTop:8}} onClick={()=>Promise.resolve(native.openSettings()).catch(()=>{})}>{t("notices.openSettings")}</button>
+      </div>)}
+      {notices.on&&allowed===true&&<div className="list-sub" data-section="notices-ok" style={{marginTop:8,color:"var(--pos)"}}>{t("notices.ready")}</div>}
+    </div>
+  );
+}
 // Run 75: "Report a problem / write to us". Says what is sent before sending; nothing from the ledger unless the person writes it.
 function FeedbackSheet({ lang, showToast, onClose }) {
   const [msg,setMsg]=useState(""), [contact,setContact]=useState(""), [tech,setTech]=useState(true), [busy,setBusy]=useState(false);
@@ -990,7 +1013,7 @@ function DriveCard({ drive }) {
     </div>
   );
 }
-export function ImportExportPage({ drive, state, onExportCSV, onExportJSON, onImportFile, onImportText, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall, onDeleteMany }) {
+export function ImportExportPage({ notices, drive, state, onExportCSV, onExportJSON, onImportFile, onImportText, onConfirmBackup, onShareBackup, onExportEncrypted, protection, onProtect, onInstall, onDeleteMany }) {
   const fileRef=useRef();
   const { transactions, lastBackup, backupConfirmedAt }=state;
   const confirmed=!!(lastBackup && backupConfirmedAt && Date.parse(backupConfirmedAt)>=Date.parse(lastBackup));
@@ -1024,6 +1047,7 @@ export function ImportExportPage({ drive, state, onExportCSV, onExportJSON, onIm
       </div>
 
       <DriveCard drive={drive}/>
+      <NoticesCard notices={notices}/>
       <div className="section-title">{t("io2.importTitle")}</div>
       <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io2.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}} style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
         {/* Run 39c (owner: the backup is in Google Drive but the website's picker does not show it): no type filter anywhere. Drive and other apps often label
