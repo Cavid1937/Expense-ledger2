@@ -34,7 +34,7 @@ export function MonthReportSheet({ state, mon, currency, onClose, showToast }) {
         <div className="list-sub" style={{ marginTop: 10 }}>{tn("report.count", r.count)}</div>
         <div className="list-sub" style={{ marginTop: 6, lineHeight: 1.5 }}>{t("report.privacy")}</div>
         <button type="button" className="btn btn-primary btn-full" data-section="report-share" style={{ marginTop: 12 }} onClick={async () => { const res = await shareText(title, text); if (res === "failed") showToast && showToast(t("report.shareFailed"), 5000); }}><Icon name="upload" size={15} /> {t("report.share")}</button>
-        <button type="button" className="btn btn-full" data-section="report-copy" style={{ marginTop: 8 }} onClick={async () => { try { await navigator.clipboard.writeText(text); showToast && showToast(t("report.copied")); } catch { showToast && showToast(t("report.shareFailed"), 5000); } }}>{t("report.copy")}</button>
+        <button type="button" className="btn btn-ghost btn-full" data-section="report-copy" style={{ marginTop: 8 }} onClick={async () => { try { await navigator.clipboard.writeText(text); showToast && showToast(t("report.copied")); } catch { showToast && showToast(t("report.shareFailed"), 5000); } }}>{t("report.copy")}</button>
         <button type="button" className="btn btn-ghost btn-full" data-closer="1" onClick={onClose}>{t("common.close")}</button>
       </div>
     </div>

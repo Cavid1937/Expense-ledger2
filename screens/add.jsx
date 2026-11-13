@@ -49,7 +49,7 @@ export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast
           <div className="field"><label className="field-lbl" htmlFor="bill-cat">{t("add.category")}</label>
             <PickSelect id="bill-cat" className="field-input field-select" value={cats.some(c=>c.id===category)?category:cats[0].id} onChange={e=>setCategory(e.target.value)}>{cats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</PickSelect></div>
           <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><PickDate id="bill-date" className="field-input" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/>
-            {isValidDateStr(anchor)&&<div className="list-sub" style={{marginTop:4}}>{fmtLongDate(parseLocalDate(anchor))}</div>}</div>
+            </div>
         </div>
         {type==="expense"&&(
           <div className="field"><label className="field-lbl" htmlFor="bill-kind">{t("bill.kind")}</label>
@@ -462,7 +462,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           <PickDate id="txn-date" className="field-input" lang={locale()} value={date} onChange={e=>setDate(e.target.value)}/>
           {/* Run 7, V3: the date box is the phone's own control and follows the phone's language, not the app's, so the chosen date is
               repeated here in the interface language. Display only: the stored value stays YYYY-MM-DD. */}
-          {isValidDateStr(date)&&<div className="date-readout" style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{fmtLongDate(parseLocalDate(date))}</div>}
+          
         </div>
 
         {/* Run 38 (owner: why offer cash / card / wallet when I added my own accounts?): with accounts, "Paid from" lists them (one tap);

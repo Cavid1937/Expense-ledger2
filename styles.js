@@ -906,5 +906,9 @@ html,body,.app{transition:background-color 200ms ease-out}
 .pick-sheet{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
 /* above the Add screen (100), below notices (200+) and the lock screen (1000) */
 .sheet-overlay.pick-overlay{z-index:150}
+/* Run 76 polish: form columns may shrink (a long date ends in "…" instead of running off the screen); the backup banner's buttons are finger-sized */
+.field-row>.field{min-width:0}
+.backup-banner-btn{min-height:36px;padding:6px 12px;font-size:11px}
+.backup-dismiss{min-width:36px;min-height:36px;display:inline-flex;align-items:center;justify-content:center}
 `;
 

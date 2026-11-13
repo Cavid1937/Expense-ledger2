@@ -997,14 +997,14 @@ function DriveCard({ drive }) {
       {!pref.on ? (<>
         <div className="list-sub" style={{lineHeight:1.55,marginTop:8}}>{t("drive.what")}</div>
         <button type="button" className="btn btn-primary" data-section="drive-connect" disabled={!!busy} style={{marginTop:12,width:"100%"}} onClick={onConnect}>{busy?t("drive.working"):t("drive.connect")}</button>
-        <button type="button" className="btn" data-section="drive-restore" disabled={!!busy} style={{marginTop:8,width:"100%"}} onClick={onRestore}>{t("drive.restore")}</button>
+        <button type="button" className="btn btn-ghost" data-section="drive-restore" disabled={!!busy} style={{marginTop:8,width:"100%"}} onClick={onRestore}>{t("drive.restore")}</button>
       </>) : (<>
         <div className="list-sub" data-section="drive-last" style={{marginTop:8,lineHeight:1.5}}>{pref.lastAt?t("drive.last",{date:fmtLongDate(pref.lastAt)}):t("drive.never")}</div>
         {pref.fails>=3&&<div className="list-sub" data-section="drive-warn" role="status" style={{marginTop:6,color:"var(--warn)",lineHeight:1.5}}>{t("drive.failing",{n:pref.fails})}</div>}
         <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("drive.auto")}</div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
           <button type="button" className="btn btn-primary" data-section="drive-backup" disabled={!!busy} style={{flex:"1 1 140px"}} onClick={onBackup}>{busy==="save"?t("drive.working"):t("drive.backupNow")}</button>
-          <button type="button" className="btn" data-section="drive-restore" disabled={!!busy} style={{flex:"1 1 140px"}} onClick={onRestore}>{busy==="load"?t("drive.working"):t("drive.restore")}</button>
+          <button type="button" className="btn btn-ghost" data-section="drive-restore" disabled={!!busy} style={{flex:"1 1 140px"}} onClick={onRestore}>{busy==="load"?t("drive.working"):t("drive.restore")}</button>
         </div>
         {!askOff
           ? <button type="button" className="btn btn-sm" data-section="drive-off" style={{marginTop:10}} onClick={()=>setAskOff(true)}>{t("drive.disconnect")}</button>

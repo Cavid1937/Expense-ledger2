@@ -90,8 +90,9 @@ section("R7-7. V3: the Add form repeats the chosen date in the interface languag
 page = await openPage(browser, { seed: seed({ language: "az" }) });
 await openAdd(page);
 const azMonths = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avqust", "sentyabr", "oktyabr", "noyabr", "dekabr"];
-const readout = await page.evaluate(() => (document.querySelector(".add-overlay .date-readout") || {}).innerText || "");
-ok(readout === `${d} ${azMonths[m]} ${y}`, `az: under the date box "${d} ${azMonths[m]} ${y}" (the box itself follows the phone's language)`, readout);
+// Run 76: the app's own date picker shows the date in the interface language on its button, so the extra line under the box is gone
+const readout = await page.evaluate(() => { const d = document.querySelector('.add-overlay input[type="date"]'); return d ? (d.parentElement.querySelector(".pick-btn .pick-text") || {}).innerText || "" : ""; });
+ok(readout === `${d} ${azMonths[m]} ${y}`, `az: the date button reads "${d} ${azMonths[m]} ${y}" in the app's language`, readout);
 await page.close();
 
 section("R7-8. The 4-tab bar fits in Azerbaijani at 320 / 360 / 390 px");
