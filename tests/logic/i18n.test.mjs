@@ -82,6 +82,7 @@ const REASONS = ["not a transaction record", "missing date", "invalid date", "mi
 const dynamic = { "nav.": ["home", "ledger", "monthly", "goals", "more"], "cat.": CAT_IDS, "tile.": CAT_IDS, "sub.": SUBS, "dow.": DAYS, "dow.pl.": DAYS, "dow.cmp.": DAYS,
   "freq.": FREQ, "freqCap.": FREQ, "surplus.": ["Surplus", "Deficit", "Break-even"], "month.net.": ["Net surplus", "Net deficit", "Break-even"],
   "an.perDay.": ["null", "same", "weekend", "weekday"], "paid.kind.": ["cash", "card", "mobile", "bank", "other"], "paid.short.": ["cash", "card", "mobile", "bank", "other"], "ledger.type.": ["all", "expense", "income"], "reason.": REASONS, "cathint.": ["digital", "housing", "transport", "gifts", "shopping"],
+  "map.mode.": ["signed", "inout", "out"],   // Run 67: "Match the columns"
   // Run 64: the Excel workbook's sheet names, column headings and Read me lines
   "xl.sheet.": ["readme", "entries", "accounts", "transfers", "budgets", "goals", "goalHist", "debts", "bills"],
   "xl.readme.": ["entries", "accounts", "transfers", "budgets", "goals", "goalHist", "debts", "bills"],

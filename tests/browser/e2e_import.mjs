@@ -77,12 +77,18 @@ await page.close();
 
 section("I4. Files that must be refused");
 page = await openPage(browser); await openData(page); const pre4 = strip(await state(page));
-for (const [name, content, re] of [["unterminated.csv", 'Date,Amount,Merchant\r\n2026-09-01,5,"never closed\r\n2026-09-02,6,ok', /never closed/], ["nocols.csv", "When,How much\r\n2026-09-01,5", /needs a date and amount column/], ["future.json", JSON.stringify({ version: 11, transactions: [tx()] }), /newer version/], ["junk.json", "{not json", /incomplete or damaged/], ["junk2.json", "not json at all", /not valid JSON or CSV/], ["allbad.csv", "Date,Amount\r\n2026-09-01,-1\r\n2026-09-02,0", /Nothing could be imported/]]) {
+for (const [name, content, re] of [["unterminated.csv", 'Date,Amount,Merchant\r\n2026-09-01,5,"never closed\r\n2026-09-02,6,ok', /never closed/], ["future.json", JSON.stringify({ version: 11, transactions: [tx()] }), /newer version/], ["junk.json", "{not json", /incomplete or damaged/], ["junk2.json", "not json at all", /not valid JSON or CSV/], ["allbad.csv", "Date,Amount\r\n2026-09-01,-1\r\n2026-09-02,0", /Nothing could be imported/]]) {
   await upload(page, write(name, content)); sh = await sheetText(page);
   ok(re.test(sh), `${name}: refused with a clear message`, sh.slice(0, 200));
   await sheetBtn(page, /^OK/); await wait(200);
   ok(eq2((await state(page)).transactions, pre4.transactions), `${name}: saved data unchanged`);
 }
+// Run 67: a CSV with unknown column names ("When", "How much") is no longer refused outright: the app cannot tell money in from money out, so it
+// opens "Match the columns" with its guess (date in A, amount in B). Cancel there changes nothing.
+await upload(page, write("nocols.csv", "When,How much\r\n2026-09-01,5")); sh = await sheetText(page);
+ok(/Match the columns/.test(sh) && (await page.evaluate(() => document.querySelector('[data-map="date"]').value)) === "0" && (await page.evaluate(() => document.querySelector('[data-map="amount"]').value)) === "1", "nocols.csv: 'Match the columns' opens with date in A and amount in B guessed", sh.slice(0, 200));
+await page.evaluate(() => [...document.querySelectorAll('[data-section="map-cols"] .btn')].find((b) => /^Cancel/.test(b.innerText.trim())).click()); await wait(400);
+ok(eq2((await state(page)).transactions, pre4.transactions), "nocols.csv: saved data unchanged");
 await page.close();
 
 section("I5. Look-alike transactions (re-importing the same CSV)");

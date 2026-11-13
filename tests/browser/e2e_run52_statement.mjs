@@ -147,11 +147,15 @@ section("R52-B4. Files that are not statements are refused with a reason; nothin
   const before = JSON.stringify((await state(page)).transactions);
   const cases = [["broken.pdf", Buffer.from("%PDF-1.4\nthis is not a real pdf file"), /This PDF could not be opened/], ["letter.pdf", pdf([[[72, 700, "Dear customer, thank you for banking with us."], [72, 680, "Kind regards"]]]), /No bank statement rows were found/],
     ["word.xlsx", zip([{ name: "word/document.xml", text: "<w/>" }]), /This Excel file could not be opened/], ["notes.xlsx", xlsx([["Shopping list"], ["Milk", "Bread"]]), /No bank statement rows were found/],
-    ["two-columns.xlsx", xlsx([["2026-10-01", "A", "10.00", "7.00"], ["2026-10-02", "B", "50.00", "1.00"], ["2026-10-03", "C", "5.00", "2.00"]]), /cannot tell which column is money in/]];
+    // Run 67: a table with dates and two unnamed money columns is no longer refused: it opens "Match the columns" (checked below)
+    ["two-columns.xlsx", xlsx([["2026-10-01", "A", "10.00", "7.00"], ["2026-10-02", "B", "50.00", "1.00"], ["2026-10-03", "C", "5.00", "2.00"]]), /Match the columns/]];
   for (const [name, data, re] of cases) {
     const f = path.join(IMP, name); fs.writeFileSync(f, data); await upload(page, f); const sh = await sheet(page);
-    ok(re.test(sh) && JSON.stringify((await state(page)).transactions) === before, `${name}: refused with a clear reason, saved data unchanged`, sh.slice(0, 240));
-    await clickText(page, '[aria-label="Restore backup"] .btn', /^OK/); await wait(250);
+    const mapping = name === "two-columns.xlsx";
+    ok(re.test(sh) && JSON.stringify((await state(page)).transactions) === before, mapping ? `${name}: the person is asked to match the columns; saved data unchanged` : `${name}: refused with a clear reason, saved data unchanged`, sh.slice(0, 240));
+    if (mapping) await page.evaluate(() => [...document.querySelectorAll('[data-section="map-cols"] .btn')].find((b) => /^Cancel/.test(b.innerText.trim())).click());
+    else await clickText(page, '[aria-label="Restore backup"] .btn', /^OK/);
+    await wait(250);
   }
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();

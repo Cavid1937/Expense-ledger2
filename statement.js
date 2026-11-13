@@ -254,6 +254,67 @@ export function readStatement(lines) {
   return { bank, rows, problems: notes, check: statementCheck(rows) };
 }
 
+// ── Run 67: CSV files from banks, and "match the columns" when a table cannot be worked out ─────────────────────────────────────────
+// A CSV text -> a grid (rows of cells). The separator is the one (; tab ,) that splits the first line most; quotes are honoured ("a;b" is one cell,
+// "" inside quotes is one quote). Pure.
+export function gridFromCsv(text) {
+  const s = String(text || "").replace(/^﻿/, ""), first = s.split(/\r?\n/, 1)[0] || "";
+  const sep = [";", "\t", ","].map((c) => [c, first.split(c).length]).sort((a, b) => b[1] - a[1])[0][0];
+  const rows = []; let row = [], cell = "", q = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (q) { if (ch === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; continue; }
+    if (ch === '"' && cell === "") { q = true; continue; }
+    if (ch === sep) { row.push(cell); cell = ""; continue; }
+    if (ch === "\n" || ch === "\r") { if (ch === "\r" && s[i + 1] === "\n") i++; row.push(cell); rows.push(row); row = []; cell = ""; continue; }
+    cell += ch;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows.map((r) => r.map(clean)).filter((r) => r.some(Boolean));
+}
+// A first guess for the columns of a grid: the column that holds dates most often, the money columns, and the longest-text column as the
+// description. map = { header, date, desc, mode: "signed" | "out" | "inout", amount, debit, credit, balance } (column numbers; -1 = none).
+export function guessMap(grid) {
+  const g = Array.isArray(grid) ? grid : [], width = Math.max(0, ...g.map((r) => r.length));
+  const dateHits = Array(width).fill(0), moneyHits = Array(width).fill(0), textLen = Array(width).fill(0);
+  let firstData = -1;
+  g.forEach((r, i) => r.forEach((c, k) => { if (stDate(c)) { dateHits[k]++; if (firstData < 0) firstData = i; } else if (c && stMoney(c) !== null && c.replace(/\D/g, "").length < 12) moneyHits[k]++; else if (c) textLen[k] += c.length; }));
+  const best = (arr, skip = []) => { let b = -1; arr.forEach((v, k) => { if (!skip.includes(k) && v > 0 && (b < 0 || v > arr[b])) b = k; }); return b; };
+  const date = best(dateHits), desc = best(textLen, [date]);
+  const money = moneyHits.map((v, k) => [k, v]).filter(([k, v]) => k !== date && v >= Math.max(1, (g.length - Math.max(0, firstData)) * 0.3)).map(([k]) => k);
+  const header = firstData > 0 ? firstData - 1 : -1;
+  const named = (k) => header >= 0 ? roleOf(g[header][k] || "") : "";
+  let debit = money.find((k) => named(k) === "debit") ?? -1, credit = money.find((k) => named(k) === "credit") ?? -1, balance = money.find((k) => named(k) === "balance") ?? -1;
+  let amount = money.find((k) => named(k) === "amount") ?? (money.find((k) => k !== balance && k !== debit && k !== credit) ?? -1);
+  const mode = debit >= 0 && credit >= 0 ? "inout" : "signed";
+  return { header, date, desc, mode, amount, debit, credit, balance };
+}
+// Reads a grid with the columns the person chose. Rows above `header` (and the header row) are skipped; a row without a real date in the
+// date column is skipped and counted. mode "signed": one amount column, a minus sign means money out; "out": one amount column, every row is
+// money out; "inout": two columns, money out and money in. Returns the same shape as readStatement, so the same review sheet is used.
+export function readMapped(grid, map) {
+  const g = Array.isArray(grid) ? grid : [], m = map || {}, rows = [], problems = [];
+  const cell = (r, k) => (k >= 0 && k < r.length ? r[k] : "");
+  let skipped = 0;
+  g.forEach((r, i) => {
+    if (i <= (m.header ?? -1)) return;
+    const d = stDate(cell(r, m.date)); if (!d) { if (r.some(Boolean)) skipped++; return; }
+    let type = "expense", cents = 0;
+    if (m.mode === "inout") { const o = stMoney(cell(r, m.debit)), n = stMoney(cell(r, m.credit)); if (o) cents = Math.abs(o); else if (n) { cents = Math.abs(n); type = "income"; } }
+    else { const a = stMoney(cell(r, m.amount)); if (a) { cents = Math.abs(a); type = m.mode === "out" ? "expense" : a < 0 ? "expense" : "income"; } }
+    if (!cents) { skipped++; return; }
+    const descCols = Array.isArray(m.desc) ? m.desc : [m.desc];
+    const desc = clean(descCols.map((k) => cell(r, k)).filter(Boolean).join(" "));
+    const bal = m.balance >= 0 ? stMoney(cell(r, m.balance)) : null;
+    const merchant = desc.slice(0, 80);
+    rows.push({ date: d.date, posted: "", time: d.time, type, cents, desc, merchant, balance: bal, ref: "", mcc: "", cur: curOf(cell(r, m.mode === "inout" ? (type === "income" ? m.credit : m.debit) : m.amount)) || "", orig: "", city: "", pending: false, kind: kindOf(merchant) });
+  });
+  if (skipped) problems.push("rows:" + skipped);
+  const mins = (r) => (r.time ? +r.time.slice(0, 2) * 60 + +r.time.slice(3) : null);
+  rows.forEach((r, i) => { if (r.pair || r.type !== "income" || mins(r) === null) return; const j = rows.findIndex((o, k) => k !== i && !o.pair && o.type === "expense" && o.date === r.date && o.cents === r.cents && mins(o) !== null && Math.abs(mins(o) - mins(r)) <= 5); if (j >= 0) { r.pair = rows[j].pair = true; } });
+  return { bank: "generic", rows, problems, check: statementCheck(rows) };
+}
+
 // The running balance, when the statement has one, proves every row: the balance before, plus money in, minus money out, is the balance after.
 export function statementCheck(rows) {
   const withBal = rows.filter((r) => r.balance !== null && r.balance !== undefined);

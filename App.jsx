@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Fragment, Component } from "react";
 import { t, tn, tIn, setLang, locale, LANGS, LANG_NAMES, MESSAGES } from "./i18n.js";
-import { readStatement, statementEntries, linesFromText, linesFromGrid, xlsxGrid } from "./statement.js";
+import { readStatement, statementEntries, linesFromText, linesFromGrid, xlsxGrid, gridFromCsv, guessMap, readMapped } from "./statement.js";
 import { CSS } from "./styles.js";
 import { LockGate, LockSheet } from "./screens/lock.jsx";
 import { HomePage } from "./screens/home.jsx";
@@ -11,6 +11,7 @@ import { ImportExportPage, ImportUnlock, InfoSheet, LanguageChooser, MorePage, M
 import { AccountSheet } from "./screens/home.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { GiftsPage } from "./screens/gifts.jsx";
+import { ColumnMapper } from "./screens/mapcols.jsx";   // Run 67
 import { SetupSheet } from "./screens/setup.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
@@ -2004,6 +2005,21 @@ function bankCsvToStandard(raw) {
   return out.length>1 ? { text:out.join("\n"), skipped } : null;
 }
 
+// Run 67: the app's own CSV (what "Export CSV" writes, or a file made the same way): a Date and an Amount column and dates written YYYY-MM-DD.
+// Anything else ending in .csv is treated as a bank's file and read by the statement reader.
+export function isOwnCsv(raw) {
+  const g=gridFromCsv(String(raw||"").split(/\r?\n/).slice(0,3).join("\n")); if (g.length<2) return false;
+  const h=g[0].map(x=>String(x).replace(/^﻿/,"").trim().toLowerCase()), d=h.indexOf("date");
+  return d>=0 && h.includes("amount") && /^\d{4}-\d{2}-\d{2}/.test(String(g[1][d]||"").trim());
+}
+// Run 67: "Match the columns" opens when a table could not be read, or was read without knowing money in from money out ("sign"), and only
+// when the table really has a date column and an amount column to match (a sheet of notes keeps the plain "could not read" message).
+export function needsMapping(res, grid) {
+  if (!Array.isArray(grid) || grid.length<2) return false;
+  if (res && res.rows && res.rows.length && !(res.problems||[]).includes("sign")) return false;
+  const m=guessMap(grid);
+  return m.date>=0 && (m.amount>=0 || m.debit>=0 || m.credit>=0);
+}
 function parseCsvImport(raw, _bank=false) {
   const rows=parseCSV(String(raw).replace(/^\uFEFF/,""));
   if (rows.unterminated) return { error:t("csv.unterminated") };
@@ -4861,13 +4877,23 @@ function AppInner() {
       if (isPdf || isZip) {
         setImportPending({ busy:true, filename:name });
         try {
-          const lines=isPdf ? await (await import("./pdfText.js")).pdfLines(buf) : linesFromGrid(await xlsxGrid(buf));
-          openStatement(readStatement(lines), name);
+          if (isPdf) { openStatement(readStatement(await (await import("./pdfText.js")).pdfLines(buf)), name); return; }
+          // Run 67: an Excel table whose columns cannot be worked out opens "Match the columns" instead of an error
+          const grid=await xlsxGrid(buf), res=readStatement(linesFromGrid(grid));
+          if (needsMapping(res, grid)) { setImportPending({ mapping:true, grid, map:guessMap(grid), filename:name }); return; }
+          openStatement(res, name);
         } catch { setImportPending({ error:t(isPdf?"st.pdfFailed":"st.xlsxFailed"), filename:name }); }
         return;
       }
       const raw=new TextDecoder("utf-8").decode(buf);
       if (isEncryptedBackup(raw)) { setImportPending({ needPass:true, text:raw, filename:name }); return; }   // Run 32: asks for the passphrase first
+      // Run 67: a bank's CSV file goes through the statement reader, like its PDF or Excel file (stable ids, so the same file never adds twice;
+      // categories from the shop's words; the transfer and cash choices; the running-balance check). The app's own CSV export keeps its route.
+      if (/\.csv$/i.test(name) && !isOwnCsv(raw)) {
+        const grid=gridFromCsv(raw), res=readStatement(linesFromGrid(grid));
+        if (needsMapping(res, grid)) { setImportPending({ mapping:true, grid, map:guessMap(grid), filename:name }); return; }
+        if (res.rows.length) { openStatement(res, name); return; }
+      }
       const plan=planImportWithCats(raw, name);
       if (!plan.ok) {
         const st=readStatement(linesFromText(raw));
@@ -5153,9 +5179,12 @@ function AppInner() {
           <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setImportPending(null)}>
             <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("import.dialogLabel")}>
               <div className="sheet-grip"><div className="sheet-handle"/></div>
-              <div className="sheet-title">{t(importPending.needPass?"enc.unlockTitle":importPending.kind==="statement"?"st.sheetTitle":"import.title")}</div>
+              <div className="sheet-title">{t(importPending.needPass?"enc.unlockTitle":importPending.mapping?"map.title":importPending.kind==="statement"?"st.sheetTitle":"import.title")}</div>
               {importPending.needPass?(
                 <ImportUnlock filename={importPending.filename} onUnlock={unlockImport} onCancel={()=>setImportPending(null)}/>
+              ):importPending.mapping?(
+                <ColumnMapper grid={importPending.grid} initial={importPending.map} filename={importPending.filename} currency={currency}
+                  onUse={(map)=>openStatement(readMapped(importPending.grid,map), importPending.filename)} onCancel={()=>setImportPending(null)}/>
               ):importPending.busy?(
                 <div role="status" data-section="import-busy" style={{fontSize:13,color:"var(--ink-2)",padding:"8px 2px 16px",lineHeight:1.55}}>{t("st.reading")}<div style={{fontSize:12,color:"var(--ink-3)",overflowWrap:"anywhere"}}>{importPending.filename}</div></div>
               ):importPending.error?(
