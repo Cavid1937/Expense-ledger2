@@ -51,7 +51,7 @@ Two of its points were sound, and both are in the package below: a native speake
   - core.test (the label formula);
   - e2e_run35_cat (93% and two separate notes, instead of 94% and one combined note);
   - e2e_run7 (the all-time label).
-- Results: logic 109 files, 2,190 passed, 0 failed. Browser files run on the final code: e2e_run65 11, e2e_run35_cat 25, e2e_run7 21, e2e_run59_leftover 16, e2e_run50 12, e2e_lang 57, e2e_ux_lang 8, e2e_run58_cats 25, e2e_run50gifts 9. Full browser suite: see PHASE_CHECKPOINT.md.
+- Results: logic 109 files, 2,190 passed, 0 failed. Browser files run on the final code: e2e_run65 11, e2e_run35_cat 25, e2e_run7 21, e2e_run59_leftover 16, e2e_run50 12, e2e_lang 57, e2e_ux_lang 8, e2e_run58_cats 25, e2e_run50gifts 9. Full browser suite on 8345621: 135 files, 2,276 passed, 3 failed, all three in e2e_run9 R9-5, which still expected the month labels on the all-time overview. That overview now says 'Not spent' / 'Overspent' on purpose, because it is not a month figure. I updated the check to the new labels (same 3 languages, same amounts), and e2e_run9 then passed 55/55 on its own, so all 135 files pass.
 
 ## Status
 | Item | Status |

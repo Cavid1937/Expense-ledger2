@@ -146,7 +146,8 @@ section("R9-4. A rent paid as an ordinary expense is linked to the bill only whe
 section("R9-5. The Analytics overview names surplus, deficit and break-even in words (en / az / ru)");
 {
   const { tIn } = await import(new URL("../../i18n.js", import.meta.url));
-  const cases = [["surplus", 1000, 600, "month.net.Net surplus", "400.00"], ["deficit", 500, 900, "month.net.Net deficit", "400.00"], ["break-even", 700, 700, "month.net.Break-even", "0.00"]];
+  // Run 65: the all-time overview is not a month figure, so it uses the plain surplus.* words (the month card says "Monthly surplus")
+  const cases = [["surplus", 1000, 600, "surplus.Surplus", "400.00"], ["deficit", 500, 900, "surplus.Deficit", "400.00"], ["break-even", 700, 700, "surplus.Break-even", "0.00"]];
   for (const l of LANGS) {
     const res = [];
     for (const [name, inc, exp, key, amt] of cases) {
@@ -157,7 +158,7 @@ section("R9-5. The Analytics overview names surplus, deficit and break-even in w
       res.push({ name, ok: !!line && line.includes(amt), line });
       await page.close();
     }
-    ok(res.every((r) => r.ok), `${l}: overview shows "${tIn(l, "month.net.Net surplus")}" / "${tIn(l, "month.net.Net deficit")}" / "${tIn(l, "month.net.Break-even")}" with the right amount`, res);
+    ok(res.every((r) => r.ok), `${l}: overview shows "${tIn(l, "surplus.Surplus")}" / "${tIn(l, "surplus.Deficit")}" / "${tIn(l, "surplus.Break-even")}" with the right amount`, res);
   }
 }
 
