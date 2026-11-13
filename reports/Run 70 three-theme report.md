@@ -107,8 +107,8 @@ Every surface and text colour is as you gave it. Three values were adjusted afte
 | Warning on card | 10.28 | 6.51 | 9.54 |
 
 ## D. Tests actually run
-- **Logic:** `node tests\run-logic.mjs`: 114 files, 2,293 passed, 0 failed, 0 missing.
-  - **New: run70themes, 42 checks.** It covers:
+- **Logic (first pass):** `node tests\run-logic.mjs`: 114 files, 2,293 passed, 0 failed, 0 missing.
+  - **New: run70themes, 45 checks.** It covers:
     - your colours;
     - contrast on all four surfaces;
     - button and border edges;
@@ -131,7 +131,11 @@ Every surface and text colour is as you gave it. Three values were adjusted afte
   - e2e_run42_io 6/6;
   - e2e_ux_lang 8/8.
 - **Build:** `npx vite build` OK.
-- **Full browser suite:** GATE70
+- **Full browser suite, first run:** 140 files, 2,339 passed, 3 failed. All three failures were real findings:
+  - The phone's "more contrast" setting had stopped working. Its stronger colours only reached the original look, because themes set their colours directly. **Fixed:** each theme now gets its own stronger set, and the logic check is in run70themes.
+  - Two tests expected the original look's exact colours. They now check the active theme (reduced transparency: the bar is solid in the page colour; more contrast: exact stronger Sea glass values).
+- **Full browser suite after the fixes** (`node tests\run-browser.mjs` on cddf0d2): **140 files, 2,342 passed, 0 failed, 0 missing**, 0 standby events.
+- **Logic after the fixes:** 114 files, 2,296 passed (run70themes 45).
 
 ## E. Status
 | Item | Status |
