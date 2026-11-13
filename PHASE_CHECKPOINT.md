@@ -1,3 +1,6 @@
+## 0000zb. 2026-11-13 morning. STATE FOR THE OWNER: read "reports/Morning summary 2026-11-13.md".
+- Full browser suite on 8dbfcca (Run 64): 134 files, 2268 passed / 0 failed / 0 missing (90 files in the run cut off by a session restart, 43 afterwards with the same count guard, e2e_run40 alone because it needs E2E_IMP_DIR to exist). Logic 107 files 2169/0/0. vite build OK (main chunk 1,031.88 kB, gzip 319.71 kB).
+- Runs 58-64 are local commits only, NOT pushed. Waiting on the owner: Left over vs Not spent; lottery/alcohol subcategories; "publish"; native-speaker review sheet.
 ## 0000za. 2026-11-13 RUN 64 (latest). Local commit, NOT pushed. Read reports/Run 64 report.md.
 - Full suite on 538ce4e (Runs 62-63) reported 2 problem files, both caused by me: build.mjs broken mid-run by a `//` note (fixed), and 32 px toggle buttons under the 34 px rule (raised to 36). Both files pass alone now; a clean full suite is needed (next line).
 - Done: xlsxWrite.js (stored-zip workbook writer), buildWorkbookSheets (9 sheets, localized, xl.* keys), Import/Export card io-xlsx (browser only: inNativeShell hides it), saveTextFile for Gifts and Debts CSV (Android save bridge). tests/browser/build.mjs copies xlsxWrite.js. APP_RELEASE 64.

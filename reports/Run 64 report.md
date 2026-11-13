@@ -1,4 +1,4 @@
-﻿# Run 64 report: everything in one Excel file, and exports that work in the Android app (13 Nov 2026)
+# Run 64 report: everything in one Excel file, and exports that work in the Android app (13 Nov 2026)
 
 Working copy: `Expense-ledger2-fixes`, branch `fix/financial-correctness-2026-10-26`. Local commit only. Nothing pushed, no APK built.
 From your 10 Nov list (NEXT_WORK_PLAN item E11, "make the export one coherent, self-explaining system").
@@ -48,7 +48,7 @@ From your 10 Nov list (NEXT_WORK_PLAN item E11, "make the export one coherent, s
 - Browser, on the final code:
   - new `e2e_run64_xlsx`: 5/5 (the button, the download, nine sheets, both entries read back).
   - Also passing: e2e_run61_downgrade 4, e2e_downgrade 26, e2e_ux_lang 8, e2e_ux 30, e2e_run62_history 7, e2e_run61_goals 11, e2e_run50gifts 9, e2e_import 53.
-- Full browser suite: see PHASE_CHECKPOINT.md (it runs after this commit).
+- Full browser suite on 8dbfcca: 134 files, 2,268 passed / 0 failed / 0 missing. A session restart cut the run off at 90 files (all passing); the remaining 43 ran with the same counting rules; e2e_run40 (42/42) ran alone, since its import folder is normally created by an earlier test.
 
 ## Status
 | Item | Status |
