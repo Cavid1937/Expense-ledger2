@@ -48,8 +48,8 @@ export function ColumnMapper({ grid, initial, filename, currency, onUse, onCance
       <fieldset style={{ border: "none", padding: 0, margin: "0 0 10px" }}>
         <legend className="field-lbl">{t("map.how")}</legend>
         {["signed", "inout", "out"].map((md) => (
-          <label key={md} style={{ display: "flex", gap: 8, alignItems: "flex-start", margin: "6px 0", fontSize: 13, lineHeight: 1.4 }}>
-            <input type="radio" name="map-mode" data-map-mode={md} checked={m.mode === md} onChange={() => set("mode", md)} style={{ marginTop: 2 }}/>
+          <label key={md} style={{ display: "flex", gap: 10, alignItems: "center", minHeight: 40, padding: "4px 0", margin: 0, fontSize: 13, lineHeight: 1.4, cursor: "pointer" }}>
+            <input type="radio" name="map-mode" data-map-mode={md} checked={m.mode === md} onChange={() => set("mode", md)} style={{ width: 18, height: 18, margin: 0, flexShrink: 0 }}/>
             <span>{t("map.mode." + md)}</span>
           </label>
         ))}
