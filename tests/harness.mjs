@@ -55,6 +55,8 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   "loanSchedule","impliedNominalPct","debtRemaining","debtCanPay","cleanDebtData","readDebts","writeDebts","mergeDebtData","tripName","tripTotals","catTotals","budgetCrossing","billsToIcs","icsEscape","bankMoney","bankDate","cleanCustomCats","applyCustomCats","addCustomCat","editCustomCat","mergeCustomCats","customCatInUse","planImportWithCats","splitTransaction","cleanAccountData","accountBalances","addAccount","editAccount","addTransfer","accountInUse","mergeAccountData","parseCsvImport","netPosition","loanRemainingCents","reminderPlan","cleanReminderPrefs","reminderMessage","REMIND_DEFAULT",
   // Run 69: "Help improve the app"
   "readLearn","writeLearn","cleanPlace","learnPreview","sendLearning","LEARN_KEY",
+  // Run 88: explore notes in the bell
+  "exploreTip","EXPLORE_GAP_FIRST","EXPLORE_GAP_NEXT",
   // interface language (from i18n.js when present)
   "t","tn","tIn","setLang","getLang","MESSAGES","LANGS","LANG_NAMES","LOCALES","catName","subName","monthName","monthShort","fmtLongDate"];
 const have = names.filter((n) => new RegExp("(function\\s+" + n + "\\b|const\\s+" + n + "\\b)").test(body));

@@ -41,7 +41,8 @@ section("R17-T3. Profile name in the greeting");
   ok((await state(page)).profileName === "Aysel Məmmədova", "the name is trimmed, inner spaces collapsed and saved", (await state(page)).profileName);
   await page.evaluate(() => document.querySelectorAll(".tab-btn")[0].click()); await wait(300);
   const h1 = await page.evaluate(() => document.querySelector(".wordmark").innerText);
-  ok(/^Good (morning|afternoon|evening), Aysel Məmmədova$/.test(h1), "Home greets by name", h1);
+  // Run 88: the greeting may be the usual one or a varied line for the time of day; the name always follows it
+  ok(/^[A-Z][A-Za-z -]+, Aysel Məmmədova$/.test(h1), "Home greets by name", h1);
   await goToSettings(page);
   await setInput(page, () => document.querySelector("#profile-name"), "<b>x</b>" + "y".repeat(60)); await wait(100);
   await clickText(page, '[data-section="st-profile"] button', /save/i); await wait(300);

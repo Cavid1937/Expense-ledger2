@@ -19,16 +19,21 @@ export function writeOnboard(v) { try { localStorage.setItem(OB_KEY, v === "acco
 
 const GOOGLE_G = '<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
 
-// The brand band: mark, name, one line. Before a language is chosen the line changes language every 2.4 s.
+// The brand band: mark, name, one line. Before a language is chosen the line changes language every 4.2 s.
+// Run 88 (owner: the line "changes a little fast ... and a little bit hard"): it stays longer (4.2 s instead of 2.4 s), and the old line softly
+// fades and lifts away while the new one comes into focus in the same place, instead of being swapped at once.
 function Brand({ lang }) {
   const [i, setI] = useState(0);
-  useEffect(() => { if (lang || motionOff()) return undefined; const id = setInterval(() => setI(n => (n + 1) % LANGS.length), 2400); return () => clearInterval(id); }, [lang]);
+  const [prev, setPrev] = useState(null);
+  useEffect(() => { if (lang || motionOff()) return undefined; const id = setInterval(() => setI(n => (n + 1) % LANGS.length), 4200); return () => clearInterval(id); }, [lang]);
   const l = lang || LANGS[i];
+  const last = useRef(l);
+  useEffect(() => { if (last.current === l) return undefined; setPrev(last.current); last.current = l; const to = setTimeout(() => setPrev(null), 700); return () => clearTimeout(to); }, [l]);
   return (
     <div className="ob-brand">
       <span className="lang-glyph ob-glyph" data-launch-target="1" aria-hidden="true" dangerouslySetInnerHTML={{ __html: LAUNCH_GLYPH }} />
       <div className="wordmark lang-mark ob-name">Expense Ledger</div>
-      <p className="ob-tag" aria-live="off"><span key={l} lang={l} className="ob-tag-in">{tIn(l, "ob.tagline")}</span></p>
+      <p className="ob-tag" aria-live="off">{prev && prev !== l && <span key={"o" + prev} lang={prev} className="ob-tag-out" aria-hidden="true">{tIn(prev, "ob.tagline")}</span>}<span key={l} lang={l} className="ob-tag-in">{tIn(l, "ob.tagline")}</span></p>
     </div>
   );
 }

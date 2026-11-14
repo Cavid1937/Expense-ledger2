@@ -19,7 +19,7 @@ import { AccountSheet } from "./screens/home.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { GiftsPage } from "./screens/gifts.jsx";
 import { ColumnMapper } from "./screens/mapcols.jsx";   // Run 67
-import { SetupSheet } from "./screens/setup.jsx";
+import { SetupSheet, readFirstChoices, writeFirstChoices } from "./screens/setup.jsx";
 import { Onboarding, readOnboard, writeOnboard } from "./screens/onboard.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
@@ -4054,7 +4054,21 @@ export function median(arr) {
 
 // ─── Redesign (2026-10-27): figures for the Home ring, the Analytics trend and the Home greeting ───
 // Time-of-day greeting for the Home title. No name: the app does not know the user's name and does not ask for it.
-function greetingKey(now=new Date()) { const h=now.getHours(); return h<5?"home.greet.evening":h<12?"home.greet.morning":h<18?"home.greet.afternoon":"home.greet.evening"; }
+// Run 88 (owner: "the ordinary good morning ... is fine, but use different words too, like evening thoughts or moonlit chat"): about half the
+// time the usual greeting, otherwise one of three lines that fit the time of day. The pick is made once each time the app opens (GREET_R), so
+// the title does not change while the person is using it. Late night (before 5) has its own set.
+const GREET_SETS={
+  night:["home.greet.evening","home.greet.n1","home.greet.n2","home.greet.n3"],
+  morning:["home.greet.morning","home.greet.m1","home.greet.m2","home.greet.m3"],
+  afternoon:["home.greet.afternoon","home.greet.a1","home.greet.a2","home.greet.a3"],
+  evening:["home.greet.evening","home.greet.e1","home.greet.e2","home.greet.e3"],
+};
+const GREET_R=Math.random();
+export function greetingKey(now=new Date(), r=GREET_R) {
+  const h=now.getHours(), set=GREET_SETS[h<5?"night":h<12?"morning":h<18?"afternoon":"evening"];
+  const x=Math.min(0.999999,Math.max(0,Number(r)||0));
+  return x<0.5 ? set[0] : set[1+Math.min(2,Math.floor((x-0.5)*6))];
+}
 // Whole-number percentages that add up to exactly 100 (largest remainder), so a legend never shows 99% or 101%.
 // Rows with no amount get 0. Returns [] when the total is 0.
 function pctShares(amounts) {
@@ -4357,6 +4371,31 @@ export async function sendLearning(preview, fetchFn=(typeof fetch!=="undefined"?
     ]);
     return ok.every(Boolean);
   } catch { return false; }
+}
+
+// Run 88 (owner: "the notification center must remember the choices made at first launch and use them to remind people to explore"): one
+// "try this" note at a time in the bell, picked from the first-launch answers and what the person has (not) set up yet. The first comes a day
+// after setting up; after one is answered the next waits 3 days. Each is shown once: "Show me" opens the place, "Not now" just ends it.
+// Pure, so it can be tested: choices = expense_ledger_v5__first_choices (or null), ctx = counts from the ledger.
+export const EXPLORE_GAP_FIRST = 20 * 3600 * 1000;
+export const EXPLORE_GAP_NEXT = 3 * 24 * 3600 * 1000;
+export const EXPLORE_TIPS = [
+  { id:"pay", to:"recurring", when:(c,x)=>c.income==="fixed" && x.incomeBills===0 },
+  { id:"irregular", to:"monthly", when:(c,x)=>c.income==="variable" && x.entries>=5 },
+  { id:"bills", to:"recurring", when:(c,x)=>x.bills===0 && x.entries>=5 },
+  { id:"goal", to:"goals", when:(c,x)=>x.goals===0 && x.entries>=3 },
+  { id:"where", to:"monthly", when:(c,x)=>x.entries>=10 },
+];
+export function exploreTip(choices, ctx, now=Date.now()) {
+  const c=choices && typeof choices==="object" ? choices : {};
+  const x={ entries:0, bills:0, incomeBills:0, goals:0, ...(ctx||{}) };
+  const done=Array.isArray(c.exploreDone) ? c.exploreDone : [];
+  const since=typeof c.exploreAt==="number" ? c.exploreAt : typeof c.at==="number" ? c.at : null;
+  const gap=typeof c.exploreAt==="number" ? EXPLORE_GAP_NEXT : EXPLORE_GAP_FIRST;
+  if (since!=null && now-since<gap) return null;
+  // the statement / loan card on Home speaks first, while it is still waiting to be shown or answered
+  if ((c.stmt && c.stmtState==="later") || (c.debts && c.debtsState==="later")) return null;
+  return EXPLORE_TIPS.find(tip=>!done.includes(tip.id) && tip.when(c,x)) || null;
 }
 
 // ─── SVG icon system ──────────────────────────────────────────────────────────
@@ -4848,18 +4887,21 @@ function AppInner() {
     // page is left, the new page appears at full size at once (it used to show shrunk for half a second and then spring back).
     let raf=0, pend=null;
     const clearRaf=()=>{ if (raf) { cancelAnimationFrame(raf); raf=0; } pend=null; };
-    const settle=(o,ms)=>{ const el=o.el; el.style.transition=ms?`scale ${ms}ms ${ease}, translate ${ms}ms ${ease}, border-radius ${ms}ms ${ease}`:"none"; el.style.scale=""; el.style.translate=""; if (o.round) el.style.borderRadius=""; setTimeout(()=>{ el.style.transition=""; el.style.willChange=""; if (o.round) el.style.overflow=""; },ms+40); };
+    // Run 88 (owner: "mix the current one with Claude's, where the page fades by how far it is pulled"): the layer also fades as the thumb
+    // pulls (down to 70 % at a full pull) and comes back with the same soft curve when the swipe is let go the other way.
+    const settle=(o,ms)=>{ const el=o.el; el.style.transition=ms?`scale ${ms}ms ${ease}, translate ${ms}ms ${ease}, opacity ${ms}ms ${ease}, border-radius ${ms}ms ${ease}`:"none"; el.style.scale=""; el.style.translate=""; el.style.opacity=""; if (o.round) el.style.borderRadius=""; setTimeout(()=>{ el.style.transition=""; el.style.willChange=""; if (o.round) el.style.overflow=""; },ms+40); };
     const apply=()=>{ raf=0; if (!g || !pend) return; const { q, edge }=pend; pend=null; const e=1-(1-q)*(1-q);
-      g.el.style.scale=String(1-0.08*e); g.el.style.translate=`${(edge===1?-1:1)*Math.round(24*e)}px 0`; };
+      g.el.style.scale=String(1-0.08*e); g.el.style.translate=`${(edge===1?-1:1)*Math.round(24*e)}px 0`; g.el.style.opacity=String(Math.round((1-0.3*e)*100)/100); };
     window.__ledgerBackGesture=(phase,p,edge)=>{
       try {
-        if (phase==="start") { clearRaf(); if (g) settle(g,0); g=pick(); if (g) { const s=g.el.style; s.transition=g.round?`border-radius 160ms ${ease}`:"none"; s.willChange="scale, translate"; if (g.round) { s.borderRadius="24px"; s.overflow="hidden"; } } return "ok"; }
+        if (phase==="start") { clearRaf(); if (g) settle(g,0); g=pick(); if (g) { const s=g.el.style; s.transition=g.round?`border-radius 160ms ${ease}`:"none"; s.willChange="scale, translate, opacity"; if (g.round) { s.borderRadius="24px"; s.overflow="hidden"; } } return "ok"; }
         if (!g) return "none";
         if (phase==="move") { pend={ q:Math.max(0,Math.min(1,Number(p)||0)), edge }; if (!raf) raf=requestAnimationFrame(apply); return "ok"; }
         if (phase==="cancel") { clearRaf(); settle(g,260); g=null; return "ok"; }
         // let go: Back closes the layer with its own motion. A sheet or the add form leaves by itself; a page is replaced by its parent, which
         // must not inherit the shrunk look, so it is put back at once.
-        if (phase==="commit") { clearRaf(); const o=g; g=null; if (o.round) settle(o,0); else setTimeout(()=>settle(o,180),450); return "ok"; }
+        // Run 88: the page that comes back fades up from where the pulled one left off, so the change is not a hard cut.
+        if (phase==="commit") { clearRaf(); const o=g; g=null; if (o.round) { const was=o.el.style.opacity||"1"; settle(o,0); const el=o.el; el.style.opacity=String(Math.min(Number(was)||1,0.8)); requestAnimationFrame(()=>requestAnimationFrame(()=>{ el.style.transition=`opacity 220ms ${ease}`; el.style.opacity=""; setTimeout(()=>{ el.style.transition=""; },260); })); } else setTimeout(()=>settle(o,180),450); return "ok"; }
       } catch { g=null; }
       return "none";
     };    return ()=>{ delete window.__ledgerBackGesture; };
@@ -5126,6 +5168,7 @@ function AppInner() {
   // Run 69: turning "Help improve the app" on (Settings) sends the first day's rows without waiting for the next start
   const [learnTick,setLearnTick]=useState(0);
   const [learnAsk,setLearnAsk]=useState(()=>readLearn());
+  const [, setExploreTick]=useState(0);
   useEffect(()=>{ setLearnAsk(readLearn()); },[learnTick]);
   const answerLearn=useCallback((yes)=>{
     const next={ ...readLearn(), on:yes, asked:true };
@@ -5752,6 +5795,14 @@ function AppInner() {
   if (!learnAsk.on && !learnAsk.asked && transactions.length>=5) notices.push({ id:"learn-ask", text:t("learn.ask"), actions:[
     { key:"yes", label:t("learn.askYes"), primary:true, onClick:()=>answerLearn(true) },
     { key:"no", label:t("learn.askNo"), onClick:()=>answerLearn(false) } ] });
+  {
+    const tip=exploreTip(readFirstChoices(),{ entries:transactions.length, bills:(state.bills||[]).length, incomeBills:(state.bills||[]).filter(b=>b.type==="income").length, goals:(state.goals||[]).length });
+    if (tip) {
+      const TEXT={ pay:t("explore.pay"), irregular:t("explore.irregular"), bills:t("explore.bills"), goal:t("explore.goal"), where:t("explore.where") };
+      const end=(go)=>{ const c=readFirstChoices()||{}; writeFirstChoices({ exploreDone:[...(Array.isArray(c.exploreDone)?c.exploreDone:[]),tip.id], exploreAt:Date.now() }); setExploreTick(n=>n+1); if (go) switchTab(tip.to); };
+      notices.push({ id:"explore-"+tip.id, text:TEXT[tip.id], actions:[{ key:"go", label:t("explore.go"), primary:true, onClick:()=>end(true) },{ key:"no", label:t("explore.later"), onClick:()=>end(false) }] });
+    }
+  }
   if (iosNote) notices.push({ id:"ios-note", text:t("banner.iosNote"), actions:[{ key:"ok", label:t("inbox.gotIt"), onClick:()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } } }] });
 
   return (

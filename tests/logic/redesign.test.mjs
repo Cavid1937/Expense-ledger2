@@ -38,7 +38,8 @@ const ring = donutSlices(calcCategorySpend(txns, "2026-10"));
 ok(ring.reduce((s, x) => s + x.amt, 0) === ms.curExp, "the ring's slices add up to the same 'Spent' figure");
 
 section("4. Greeting by time of day");
-const g = (h) => greetingKey(new Date(2026, 9, 15, h, 0));
+// Run 88: greetingKey picks the usual greeting for a low pick (0); varied lines are checked in run88greet
+const g = (h) => greetingKey(new Date(2026, 9, 15, h, 0), 0);
 ok(g(4) === "home.greet.evening" && g(5) === "home.greet.morning" && g(11) === "home.greet.morning" && g(12) === "home.greet.afternoon" && g(17) === "home.greet.afternoon" && g(18) === "home.greet.evening",
   "04:00 evening, 05:00–11:59 morning, 12:00–17:59 afternoon, 18:00 evening");
 reset();

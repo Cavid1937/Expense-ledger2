@@ -435,7 +435,20 @@ export function LookSettings({ showToast, open, toggle }) {
   const [theme, setTheme]=useState(()=>readTheme());
   const [fxOff, setFxOff]=useState(()=>readFxOff());
   const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
-  const pick=(id)=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; } applyTheme(id); setTheme(id); showToast(t("theme.changed")); try { window.dispatchEvent(new Event("ledger-widget-changed")); } catch {} };
+  // Run 88 (owner: "the theme changing must be animated"): the new colours spread out in a circle from the card that was tapped. Phones
+  // without that browser feature get a short colour fade instead; with reduced motion or effects off the change is instant as before.
+  const pick=(id,ev)=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; }
+    const swapNow=()=>{ applyTheme(id); setTheme(id); };
+    const root=document.documentElement;
+    if (motionOff()) swapNow();
+    else if (typeof document.startViewTransition==="function") {
+      const r=ev&&ev.currentTarget&&ev.currentTarget.getBoundingClientRect ? ev.currentTarget.getBoundingClientRect() : null;
+      root.style.setProperty("--vt-x",(r?Math.round(r.left+r.width/2):Math.round(window.innerWidth/2))+"px");
+      root.style.setProperty("--vt-y",(r?Math.round(r.top+r.height/2):Math.round(window.innerHeight/2))+"px");
+      root.classList.add("theme-vt");
+      try { const vt=document.startViewTransition(swapNow); vt.finished.finally(()=>root.classList.remove("theme-vt")); } catch { root.classList.remove("theme-vt"); swapNow(); }
+    } else { root.classList.add("theme-fading"); swapNow(); setTimeout(()=>root.classList.remove("theme-fading"),520); }
+    showToast(t("theme.changed")); try { window.dispatchEvent(new Event("ledger-widget-changed")); } catch {} };
   return (
     <Fold id="look" icon="eye" title={t("st.foldLook")} sub={fxOff?t("st.sumLookFx",{theme:t("theme."+theme)}):t("theme."+theme)} open={open.look} onToggle={()=>toggle("look")}>
     <div className="card st-card" data-section="st-look">
@@ -447,7 +460,7 @@ export function LookSettings({ showToast, open, toggle }) {
         {/* Run 84 (owner: "treat each theme as an equal"): every theme is a preview card, Ivory first */}
         <div className="theme-cards">
           {THEME_IDS.map(id=>{ const p=themePreview(id), on=theme===id; return (
-            <button key={id} type="button" role="radio" aria-checked={on} data-theme-id={id} className={`theme-card${on?" on":""}`} onClick={()=>pick(id)}>
+            <button key={id} type="button" role="radio" aria-checked={on} data-theme-id={id} className={`theme-card${on?" on":""}`} onClick={(e)=>pick(id,e)}>
               <span className="theme-mini" aria-hidden="true" style={{background:p.bg,borderColor:p.rule}}>
                 <span className="theme-mini-card" style={{background:p.card,borderColor:p.rule}}>
                   <span style={{background:p.ink,width:"62%"}}/><span style={{background:p.ink3,width:"40%"}}/>

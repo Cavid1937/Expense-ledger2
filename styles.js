@@ -420,7 +420,18 @@ html.launch-first .lang-hint{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 460
 .lang-mark-sel{flex-shrink:0;width:22px;height:22px;border-radius:50%;border:2px solid var(--rule-2);display:inline-flex;align-items:center;justify-content:center}
 .lang-opt.sel{border-color:var(--ink);background:var(--bg-warm)}
 .lang-opt.sel .lang-mark-sel{border-color:var(--ink);background:var(--ink)}
-.lang-opt.sel .lang-mark-sel::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--bg)}
+.lang-opt.sel .lang-mark-sel::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--bg);animation:langDot 380ms cubic-bezier(.3,1.5,.5,1) both}
+.lang-opt.sel{animation:langPick 460ms cubic-bezier(.3,1.25,.5,1)}
+.lang-mark-sel{transition:border-color 220ms,background 220ms}
+.lang-continue{transition:background 260ms,color 260ms,opacity 260ms,transform 120ms}
+@keyframes langPick{0%{transform:scale(.97)}45%{transform:scale(1.015)}100%{transform:none}}
+@keyframes langDot{from{transform:scale(0)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.lang-opt.sel,.lang-opt.sel .lang-mark-sel::after{animation:none}}
+[data-fx="off"] .lang-opt.sel,[data-fx="off"] .lang-opt.sel .lang-mark-sel::after{animation:none}
+html.theme-vt::view-transition-old(root){animation:none}
+html.theme-vt::view-transition-new(root){animation:themeReveal 620ms cubic-bezier(.2,.8,.2,1) both}
+@keyframes themeReveal{from{clip-path:circle(0 at var(--vt-x,50%) var(--vt-y,50%))}to{clip-path:circle(150vmax at var(--vt-x,50%) var(--vt-y,50%))}}
+html.theme-fading,html.theme-fading *{transition:background-color 420ms ease,color 420ms ease,border-color 420ms ease,fill 420ms ease !important}
 .lang-opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .lang-continue{margin-top:6px;min-height:48px}
 .lang-hint{display:flex;flex-direction:column;gap:2px;text-align:center;font-size:12px;color:var(--ink-2);line-height:1.45;margin:14px 0 0}
@@ -439,8 +450,8 @@ html.launch-first .lang-hint{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 460
 .settings-section-lbl.no-rule{border-bottom:0;padding-bottom:6px}
 .lang-opt,.lang-pill{touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:border-color 90ms,background 90ms,color 90ms,transform 90ms cubic-bezier(.2,.8,.2,1)}
 .lang-opt:active,.lang-pill:active{transform:scale(.97)}
-.lang-swap{display:inline-block;animation:langSwap 200ms cubic-bezier(.2,.8,.2,1) both}
-@keyframes langSwap{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.lang-swap{display:inline-block;animation:langSwap 340ms cubic-bezier(.2,.8,.2,1) both}
+@keyframes langSwap{from{opacity:0;transform:translateY(5px);filter:blur(3px)}to{opacity:1;transform:none;filter:none}}
 @media (prefers-reduced-motion:reduce){.lang-opt,.lang-pill{transition:none}.lang-opt:active,.lang-pill:active{transform:none}.lang-swap{animation:none}}
 [data-fx="off"] .lang-swap{animation:none}
 .fab-add:focus-visible,.topbar-btn:focus-visible,.tab-btn:focus-visible,.btn:focus-visible,.cat-tile:focus-visible,.chip:focus-visible,.sub-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -999,15 +1010,25 @@ html,body,.app{transition:background-color 200ms ease-out}
 .ob-brand .lang-glyph{transition:width 420ms var(--ease-out),height 420ms var(--ease-out),margin 420ms var(--ease-out)}
 .ob-name.lang-mark{color:#F3F7F6;font-size:26px;letter-spacing:-0.3px;margin:0}
 .ob-tag{margin:8px 0 0;min-height:21px;font-size:14px;line-height:1.5;color:#A5B7B8;transition:opacity 300ms,max-height 420ms var(--ease-out);max-height:44px;overflow:hidden}
-.ob-tag-in{display:inline-block;animation:obTag 520ms var(--ease-out) both}
-@keyframes obTag{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.ob-tag{display:grid;justify-items:center}
+.ob-tag-in,.ob-tag-out{grid-area:1/1;display:inline-block}
+.ob-tag-in{animation:obTag 760ms cubic-bezier(.2,.8,.2,1) 120ms both}
+.ob-tag-out{animation:obTagOut 520ms cubic-bezier(.4,0,.6,1) both;pointer-events:none}
+@keyframes obTag{from{opacity:0;transform:translateY(8px);filter:blur(4px)}to{opacity:1;transform:none;filter:none}}
+@keyframes obTagOut{from{opacity:1;transform:none;filter:none}to{opacity:0;transform:translateY(-6px);filter:blur(3px)}}
 .ob-panel{position:relative;flex:1 1 auto;margin-top:5vh;background:var(--bg);color:var(--ink);border-top-left-radius:100% 112px;overflow-y:auto;overscroll-behavior:contain;
   padding:104px 20px calc(24px + env(safe-area-inset-bottom,0px));box-shadow:0 -18px 48px rgba(0,0,0,.28)}
 .ob-lang .ob-panel{animation:obRise 680ms cubic-bezier(.2,.8,.2,1) 260ms both}
 @keyframes obRise{from{transform:translateY(100%)}to{transform:none}}
 .ob-slide{max-width:440px;margin:0 auto}
 .ob-slide.in-next{animation:obIn 380ms var(--ease-out) both}
-@keyframes obIn{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:none}}
+@keyframes obIn{from{opacity:0;transform:translateY(16px) scale(.985);filter:blur(5px)}to{opacity:1;transform:none;filter:none}}
+.ob-slide.in-next .ob-page>*,.setup-page.in-next>*,.setup-page.in-prev>*{animation:obItem 520ms cubic-bezier(.2,.8,.2,1) both}
+.ob-slide.in-next .ob-page>:nth-child(2),.setup-page>:nth-child(2){animation-delay:50ms}
+.ob-slide.in-next .ob-page>:nth-child(3),.setup-page>:nth-child(3){animation-delay:100ms}
+.ob-slide.in-next .ob-page>:nth-child(4),.setup-page>:nth-child(4){animation-delay:150ms}
+.ob-slide.in-next .ob-page>:nth-child(n+5),.setup-page>:nth-child(n+5){animation-delay:200ms}
+@keyframes obItem{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 .ob-screen .lang-box{max-width:none}
 /* the questions need room: the brand band folds down to the mark and the name */
 .ob-setup .ob-brand{padding-top:calc(var(--sat,0px) + 14px);flex-direction:row;justify-content:center;gap:10px}
@@ -1045,7 +1066,7 @@ html,body,.app{transition:background-color 200ms ease-out}
 .setup-clip{overflow-x:clip}
 .setup-page.in-next{animation:obIn 340ms var(--ease-out) both}
 .setup-page.in-prev{animation:setupInPrev 340ms var(--ease-out) both}
-@keyframes setupInPrev{from{opacity:0;transform:translateX(-32px)}to{opacity:1;transform:none}}
+@keyframes setupInPrev{from{opacity:0;transform:translateY(-12px) scale(.985);filter:blur(5px)}to{opacity:1;transform:none;filter:none}}
 .setup-field{margin-bottom:14px}
 .setup-lbl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:0 0 6px}
 .setup-money{display:flex;align-items:center;gap:8px;min-height:62px;padding:0 16px;background:var(--bg-card);border:1.5px solid var(--rule);border-radius:16px;transition:border-color 160ms}
@@ -1095,8 +1116,8 @@ html,body,.app{transition:background-color 200ms ease-out}
 .setup-next{flex:1 1 auto;max-width:260px;margin-left:auto}
 .setup-back{flex:0 0 auto}
 .setup-sheet .setup-q{font-size:22px}
-@media (prefers-reduced-motion:reduce){.ob-lang .ob-panel,.ob-slide.in-next,.setup-page.in-next,.setup-page.in-prev,.ob-tag-in,.ob-leaving,.ob-leaving .ob-panel{animation:none}.ob-brand,.ob-brand .lang-glyph,.setup-dot{transition:none}}
-[data-fx="off"] .ob-lang .ob-panel,[data-fx="off"] .ob-slide.in-next,[data-fx="off"] .setup-page.in-next,[data-fx="off"] .setup-page.in-prev,[data-fx="off"] .ob-tag-in{animation:none}
+@media (prefers-reduced-motion:reduce){.ob-lang .ob-panel,.ob-slide.in-next,.setup-page.in-next,.setup-page.in-prev,.ob-tag-in,.ob-tag-out,.ob-slide.in-next .ob-page>*,.setup-page.in-next>*,.setup-page.in-prev>*,.ob-leaving,.ob-leaving .ob-panel{animation:none}.ob-tag-out{display:none}.ob-brand,.ob-brand .lang-glyph,.setup-dot{transition:none}}
+[data-fx="off"] .ob-lang .ob-panel,[data-fx="off"] .ob-slide.in-next,[data-fx="off"] .setup-page.in-next,[data-fx="off"] .setup-page.in-prev,[data-fx="off"] .ob-tag-in,[data-fx="off"] .ob-slide.in-next .ob-page>*,[data-fx="off"] .setup-page.in-next>*,[data-fx="off"] .setup-page.in-prev>*{animation:none}[data-fx="off"] .ob-tag-out{display:none}
 /* Run 85 (owner's photo: a white box around "Continue with Google" on a dark theme): Google's button is an iframe whose page is light.
    When our page is dark, Chrome paints an opaque white backdrop behind a light iframe; giving the iframe the same light scheme removes it. */
 iframe[src*="accounts.google.com"]{color-scheme:light}

@@ -24,7 +24,8 @@ section("R79-O1. A new install: language, then Google or guest, in one scene");
 let page = await fresh();
 ok(await has(page, '[data-section="onboarding"] .ob-brand [data-launch-target]') && await has(page, ".ob-panel .lang-opt"), "the brand band (with the mark the opening lands on) and the language panel are shown");
 ok(!(await has(page, ".tabbar")), "the app itself is not shown yet");
-const tags = new Set(); for (let i = 0; i < 4; i++) { tags.add(await page.evaluate(() => document.querySelector(".ob-tag").innerText)); await wait(800); }
+// Run 88: the line now stays 4.2 s (owner: it changed "a little fast"), so watch for about 5 s; read only the arriving line, not the one fading out
+const tags = new Set(); for (let i = 0; i < 6; i++) { tags.add(await page.evaluate(() => document.querySelector(".ob-tag .ob-tag-in").innerText)); await wait(1000); }
 ok(tags.size >= 2, "before a language is chosen, the line under the name changes language", [...tags]);
 await pickLang(page, "az");
 ok(await has(page, '[data-ob="google"]') && await has(page, '[data-ob="guest"]'), "after the language: create an account with Google, or as a guest");

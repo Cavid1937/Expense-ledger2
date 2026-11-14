@@ -5,7 +5,7 @@ import { launch, openPage, ok, section, finish, baseSeed, tx, wait, openAdd } fr
 const browser = await launch();
 // Run 85: a move is applied on the next screen frame (only the latest position), so the check waits one frame
 const g = (page, phase, p, edge) => page.evaluate(async (a) => { const r = window.__ledgerBackGesture(a[0], a[1], a[2]); await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))); return r; }, [phase, p, edge]);
-const style = (page, sel) => page.evaluate((s) => { const el = document.querySelector(s); return el ? { scale: el.style.scale, translate: el.style.translate, radius: el.style.borderRadius } : null; }, sel);
+const style = (page, sel) => page.evaluate((s) => { const el = document.querySelector(s); return el ? { scale: el.style.scale, translate: el.style.translate, radius: el.style.borderRadius, opacity: el.style.opacity } : null; }, sel);
 const back = (page) => page.evaluate(() => { window.__ledgerBackGesture("commit", 1, 0); return window.__ledgerNativeBack(); });
 
 section("R79-B1. Home with nothing open: nothing moves (Back there only warns)");
@@ -22,9 +22,11 @@ ok(s1 && Number(s1.scale) < 1 && Number(s1.scale) > 0.9 && /^\d+px/.test(s1.tran
 await g(page, "move", 1, 0);
 const s2 = await style(page, "main.page");
 ok(Math.abs(Number(s2.scale) - 0.92) < 0.001 && parseInt(s2.translate) === 24, "at the end of the swipe: 92 % and 24 px, never more", s2);
+// Run 88: the page also fades by how far it is pulled (Claude-app feel), from 1 down to 0.7 at a full pull
+ok(Number(s1.opacity) > 0.7 && Number(s1.opacity) < 1 && Number(s2.opacity) === 0.7, "it fades with the pull: part way at half, 70 % at a full pull", { half: s1.opacity, full: s2.opacity });
 await g(page, "cancel", 0, 0); await wait(400);
 const s3 = await style(page, "main.page");
-ok(s3.scale === "" && s3.translate === "" && s3.radius === "", "cancelled: the page settles back to normal", s3);
+ok(s3.scale === "" && s3.translate === "" && s3.radius === "" && s3.opacity === "", "cancelled: the page settles back to normal, fully visible", s3);
 ok(await page.evaluate(() => [...document.querySelectorAll(".tab-btn")][1].getAttribute("aria-current") === "page"), "and nothing happened: still on the same page");
 
 section("R79-B3. Let go on a sub-page: Back returns Home");
@@ -35,7 +37,7 @@ ok((await back(page)) === "handled", "let go: the normal Back runs");
 await wait(700);
 ok(await page.evaluate(() => [...document.querySelectorAll(".tab-btn")][0].getAttribute("aria-current") === "page"), "Home is shown");
 const s5 = await style(page, "main.page");
-ok(s5.scale === "" && s5.translate === "", "the new page is not left shrunk", s5);
+ok(s5.scale === "" && s5.translate === "" && s5.opacity === "", "the new page is not left shrunk, and has faded fully in", s5);
 
 section("R79-B4. The add form follows the swipe and closes when let go");
 await openAdd(page);
