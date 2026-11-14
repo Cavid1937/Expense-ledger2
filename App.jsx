@@ -685,6 +685,31 @@ export function catTotals(list, catId) {
   });
   return { total:cents/100, n, months:[...by.values()].filter(g=>/^\d{4}-\d{2}$/.test(g.month)).sort((a,b)=>b.month.localeCompare(a.month)).map(g=>({ month:g.month, total:g.cents/100, n:g.n })) };
 }
+// Run 88 (owner: "when user selects any date range ... app must tell them their statistics during that range"). The app's own spending rules
+// (loan instalments count only their interest, refunds lower the spending they refund, spread costs count their slice), applied BEFORE the
+// range is cut, so a spread cost counts only the part that falls inside it. Money in: earnings apart from money that is not earnings
+// (transfers received, refunds, savings taken out). from / to: "YYYY-MM-DD" or "" (open end). Whole cents inside.
+export function rangeStats(list, from, to) {
+  const inR=(d)=>(!from||d>=from)&&(!to||d<=to);
+  let spent=0, earned=0, other=0;
+  forSpending(list||[]).forEach(x=>{
+    const d=String((x&&x.date)||"").slice(0,10); if (!x || !inR(d)) return;
+    const c=Math.round((Number(x.amount)||0)*100);
+    if (x.type==="expense") spent+=c; else if (x.type==="income") { if (isEarnedCat(x.category)) earned+=c; else other+=c; }
+  });
+  const days=from&&to&&to>=from ? daysBetween(parseLocalDate(from),parseLocalDate(to))+1 : 0;
+  return { spent:spent/100, earned:earned/100, other:other/100, net:(earned+other-spent)/100, days, perDay:days ? Math.round(spent/days)/100 : 0 };
+}
+// Ready-made ranges for the Entries date filter: { from, to } as "YYYY-MM-DD", ending today at the latest
+export function rangePreset(key, now=new Date()) {
+  const y=now.getFullYear(), m=now.getMonth(), d=now.getDate(), s=(a)=>localDateStr(a), today=s(now);
+  if (key==="week") { const wd=(now.getDay()+6)%7; return { from:s(new Date(y,m,d-wd)), to:today }; }
+  if (key==="month") return { from:s(new Date(y,m,1)), to:today };
+  if (key==="lastMonth") return { from:s(new Date(y,m-1,1)), to:s(new Date(y,m,0)) };
+  if (key==="d30") return { from:s(new Date(y,m,d-29)), to:today };
+  if (key==="year") return { from:s(new Date(y,0,1)), to:today };
+  return { from:"", to:"" };
+}
 // Expenses per trip (loan instalments count only their interest, like every spending view), whole cents so 0.1 + 0.2 is exactly 0.30.
 // "Baku" and "baku" are one trip; the spelling of the first entry in the list (newest first) is shown. Largest total first.
 export function tripTotals(list) {

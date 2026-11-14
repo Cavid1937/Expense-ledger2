@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
-import { pickerCats, readCatPrefs, cleanReimb, reimbOwedMap, reimbStatus } from "../App.jsx";
+import { pickerCats, readCatPrefs, cleanReimb, reimbOwedMap, reimbStatus, rangeStats, rangePreset } from "../App.jsx";
 import { accountsMap, paidFromMatch, paidFromOptions, paidKindName, readAccounts } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, spreadMonths, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
@@ -128,7 +128,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const [showDates,  setShowDates]  = useState(false);
   const [showCatSheet, setShowCatSheet] = useState(false);
 
-  const filtered=useMemo(()=>{
+  const preDate=useMemo(()=>{
     let list=[...transactions];                       // not "t": that name is the translation function used below
     if (search) {
       const q=search.toLowerCase().trim(),asNum=parseFloat(q);
@@ -154,10 +154,12 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
     if (catFilter!=="all" && subFilter!=="all") list=list.filter(x=>{ const s=lc(String(x.subcategory||"").trim()); return subFilter==="none" ? !s : s===subFilter; });
     if (paidFilter!=="all") list=list.filter(x=>paidFromMatch(x,paidFilter,accMap));
     if (tripFilter!=="all") list=list.filter(x=>lc(tripName(x.trip))===lc(tripFilter));
-    if (dateFrom)           list=list.filter(x=>x.date>=dateFrom);
-    if (dateTo)             list=list.filter(x=>x.date<=dateTo);
     return list;
-  },[transactions,search,typeFilter,catFilter,subFilter,paidFilter,tripFilter,accMap,dateFrom,dateTo,locale()]);
+  },[transactions,search,typeFilter,catFilter,subFilter,paidFilter,tripFilter,accMap,locale()]);
+  // Run 88: the date range is cut last, so the range totals below can apply the spending rules to the other filters' list first
+  const filtered=useMemo(()=>preDate.filter(x=>(!dateFrom||x.date>=dateFrom)&&(!dateTo||x.date<=dateTo)),[preDate,dateFrom,dateTo]);
+  const rStats=useMemo(()=>(dateFrom||dateTo) ? rangeStats(preDate,dateFrom,dateTo) : null,[preDate,dateFrom,dateTo]);
+  const rangeKey=["week","month","lastMonth","d30","year"].find(k=>{ const r=rangePreset(k); return r.from===dateFrom && r.to===dateTo; })||"";
   const paidOpts=useMemo(()=>paidFromOptions(transactions,accMap),[transactions,accMap]);
   const paidUseful=paidOpts.some(o=>o.value!=="none");   // offered only when at least one entry says how it was paid
   // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
@@ -252,7 +254,29 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
           <label className="date-input-wrap"><span className="date-lbl">{t("ledger.from")}</span><PickDate lang={locale()} className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
           <label className="date-input-wrap"><span className="date-lbl">{t("ledger.to")}</span><PickDate lang={locale()} className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
         </div>
+        {/* Run 88: ready-made ranges, offered only here (the Entries date filter) */}
+        <div className="filter-bar" role="group" aria-label={t("range.quick")} data-section="tx-range-quick" style={{marginTop:8}}>
+          {["week","month","lastMonth","d30","year"].map(k=>(
+            <button key={k} type="button" className={`chip${rangeKey===k?" on":""}`} aria-pressed={rangeKey===k} data-range={k} onClick={()=>{ const r=rangePreset(k); setDateFrom(r.from); setDateTo(r.to); }}>{{ week:t("range.week"), month:t("range.month"), lastMonth:t("range.lastMonth"), d30:t("range.d30"), year:t("range.year") }[k]}</button>
+          ))}
+        </div>
       </Collapse>
+      {/* Run 88: what happened in the chosen range: spending, income, or both, following the Expenses / Income choice above */}
+      <Reveal when={rStats}>{rs=>{
+        const showExp=typeFilter!=="income", showInc=typeFilter!=="expense", empty=!filtered.length;
+        const head=dateFrom&&dateTo ? t("range.head",{ from:fmtDate(dateFrom), to:fmtDate(dateTo) }) : dateFrom ? t("range.since",{ date:fmtDate(dateFrom) }) : t("range.until",{ date:fmtDate(dateTo) });
+        return (
+          <div className="card" data-section="tx-range-stats" style={{padding:"12px 14px",margin:"2px 0 12px"}}>
+            <div className="list-sub" style={{fontWeight:600,marginBottom:4}}>{head}</div>
+            {empty ? <div className="list-sub" data-stat="none">{t("range.none")}</div> : <>
+              {showExp&&<div data-stat="spent" style={{fontWeight:600}}>{t("range.spent",{ amount:fmt(rs.spent) })}{rs.days>1&&rs.spent>0&&<span className="list-sub" style={{fontWeight:400}}>{" "}{t("range.perDay",{ amount:fmt(rs.perDay), n:rs.days })}</span>}</div>}
+              {showInc&&<div data-stat="earned" style={{fontWeight:600}}>{t("range.earned",{ amount:fmt(rs.earned) })}</div>}
+              {showInc&&rs.other>0&&<div className="list-sub" data-stat="other">{t("range.other",{ amount:fmt(rs.other) })}</div>}
+              {showExp&&showInc&&<div data-stat="net" style={{marginTop:4,color:rs.net<0?"var(--neg)":undefined}}>{t(rs.net<0?"range.netNeg":"range.netPos",{ amount:fmt(Math.abs(rs.net)) })}</div>}
+            </>}
+          </div>
+        );
+      }}</Reveal>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,margin:"2px 2px 12px"}}>
         <div className="list-sub">{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</div>
         <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); setOnlySel(false); setGrpOpen(false); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
