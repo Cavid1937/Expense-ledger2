@@ -56,5 +56,5 @@ ok(m.title === "Kommunal is due today" && m.body === "18.00 ₼ · open the app 
 const h = reminderMessage({ kind: "bill", name: "Kommunal", amount: 18 }, on({ hideAmount: true }), "₼");
 ok(!/Kommunal|18/.test(h.title + h.body) && h.title === "A payment is due today", "hide amounts: neither the name nor the amount is written", h);
 ok(reminderMessage({ kind: "recurring", name: "Gym", amount: 30 }, on({}), "₼").title === "Gym is due tomorrow", "recurring text says tomorrow");
-ok(reminderMessage({ kind: "daily" }, on({}), "₼").title === "Anything to add today?", "daily text");
+ok(reminderMessage({ kind: "daily" }, on({}), "₼").title === "Did you spend anything today?", "daily text");
 finish("run30reminders");

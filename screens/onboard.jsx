@@ -6,7 +6,7 @@
 //   4. The quick questions (screens/setup.jsx), one per page. Then the panel falls away and Home rises.
 // Where it is: expense_ledger_v5__onboard holds "account" or "setup" while the person is in steps 3-4, so a reload resumes there. A phone that
 // already had the app has no such key and never sees these steps (their language is already set). The main data key is never touched here.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LANGS, LANG_NAMES, t, tIn } from "../i18n.js";
 import { LAUNCH_GLYPH } from "./launch.js";
 import { motionOff, useBackStep } from "./motion.jsx";
@@ -57,14 +57,20 @@ function LanguagePage({ onChoose }) {
 }
 
 function AccountPage({ onGoogle, onGuest, busy, error }) {
+  // Run 82: on the website Google's own button has to be shown and tapped (the app's button only reveals it)
+  const gRef = useRef(null);
+  const [gShown, setGShown] = useState(false);
+  const google = async () => { const r = await onGoogle(gRef.current); if (r === "button") setGShown(true); };
   return (
     <div className="ob-page ob-account" data-section="ob-account">
       <h2 className="setup-q">{t("ob.acc.title")}</h2>
       <p className="setup-sub">{t("ob.acc.sub")}</p>
-      <button type="button" className="ob-choice ob-google" data-ob="google" disabled={!!busy} aria-busy={!!busy} onClick={onGoogle}>
+      <div ref={gRef} data-section="ob-gbtn" style={{ display: gShown ? "flex" : "none", justifyContent: "center", minHeight: 44, margin: "4px 0 6px" }} />
+      {gShown && <p className="setup-sub" style={{ textAlign: "center", marginTop: 0 }}>{busy ? t("ob.busy") : t("acct.tapGoogle")}</p>}
+      {!gShown && <button type="button" className="ob-choice ob-google" data-ob="google" disabled={!!busy} aria-busy={!!busy} onClick={google}>
         <span className="ob-choice-ic ob-g" dangerouslySetInnerHTML={{ __html: GOOGLE_G }} />
         <span className="ob-choice-txt"><span className="ob-choice-name">{busy ? t("ob.busy") : t("ob.google")}</span><span className="ob-choice-sub">{t("ob.googleSub")}</span></span>
-      </button>
+      </button>}
       <button type="button" className="ob-choice ob-guest" data-ob="guest" disabled={!!busy} onClick={onGuest}>
         <span className="ob-choice-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5" /><path d="M10.5 18.5h3" /></svg></span>
         <span className="ob-choice-txt"><span className="ob-choice-name">{t("ob.guest")}</span><span className="ob-choice-sub">{t("ob.guestSub")}</span></span>

@@ -160,7 +160,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="81 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="82 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -5177,28 +5177,47 @@ function AppInner() {
   const [ob,setOb]=useState(()=>readOnboard());
   const [obBusy,setObBusy]=useState(false), [obErr,setObErr]=useState("");
   const obTo=(v)=>{ writeOnboard(v); setOb(v); };
-  const obGoogle=async ()=>{
-    if (obBusy) return;
+  // Run 82 (owner: "switch that with ... create an account"): the first-launch Google choice now creates or opens an ACCOUNT (Run 81),
+  // no longer a Drive backup (Drive backup stays in Settings). An account that already holds data is opened in the normal import
+  // preview (nothing replaced without confirming); a new account gets this phone's copy and the quick questions follow.
+  const obAccount=async (idToken, rawNonce)=>{
     setObBusy(true); setObErr("");
     try {
-      const tok=await driveToken({ interactive:true });
-      const got=await driveLoad(tok);
-      if (got) {
-        const name=t("drive.fileName"), plan=planImportWithCats(got.text,name);
-        obTo("done");
-        if (!plan.ok) { setImportPending({ error:plan.error, filename:name }); return; }
-        setSkipDup(true); setSkipSim(true);
-        setImportPending({ ...plan, filename:name, fromDrive:true, ...mergeCounts(stateRef.current.transactions, plan) });
-        return;
-      }
-      const saved=await driveBackupNow({ interactive:false, auto:true });
-      if (!saved) { const r=readDrive().lastError||"server"; setObErr(t("drive.err."+(["auth","offline","space","cancelled"].includes(r)?r:"server"))); return; }
-      showToast(t("drive.connected"));
+      const s=await signInWithGoogleIdToken(idToken,rawNonce,acctRef.current);
+      putAcct({ ...s, version:0, paused:"", lastHash:"", syncedAt:"", lastError:"" });
+      const got=await loadLedger(s);
+      if (got) { obTo("done"); acctOffer(got); return true; }
+      const now=new Date().toISOString(), text=backupTextRef.current(now);
+      const v=await saveLedger(s,text,0,acctDevice());
+      patchAcct({ version:v, lastHash:backupFingerprint(text), syncedAt:now });
+      showToast(t("acct.created"),5000);
       obTo("setup");
+      return true;
     } catch (e) {
-      const r=(e&&e.reason)||"server";
-      setObErr(t("drive.err."+(["auth","offline","space","cancelled"].includes(r)?r:"server")));
+      const r=acctReason(e);
+      if (r!=="cancelled") setObErr(t("acct.err."+r));
+      return false;
     } finally { setObBusy(false); }
+  };
+  // Android app: Google's own sheet opens. Website: Google's button is drawn into `el` and the page says "tap it" ("button").
+  const obGoogle=async (el)=>{
+    if (obBusy) return false;
+    setObErr("");
+    try {
+      const n=await makeNonce();
+      if (nativeGoogleIdAvailable()) {
+        setObBusy(true);
+        let tok; try { tok=await nativeGoogleIdToken(n.hashed); } finally { setObBusy(false); }
+        return obAccount(tok,n.raw);
+      }
+      if (!el) return false;
+      await renderGoogleButton(el,n.hashed,(tok)=>{ obAccount(tok,n.raw); },{ locale:stateRef.current.language||"en", dark:document.documentElement.getAttribute("data-dark")==="1" });
+      return "button";
+    } catch (e) {
+      const r=acctReason(e);
+      if (r!=="cancelled") setObErr(t("acct.err."+r));
+      return false;
+    }
   };
   const driveDisconnect=useCallback(async ()=>{ await driveSignOut(); const p={ ...cleanDrivePref(null) }; writeDrive(p); setDrivePref(p); showToast(t("drive.disconnected")); },[showToast]);
   // Run 81: the account (account.js). This phone's ledger stays the working copy; the account keeps one mirror of it on the app's server.
