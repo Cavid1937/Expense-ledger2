@@ -938,8 +938,9 @@ function PasteStatement({ onImportText }) {
 // Run 75: payments from bank notifications (Android app only). Explains what Android lets the app see and what it keeps, before anything.
 function NoticesCard({ notices }) {
   const native=typeof window!=="undefined" && window.LedgerNative && window.LedgerNative.notices;
-  const [allowed,setAllowed]=useState(null);
-  useEffect(()=>{ if (!native) return; let live=true; const check=()=>Promise.resolve(native.status()).then(a=>{ if (live) setAllowed(!!a); }).catch(()=>{ if (live) setAllowed(false); });
+  const [allowed,setAllowed]=useState(null), [info,setInfo]=useState(null);
+  const when=(ms)=>{ const d=new Date(ms); return `${fmtLongDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`)} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; };
+  useEffect(()=>{ if (!native) return; let live=true; const check=()=>{ if (native.info) Promise.resolve(native.info()).then(i=>{ if (live) setInfo(i||null); }).catch(()=>{}); return Promise.resolve(native.status()).then(a=>{ if (live) setAllowed(!!a); }).catch(()=>{ if (live) setAllowed(false); }); };
     check(); const vis=()=>{ if (document.visibilityState==="visible") check(); }; document.addEventListener("visibilitychange",vis); return ()=>{ live=false; document.removeEventListener("visibilitychange",vis); }; },[native]);
   if (!native || !notices) return null;
   const flip=()=>{ const on=!notices.on; notices.set(on); if (on && allowed===false) Promise.resolve(native.openSettings()).catch(()=>{}); };
@@ -955,6 +956,12 @@ function NoticesCard({ notices }) {
         <button type="button" className="btn btn-sm btn-sm-primary" data-section="notices-open" style={{marginTop:8}} onClick={()=>Promise.resolve(native.openSettings()).catch(()=>{})}>{t("notices.openSettings")}</button>
       </div>)}
       {notices.on&&allowed===true&&<div className="list-sub" data-section="notices-ok" style={{marginTop:8,color:"var(--pos)"}}>{t("notices.ready")}</div>}
+      {/* Run 78: proof the reader is alive (times only), and the Xiaomi/Poco setting that keeps it alive */}
+      {notices.on&&allowed===true&&info&&(<div data-section="notices-health" style={{marginTop:8}}>
+        <div className="list-sub" style={{lineHeight:1.5}}>{info.seen?t("notices.seen",{time:when(info.seen)}):t("notices.waiting")}</div>
+        {info.kept>0&&<div className="list-sub" style={{lineHeight:1.5,marginTop:4}}>{t("notices.kept",{time:when(info.kept)})}</div>}
+        <div className="list-sub" style={{lineHeight:1.5,marginTop:4}}>{t("notices.battery")}</div>
+      </div>)}
     </div>
   );
 }
