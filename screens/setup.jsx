@@ -10,8 +10,17 @@ const STEPS = ["money", "income", "goal", "debts"];
 // which page holds each answer, so a refused answer can be shown on its own page
 const PAGE_OF = { cash: 0, bank: 0, salary: 1, payDay: 1, goalName: 2, goalTarget: 2 };
 
+// Run 83 (owner, 14 Nov: choosing "bank statement" or "I have a loan" jumped straight there with no guide and skipped the other
+// questions; "App must remember user's first choices and remind them in appropriate time"). The answers are kept here, on this phone only.
+// stmt / debts: what was chosen; stmtState / debtsState: "now" (done from the guide), "later", "done" or "dismissed"; laterAt: when "later" was chosen.
+export const FIRST_KEY = "expense_ledger_v5__first_choices";
+export function readFirstChoices() { try { const r = JSON.parse(localStorage.getItem(FIRST_KEY) || "null"); return r && typeof r === "object" && !Array.isArray(r) ? r : null; } catch { return null; } }
+export function writeFirstChoices(patch) { try { localStorage.setItem(FIRST_KEY, JSON.stringify({ ...(readFirstChoices() || {}), ...patch })); } catch { /* storage full or blocked: the reminder is only a convenience */ } }
+
 export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, onStatement, inSheet = false }) {
-  const [v, setV] = useState({ cash: "", bank: "", income: "", salary: "", payDay: "", goalName: "", goalTarget: "", debts: false });
+  // onStatement: only whether the bank-statement option is offered. Choosing it is now an answer like the others, not a jump.
+  const [v, setV] = useState({ cash: "", bank: "", income: "", salary: "", payDay: "", goalName: "", goalTarget: "", debts: false, stmt: false });
+  const [next, setNext] = useState(null);
   const [errors, setErrors] = useState({});
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState(0);
@@ -25,7 +34,15 @@ export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, onStatement,
   const finish = () => {
     const plan = planSetup(v, names, readAccounts().accounts.map(a => a.name));
     if (!plan.ok) { setErrors(plan.errors); const first = Math.min(...Object.keys(plan.errors).map(k => PAGE_OF[k] ?? 0)); go(first); return; }
-    onSave(plan, { debts: v.debts });
+    writeFirstChoices({ stmt: !!v.stmt, debts: !!v.debts, income: v.income || "", at: Date.now() });
+    if (v.stmt || v.debts) { setDir(1); setNext(plan); return; }
+    onSave(plan, { go: null });
+  };
+  // the last page: a short guide for each thing chosen, with "now" or "later"
+  const done = (go) => {
+    const later = Date.now();
+    writeFirstChoices({ stmtState: v.stmt ? (go === "io" ? "now" : "later") : undefined, debtsState: v.debts ? (go === "debts" ? "now" : "later") : undefined, laterAt: later });
+    onSave(next, { go, debts: go === "debts" });
   };
   const money = (k, id, label) => (
     <div className="setup-field"><label className="setup-lbl" htmlFor={id}>{label}</label>
@@ -44,6 +61,22 @@ export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, onStatement,
         <button type="button" className="setup-skipall" data-closer="1" data-section="setupq-skip" onClick={onSkip}>{t("setupq.skip")}</button>
       </div>
       <div className="setup-clip" ref={body}>
+        {next ? (
+        <div key="next" className="setup-page in-next" data-step="next" data-section="setupq-next-steps">
+          <h2 className="setup-q">{t("setupq.nextQ")}</h2>
+          <p className="setup-sub">{t("setupq.nextSub")}</p>
+          {v.stmt && (<div className="setup-guide" data-section="setupq-guide-stmt">
+            <div className="setup-guide-t">{t("setupq.gStmtT")}</div>
+            <ol className="setup-guide-l"><li>{t("setupq.gStmt1")}</li><li>{t("setupq.gStmt2")}</li><li>{t("setupq.gStmt3")}</li></ol>
+            <button type="button" className="btn btn-primary setup-guide-go" data-section="setupq-stmt-now" onClick={() => done("io")}>{t("setupq.gStmtNow")}</button>
+          </div>)}
+          {v.debts && (<div className="setup-guide" data-section="setupq-guide-debts">
+            <div className="setup-guide-t">{t("setupq.gDebtT")}</div>
+            <ol className="setup-guide-l"><li>{t("setupq.gDebt1")}</li><li>{t("setupq.gDebt2")}</li><li>{t("setupq.gDebt3")}</li></ol>
+            <button type="button" className="btn btn-primary setup-guide-go" data-section="setupq-debts-now" onClick={() => done("debts")}>{t("setupq.gDebtNow")}</button>
+          </div>)}
+        </div>
+        ) : (
         <div key={page} className={`setup-page${dir > 0 ? " in-next" : dir < 0 ? " in-prev" : ""}`} data-step={page}>
           {page === "money" && (<>
             <h2 className="setup-q">{t("setupq.q1")}</h2>
@@ -52,9 +85,9 @@ export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, onStatement,
             {money("bank", "setupq-bank", t("setupq.bank"))}
             {/* Run 80 (owner: "import and use that data instead of starting from zero"): a bank statement can bring the history in */}
             {onStatement && (
-              <button type="button" className="setup-stmt" data-section="setupq-statement" onClick={onStatement}>
+              <button type="button" className={`setup-stmt${v.stmt ? " on" : ""}`} aria-pressed={!!v.stmt} data-section="setupq-statement" onClick={() => set("stmt", !v.stmt)}>
                 <span className="setup-stmt-t">{t("setupq.statement")}</span>
-                <span className="setup-stmt-s">{t("setupq.statementSub")}</span>
+                <span className="setup-stmt-s">{v.stmt ? t("setupq.stmtNoted") : t("setupq.statementSub")}</span>
               </button>)}
           </>)}
           {page === "income" && (<>
@@ -90,12 +123,18 @@ export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, onStatement,
               </div>)}
           </>)}
         </div>
+        )}
       </div>
       <div className="setup-nav">
+        {next ? (<>
+          <button type="button" className="btn btn-ghost setup-back" data-section="setupq-back" onClick={() => { setDir(-1); setNext(null); }}>{t("setupq.back")}</button>
+          <button type="button" className="btn btn-ghost setup-next" data-section="setupq-later" onClick={() => done(null)}>{t("setupq.gLater")}</button>
+        </>) : (<>
         {step > 0 ? <button type="button" className="btn btn-ghost setup-back" data-section="setupq-back" onClick={() => go(step - 1)}>{t("setupq.back")}</button> : <span />}
         {last
           ? <button type="button" className="btn btn-primary setup-next" data-section="setupq-save" onClick={finish}>{t("setupq.finish")}</button>
           : <button type="button" className="btn btn-primary setup-next" data-section="setupq-next" onClick={() => go(step + 1)}>{t("setupq.next")}</button>}
+        </>)}
       </div>
     </div>
   );
@@ -107,8 +146,8 @@ export function SetupSheet({ currency, onClose, onSave, onOpenDebts, onStatement
     <div className="sheet-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="sheet setup-sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("setupq.title")} data-section="setupq">
         <div className="sheet-grip"><div className="sheet-handle" /></div>
-        <SetupSteps inSheet currency={currency} onSkip={onClose} onOpenDebts={onOpenDebts} onStatement={onStatement ? () => { onClose(); onStatement(); } : undefined}
-          onSave={(plan, extra) => { const ok = onSave(plan); if (ok === false) return; onClose(); if (extra && extra.debts && onOpenDebts) onOpenDebts(); }} />
+        <SetupSteps inSheet currency={currency} onSkip={onClose} onOpenDebts={onOpenDebts} onStatement={onStatement}
+          onSave={(plan, extra) => { const ok = onSave(plan); if (ok === false) return; onClose(); const go = extra && extra.go; if (go === "debts" && onOpenDebts) onOpenDebts(); else if (go === "io" && onStatement) onStatement(); }} />
       </div>
     </div>
   );

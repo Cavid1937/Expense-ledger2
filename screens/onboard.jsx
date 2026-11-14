@@ -93,7 +93,7 @@ export function Onboarding({ step, lang, onLanguage, onGoogle, onGuest, busy, er
         <div key={step} className={`ob-slide${step === "lang" ? "" : " in-next"}`}>
           {step === "lang" && <LanguagePage onChoose={onLanguage} />}
           {step === "account" && <AccountPage onGoogle={onGoogle} onGuest={onGuest} busy={busy} error={error} />}
-          {step === "setup" && <SetupSteps currency={currency} onOpenDebts={onOpenDebts} onStatement={onSetupStatement ? () => out(onSetupStatement) : undefined}
+          {step === "setup" && <SetupSteps currency={currency} onOpenDebts={onOpenDebts} onStatement={onSetupStatement}
             onSkip={() => out(onSetupSkip)}
             onSave={(plan, extra) => out(() => onSetupSave(plan, extra))} />}
         </div>

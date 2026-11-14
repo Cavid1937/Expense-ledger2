@@ -7,6 +7,43 @@ import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse } from "./motion.jsx";
+import { readFirstChoices, writeFirstChoices } from "./setup.jsx";
+
+// Run 83: one quiet reminder on Home for something the person said at the start (a bank statement to bring in, a loan to add) and chose
+// "Later" for. It appears from the next day, only once per thing: "Not needed" or doing it ends it for good. Rule-based, no AI, on this phone only.
+export const FIRST_NUDGE_DELAY = 20 * 3600 * 1000;
+export function firstNudge(choices, debtsCount, now = Date.now()) {
+  const c = choices; if (!c) return null;
+  const due = typeof c.laterAt === "number" && now - c.laterAt >= FIRST_NUDGE_DELAY;
+  if (!due) return null;
+  if (c.stmt && c.stmtState === "later") return "stmt";
+  if (c.debts && c.debtsState === "later" && !(debtsCount > 0)) return "debts";
+  return null;
+}
+function FirstNudge({ onGo }) {
+  const [choices, setChoices] = useState(() => readFirstChoices());
+  const debtsCount = useMemo(() => { try { const d = readDebts(); return (d.debts || []).length + (d.loans || []).length; } catch { return 0; } }, []);
+  const kind = firstNudge(choices, debtsCount);
+  const [open, setOpen] = useState(true);
+  if (!kind) return null;
+  const end = (state, go) => {
+    writeFirstChoices(kind === "stmt" ? { stmtState: state } : { debtsState: state });
+    setOpen(false);
+    setTimeout(() => { setChoices(readFirstChoices()); setOpen(true); if (go && onGo) onGo(go); }, 280);
+  };
+  return (
+    <Collapse open={open} id="home-first-nudge">
+      <div className="card nudge-card" data-section="home-first-nudge" data-kind={kind} role="group" aria-label={t(kind === "stmt" ? "nudge.stmtT" : "nudge.debtT")}>
+        <div className="a-card-title">{t(kind === "stmt" ? "nudge.stmtT" : "nudge.debtT")}</div>
+        <div className="list-sub" style={{ marginBottom: 10 }}>{t(kind === "stmt" ? "nudge.stmtB" : "nudge.debtB")}</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button type="button" className="btn btn-primary btn-sm" data-section="nudge-go" onClick={() => end("done", kind === "stmt" ? "io" : "debts")}>{t(kind === "stmt" ? "setupq.gStmtNow" : "setupq.gDebtNow")}</button>
+          <button type="button" className="btn btn-ghost btn-sm" data-section="nudge-dismiss" onClick={() => end("dismissed")}>{t("nudge.dismiss")}</button>
+        </div>
+      </div>
+    </Collapse>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // S2: HOME PAGE — Financial hierarchy
@@ -141,7 +178,7 @@ export function WelcomeCard({ show }) {
   );
 }
 
-export function HomePage({ showToast, transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onInfo, onAccounts, onAccount }) {
+export function HomePage({ showToast, transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onFirstGo, onInfo, onAccounts, onAccount }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,curIn,curNet,curRefundIn,curSavOut,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -259,6 +296,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
           <button type="button" className="btn btn-ghost btn-sm" data-section="rollover-skip" onClick={rollover.onSkip}>{t("rollover.skip")}</button>
         </div>
       )}
+      {onFirstGo&&<FirstNudge onGo={onFirstGo}/>}
       {/* Smart Helper — deterministic advice cards */}
       <div className="section-enter section-enter-2" data-section="home-coach">
         <SmartHelper transactions={transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>

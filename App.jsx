@@ -5695,7 +5695,7 @@ function AppInner() {
         </header>
 
         <main className={(SUBPAGE_PARENT[tab]?"page page-sub":"page")+(pageOut?" page-out":"")+(pfCount.current>0?(pfCount.current%2?" pf-a":" pf-b"):"")} key={tabKey}>
-          {tab==="home"      && <HomePage showToast={showToast} transactions={spendTxns} accountTxns={transactions} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onInfo={setInfoKind}
+          {tab==="home"      && <HomePage showToast={showToast} transactions={spendTxns} accountTxns={transactions} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onFirstGo={k=>{ if (k==="debts") { setDebtsStart("debts"); switchTab("debts"); } else if (k==="io") switchTab("io"); }} onInfo={setInfoKind}
             rollover={{ offer:readLeftoverGoal() ? rolloverOffer(spendTxns,goals,rolloverSeen) : null /* Run 59: only when turned on (Budgets & Goals > Goals) */, onSkip:()=>{ const m=rolloverOffer(spendTxns,goals,rolloverSeen)?.month; if (m) { writeRolloverSeen(m); setRolloverSeen(m); } },
               onApply:(g)=>{ const o=rolloverOffer(spendTxns,goals,rolloverSeen); if (!o) return; setState(s=>({...s,goals:applyRollover(s.goals,g.id,g.amount)})); writeRolloverSeen(o.month); setRolloverSeen(o.month); showToast(t("rollover.done",{ amount:fmt(g.amount,currency), goal:g.name||t("rollover.goalFallback") })); } }}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
@@ -5888,7 +5888,7 @@ function AppInner() {
           onOpenDebts={()=>{}}
           onSetupSkip={()=>obTo("done")}
           onSetupStatement={()=>{ obTo("done"); switchTab("io"); }}
-          onSetupSave={(plan,extra)=>{ applySetupPlan(plan); obTo("done"); if (extra&&extra.debts) { setDebtsStart("debts"); switchTab("debts"); } }}/>}
+          onSetupSave={(plan,extra)=>{ applySetupPlan(plan); obTo("done"); const go=extra&&extra.go; if (go==="debts") { setDebtsStart("debts"); switchTab("debts"); } else if (go==="io") switchTab("io"); }}/>}
         {editBill!==undefined&&(
           <BillSheet bill={editBill} currency={currency} onSave={saveBill} onDelete={deleteBill} onClose={()=>setEditBill(undefined)} showToast={showToast}/>
         )}

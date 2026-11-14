@@ -47,11 +47,37 @@ page = await openPage(browser, { fresh: true, seed: null, chooseLang: false });
 await click(page, '.lang-opt input[value="en"]'); await click(page, ".lang-continue"); await page.waitForSelector('[data-ob="guest"]', { timeout: 4000 }); await wait(450);
 await click(page, '[data-ob="guest"]'); await page.waitForSelector('[data-section="setupq-statement"]', { timeout: 4000 }); await wait(400);
 ok(/ABB and Unibank/.test(await page.evaluate(() => document.querySelector('[data-section="setupq-statement"]').innerText)), "the first question offers a bank statement and says which banks are read");
-await click(page, '[data-section="setupq-statement"]');
+// Run 83 (owner, 14 Nov): choosing the statement no longer jumps away and skips the other questions. It is marked as an answer,
+// the questions go on, and the end shows a short guide with "Bring it in now" / "Later".
+await click(page, '[data-section="setupq-statement"]'); await wait(250);
+ok(await page.evaluate(() => document.querySelector('[data-section="setupq-statement"]').getAttribute("aria-pressed") === "true") && await has(page, '[data-section="onboarding"]'), "choosing the statement marks it and stays on the questions");
+for (let i = 0; i < 3; i++) { await click(page, '[data-section="setupq-next"]'); await wait(420); }
+await click(page, '[data-debts="yes"]'); await wait(150);
+await click(page, '[data-section="setupq-save"]'); await wait(500);
+ok(await has(page, '[data-section="setupq-guide-stmt"]') && await has(page, '[data-section="setupq-guide-debts"]') && await has(page, '[data-section="onboarding"]'), "the end shows a guide for the statement and for the loan, still inside the first launch");
+const fc = await page.evaluate((k) => JSON.parse(localStorage.getItem(k + "__first_choices") || "null"), KEY);
+ok(fc && fc.stmt === true && fc.debts === true, "the first answers are remembered on this phone", fc);
+await click(page, '[data-section="setupq-stmt-now"]');
 await page.waitForSelector(".io-page", { timeout: 4000 }); await wait(700);
-ok(!(await has(page, '[data-section="onboarding"]')) && await has(page, '[data-section="io-import"]'), "the first launch ends and Import / Export opens with the import card");
+ok(!(await has(page, '[data-section="onboarding"]')) && await has(page, '[data-section="io-import"]'), "'Bring it in now': the first launch ends and Import / Export opens with the import card");
 ok((await page.evaluate((k) => localStorage.getItem(k + "__onboard"), KEY)) === "done", "the first launch is recorded as finished (it does not come back)");
+const fc2 = await page.evaluate((k) => JSON.parse(localStorage.getItem(k + "__first_choices") || "null"), KEY);
+ok(fc2 && fc2.stmtState === "now" && fc2.debtsState === "later", "the statement is marked done now, the loan as 'later'", fc2);
 ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+await page.close();
+
+section("R83-N1. The next day Home reminds once about the loan; 'Not needed' ends it");
+page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [tx({ amount: 5 })] }), pre: `localStorage.setItem("${KEY}__first_choices", JSON.stringify({ stmt: true, debts: true, stmtState: "now", debtsState: "later", laterAt: Date.now() - 25 * 3600 * 1000 }));` });
+await wait(500);
+ok(await page.evaluate(() => document.querySelector('[data-section="home-first-nudge"]')?.dataset.kind) === "debts", "Home shows the loan reminder a day later");
+await click(page, '[data-section="nudge-dismiss"]'); await wait(700);
+ok(!(await has(page, '[data-section="home-first-nudge"]')), "'Not needed' removes it");
+ok((await page.evaluate((k) => JSON.parse(localStorage.getItem(k + "__first_choices")).debtsState, KEY)) === "dismissed", "and it is remembered, so it does not come back");
+ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+await page.close();
+page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [tx({ amount: 5 })] }), pre: `localStorage.setItem("${KEY}__first_choices", JSON.stringify({ stmt: true, stmtState: "later", laterAt: Date.now() - 3600 * 1000 }));` });
+await wait(500);
+ok(!(await has(page, '[data-section="home-first-nudge"]')), "not on the same day as 'Later'");
 await page.close();
 await browser.close();
 finish("e2e_run80_settings");

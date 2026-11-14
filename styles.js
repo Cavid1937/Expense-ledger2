@@ -1068,6 +1068,13 @@ html,body,.app{transition:background-color 200ms ease-out}
 .setup-stmt:active{transform:scale(.98);background:var(--bg-warm)}
 .setup-stmt-t{font-size:15px;font-weight:600;color:var(--accent-text)}
 .setup-stmt-s{font-size:13px;line-height:1.45;color:var(--ink-3)}
+/* Run 83: choosing the statement is an answer now (it used to jump away): the card fills in like the other choices */
+.setup-stmt.on{border-style:solid;border-color:var(--accent-fill);background:var(--accent-light)}
+.setup-guide{border:1px solid var(--rule);border-radius:16px;background:var(--bg-card);padding:16px;margin-bottom:12px}
+.setup-guide-t{font-size:16px;font-weight:600;margin-bottom:8px}
+.setup-guide-l{margin:0 0 12px;padding-left:20px;font-size:14px;line-height:1.5;color:var(--ink-2,var(--ink))}
+.setup-guide-l li{margin-bottom:4px}
+.setup-guide-go{width:100%;margin-top:0}
 .setup-choice.on{border-color:var(--accent-fill);background:var(--accent-light)}
 .setup-radio{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:2px solid var(--rule-2);display:inline-flex;align-items:center;justify-content:center;transition:border-color 160ms,background 200ms}
 .setup-choice.on .setup-radio{border-color:var(--accent-fill);background:var(--accent-fill)}
