@@ -89,7 +89,7 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
         <div className={x.billId?"bill-row":undefined} role="button" tabIndex={0} onKeyDown={activateKey(()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest))} onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
           <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{maskText(x.merchant||x.note)||catName(x.category)}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,lineHeight:1.4}}>
-            {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""} · {t("freq."+x.freq)} · {tn("rec.paymentsRecorded",x.occurrences.length)}
+            {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""} · {t("freq."+x.freq)}
           </div>
           <div style={{fontSize:11,marginTop:1,color:near&&x.isActive?"var(--warn)":"var(--ink-4)",fontWeight:near&&x.isActive?700:400}}>
             {x.isActive?dueText(x):t("rec.paused")}{x.left!=null&&x.isActive&&<span> · {x.left>0?tn("bill.paymentsLeft",x.left):t("bill.endedOn",{date:fmtDate(x.bill.endDate)})}</span>} · {x.occurrences.length?t("rec.last",{date:fmtDate(x.occurrences[x.occurrences.length-1])}):t("bill.noPayments")}
@@ -118,7 +118,7 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
   };
 
   return (
-    <div>
+    <div style={{paddingBottom:96}}>
       <div style={{marginBottom:12}}><TipHead id="rec" text={t("rec.intro")} className="list-sub">{t("tip.recHow")}</TipHead></div>
       {sugCard}
       {inferred>0&&onConvert&&(
@@ -128,13 +128,18 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
           <button className="btn btn-primary btn-full rec-convert" onClick={onConvert} style={{marginTop:12}}>{t("bill.convertBtn")}</button>
         </div>
       )}
-      <div className="stat-row">
-        <div className="stat-cell"><div className="stat-val" style={{color:"var(--neg)"}}>{fmt(monthlyOut,currency)}</div><div className="stat-lbl">{t("rec.monthlyOut")}</div></div>
-        <div className="stat-cell"><div className="stat-val">{fmt(monthlyOut*12,currency)}</div><div className="stat-lbl">{t("rec.yearly")}</div></div>
-        {monthlyIn>0&&<div className="stat-cell"><div className="stat-val" style={{color:"var(--pos)"}}>{fmt(monthlyIn,currency)}</div><div className="stat-lbl">{t("rec.monthlyIn")}</div></div>}
-        <div className="stat-cell"><div className="stat-val">{active.length}</div><div className="stat-lbl">{t("rec.activeSchedules")}</div></div>
+      {/* Run 88 (owner: polish Recurring entirely): one calm summary instead of three big tiles (a lone "1" tile said little) */}
+      <div className="card" data-section="rec-summary" style={{padding:"14px 16px",marginBottom:13}}>
+        <div className="list-sub">{t("rec.sumLbl")}</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:"4px 12px",flexWrap:"wrap",marginTop:2}}>
+          <span className="stat-val" data-sum="month" style={{color:monthlyOut>0?"var(--neg)":undefined}}>{t("rec.sumMonth",{ amount:fmt(monthlyOut,currency) })}</span>
+          <span className="list-sub" data-sum="year">{t("rec.sumYear",{ amount:fmt(monthlyOut*12,currency) })}</span>
+        </div>
+        <div className="list-sub" data-sum="count" style={{marginTop:4}}>{t("rec.sumActive",{ n:active.length })}</div>
+        {monthlyIn>0&&<div className="list-sub" data-sum="in" style={{color:"var(--pos)"}}>{t("rec.sumIn",{ amount:fmt(monthlyIn,currency) })}</div>}
       </div>
-      {upcoming.length>0&&(
+      {/* Run 88: the "due within 7 days" card only when it picks something out; when every payment is due soon, the list below already says so */}
+      {upcoming.length>0&&upcoming.length<outgoing.length&&(
         <div className="card">
           <div className="card-head"><span className="card-title">{t("home.dueWithin7")}</span></div>
           {upcoming.map(x=>{ const c=CAT(x.category); return (

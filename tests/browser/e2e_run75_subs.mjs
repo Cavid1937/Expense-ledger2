@@ -14,6 +14,7 @@ ok(/18\.00/.test(g.total) && /216\.00/.test(g.total), "the subscriptions show th
 
 section("R75-SB2. The person can move one");
 await page.evaluate(() => [...document.querySelectorAll('[data-section="rec-subs"] .bill-row')].find((r) => /Spotify/.test(r.innerText)).click()); await page.waitForSelector(".bill-sheet"); await wait(300);
+await page.evaluate(() => { const b = document.querySelector('[data-section="bill-more"]'); if (b.getAttribute("aria-expanded") !== "true") b.click(); }); await wait(450);
 await page.select("#bill-kind", "bill"); await wait(150);
 await page.evaluate(() => document.querySelector(".bill-save").click()); await wait(600);
 g = await groups();

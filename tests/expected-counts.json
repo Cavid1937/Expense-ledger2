@@ -165,7 +165,7 @@
     "e2e_run50sinking.mjs": 5,
     "e2e_run50text.mjs": 14,
     "e2e_run50gifts.mjs": 10,
-    "e2e_run50recur.mjs": 10,
+    "e2e_run50recur.mjs": 11,
     "e2e_run50setup.mjs": 12,
     "e2e_run51_integrity.mjs": 30,
     "e2e_run51_undo.mjs": 31,

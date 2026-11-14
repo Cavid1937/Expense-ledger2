@@ -11,9 +11,11 @@ await tab(page, "Recurring"); await wait(600);
 let txt = await card(page);
 ok(txt && /Netflix/.test(txt) && /9\.99/.test(txt) && /monthly/.test(txt), "the card names Netflix, 9.99, monthly", txt);
 await page.evaluate(() => document.querySelector('[data-section="rec-suggest-review"]').click()); await page.waitForSelector(".bill-sheet", { timeout: 4000 }); await wait(400);
-const form = await page.evaluate(() => ({ name: document.querySelector("#bill-name").value, amount: document.querySelector("#bill-amount").value, freq: document.querySelector("#bill-freq").value, date: document.querySelector("#bill-date").value, del: !!document.querySelector(".bill-delete") }));
+const form = await page.evaluate(() => ({ name: document.querySelector("#bill-name").value, amount: document.querySelector("#bill-amount").value, freq: (document.querySelector('[data-section="bill-freq"] [aria-pressed="true"]') || {}).dataset?.freq, per: (document.querySelector('[data-section="bill-per"]') || {}).innerText || "", date: document.querySelector("#bill-date").value, del: !!document.querySelector(".bill-delete") }));
 ok(form.name === "Netflix" && form.amount === "9.99" && form.freq === "monthly" && form.date === "2026-11-05", "the new-bill form is pre-filled: Netflix, 9.99, monthly, first due 5 Nov", form);
 ok(form.del === false, "it is a NEW bill (no Delete button)");
+// Run 88: the form says what the amount means for a year (9.99 x 12 = 119.88)
+ok(/119\.88/.test(form.per) && /a year/.test(form.per), "the form says 119.88 a year", form.per);
 const before = await state(page);
 ok((before.bills || []).length === 0, "nothing was created before Save");
 await page.evaluate(() => document.querySelector(".bill-save").click()); await wait(700);

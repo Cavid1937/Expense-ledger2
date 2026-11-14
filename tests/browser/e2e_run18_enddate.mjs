@@ -8,7 +8,9 @@ const left = [0, 1, 2, 3].filter((m) => `${ym(m)}-28` >= todayS).length;   // th
 const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [tx({ type: "income", category: "salary", amount: 2000, merchant: "Employer", date: `${ym(0)}-01` })], goals: [], safeToSpend: { enabled: true, savingsTarget: 0 } }) });
 const fill = (vals) => page.evaluate((v) => { const set = (el, x) => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value").set.call(el, x); el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); };
   for (const [sel, x] of Object.entries(v)) set(document.querySelector(sel), x); }, vals);
-const openNew = async () => { await tab(page, "Recurring"); await page.evaluate(() => document.querySelector(".fab-add").click()); await page.waitForSelector(".bill-sheet"); await wait(300); };
+const openNew = async () => { await tab(page, "Recurring"); await page.evaluate(() => document.querySelector(".fab-add").click()); await page.waitForSelector(".bill-sheet"); await wait(300);
+  // Run 88: the last payment date sits under "More options"
+  await page.evaluate(() => { const b = document.querySelector('[data-section="bill-more"]'); if (b.getAttribute("aria-expanded") !== "true") b.click(); }); await wait(450); };
 
 section("R18-EB1. A wrong end date is refused");
 await openNew();

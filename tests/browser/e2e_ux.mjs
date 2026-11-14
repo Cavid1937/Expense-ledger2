@@ -15,7 +15,8 @@ await tab(page, "Recurring"); await wait(300);
 const rows = await page.evaluate(() => [...document.querySelectorAll("button")].filter((b) => /^(Pause|Reactivate)$/.test(b.textContent.trim())).length);
 ok(rows === 3, `rent recorded 3 months + Netflix + Spotify = 3 rows, not 5 (found ${rows})`);
 let txt = await bodyText(page);
-ok(/3 payments recorded/.test(txt) && /480\.00 ₼/.test(txt), "rent row says '3 payments recorded'; typical monthly outgoing = 450 + 15 + 15 = 480.00 ₼");
+// Run 88: the row no longer repeats a payment count next to "last <date>" (owner's screenshot); it says when the last one was
+ok(/last \d/.test(txt) && /480\.00 ₼/.test(txt), "rows say when the last payment was; typical monthly outgoing = 450 + 15 + 15 = 480.00 ₼");
 await clickText(page, "button", /^Pause$/); await wait(250);
 const rentRow = await page.evaluate(() => { const r = [...document.querySelectorAll("div")].find((el) => /Rent/.test(el.textContent) && /Reactivate|Pause/.test(el.textContent) && el.children.length >= 2 && el.textContent.length < 400); return !!r; });
 let st = await state(page);

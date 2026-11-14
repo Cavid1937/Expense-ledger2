@@ -6,7 +6,7 @@ import { locale, t, tn } from "../i18n.js";
 import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo, catHint } from "../App.jsx";
 import { Collapse, Reveal, motionOff } from "./motion.jsx";
 import { TipHead } from "./tip.jsx";
-import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
+import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, scheduleMonthly, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // Run 42: the amount box also takes simple arithmetic ("45 - 20", "12.5 x 3"); amountOf gives the number either way (null when not valid).
 const EXPR_TEXT=/[+*\/×÷]|[0-9.,)]\s*[-−]\s*[0-9.,(]/;
@@ -26,6 +26,11 @@ export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast
   // Run 75: subscription, other repeating payment, or decided by the app ("auto": no kind stored)
   const [kind,setKind]=useState(bill?.kind==="sub"||bill?.kind==="bill" ? bill.kind : "auto");
   const cats=pickerCats(type==="income",readCatPrefs(),[bill?.category,category]);   // Run 36: user's order; hidden ones only if this bill uses it
+  // Run 88 (owner: "polish the recurring section, including adding"): the kind and the last date are rarely needed, so they sit under a fold that
+  // opens by itself when one of them is already set; the amount shows what it means for a month and a year as it is typed.
+  const [more,setMore]=useState(kind!=="auto"||!!endDate);
+  const amt=formMoney(amount,{positive:true});
+  const perMonth=amt ? scheduleMonthly({ amount:amt, freq }) : 0;
   const save=()=>{
     const b=validateBill({ id:bill?.id||"tmp", name, type, category:cats.some(c=>c.id===category)?category:cats[0].id, subcategory:bill?.subcategory||"",
       amount:formMoney(amount,{positive:true}), freq, anchorDate:anchor, ...(bill && anchor===bill.anchorDate && bill.dueDay ? { dueDay:bill.dueDay } : {}), endDate, active, createdAt:bill?.createdAt||new Date().toISOString(), ...(type==="expense"&&kind!=="auto" ? { kind } : {}) });
@@ -43,22 +48,26 @@ export function BillSheet({ bill, currency, onSave, onDelete, onClose, showToast
         <div className="field"><label className="field-lbl" htmlFor="bill-name">{t("bill.name")}</label><input id="bill-name" className="field-input" value={name} maxLength={80} placeholder={t("bill.namePh")} onChange={e=>setName(e.target.value)}/></div>
         <div className="field-row">
           <div className="field"><label className="field-lbl" htmlFor="bill-amount">{t("add.amount")} ({currency})</label><input id="bill-amount" className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00" value={amount} onChange={e=>setAmount(cleanMoneyText(e.target.value))}/></div>
-          <div className="field"><label className="field-lbl" htmlFor="bill-freq">{t("add.frequency")}</label>
-            <PickSelect id="bill-freq" className="field-input field-select" value={freq} onChange={e=>setFreq(e.target.value)}>{["weekly","biweekly","monthly","yearly"].map(f=><option key={f} value={f}>{t("freqCap."+f)}</option>)}</PickSelect></div>
+          <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><PickDate id="bill-date" className="field-input" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/></div>
         </div>
-        <div className="field-row">
-          <div className="field"><label className="field-lbl" htmlFor="bill-cat">{t("add.category")}</label>
-            <PickSelect id="bill-cat" className="field-input field-select" value={cats.some(c=>c.id===category)?category:cats[0].id} onChange={e=>setCategory(e.target.value)}>{cats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</PickSelect></div>
-          <div className="field"><label className="field-lbl" htmlFor="bill-date">{t(isNew?"bill.firstDue":"bill.dueFrom")}</label><PickDate id="bill-date" className="field-input" lang={locale()} value={anchor} onChange={e=>setAnchor(e.target.value)}/>
-            </div>
+        <div className="field"><div className="field-lbl" id="bill-freq-lbl">{t("add.frequency")}</div>
+          <div className="filter-bar" role="group" aria-labelledby="bill-freq-lbl" data-section="bill-freq" style={{marginTop:2}}>
+            {["weekly","biweekly","monthly","yearly"].map(f=><button key={f} type="button" className={"chip"+(freq===f?" on":"")} data-freq={f} aria-pressed={freq===f} onClick={()=>setFreq(f)}>{t("freqCap."+f)}</button>)}
+          </div>
+          <Reveal when={perMonth>0&&perMonth}>{(pm)=><div className="list-sub" data-section="bill-per" style={{marginTop:6}}>{freq==="monthly" ? t("bill.perYear",{ year:fmt(Math.round(pm*1200)/100,currency) }) : t("bill.perMonthYear",{ month:fmt(pm,currency), year:fmt(Math.round(pm*1200)/100,currency) })}</div>}</Reveal>
         </div>
-        {type==="expense"&&(
-          <div className="field"><label className="field-lbl" htmlFor="bill-kind">{t("bill.kind")}</label>
-            <PickSelect id="bill-kind" className="field-input field-select" value={kind} onChange={e=>setKind(e.target.value)}>{["auto","sub","bill"].map(k=><option key={k} value={k}>{t("bill.kind."+k)}</option>)}</PickSelect>
-            <div className="list-sub" style={{marginTop:4}}>{t("bill.kindSub")}</div></div>
-        )}
-        <div className="field"><label className="field-lbl" htmlFor="bill-end">{t("bill.endDate")}</label><PickDate id="bill-end" className="field-input" lang={locale()} value={endDate} min={isValidDateStr(anchor)?anchor:undefined} onChange={e=>setEndDate(e.target.value)}/>
-          <div className="list-sub" style={{marginTop:4}}>{t("bill.endDateSub")}</div></div>
+        <div className="field"><label className="field-lbl" htmlFor="bill-cat">{t("add.category")}</label>
+          <PickSelect id="bill-cat" className="field-input field-select" value={cats.some(c=>c.id===category)?category:cats[0].id} onChange={e=>setCategory(e.target.value)}>{cats.map(c=><option key={c.id} value={c.id}>{catName(c.id)}</option>)}</PickSelect></div>
+        <button type="button" className="btn btn-sm" data-section="bill-more" aria-expanded={more} onClick={()=>setMore(m=>!m)} style={{marginBottom:8}}>{t(more?"bill.lessOpts":"bill.moreOpts")}</button>
+        <Collapse open={more}>
+          {type==="expense"&&(
+            <div className="field"><label className="field-lbl" htmlFor="bill-kind">{t("bill.kind")}</label>
+              <PickSelect id="bill-kind" className="field-input field-select" value={kind} onChange={e=>setKind(e.target.value)}>{["auto","sub","bill"].map(k=><option key={k} value={k}>{t("bill.kind."+k)}</option>)}</PickSelect>
+              <div className="list-sub" style={{marginTop:4}}>{t("bill.kindSub")}</div></div>
+          )}
+          <div className="field"><label className="field-lbl" htmlFor="bill-end">{t("bill.endDate")}</label><PickDate id="bill-end" className="field-input" lang={locale()} value={endDate} min={isValidDateStr(anchor)?anchor:undefined} onChange={e=>setEndDate(e.target.value)}/>
+            <div className="list-sub" style={{marginTop:4}}>{t("bill.endDateSub")}</div></div>
+        </Collapse>
         {!isNew&&(
           <div className="settings-row">
             <div><div className="settings-row-title">{t("bill.active")}</div><div className="settings-row-sub">{t("bill.activeSub")}</div></div>
