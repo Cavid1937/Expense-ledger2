@@ -2,6 +2,7 @@
 import { useMemo, useState } from "react";
 import { t, tn } from "../i18n.js";
 import { Collapse } from "./motion.jsx";
+import { TipHead } from "./tip.jsx";
 import { CAT, CatIcon, Icon, activateKey, billPaymentsLeft, billsToIcs, buildSchedules, catName, daysBetween, downloadFile, fmt, fmtDate, localDateStr, localMonthStr, maskText, scheduleMonthStatus, scheduleMonthly, scheduleNextDue, subName, today } from "../App.jsx";
 // Run 70: category colours drawn darker on light themes
 import { catInk } from "../App.jsx";
@@ -118,7 +119,7 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
 
   return (
     <div>
-      <div style={{fontSize:11,color:"var(--ink-4)",fontStyle:"italic",marginBottom:14,lineHeight:1.5}}>{t("rec.intro")}</div>
+      <div style={{marginBottom:12}}><TipHead id="rec" text={t("rec.intro")} className="list-sub">{t("tip.recHow")}</TipHead></div>
       {sugCard}
       {inferred>0&&onConvert&&(
         <div className="card bill-convert">

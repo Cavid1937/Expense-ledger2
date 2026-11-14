@@ -5,6 +5,7 @@ import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, saveTextFile } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
+import { TipHead } from "./tip.jsx";
 import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";   // Run 38: forms, edits and the Debts / Loans switch ease in and out
 
 // ─── Debts & loans page (Run 17) ──────────────────────────────────────────────
@@ -313,10 +314,9 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
               <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t("loan.estimate")}</div>
               {!done&&(
                 <div className="field" style={{marginTop:10,marginBottom:0}}>
-                  <label className="field-lbl" htmlFor={"loan-int-"+l.id}>{t("loan.interestPart")}</label>
+                  <TipHead id={"loan-int-"+l.id} text={t("loan.interestHint")} className="tip-field"><label className="field-lbl" htmlFor={"loan-int-"+l.id}>{t("loan.interestPart")}</label></TipHead>
                   <input id={"loan-int-"+l.id} className="field-input loan-interest-input" type="text" inputMode="decimal" autoComplete="off" placeholder="0.00"
                     value={intr[l.id]!==undefined ? intr[l.id] : (next.interest/100).toFixed(2)} onChange={e=>setIntr(m=>({...m,[l.id]:cleanMoneyText(e.target.value)}))}/>
-                  <div className="list-sub" style={{marginTop:4,lineHeight:1.5}}>{t("loan.interestHint")}</div>
                 </div>
               )}
               {!done&&l.rateType==="annuity"&&(()=>{

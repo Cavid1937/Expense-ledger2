@@ -5,6 +5,7 @@ import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo, catHint } from "../App.jsx";
 import { Collapse, Reveal, motionOff } from "./motion.jsx";
+import { TipHead } from "./tip.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // Run 42: the amount box also takes simple arithmetic ("45 - 20", "12.5 x 3"); amountOf gives the number either way (null when not valid).
@@ -585,7 +586,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
         {/* Run 41: spread a big one-off cost over several months in the analytics; the cash still leaves on the date above */}
         <Collapse open={type==="expense"&&!recur} id="add-spread-wrap">
           <div className="field" data-section="add-spread">
-            <label className="field-lbl" id="txn-spread-lbl">{t("spread.label")} {optional}</label>
+            <TipHead id="spread" text={t("spread.hint")} className="tip-field"><label className="field-lbl" id="txn-spread-lbl">{t("spread.label")} {optional}</label></TipHead>
             <div className="filter-bar" role="group" aria-labelledby="txn-spread-lbl" style={{flexWrap:"wrap",overflowX:"visible"}}>
               {[...new Set([0,3,6,12,spread])].sort((a,b)=>a-b).map(n=>(<button key={n} type="button" className={`chip${spread===n&&!spreadOwn?" on":""}`} aria-pressed={spread===n&&!spreadOwn} data-spread={n} onClick={()=>{ setSpread(n); setSpreadOwn(false); setSpreadText(""); }}>{n===0?t("spread.off"):tn("spread.months",n)}</button>))}
               {/* Run 53 (owner: "what if the user wants 4 months?"): any whole number of months from 2 to 24 */}
@@ -599,18 +600,18 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
                 <div id="txn-spread-own-msg" role={spreadText!==""&&!spreadMonths(spreadText)?"alert":undefined} className="list-sub" style={{marginTop:4,color:spreadText!==""&&!spreadMonths(spreadText)?"var(--neg)":undefined}}>{spreadText!==""&&!spreadMonths(spreadText) ? t("spread.ownErr") : ""}</div>
               </div>
             </Collapse>
-            <div className="list-sub" style={{lineHeight:1.5,marginTop:6}}>{spread>0 ? t("spread.on",{ months:spread, each:fmt(Math.floor(Math.round((amountOf(amount)||0)*100)/spread)/100,currency) }) : t("spread.hint")}</div>
+            {spread>0&&<div className="list-sub" style={{lineHeight:1.5,marginTop:6}}>{t("spread.on",{ months:spread, each:fmt(Math.floor(Math.round((amountOf(amount)||0)*100)/spread)/100,currency) })}</div>}
           </div>
         </Collapse>
         {/* Run 43: part of this expense is for someone else who will pay it back; only the user's share counts in spending */}
         <Collapse open={type==="expense"&&!recur} id="add-reimb-wrap">
           <div className="field" data-section="add-reimb">
-            <label className="field-lbl" htmlFor="txn-reimb-amt">{t("reimb.label")} {optional}</label>
+            <TipHead id="reimb" text={t("reimb.hint")} className="tip-field"><label className="field-lbl" htmlFor="txn-reimb-amt">{t("reimb.label")} {optional}</label></TipHead>
             <div style={{display:"flex",gap:8}}>
               <input id="txn-reimb-amt" className="field-input" style={{flex:1,minWidth:0}} inputMode="decimal" autoComplete="off" placeholder={t("reimb.amt")} aria-label={t("reimb.amt")} value={reimbAmt} onChange={e=>setReimbAmt(e.target.value)}/>
               <input id="txn-reimb-who" className="field-input" style={{flex:1,minWidth:0}} maxLength={40} autoComplete="off" placeholder={t("reimb.who")} aria-label={t("reimb.who")} value={reimbWho} onChange={e=>setReimbWho(e.target.value)}/>
             </div>
-            <div className="list-sub" data-section="add-reimb-note" style={{lineHeight:1.5,marginTop:6}}>{(()=>{ const a=amountOf(amount), r=reimbAmt.trim()?amountOf(reimbAmt):null; return a!==null && r!==null && r>0 && Math.round(r*100)<=Math.round(a*100) ? t("reimb.share",{ share:fmt(Math.round(a*100-r*100)/100,currency), back:fmt(r,currency) }) : t("reimb.hint"); })()}</div>
+            {(()=>{ const a=amountOf(amount), r=reimbAmt.trim()?amountOf(reimbAmt):null; return a!==null && r!==null && r>0 && Math.round(r*100)<=Math.round(a*100) ? <div className="list-sub" data-section="add-reimb-note" style={{lineHeight:1.5,marginTop:6}}>{t("reimb.share",{ share:fmt(Math.round(a*100-r*100)/100,currency), back:fmt(r,currency) })}</div> : null; })()}
           </div>
         </Collapse>
 

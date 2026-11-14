@@ -66,7 +66,8 @@ for (const lang of ["en", "az", "ru"]) {
     // Run 27b: Accounts and Preferences are open on the Settings page itself; each part of it is visited by scrolling to it.
 for (const sec of ["my-accounts", "st-money-options", "st-look"]) await visit(page, `${lang} Settings-${sec}`, async () => { await goTab(page, 4); await wait(250); await page.evaluate(() => document.querySelectorAll('[data-fold-head][aria-expanded="false"]').forEach((b) => b.click())); await wait(300); await page.evaluate((s) => document.querySelector(`[data-section="${s}"]`).scrollIntoView({ block: "start" }), sec); await wait(400); });
 for (const id of ["recurring", "debts", "io", "lock", "safe", "privacy", "how"]) {
-      await visit(page, `${lang} More-${id}`, async () => { await goTab(page, 4); await wait(250); await click(page, `.more-page [data-more="${id}"]`); await wait(600); });
+      // Run 80: the privacy notice row sits inside the closed Privacy fold
+      await visit(page, `${lang} More-${id}`, async () => { await goTab(page, 4); await wait(250); if (id === "privacy") { await page.evaluate(() => { const h = document.querySelector('[data-fold-head="privacy"]'); if (h && h.getAttribute("aria-expanded") === "false") h.click(); }); await wait(500); } await click(page, `.more-page [data-more="${id}"]`); await wait(600); });
       await page.keyboard.press("Escape"); await wait(200);
       await page.evaluate(() => { const o = document.querySelector(".sheet-overlay"); if (o) o.click(); }); await wait(350);
     }

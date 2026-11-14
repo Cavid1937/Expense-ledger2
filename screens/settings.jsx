@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { Collapse, EditSwap, motionOff, useBackStep, useFlip, useLeave } from "./motion.jsx";
+import { TipHead } from "./tip.jsx";
 import { LAUNCH_GLYPH } from "./launch.js";
 import { LANGS, LANG_NAMES, locale, t, tIn, tn, tShell } from "../i18n.js";
 import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
@@ -252,7 +253,7 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
   const nameOf=(id)=>(data.accounts.find(a=>a.id===id)||{}).name||"?";
   return (
     <div className="card prefs-card" data-section="my-accounts" style={{marginTop:14}}>
-      <div className="list-sub" style={{marginBottom:8}}>{t("acc.sub")}</div>
+      <div style={{marginBottom:8}}><TipHead id="acc" text={t("acc.sub")} className="list-sub">{t("tip.accHow")}</TipHead></div>
       {data.accounts.map(a=><EditSwap key={a.id} editing={!!(editing&&editing.id===a.id)} form={()=>(
         <div data-account-edit={a.id} style={{padding:"8px 0"}}>
           <div className="field"><label className="field-lbl" htmlFor="acc-edit-name">{t("acc.name")}</label>
@@ -395,8 +396,7 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
           <div className={`toggle-track${safeToSpend.enabled?" on":""}`} onClick={()=>onSafeToSpendChange({enabled:!safeToSpend.enabled})} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); onSafeToSpendChange({enabled:!safeToSpend.enabled}); } }} role="switch" aria-checked={!!safeToSpend.enabled} aria-label={t("safe.title")} tabIndex={0}><div className="toggle-knob"/></div>
         </div>
         {/* Run 41: monthly working hours, so an expense can be shown as hours of work */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("work.title")}</div>
-        <div className="list-sub" style={{lineHeight:1.5}}>{t("work.sub")}</div>
+        <TipHead id="work" text={t("work.sub")} className="settings-section-lbl" style={{marginTop:14}}>{t("work.title")}</TipHead>
         <div className="settings-row" data-section="work-hours" style={{flexWrap:"wrap",gap:8}}>
           <div className="settings-row-title" id="set-work-lbl" style={{minWidth:0,overflowWrap:"anywhere"}}>{t("work.label")}</div>
           <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap",maxWidth:"100%"}}>
@@ -420,8 +420,7 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
           </div>
         </div>
         {/* Run 39: the quick-add link for Apple Shortcuts, an NFC sticker or a home-screen bookmark */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("quick.title")}</div>
-        <div className="list-sub" style={{lineHeight:1.5}}>{t("quick.sub")}</div>
+        <TipHead id="quick" text={t("quick.sub")} className="settings-section-lbl" style={{marginTop:14}}>{t("quick.title")}</TipHead>
         <code data-section="quick-link" style={{display:"block",overflowWrap:"anywhere",fontSize:12,background:"var(--bg-inset)",borderRadius:8,padding:"8px 10px",margin:"8px 0"}}>{PUBLIC_URL+"?add=expense&amount=5&merchant=Bravo&category=food"}</code>
         <button className="btn btn-ghost btn-full" data-section="quick-copy" onClick={()=>{ const s=PUBLIC_URL+"?add=expense&amount=5&merchant=Bravo&category=food"; try { Promise.resolve(navigator.clipboard.writeText(s)).then(()=>showToast(t("quick.copied"))).catch(()=>showToast(t("quick.copyFail"),5000)); } catch { showToast(t("quick.copyFail"),5000); } }}>{t("quick.copy")}</button>
       </div>

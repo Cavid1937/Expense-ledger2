@@ -1068,6 +1068,20 @@ html,body,.app{transition:background-color 200ms ease-out}
 .setup-stmt:active{transform:scale(.98);background:var(--bg-warm)}
 .setup-stmt-t{font-size:15px;font-weight:600;color:var(--accent-text)}
 .setup-stmt-s{font-size:13px;line-height:1.45;color:var(--ink-3)}
+/* Run 83: info tips. A small round button beside a heading; the bubble grows in from the top with a slight settle and fades away. */
+.tip-head{display:flex;align-items:center;gap:6px}
+.tip-head.tip-field{margin-bottom:5px}
+.tip-head-text>.field-lbl{margin-bottom:0}
+.tip-head-text{min-width:0}
+.tip-btn{flex:none;position:relative;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;margin:-4px 0;border:none;border-radius:50%;background:transparent;color:var(--ink-3);cursor:pointer;transition:color 180ms ease-out,background-color 180ms ease-out,transform 260ms cubic-bezier(.34,1.45,.64,1)}
+.tip-btn::before{content:"";position:absolute;inset:-9px}
+.tip-btn.on{color:var(--accent-text,var(--accent));background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.tip-btn:is(:active,.pressed){transform:scale(.88);transition:transform 90ms ease-out}
+.tip-pop{margin:6px 0 10px;padding:11px 14px;border-radius:14px;background:color-mix(in srgb,var(--ink) 5%,var(--bg-card));border:1px solid var(--rule);font-size:13.5px;line-height:1.55;color:var(--ink-2,var(--ink));cursor:pointer;transform-origin:20% 0;animation:tipIn 360ms cubic-bezier(.34,1.3,.64,1) backwards;transition:transform 220ms cubic-bezier(.4,0,.8,.4)}
+.tip-pop:not(.in){transform:scale(.94) translateY(-4px)}
+@keyframes tipIn{from{transform:scale(.9) translateY(-6px)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.tip-pop,.tip-pop:not(.in),.tip-btn{transition:none;transform:none;animation:none}}
+[data-fx="off"] .tip-pop,[data-fx="off"] .tip-pop:not(.in){transition:none;transform:none;animation:none}
 /* Run 83: choosing the statement is an answer now (it used to jump away): the card fills in like the other choices */
 .setup-stmt.on{border-style:solid;border-color:var(--accent-fill);background:var(--accent-light)}
 .setup-guide{border:1px solid var(--rule);border-radius:16px;background:var(--bg-card);padding:16px;margin-bottom:12px}

@@ -9,7 +9,8 @@ section("R27C-1. Everything starts closed; each section opens and closes on its 
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page);
   await tab(page, "More"); await wait(300);
   const s0 = await state(page);
-  ok(Object.keys(s0).join() === "accounts,money,look" && Object.values(s0).every((v) => v === "false"), "three sections, all closed to start (Run 38: categories moved to Budgets & Goals)", s0);
+  // Run 80 added the Privacy fold
+  ok(Object.keys(s0).join() === "accounts,money,look,privacy" &&Object.values(s0).every((v) => v === "false"), "three sections, all closed to start (Run 38: categories moved to Budgets & Goals)", s0);
   ok(await page.evaluate(() => !document.querySelector('[data-section="my-accounts"]') && !document.querySelector('[data-section="theme-chips"]')), "closed means their contents are not on the page");
   await page.click(sel("accounts")); await wait(300);
   const s1 = await state(page);
