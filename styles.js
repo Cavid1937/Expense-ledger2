@@ -1132,5 +1132,17 @@ iframe[src*="accounts.google.com"]{color-scheme:light}
 @keyframes tickDraw{to{stroke-dashoffset:0}}
 @media (prefers-reduced-motion:reduce){.fab-add svg{transition:none}.snackbar.snack-ghost{display:none}.snack-tick circle,.snack-tick path{animation:none;stroke-dashoffset:0}}
 [data-fx="off"] .fab-add svg{transition:none}[data-fx="off"] .snackbar.snack-ghost{display:none}[data-fx="off"] .snack-tick circle,[data-fx="off"] .snack-tick path{animation:none;stroke-dashoffset:0}
+/* Run 87: receipt photo on the entry view */
+.photo-box{margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
+.photo-thumb{display:block;padding:0;border:1px solid var(--rule);border-radius:12px;overflow:hidden;background:var(--bg-warm);cursor:zoom-in;max-height:220px}
+.photo-thumb img{display:block;width:100%;max-height:220px;object-fit:cover}
+.photo-acts{display:flex;gap:8px}.photo-acts .btn{flex:1}
+.photo-arm{border-color:var(--neg);color:var(--neg)}
+.photo-err{font-size:13px;color:var(--neg);line-height:1.4}
+.photo-note{font-size:12px;color:var(--ink-3);line-height:1.45;margin:0 2px}
+.photo-full{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:16px;animation:fadeIn 180ms ease-out}
+.photo-full img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+.photo-full-close{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,0.16);color:#fff;font-size:26px;line-height:1;cursor:pointer}
+@media (prefers-reduced-motion:reduce){.photo-full{animation:none}}[data-fx="off"] .photo-full{animation:none}
 `);
 

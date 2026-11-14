@@ -8,6 +8,7 @@ import { accountsMap, paidFromMatch, paidFromOptions, paidKindName, readAccounts
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, spreadMonths, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { Collapse, Reveal, Swap, useBackStep, usePresence } from "./motion.jsx";
+import { ReceiptPhoto } from "./photo.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
 export const LEDGER_PAGE=150;   // Run 32: rows drawn at first and per "Show more" (a throttled phone froze for seconds drawing 300+ rows at once). Whole days only.
@@ -459,6 +460,8 @@ export function TxnDetailSheet({ txn, currency, transactions, bills:billList=[],
           <button className="btn btn-sm btn-full detail-action" style={{flex:1}} onClick={onEdit}><Icon name="edit" size={14}/>{t("common.edit")}</button>
           <button className="btn btn-sm btn-full detail-action" style={{flex:1}} onClick={onDuplicate}><Icon name="repeat" size={14}/>{t("detail.duplicate")}</button>
         </div>
+        {/* Run 87: a receipt photo, kept on this device only (see screens/photo.jsx) */}
+        <ReceiptPhoto id={txn.id}/>
         {onRepaid&&reimb&&reimb.owed>0&&<button className="btn btn-primary btn-full" data-section="reimb-paid" style={{marginBottom:8}} onClick={onRepaid}>{t("reimb.markPaid",{ amt:fmt(reimb.owed,currency) })}</button>}
         {reimb&&reimb.owed===0&&<div className="list-sub" data-section="reimb-settled" style={{margin:"0 2px 8px"}}>{t("reimb.settled")}</div>}
         {onSplit&&!txn.recurring&&!txn.billId&&!txn.debtLink&&txn.amount>0&&!txn.reimb&&<SplitPanel key={txn.id} txn={txn} currency={currency} onSplit={onSplit}/>}

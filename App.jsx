@@ -11,6 +11,7 @@ import { CSS } from "./styles.js";
 import { LockGate, LockSheet } from "./screens/lock.jsx";
 import { HomePage } from "./screens/home.jsx";
 import { LedgerPage, TxnDetailSheet, TxnRow } from "./screens/ledger.jsx";
+import { copyPhoto, sweepPhotos } from "./screens/photo.jsx";
 import { AddEditOverlay, BillSheet } from "./screens/add.jsx";
 import { RecurringHub } from "./screens/recurring.jsx";
 import { ImportExportPage, ImportUnlock, InfoSheet, MorePage, MyAccounts } from "./screens/settings.jsx";
@@ -161,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="86 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="87 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -4648,6 +4649,9 @@ function AppInner() {
   },[]);
 
   const [storageFailed, setStorageFailed] = useState(false);
+  // Run 87: photos whose entry is gone are marked, and cleared after 30 days. Only after a clean load (no load notice, saving
+  // allowed, nothing failed) and never with an empty list, so a bad start can never wipe the photos.
+  useEffect(()=>{ if (storageFailed || SAVE_BLOCKED || LOAD_NOTICE) return undefined; const to=setTimeout(()=>{ const s=stateRef.current; if (SAVE_BLOCKED || !s || !Array.isArray(s.transactions) || !s.transactions.length) return; sweepPhotos(s.transactions.map(x=>x.id)).catch(()=>{}); },15000); return ()=>clearTimeout(to); },[storageFailed]);
   useEffect(()=>{
     // Never overwrite the original stored data if we could not keep a recovery copy of it.
     if (SAVE_BLOCKED) { setStorageFailed(true); return; }
@@ -4971,6 +4975,8 @@ function AppInner() {
     if (!orig) return false;
     const r=splitTransaction(orig,parts); if (!r.ok) return false;
     const next={...before,transactions:before.transactions.flatMap(x=>x.id===id?r.entries:[x])};
+    // Run 87: a receipt photo goes with the first part (the original's copy stays until it has been missing for 30 days, so Undo keeps it)
+    copyPhoto(id,r.entries[0].id).catch(()=>{});
     setState(next);
     showSnackbar(t("split.done",{ n:r.entries.length }),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },8000,"split");
     return true;
