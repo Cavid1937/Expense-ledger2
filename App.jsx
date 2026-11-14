@@ -5118,6 +5118,12 @@ function AppInner() {
       Promise.resolve(window.LedgerNative.reminders.sync({ items, exact:readReminders().exact })).catch(()=>{ /* the shell is unavailable: the ledger is not affected */ });
     } catch { /* same */ }
   },[state.transactions,state.bills,state.currency,state.language,remindTick]);
+  // Run 88: Settings > Reminders > "Send a test reminder": the usual plan plus one test notice 10 seconds from now (sync replaces the whole list)
+  useEffect(()=>{
+    if (!remindersAvailable()) return undefined;
+    const go=()=>{ try { const prefs=readReminders(), tx=state.transactions||[], cur=state.currency; const items=reminderPlan(buildSchedules(tx,state.bills||[]),tx,prefs,new Date()).map(i=>({ ...i, ...reminderMessage(i,prefs,cur) })); items.unshift({ id:2147483601, kind:"test", atMs:Date.now()+10000, title:t("remind.testTitle"), body:t("remind.testBody") }); Promise.resolve(window.LedgerNative.reminders.sync({ items, exact:prefs.exact })).catch(()=>{}); } catch { /* the shell is unavailable */ } };
+    window.addEventListener("ledger-reminder-test",go); return ()=>window.removeEventListener("ledger-reminder-test",go);
+  },[state.transactions,state.bills,state.currency]);
   // Run 69: "Help improve the app": nothing at all unless the person turned it on; then at most once a day, with a connection, best effort.
   useEffect(()=>{
     const L=readLearn(), day=localDateStr();

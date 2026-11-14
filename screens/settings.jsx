@@ -538,6 +538,8 @@ export function RemindersSettings({ showToast, open, toggle }) {
         )}
         {blocked && <div className="list-sub" role="alert" data-section="rem-denied" style={{marginTop:8}}>{t("remind.denied")}</div>}
         <div className="list-sub" style={{marginTop:8}}>{t("remind.battery")}</div>
+        {/* Run 88 (owner: "I didn't receive notification today"): one reminder in 10 seconds, so the person can see at once whether the phone lets them through */}
+        <button type="button" className="btn-ghost" data-section="rem-test" style={{marginTop:10}} onClick={()=>{ Promise.resolve(window.LedgerNative.reminders.requestPermission()).then(r=>{ if (!(r && r.granted)) { setBlocked(true); return; } setBlocked(false); window.dispatchEvent(new Event("ledger-reminder-test")); showToast(t("remind.testSent"),5000); }).catch(()=>setBlocked(true)); }}>{t("remind.test")}</button>
         </Collapse>
       </div>
     </Fold>

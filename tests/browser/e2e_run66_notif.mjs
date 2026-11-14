@@ -30,5 +30,17 @@ section("R66-B2. When the phone blocks notifications, the screen says so");
   ok(/blocked/.test(t), "the line says notifications are blocked and where to allow them", t);
   await page.close();
 }
+section("R88-T. A test reminder, to see at once whether the phone lets reminders through");
+{
+  const page = await openPage(browser, { seed: seed(), pre: SHELL("granted") }); await openSettings(page); await wait(400);
+  await page.evaluate(() => document.querySelector('[data-section="rem-recurring"]').click()); await wait(700);
+  const before = await lastItems(page);
+  await page.evaluate(() => { window.__t0 = Date.now(); document.querySelector('[data-section="rem-test"]').click(); }); await wait(700);
+  const last = await page.evaluate(() => { const c = window.__calls; const it = c[c.length - 1].items; const x = it.find((i) => i.kind === "test"); return { n: it.length, dt: x ? x.atMs - window.__t0 : -1, title: x && x.title }; });
+  ok(last.n === before + 1 && last.dt >= 9000 && last.dt <= 12000 && last.title === "Test reminder", "one test reminder about 10 seconds ahead, and the usual ones are kept", last);
+  ok(/10 seconds/.test(await page.evaluate(() => document.body.innerText)), "a message says it will arrive in about 10 seconds");
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
 await browser.close();
 finish("e2e_run66_notif");
