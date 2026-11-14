@@ -4,7 +4,7 @@
 import fs from "fs";
 import { ok, section, finish } from "./lib.mjs";
 import { cleanSession, sessionFromAuth, makeNonce, signInWithGoogleIdToken, freshSession, loadLedger, saveLedger, deleteAccount, accountDue,
-  AccountError, ACCOUNT_URL, GOOGLE_WEB_CLIENT_ID } from "../../account.js";
+  AccountError, ACCOUNT_URL, GOOGLE_WEB_CLIENT_ID, nativeGoogleIdAvailable, nativeGoogleIdToken } from "../../account.js";
 
 const UID = "11111111-2222-3333-4444-555555555555";
 const ID_TOKEN = "aaa.bbb.ccc";
@@ -130,5 +130,24 @@ section("R81-8. When the phone saves automatically");
   ok(!accountDue({ ...s, paused: "conflict" }, "h2"), "never while waiting for the person to choose after a conflict");
   ok(!accountDue({ ...s, version: 0 }, "h2"), "never before the first copy was settled (sign-in decides that)");
   ok(!accountDue(null, "h2"), "never when signed out");
+}
+section("R81-9. The Android app's Google sheet (APK 81): what comes back, and each way it can fail");
+{
+  const calls = [];
+  const fake = (answer) => { globalThis.window = { LedgerNative: { google: { getIdToken: async (o) => { calls.push(o); if (answer instanceof Error) throw answer; return answer; } } } }; };
+  fake({ idToken: ID_TOKEN });
+  ok(nativeGoogleIdAvailable(), "an app with the sign-in sheet is recognised");
+  ok((await nativeGoogleIdToken("ab".repeat(32))) === ID_TOKEN && calls[0].nonce === "ab".repeat(32), "the hashed nonce goes to the sheet and the ID token comes back");
+  const reasonFor = async (msg) => { fake(new Error(msg)); try { await nativeGoogleIdToken("ab".repeat(32)); return "none"; } catch (e) { return e.reason; } };
+  ok((await reasonFor("cancelled")) === "cancelled", "closing the sheet = cancelled (no message shown)");
+  ok((await reasonFor("noaccount")) === "noaccount", "no Google account on the phone = its own message");
+  ok((await reasonFor("offline")) === "offline", "no internet = offline");
+  ok((await reasonFor("auth")) === "server", "Google refusing = a general error");
+  fake({ nothing: true });
+  let err = null; try { await nativeGoogleIdToken("ab".repeat(32)); } catch (e) { err = e; }
+  ok(err && err.reason === "cancelled", "an empty answer is treated as cancelled");
+  globalThis.window = { LedgerNative: { google: { getToken: async () => ({}) } } };
+  ok(!nativeGoogleIdAvailable(), "an older app (APK 79, Drive only) is NOT treated as having the sign-in sheet");
+  delete globalThis.window;
 }
 finish("run81account");

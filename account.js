@@ -128,7 +128,12 @@ export function nativeGoogleIdAvailable() {
 }
 export async function nativeGoogleIdToken(hashedNonce) {
   const n = window.LedgerNative.google;
-  let r; try { r = await n.getIdToken({ nonce: hashedNonce, clientId: GOOGLE_WEB_CLIENT_ID }); } catch { throw new AccountError("cancelled"); }
+  let r;
+  try { r = await n.getIdToken({ nonce: hashedNonce, clientId: GOOGLE_WEB_CLIENT_ID }); }
+  catch (e) {
+    const m = String((e && e.message) || "");
+    throw new AccountError(m === "offline" ? "offline" : m === "noaccount" ? "noaccount" : m === "auth" ? "server" : "cancelled");
+  }
   if (!r || typeof r.idToken !== "string") throw new AccountError("cancelled");
   return r.idToken;
 }

@@ -5213,7 +5213,7 @@ function AppInner() {
   const putAcct=(s)=>{ const c=cleanSession(s); acctRef.current=c; writeAccount(c); setAcct(c); };
   const patchAcct=(p)=>{ if (acctRef.current) putAcct({ ...acctRef.current, ...p }); };
   const acctDevice=()=>(typeof window!=="undefined" && window.LedgerNative ? "Android app" : "Website");
-  const acctReason=(e)=>{ const r=(e&&e.reason)||"server"; return ["auth","offline","conflict","toolarge","cancelled","notset"].includes(r)?r:"server"; };
+  const acctReason=(e)=>{ const r=(e&&e.reason)||"server"; return ["auth","offline","conflict","toolarge","cancelled","notset","noaccount"].includes(r)?r:"server"; };
   const acctFresh=async ()=>{ const s0=acctRef.current; const s=await freshSession(s0); if (s!==s0 && acctRef.current) putAcct(s); return s; };
   // The account's copy is opened in the import preview; until the person confirms (or keeps this phone's copy instead) saving is paused.
   const acctOffer=(got)=>{
