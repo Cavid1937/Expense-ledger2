@@ -6,7 +6,7 @@ import { t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
-import { Collapse } from "./motion.jsx";
+import { Collapse, useRolling } from "./motion.jsx";
 import { readFirstChoices, writeFirstChoices } from "./setup.jsx";
 
 // Run 83: one quiet reminder on Home for something the person said at the start (a bank statement to bring in, a loan to add) and chose
@@ -77,6 +77,8 @@ export const cmpPrev  = (kind, amount, currency) => t(kind==="same" ? "cmp.prevS
 // Run 25: the currency sign after a big figure is set smaller and lighter, so the number is the brand and the sign stays quiet.
 // The text is unchanged ("816.90 ₼"): the space and sign are the same characters, only wrapped.
 export function MoneyText({ v }) { const i=typeof v==="string"?v.lastIndexOf(" "):-1; return i<0?v:<>{v.slice(0,i)}<span className="cur">{v.slice(i)}</span></>; }
+// Run 85: the month's big figure rolls to its new value when it changes (see useRolling in motion.jsx)
+export function RollingMoney({ v, currency }) { const x=useRolling(v); return <MoneyText v={fmt(x,currency)}/>; }
 
 // Run 25: the empty-state picture - an open ledger page with ruled lines, a double rule and one accent mark. Drawn once, in the theme's own colours.
 export function LedgerArt() {
@@ -209,7 +211,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
       <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={accountsHeld(accountTxns||transactions)}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
-        <div className="hero-amount"><MoneyText v={fmt(curExp,currency)}/></div>
+        <div className="hero-amount" data-section="hero-spent"><RollingMoney v={curExp} currency={currency}/></div>
         <div className="hero-sub">
           <span>{t("home.spentThisMonth")}</span>
           {momDiff!==null&&(

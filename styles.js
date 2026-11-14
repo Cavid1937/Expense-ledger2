@@ -1121,5 +1121,16 @@ iframe[src*="accounts.google.com"]{color-scheme:light}
 .inbox-btn.primary{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--on-accent)}
 @media (prefers-reduced-motion:reduce){.inbox-pop{transition:none}.inbox-bell.nod svg{animation:none}}
 [data-fx="off"] .inbox-pop{transition:none}[data-fx="off"] .inbox-bell.nod svg{animation:none}
+/* Run 85 motion (owner's list): the + turns into x while the add sheet is open; a saved entry draws a small tick; a message that is replaced slides back and fades under the new one. */
+.fab-add svg{transition:transform 260ms cubic-bezier(0.22,1,0.36,1)}
+.fab-add.fab-open{pointer-events:none}.fab-add.fab-open svg{transform:rotate(45deg)}
+.snackbar.snack-ghost{animation:snackGhost 340ms cubic-bezier(0.4,0,1,1) forwards;pointer-events:none;z-index:199}
+@keyframes snackGhost{from{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}to{opacity:0;transform:translateX(-50%) translateY(-14px) scale(0.92)}}
+.snack-tick{flex-shrink:0;fill:none;stroke:var(--pos,var(--accent-text));stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-right:-6px}
+.snack-tick circle{stroke-dasharray:54;stroke-dashoffset:54;animation:tickDraw 380ms cubic-bezier(0.22,1,0.36,1) 80ms forwards}
+.snack-tick path{stroke-dasharray:14;stroke-dashoffset:14;animation:tickDraw 260ms cubic-bezier(0.22,1,0.36,1) 340ms forwards}
+@keyframes tickDraw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.fab-add svg{transition:none}.snackbar.snack-ghost{display:none}.snack-tick circle,.snack-tick path{animation:none;stroke-dashoffset:0}}
+[data-fx="off"] .fab-add svg{transition:none}[data-fx="off"] .snackbar.snack-ghost{display:none}[data-fx="off"] .snack-tick circle,[data-fx="off"] .snack-tick path{animation:none;stroke-dashoffset:0}
 `);
 

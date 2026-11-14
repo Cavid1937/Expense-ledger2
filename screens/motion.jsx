@@ -126,3 +126,27 @@ export function useLeave() {
   };
   return { isLeaving:(key)=>leaving.has(key), leave };
 }
+
+// Run 85 (owner's motion list, "rolling numbers"): a big figure glides from its old value to its new one (about 0.45 s, easing out) when it
+// changes, for example the month's spending after an entry is saved. The first value is shown at once (no counting up on opening the app),
+// whole cents are kept on every frame, and with reduced motion or "reduce effects" the new value simply appears.
+export function useRolling(value, ms=450) {
+  const v=Number.isFinite(value)?value:0;
+  const [shown,setShown]=useState(v);
+  const from=useRef(v), raf=useRef(0);
+  useEffect(()=>{
+    const start=from.current;
+    cancelAnimationFrame(raf.current);
+    if (start===v || motionOff()) { from.current=v; setShown(v); return undefined; }
+    const t0=performance.now();
+    const step=(now)=>{
+      const q=Math.min(1,(now-t0)/ms), e=1-Math.pow(1-q,3);
+      const cur=q>=1?v:Math.round((start+(v-start)*e)*100)/100;
+      from.current=cur; setShown(cur);
+      if (q<1) raf.current=requestAnimationFrame(step);
+    };
+    raf.current=requestAnimationFrame(step);
+    return ()=>cancelAnimationFrame(raf.current);
+  },[v,ms]);
+  return shown;
+}

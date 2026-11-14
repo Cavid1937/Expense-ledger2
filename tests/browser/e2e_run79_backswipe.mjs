@@ -3,7 +3,8 @@
 // The layer Back would close follows the swipe, settles back when the swipe is cancelled, and closes through the normal Back when let go.
 import { launch, openPage, ok, section, finish, baseSeed, tx, wait, openAdd } from "./lib.mjs";
 const browser = await launch();
-const g = (page, phase, p, edge) => page.evaluate((a) => window.__ledgerBackGesture(a[0], a[1], a[2]), [phase, p, edge]);
+// Run 85: a move is applied on the next screen frame (only the latest position), so the check waits one frame
+const g = (page, phase, p, edge) => page.evaluate(async (a) => { const r = window.__ledgerBackGesture(a[0], a[1], a[2]); await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))); return r; }, [phase, p, edge]);
 const style = (page, sel) => page.evaluate((s) => { const el = document.querySelector(s); return el ? { scale: el.style.scale, translate: el.style.translate, radius: el.style.borderRadius } : null; }, sel);
 const back = (page) => page.evaluate(() => { window.__ledgerBackGesture("commit", 1, 0); return window.__ledgerNativeBack(); });
 

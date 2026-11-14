@@ -161,7 +161,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="85 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="86 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -4579,6 +4579,9 @@ function AppInner() {
   const [,setCatVer] = useState(0);   // Run 24: bumped when the user's own categories change, so every screen redraws with them
   const [toast,    setToast]    = useState(null);
   const [snackbar, setSnackbar] = useState(null);
+  // Run 85 (owner's motion list, "notifications stacking"): when a new message takes the place of one still showing, the old one slides back
+  // and fades under it for a moment instead of vanishing.
+  const [snackGhost,setSnackGhost]=useState(null), snackCur=useRef(null), ghostTimer=useRef(null);
   const [prefill,  setPrefill]  = useState(null);
   const [editId,   setEditId]   = useState(null);
   const [viewTxn,  setViewTxn]  = useState(null);
@@ -4664,11 +4667,13 @@ function AppInner() {
   const snackQueue=useRef([]), snackKind=useRef(null);
   const openSnack=useCallback(({msg,onUndo,ms,kind,label})=>{
     clearTimeout(snackTimer.current);
-    setSnackbar({msg,onUndo,ms,label}); snackActive.current=true; snackKind.current=kind;
+    if (snackCur.current) { clearTimeout(ghostTimer.current); setSnackGhost(snackCur.current); ghostTimer.current=setTimeout(()=>setSnackGhost(null),360); }
+    snackCur.current={msg,onUndo,ms,label,kind};
+    setSnackbar({msg,onUndo,ms,label,kind}); snackActive.current=true; snackKind.current=kind;
     snackTimer.current=setTimeout(()=>closeSnack(),ms);
   },[]);
   const closeSnack=useCallback(()=>{
-    clearTimeout(snackTimer.current); setSnackbar(null); snackActive.current=false; snackKind.current=null;
+    clearTimeout(snackTimer.current); setSnackbar(null); snackCur.current=null; snackActive.current=false; snackKind.current=null;
     const next=snackQueue.current.shift(); if (next) setTimeout(()=>openSnack(next),250);
   },[]);
   const showSnackbar=useCallback((msg,onUndo,ms=4000,kind="other",label="")=>{   // Run 37b: label = the button's text ("Open"); default "Undo"
@@ -4781,24 +4786,27 @@ function AppInner() {
       return null;
     };
     const ease="cubic-bezier(.2,.8,.2,1)";
-    const settle=(o,ms)=>{ const el=o.el; el.style.transition=`scale ${ms}ms ${ease}, translate ${ms}ms ${ease}, border-radius ${ms}ms ${ease}`; el.style.scale=""; el.style.translate=""; if (o.round) el.style.borderRadius=""; setTimeout(()=>{ el.style.transition=""; },ms+40); };
+    // Run 85 (owner: swipe back "looks kinda laggy"): (1) the layer is put on its own compositor layer for the gesture (will-change), so moving
+    // it does not repaint the page; (2) the phone may report the thumb more often than the screen draws, so only the latest position is
+    // applied, once per frame; (3) the corner rounding is set once at the start instead of every frame (changing it repaints); (4) after a
+    // page is left, the new page appears at full size at once (it used to show shrunk for half a second and then spring back).
+    let raf=0, pend=null;
+    const clearRaf=()=>{ if (raf) { cancelAnimationFrame(raf); raf=0; } pend=null; };
+    const settle=(o,ms)=>{ const el=o.el; el.style.transition=ms?`scale ${ms}ms ${ease}, translate ${ms}ms ${ease}, border-radius ${ms}ms ${ease}`:"none"; el.style.scale=""; el.style.translate=""; if (o.round) el.style.borderRadius=""; setTimeout(()=>{ el.style.transition=""; el.style.willChange=""; if (o.round) el.style.overflow=""; },ms+40); };
+    const apply=()=>{ raf=0; if (!g || !pend) return; const { q, edge }=pend; pend=null; const e=1-(1-q)*(1-q);
+      g.el.style.scale=String(1-0.08*e); g.el.style.translate=`${(edge===1?-1:1)*Math.round(24*e)}px 0`; };
     window.__ledgerBackGesture=(phase,p,edge)=>{
       try {
-        if (phase==="start") { if (g) settle(g,0); g=pick(); if (g) g.el.style.transition="none"; return "ok"; }
+        if (phase==="start") { clearRaf(); if (g) settle(g,0); g=pick(); if (g) { const s=g.el.style; s.transition=g.round?`border-radius 160ms ${ease}`:"none"; s.willChange="scale, translate"; if (g.round) { s.borderRadius="24px"; s.overflow="hidden"; } } return "ok"; }
         if (!g) return "none";
-        if (phase==="move") {
-          const q=Math.max(0,Math.min(1,Number(p)||0)), e=1-(1-q)*(1-q);
-          g.el.style.scale=String(1-0.08*e); g.el.style.translate=`${(edge===1?-1:1)*Math.round(24*e)}px 0`;
-          if (g.round) g.el.style.borderRadius=`${Math.round(28*e)}px`;
-          return "ok";
-        }
-        if (phase==="cancel") { settle(g,260); g=null; return "ok"; }
-        // let go: Back closes the layer with its own motion; whatever is still on screen afterwards is put back
-        if (phase==="commit") { const o=g; g=null; setTimeout(()=>settle(o,180),450); return "ok"; }
+        if (phase==="move") { pend={ q:Math.max(0,Math.min(1,Number(p)||0)), edge }; if (!raf) raf=requestAnimationFrame(apply); return "ok"; }
+        if (phase==="cancel") { clearRaf(); settle(g,260); g=null; return "ok"; }
+        // let go: Back closes the layer with its own motion. A sheet or the add form leaves by itself; a page is replaced by its parent, which
+        // must not inherit the shrunk look, so it is put back at once.
+        if (phase==="commit") { clearRaf(); const o=g; g=null; if (o.round) settle(o,0); else setTimeout(()=>settle(o,180),450); return "ok"; }
       } catch { g=null; }
       return "none";
-    };
-    return ()=>{ delete window.__ledgerBackGesture; };
+    };    return ()=>{ delete window.__ledgerBackGesture; };
   },[]);
 
   // Swipe between the five sections: a quick, clearly sideways swipe on the page. Ignored while a sheet or the add form is
@@ -5686,8 +5694,10 @@ function AppInner() {
       <style>{CSS}</style>
       <div className={`app${privacy?" privacy-on":""}`} lang={state.language}>
         {toast&&<div className="toast" role="status" style={{"--toast-out":Math.max(0,toastMs.current-220)+"ms"}}>{toast}</div>}
+        {snackGhost&&<div className="snackbar snack-ghost" aria-hidden="true" key={"g-"+snackGhost.msg}><span>{snackGhost.msg}</span></div>}
         {snackbar&&(
           <div className="snackbar" role="status" key={snackbar.msg} style={{"--snack-out":Math.max(0,(snackbar.ms||4000)-220)+"ms"}}>
+            {snackbar.kind==="add"&&!storageFailed&&<svg className="snack-tick" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.5"/><path d="M6 10.4l2.7 2.6L14.2 7.5"/></svg>}
             <span>{snackbar.msg}</span>
             {snackbar.onUndo&&<button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();closeSnack();}}>{snackbar.label||t("common.undo")}</button>}
           </div>
@@ -5779,13 +5789,14 @@ function AppInner() {
           ); })}
         </nav>
 
+        {/* Run 85: the button stays in place under the add sheet (hidden from focus and screen readers) so the + can turn into x as the sheet rises and back as it closes. */}
         {/* Run 17: the "+" moved from the top-right (out of thumb reach on a tall phone) to the bottom-right, just above the tab bar.
             Run 9 rule kept: it creates what the screen is about (none where nothing is created). */}
-        {!showAdd && (()=>{ const a=tab==="home"||tab==="ledger" ? { label:t("nav.addTxn"), run:()=>openAdd() }
+        {(()=>{ const a=tab==="home"||tab==="ledger" ? { label:t("nav.addTxn"), run:()=>openAdd() }
             : tab==="goals" ? { label:t(goalsSeg==="goals"?"goals.addGoal":"goals.addBudget"), run:()=>setGoalsAdd(n=>n+1) }
             : tab==="recurring" ? { label:t("bill.add"), run:()=>setEditBill(null) }
             : null;
-          return a && <button className={`fab-add${fabHidden?" fab-hide":""}`} tabIndex={fabHidden?-1:undefined} aria-hidden={fabHidden||undefined} onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={26} color="var(--on-accent)"/></button>; })()}
+          return a && <button className={`fab-add${fabHidden?" fab-hide":""}${showAdd?" fab-open":""}`} tabIndex={fabHidden||showAdd?-1:undefined} aria-hidden={fabHidden||showAdd||undefined} onClick={a.run} aria-label={a.label} title={a.label}><Icon name="add" size={26} color="var(--on-accent)"/></button>; })()}
 
         {showAdd&&(
           <AddEditOverlay leaving={addLeaving} templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}

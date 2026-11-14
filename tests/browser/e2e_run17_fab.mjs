@@ -35,7 +35,8 @@ section("R17-F3. It creates, and it steps aside while a form is open");
   ok(((await fab(page)).label || "").length > 0, "it has a spoken name for screen readers", (await fab(page)).label);
   await openAdd(page);
   ok(!!(await page.$(".amount-input")), "tapping it on Home opens the add form");
-  ok(!(await page.$(".fab-add")), "the + is hidden while the form is open");
+  // Run 85: the + now stays under the sheet (so it can turn into x) but cannot be reached or tapped
+  ok(await page.evaluate(() => { const b = document.querySelector(".fab-add"); return !b || (b.getAttribute("aria-hidden") === "true" && b.tabIndex === -1 && getComputedStyle(b).pointerEvents === "none"); }), "the + is out of reach while the form is open");
   await page.close();
 }
 section("R17-F4. Goals: the + starts a goal or budget form");
