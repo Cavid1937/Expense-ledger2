@@ -6,6 +6,7 @@ import { readStatement, statementEntries, statementCheck, linesFromText, linesFr
 import { readNotifications, readNoticeItems, readNotification, maskNotice } from "./notify.js";   // Run 68; Run 75 notices and masked layouts
 // Run 74: optional Google Drive backup
 import { driveSave, driveLoad, driveToken, driveSignOut, driveHasToken, driveDue, backupFingerprint, cleanDrivePref } from "./drive.js";
+import { cleanSession, makeNonce, signInWithGoogleIdToken, freshSession, loadLedger, saveLedger, deleteAccount, signOutServer, accountDue, nativeGoogleIdAvailable, nativeGoogleIdToken, renderGoogleButton } from "./account.js";
 import { CSS } from "./styles.js";
 import { LockGate, LockSheet } from "./screens/lock.jsx";
 import { HomePage } from "./screens/home.jsx";
@@ -159,7 +160,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="80 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="81 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -4189,6 +4190,10 @@ export function writeNoticesPref(on) { try { if (on) localStorage.setItem(NOTICE
 export const DRIVE_KEY=KEY+"__drive";
 export function readDrive() { try { return cleanDrivePref(JSON.parse(localStorage.getItem(DRIVE_KEY)||"null")); } catch { return cleanDrivePref(null); } }
 export function writeDrive(v) { try { localStorage.setItem(DRIVE_KEY,JSON.stringify(cleanDrivePref(v))); return true; } catch { return false; } }
+// Run 81: the account sign-in (account.js cleanSession); its own key, never in the ledger, backups or exports
+export const ACCOUNT_KEY=KEY+"__account";
+export function readAccount() { try { return cleanSession(JSON.parse(localStorage.getItem(ACCOUNT_KEY)||"null")); } catch { return null; } }
+export function writeAccount(v) { try { const c=cleanSession(v); if (c) localStorage.setItem(ACCOUNT_KEY,JSON.stringify(c)); else localStorage.removeItem(ACCOUNT_KEY); return true; } catch { return false; } }
 export const LEARN_KEY=KEY+"__learn";
 const LEARN_URL="https://qkztocsrxhubsljtsjpd.supabase.co/rest/v1/", LEARN_PUBLIC_KEY="sb_publishable_L1ADxl6MJw9fmRjroFsoMA_EUYqwIuD";
 const LEARN_SKIP_CATS=new Set(["gifts","family","finance","other","giftin","familyin","alimony","income","personal"]);
@@ -5196,6 +5201,137 @@ function AppInner() {
     } finally { setObBusy(false); }
   };
   const driveDisconnect=useCallback(async ()=>{ await driveSignOut(); const p={ ...cleanDrivePref(null) }; writeDrive(p); setDrivePref(p); showToast(t("drive.disconnected")); },[showToast]);
+  // Run 81: the account (account.js). This phone's ledger stays the working copy; the account keeps one mirror of it on the app's server.
+  // Rules: (1) data from the account NEVER replaces this phone's data without the person confirming in the normal import preview (same
+  // checks as a backup file); (2) the phone saves its copy only on top of the account version it last saw, so a newer copy from another
+  // device is never overwritten silently: the save stops ("paused") and the person chooses; (3) signing out or deleting the account never
+  // touches the data on this phone.
+  const backupTextRef=useRef(null); backupTextRef.current=backupText;
+  const [acct,setAcct]=useState(()=>readAccount());
+  const [acctBusy,setAcctBusy]=useState("");
+  const acctRef=useRef(acct), acctSaving=useRef(false);
+  const putAcct=(s)=>{ const c=cleanSession(s); acctRef.current=c; writeAccount(c); setAcct(c); };
+  const patchAcct=(p)=>{ if (acctRef.current) putAcct({ ...acctRef.current, ...p }); };
+  const acctDevice=()=>(typeof window!=="undefined" && window.LedgerNative ? "Android app" : "Website");
+  const acctReason=(e)=>{ const r=(e&&e.reason)||"server"; return ["auth","offline","conflict","toolarge","cancelled","notset"].includes(r)?r:"server"; };
+  const acctFresh=async ()=>{ const s0=acctRef.current; const s=await freshSession(s0); if (s!==s0 && acctRef.current) putAcct(s); return s; };
+  // The account's copy is opened in the import preview; until the person confirms (or keeps this phone's copy instead) saving is paused.
+  const acctOffer=(got)=>{
+    patchAcct({ version:got.version, paused:"restore", lastError:"" });
+    const name=t("acct.fileName"), plan=planImportWithCats(got.text,name);
+    if (!plan.ok) { setImportPending({ error:plan.error, filename:name }); return; }
+    setSkipDup(true); setSkipSim(true);
+    setImportPending({ ...plan, filename:name, fromAccount:got.version, ...mergeCounts(stateRef.current.transactions, plan) });
+  };
+  // After signing in: an empty account gets this phone's copy; an account that already holds data is offered for review first.
+  const acctSettle=async ()=>{
+    setAcctBusy("signin");
+    try {
+      const s=await acctFresh(), got=await loadLedger(s);
+      if (got) { acctOffer(got); return true; }
+      const now=new Date().toISOString(), text=backupTextRef.current(now);
+      const v=await saveLedger(s,text,0,acctDevice());
+      patchAcct({ version:v, lastHash:backupFingerprint(text), syncedAt:now, paused:"", lastError:"" });
+      showToast(t("acct.created"),5000);
+      return true;
+    } catch (e) { const r=acctReason(e); patchAcct({ lastError:r }); showToast(t("acct.err."+r),6000); return false; }
+    finally { setAcctBusy(""); }
+  };
+  const acctFinish=async (idToken, rawNonce)=>{
+    setAcctBusy("signin");
+    const prev=acctRef.current;
+    let same=false;
+    try {
+      const s=await signInWithGoogleIdToken(idToken,rawNonce,prev);
+      // signing in again to the SAME account (the old sign-in had run out) keeps what this phone knows; another account starts fresh
+      same=!!(prev && prev.userId===s.userId && prev.version>0);
+      putAcct(same ? { ...s, lastError:"" } : { ...s, version:0, paused:"", lastHash:"", syncedAt:"" });
+    } catch (e) { setAcctBusy(""); showToast(t("acct.err."+acctReason(e)),6000); return false; }
+    if (same) { setAcctBusy(""); showToast(t("acct.back")); return true; }
+    return acctSettle();
+  };
+  // Starts Google sign-in. In the Android app Google's own account picker opens; on the website Google's button is drawn into `el`
+  // (the website must show Google's own button; its script is loaded only now, after the tap).
+  const acctStart=async (el)=>{
+    if (acctBusy) return false;
+    try {
+      const n=await makeNonce();
+      if (nativeGoogleIdAvailable()) { setAcctBusy("signin"); let tok; try { tok=await nativeGoogleIdToken(n.hashed); } finally { setAcctBusy(""); } return acctFinish(tok,n.raw); }
+      if (!el) return false;
+      await renderGoogleButton(el,n.hashed,(tok)=>{ acctFinish(tok,n.raw); },{ locale:stateRef.current.language||"en", dark:document.documentElement.getAttribute("data-dark")==="1" });
+      return "button";
+    } catch (e) { const r=acctReason(e); if (r!=="cancelled") showToast(t("acct.err."+r),6000); return false; }
+  };
+  const acctSave=useCallback(async ({ manual=false }={})=>{
+    const s0=acctRef.current; if (!s0 || acctSaving.current) return false;
+    if (!s0.version && !s0.paused) return manual ? acctSettle() : false;
+    if (s0.paused) { if (manual) showToast(t("acct.chooseFirst"),6000); return false; }
+    const now=new Date().toISOString(), text=backupTextRef.current(now), fp=backupFingerprint(text);
+    if (!manual && !accountDue(s0,fp)) return false;
+    acctSaving.current=true; if (manual) setAcctBusy("save");
+    try {
+      const s=await acctFresh();
+      const v=await saveLedger(s,text,s.version,acctDevice());
+      patchAcct({ version:v, lastHash:fp, syncedAt:now, lastError:"" });
+      if (manual) showToast(t("acct.saved"));
+      return true;
+    } catch (e) {
+      const r=acctReason(e);
+      patchAcct({ lastError:r, ...(r==="conflict" ? { paused:"conflict" } : {}) });
+      if (manual || r==="conflict" || r==="auth") showToast(t("acct.err."+r),6000);
+      return false;
+    } finally { acctSaving.current=false; if (manual) setAcctBusy(""); }
+  },[state,showToast]);
+  const acctReview=async ()=>{
+    setAcctBusy("load");
+    try { const s=await acctFresh(), got=await loadLedger(s); if (!got) { patchAcct({ paused:"", version:0 }); return acctSettle(); } acctOffer(got); }
+    catch (e) { showToast(t("acct.err."+acctReason(e)),6000); }
+    finally { setAcctBusy(""); }
+  };
+  // "Keep this phone's data": the account copy is replaced by this phone's (the card asked first).
+  const acctKeepPhone=async ()=>{
+    setAcctBusy("save");
+    try {
+      const s=await acctFresh(), got=await loadLedger(s), now=new Date().toISOString(), text=backupTextRef.current(now);
+      const v=await saveLedger(s,text,got?got.version:0,acctDevice());
+      patchAcct({ version:v, paused:"", lastHash:backupFingerprint(text), syncedAt:now, lastError:"" });
+      showToast(t("acct.keptPhone"));
+    } catch (e) { const r=acctReason(e); patchAcct({ lastError:r }); showToast(t("acct.err."+r),6000); }
+    finally { setAcctBusy(""); }
+  };
+  const acctSignOut=async ()=>{ const s=acctRef.current; putAcct(null); showToast(t("acct.signedOut"),5000); if (s) await signOutServer(s); };
+  const acctDelete=async ()=>{
+    setAcctBusy("delete");
+    try { const s=await acctFresh(); await deleteAccount(s); putAcct(null); showToast(t("acct.deleted"),6000); return true; }
+    catch (e) { showToast(t("acct.err."+acctReason(e)),6000); return false; }
+    finally { setAcctBusy(""); }
+  };
+  // Saves a few seconds after the data changes, and when the app goes to the background.
+  useEffect(()=>{
+    const s=acctRef.current; if (!s || s.paused || !s.version || (typeof navigator!=="undefined" && navigator.onLine===false)) return;
+    const tm=setTimeout(()=>{ acctSave(); },5000);
+    return ()=>clearTimeout(tm);
+  },[state.transactions,state.budgets,state.goals,state.bills,state.templates,state.safeToSpend,state.currency,acctSave]);
+  const acctSaveRef=useRef(acctSave); acctSaveRef.current=acctSave;
+  useEffect(()=>{
+    const onHide=()=>{ if (document.visibilityState==="hidden") acctSaveRef.current(); };
+    document.addEventListener("visibilitychange",onHide);
+    return ()=>document.removeEventListener("visibilitychange",onHide);
+  },[]);
+  // When the app opens: has another device saved a newer copy? If this phone has not changed since its last save, the newer copy is
+  // offered in the import preview; if both changed, saving pauses and the account card asks which to keep.
+  useEffect(()=>{
+    let gone=false;
+    (async ()=>{
+      const s0=acctRef.current; if (!s0 || s0.paused || !s0.version || (typeof navigator!=="undefined" && navigator.onLine===false)) return;
+      try {
+        const s=await acctFresh(), got=await loadLedger(s);
+        if (gone || !got || got.version<=s.version) return;
+        if (s.lastHash===backupFingerprint(backupTextRef.current("x"))) acctOffer(got); else patchAcct({ paused:"conflict" });
+      } catch (e) { if (!gone) patchAcct({ lastError:acctReason(e) }); }
+    })();
+    return ()=>{ gone=true; };
+  },[]);
   // at most once a day, when the app opens or the data changes, only if connected and a sign-in is at hand without asking (the Android app;
   // on the website only while the sign-in from this visit is still valid). Never interrupts: failures are counted for the card's warning.
   useEffect(()=>{
@@ -5434,6 +5570,8 @@ function AppInner() {
     setImportPending(null);
     // Run 79: a backup restored from Google Drive on the first launch switches Drive backup on (the next backup then holds the restored data)
     if (plan.fromDrive) { const p={ ...readDrive(), on:true, fails:0, lastError:"" }; if (writeDrive(p)) setDrivePref(p); }
+    // Run 81: the account's copy was confirmed; saving resumes on top of that version (the result, merged or replaced, is saved next)
+    if (plan.fromAccount && acctRef.current) putAcct({ ...acctRef.current, version:plan.fromAccount, paused:"", lastHash:"", lastError:"" });
     const delta=next.transactions.length-before.transactions.length;
     showSnackbar(settingsOnly ? t("import.settingsApplied") : mode==="replace" ? tn("import.replaced",plan.transactions.length) : tn("import.added",delta), ()=>{
       // Undo only if nothing has changed since; otherwise it would erase newer work.
@@ -5562,7 +5700,7 @@ function AppInner() {
             }}
             onUpdateTemplate={(id,patch)=>setState(s=>({...s,templates:s.templates.map(x=>x.id===id?{...x,...patch}:x)}))}
             onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))}/>}
-          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={tb=>{ if (tb==="goals") setGoalsSeg("goals"); switchTab(tb); }} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} accTools={accTools} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion}/>}
+          {tab==="more"      && <MorePage language={state.language} profileName={state.profileName||""} onLanguageChange={changeLanguage} onProfileName={changeProfileName} onOpen={tb=>{ if (tb==="goals") setGoalsSeg("goals"); switchTab(tb); }} state={state} onCatsChanged={()=>setCatVer(v=>v+1)} onCurrencyChange={c=>setState(s=>({...s,currency:c}))} onSafeToSpendChange={cfg=>setState(s=>({...s,safeToSpend:{...s.safeToSpend,...cfg}}))} showToast={showToast} accTools={accTools} scrollTo={moreScroll} onScrolled={()=>setMoreScroll("")} onInfo={setInfoKind} onLock={()=>setShowLock(true)} version={runningVersion} account={{ s:acct, busy:acctBusy, onStart:acctStart, onSave:()=>acctSave({ manual:true }), onSettle:acctSettle, onReview:acctReview, onKeepPhone:acctKeepPhone, onSignOut:acctSignOut, onDelete:acctDelete }}/>}
           {tab==="recurring" && <RecurringHub transactions={transactions} bills={bills} currency={currency} onView={txn=>setViewTxn(txn)} onToggleSchedule={toggleScheduleActive}
             onConvert={convertBills} onEditBill={b=>setEditBill(b)} onToggleBill={toggleBill} onAddBill={()=>setEditBill(null)}
             suggestions={recSuggestions} onReviewSuggestion={s=>setEditBill({ prefill:true, name:s.name, type:"expense", amount:s.amount, category:s.category, subcategory:s.subcategory, freq:s.freq, anchorDate:s.anchorDate, active:true })}

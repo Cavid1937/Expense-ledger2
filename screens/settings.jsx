@@ -711,7 +711,65 @@ export function InfoSheet({ kind, onClose }) {
   );
 }
 
-export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, accTools, scrollTo="", onScrolled }) {
+// Run 81: the optional account. Signed out it says plainly what an account does and that the app works fully without one. Signed in it
+// shows who, when the data was last saved to the account, and asks the person to choose when the account and this phone disagree.
+// Replacing the account's copy and deleting the account each ask first; nothing here changes the data on this phone.
+function AccountCard({ account }) {
+  const [ask,setAsk]=useState("");
+  const [btnShown,setBtnShown]=useState(false);
+  const gRef=useRef(null);
+  const sk=account&&account.s ? account.s.userId+"|"+account.s.lastError : "";
+  useEffect(()=>{ setBtnShown(false); },[sk]);
+  if (!account) return null;
+  const { s, busy="", onStart, onSave, onSettle, onReview, onKeepPhone, onSignOut, onDelete }=account;
+  const start=async ()=>{ const r=await onStart(gRef.current); if (r==="button") setBtnShown(true); };
+  if (!s) return (
+    <div className="card st-card" data-section="st-account">
+      <div className="list-title" style={{display:"flex",alignItems:"center",gap:8}}><Icon name="safe" size={16}/>{t("acct.title")}</div>
+      <div className="list-sub" style={{lineHeight:1.55,marginTop:4}}>{t("acct.sub")}</div>
+      <div className="list-sub" style={{lineHeight:1.55,marginTop:6}}>{t("acct.what")}</div>
+      {!btnShown&&<button type="button" className="btn btn-primary btn-full" data-section="acct-signin" disabled={!!busy} style={{marginTop:12}} onClick={start}>{busy?t("acct.working"):t("acct.signIn")}</button>}
+      <div ref={gRef} data-section="acct-gbtn" style={{marginTop:btnShown?12:0,display:"flex",justifyContent:"center",minHeight:btnShown?44:0}}/>
+      {btnShown&&<div className="list-sub" style={{marginTop:6,textAlign:"center"}}>{busy?t("acct.working"):t("acct.tapGoogle")}</div>}
+    </div>
+  );
+  const who=s.name||s.email||t("acct.title");
+  const status=s.paused==="restore" ? t("acct.pausedRestore") : s.paused==="conflict" ? t("acct.pausedConflict")
+    : !s.version ? t("acct.notSettled") : s.lastError==="auth" ? t("acct.err.auth") : s.lastError==="offline" ? t("acct.offline")
+    : s.syncedAt ? t("acct.last",{date:fmtLongDate(s.syncedAt)}) : t("acct.never");
+  const warn=!!(s.paused || !s.version || s.lastError==="auth");
+  return (
+    <div className="card st-card" data-section="st-account">
+      <div className="list-title" style={{display:"flex",alignItems:"center",gap:8}}><Icon name="safe" size={16}/>{t("acct.title")}</div>
+      <div className="list-sub" data-section="acct-who" style={{marginTop:4}}>{who}{s.name&&s.email?` · ${s.email}`:""}</div>
+      <div className="list-sub" data-section="acct-status" role="status" style={{marginTop:8,lineHeight:1.5,color:warn?"var(--warn)":undefined}}>{status}</div>
+      {s.paused ? (
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}>
+          <button type="button" className="btn btn-primary" data-section="acct-review" disabled={!!busy} style={{flex:"1 1 140px"}} onClick={onReview}>{busy==="load"?t("acct.working"):t("acct.review")}</button>
+          <button type="button" className="btn btn-ghost" data-section="acct-keep-phone" disabled={!!busy} style={{flex:"1 1 140px"}} onClick={()=>setAsk("keep")}>{t("acct.keepPhone")}</button>
+        </div>
+      ) : !s.version ? (
+        <button type="button" className="btn btn-primary btn-full" data-section="acct-settle" disabled={!!busy} style={{marginTop:12}} onClick={onSettle}>{busy?t("acct.working"):t("acct.retry")}</button>
+      ) : s.lastError==="auth" ? (<>
+        {!btnShown&&<button type="button" className="btn btn-primary btn-full" data-section="acct-again" disabled={!!busy} style={{marginTop:12}} onClick={start}>{busy?t("acct.working"):t("acct.signInAgain")}</button>}
+        <div ref={gRef} data-section="acct-gbtn" style={{marginTop:btnShown?12:0,display:"flex",justifyContent:"center",minHeight:btnShown?44:0}}/>
+      </>) : (
+        <button type="button" className="btn btn-ghost btn-full" data-section="acct-save" disabled={!!busy} style={{marginTop:12}} onClick={onSave}>{busy==="save"?t("acct.working"):t("acct.saveNow")}</button>
+      )}
+      {ask==="keep"&&<div data-section="acct-keep-ask" style={{marginTop:10}}><div className="list-sub" style={{lineHeight:1.5}}>{t("acct.keepAsk")}</div>
+        <div style={{display:"flex",gap:8,marginTop:8}}><button type="button" className="btn btn-sm" data-section="acct-keep-yes" onClick={()=>{ setAsk(""); onKeepPhone(); }}>{t("acct.keepPhone")}</button><button type="button" className="btn btn-sm" onClick={()=>setAsk("")}>{t("common.cancel")}</button></div></div>}
+      {ask!=="out"&&ask!=="delete"&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+        <button type="button" className="btn btn-sm" data-section="acct-signout" onClick={()=>setAsk("out")}>{t("acct.signOut")}</button>
+        <button type="button" className="btn btn-sm" data-section="acct-delete" style={{color:"var(--neg)"}} onClick={()=>setAsk("delete")}>{t("acct.delete")}</button>
+      </div>}
+      {ask==="out"&&<div data-section="acct-out-ask" style={{marginTop:10}}><div className="list-sub" style={{lineHeight:1.5}}>{t("acct.signOutAsk")}</div>
+        <div style={{display:"flex",gap:8,marginTop:8}}><button type="button" className="btn btn-sm" data-section="acct-out-yes" onClick={()=>{ setAsk(""); onSignOut(); }}>{t("acct.signOut")}</button><button type="button" className="btn btn-sm" onClick={()=>setAsk("")}>{t("common.cancel")}</button></div></div>}
+      {ask==="delete"&&<div data-section="acct-delete-ask" style={{marginTop:10}}><div className="list-sub" style={{lineHeight:1.5}}>{t("acct.deleteAsk")}</div>
+        <div style={{display:"flex",gap:8,marginTop:8}}><button type="button" className="btn btn-sm" data-section="acct-delete-yes" disabled={!!busy} style={{color:"var(--neg)"}} onClick={async ()=>{ const ok=await onDelete(); if (ok) setAsk(""); }}>{busy==="delete"?t("acct.working"):t("acct.deleteYes")}</button><button type="button" className="btn btn-sm" onClick={()=>setAsk("")}>{t("common.cancel")}</button></div></div>}
+    </div>
+  );
+}
+export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, accTools, scrollTo="", onScrolled, account }) {
   const [fbOpen,setFbOpen]=useState(false);
   // Run 42: the pill answers the touch at once (cheap local state, painted first); the whole app switches language one frame later.
   const [picked, setPicked]=useState(null);
@@ -738,6 +796,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
         </div>
         <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
       </div>
+      <AccountCard account={account}/>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
       <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} accTools={accTools} open={open} toggle={toggle} onOpen={onOpen}/>
       <div className="card list-card" data-section="more-money">
