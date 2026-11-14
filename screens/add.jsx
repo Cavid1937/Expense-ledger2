@@ -625,7 +625,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
             <div className="sheet-grip"><div className="sheet-handle"/></div>
             <div className="sheet-title" id="discard-title">{t("add.discardTitle")}</div>
             <p id="discard-body" style={{fontSize:14,color:"var(--ink-3)",margin:"0 0 16px",lineHeight:1.5}}>{t("add.discardBody")}</p>
-            <button className="btn btn-primary btn-full discard-keep" onClick={()=>setAskDiscard(false)}>{t("add.keepEditing")}</button>
+            <button className="btn btn-primary btn-full discard-keep" data-closer="1" onClick={()=>setAskDiscard(false)}>{t("add.keepEditing")}</button>
             <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)"}} onClick={onClose}>{t("add.discard")}</button>
           </div>
         </div>

@@ -4438,6 +4438,9 @@ function useSheetGestures() {
       },190);
     };
     document.addEventListener("click",onClickCapture,true);
+    // Run 78 (owner, 14 Nov: soft like the Claude app): on the phone, a switch, a picker choice or a calendar day gives a short system tick.
+    const onTick=(e)=>{ const n=window.LedgerNative; if (!n || !n.haptic || !e.target || !e.target.closest) return; const el=e.target.closest('[role="switch"],.pick-opt,.pick-day,.pick-quick .chip,.seg-btn'); if (el && !el.disabled) n.haptic("tick"); };
+    document.addEventListener("click",onTick);
     const stack=[];
     const sync=()=>{
       document.querySelectorAll(".sheet,.add-overlay").forEach(el=>{
@@ -4450,7 +4453,7 @@ function useSheetGestures() {
     const mo=new MutationObserver(sync); mo.observe(document.body,{ childList:true, subtree:true });
     document.addEventListener("pointerdown",onDown); document.addEventListener("pointermove",onMove);
     document.addEventListener("pointerup",onUp); document.addEventListener("pointercancel",onUp); document.addEventListener("keydown",onKey);
-    return ()=>{ stop(); mo.disconnect(); document.removeEventListener("click",onClickCapture,true); document.removeEventListener("pointerdown",onDown); document.removeEventListener("pointermove",onMove);
+    return ()=>{ stop(); mo.disconnect(); document.removeEventListener("click",onClickCapture,true); document.removeEventListener("click",onTick); document.removeEventListener("pointerdown",onDown); document.removeEventListener("pointermove",onMove);
       document.removeEventListener("pointerup",onUp); document.removeEventListener("pointercancel",onUp); document.removeEventListener("keydown",onKey); };
   },[]);
 }
@@ -5669,7 +5672,7 @@ function ConfirmHost() {
         <div className="sheet-grip"><div className="sheet-handle"/></div>
         <div style={{fontSize:15,lineHeight:1.55,margin:"6px 2px 16px"}}>{q.message}</div>
         <div style={{display:"flex",gap:8}}>
-          <button className="btn btn-ghost" style={{flex:1}} data-section="confirm-cancel" onClick={()=>done(false)}>{t("common.cancel")}</button>
+          <button className="btn btn-ghost" style={{flex:1}} data-section="confirm-cancel" data-closer="1" onClick={()=>done(false)}>{t("common.cancel")}</button>
           <button className="btn btn-primary" style={{flex:1}} data-section="confirm-ok" onClick={()=>done(true)}>{t("common.delete")}</button>
         </div>
       </div>

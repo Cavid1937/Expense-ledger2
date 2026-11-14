@@ -910,5 +910,41 @@ html,body,.app{transition:background-color 200ms ease-out}
 .field-row>.field{min-width:0}
 .backup-banner-btn{min-height:36px;padding:6px 12px;font-size:11px}
 .backup-dismiss{min-width:36px;min-height:36px;display:inline-flex;align-items:center;justify-content:center}
+/* Run 78 (owner, 14 Nov: switches feel "hard", pickers "close and select instantly"): softer motion.
+   Switch: the knob travels on a gentle spring that settles with a barely visible give, the colour fades in, a press widens the knob a little
+   (widening, not stretching, so it stays a round pill) and lets go slowly. */
+:root{--spring-soft:cubic-bezier(0.3,1.22,0.45,1)}
+.toggle-track{transition:background-color 280ms ease-out,box-shadow 280ms ease-out}
+.toggle-knob{transition:transform 420ms var(--spring-soft),width 260ms var(--ease-out),box-shadow 200ms ease-out;will-change:transform}
+.toggle-track:active .toggle-knob{transition:transform 420ms var(--spring-soft),width 140ms var(--ease-out),box-shadow 140ms ease-out;box-shadow:0 2px 6px rgba(0,0,0,0.28)}
+.lock-switch{transition:background-color 280ms ease-out}
+.lock-switch::after{transition:transform 420ms var(--spring-soft),background-color 280ms ease-out}
+/* Pickers: the chosen row or day lights up with a short soft pop, then the sheet slides down (see PickSheet). */
+.pick-opt{transition:background-color 160ms ease-out,color 160ms ease-out}
+.pick-opt:active:not(:disabled){background:color-mix(in srgb,var(--ink) 6%,transparent)}
+.pick-opt .pick-check{display:inline-flex}
+.pick-opt.just .pick-check{animation:pickPop 260ms var(--ease-out) both}
+.pick-day{transition:background-color 180ms ease-out,color 180ms ease-out,transform 160ms var(--ease-out)}
+.pick-day:active:not(:disabled){transform:scale(0.92);background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.pick-day.on.just{animation:pickPop 260ms var(--ease-out)}
+.pick-quick .chip{transition:background-color 180ms ease-out,color 180ms ease-out,transform 160ms var(--ease-out)}
+.pick-quick .chip:active{transform:scale(0.95)}
+@keyframes pickPop{0%{transform:scale(0.86);opacity:0.6}60%{transform:scale(1.04);opacity:1}100%{transform:scale(1)}}
+/* Months slide in from the side that was asked for; the name crossfades with a short shift. */
+.pick-grid-clip{overflow:hidden;margin:0 -4px;padding:0 4px}
+.pick-blank{min-height:42px}
+.pick-month-name{overflow:hidden}
+.pick-month-label{display:inline-block}
+.pick-grid.in-next .pick-day,.pick-grid.in-next .pick-blank{animation:pickInNext 280ms var(--ease-out) both}
+.pick-grid.in-prev .pick-day,.pick-grid.in-prev .pick-blank{animation:pickInPrev 280ms var(--ease-out) both}
+.pick-month-label.in-next{animation:pickNameNext 260ms var(--ease-out) both}
+.pick-month-label.in-prev{animation:pickNamePrev 260ms var(--ease-out) both}
+@keyframes pickInNext{from{opacity:0;transform:translateX(36px)}to{opacity:1;transform:none}}
+@keyframes pickInPrev{from{opacity:0;transform:translateX(-36px)}to{opacity:1;transform:none}}
+@keyframes pickNameNext{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+@keyframes pickNamePrev{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+.pick-overlay.leaving .pick-sheet{animation-duration:210ms}
+@media (prefers-reduced-motion:reduce){.toggle-track,.toggle-knob,.toggle-track:active .toggle-knob,.lock-switch,.lock-switch::after,.pick-opt,.pick-day,.pick-quick .chip{transition:none}.pick-opt .pick-check,.pick-day.on,.pick-grid .pick-day,.pick-grid .pick-blank,.pick-month-label{animation:none}.pick-day:active:not(:disabled),.pick-quick .chip:active{transform:none}}
+[data-fx="off"] .toggle-knob,[data-fx="off"] .toggle-track{transition:none}[data-fx="off"] .pick-opt .pick-check,[data-fx="off"] .pick-day.on,[data-fx="off"] .pick-grid .pick-day,[data-fx="off"] .pick-grid .pick-blank,[data-fx="off"] .pick-month-label{animation:none}
 `;
 
