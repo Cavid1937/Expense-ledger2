@@ -13,7 +13,7 @@ section("R88-X1. Regular pay chosen at first launch, a day later: the bell sugge
   ok(await hasNotice(page, "explore-pay"), "the regular-pay note waits in the bell");
   ok(/regularly/.test(await noticeText(page, "explore-pay")), "it refers to the answer given at first launch");
   await noticeAct(page, "explore-pay", "go"); await wait(700);
-  ok(await page.evaluate(() => !!document.querySelector(".bill-list, [data-section='rec-summary'], .recurring-page") || /Recurring/i.test(document.querySelector("main")?.innerText || "")), "Show me opens the Recurring page");
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="rec-empty-add"], [data-section="rec-summary"]')), "Show me opens the Recurring page (its add button is shown)");
   const f = await first(page);
   ok(f && f.income === "fixed" && Array.isArray(f.exploreDone) && f.exploreDone.includes("pay") && typeof f.exploreAt === "number", "the note is remembered as answered, the first-launch answer kept", f);
   await page.reload(); await page.waitForSelector(".tabbar"); await wait(400);
