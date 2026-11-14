@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo, catHint } from "../App.jsx";
-import { Collapse, Reveal } from "./motion.jsx";
+import { Collapse, Reveal, motionOff } from "./motion.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // Run 42: the amount box also takes simple arithmetic ("45 - 20", "12.5 x 3"); amountOf gives the number either way (null when not valid).
@@ -211,7 +211,9 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const selectedCat=CAT(catId);
   const moreSummary=[merchant.trim(), note.trim(), wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
 
-  useEffect(()=>{ setTimeout(()=>amtRef.current?.focus(),60); },[]);
+  // Run 83: the keyboard used to rise while the sheet was still sliding up (owner: "a little bit instant"). It now waits until the
+  // slide (400 ms, styles.js .add-overlay) has almost landed, so the sheet arrives first and the keys follow. Reduced motion: at once.
+  useEffect(()=>{ const id=setTimeout(()=>{ try { amtRef.current?.focus({ preventScroll:true }); } catch (e) { amtRef.current?.focus(); } },motionOff()?0:340); return ()=>clearTimeout(id); },[]);
   // Run 58: the subcategory resets with the category (it used to stay, so an expense's "Coffee" could be saved on a Salary entry)
   useEffect(()=>{ if(!prefill) { setCatId(firstCat(type)); setSubcat(""); } setCatQ(""); },[type]);
 
@@ -321,7 +323,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
         {/* Run 75: on narrow phones (≤360 px) the amount is drawn at most 38 px tall, so "0.00" fits beside the calculator keys (it was cut off) */}
         <div className="amount-zone" onClick={()=>amtRef.current?.focus()}>
           <div className="amount-line">
-            <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off" autoFocus={!editId}
+            <input ref={amtRef} className="amount-input" type="text" inputMode="decimal" autoComplete="off"
               placeholder="0.00" value={amount} onChange={e=>{ const v=e.target.value; setAmount(isExprText(v) ? cleanExprText(v) : cleanMoneyText(v)); setErr(""); }}
               onPaste={e=>{ const p=(e.clipboardData&&e.clipboardData.getData("text"))||""; if (!p) return; e.preventDefault(); setAmount(isExprText(p) ? cleanExprText(p) : cleanMoneyText(p,{paste:true})); setErr(""); }}
               min="0" step="0.01" aria-label={t("add.amount")} aria-invalid={!!err&&err===t("add.errAmount")}

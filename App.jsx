@@ -171,7 +171,10 @@ export function askConfirm(message) { return new Promise(res=>{ if (!confirmHost
 // with preventScroll (a plain autoFocus makes phones snap the page). Use as ref={revealFocus}; it only acts once per element.
 export function revealFocus(el) {
   if (!el || el.dataset.shown) return; el.dataset.shown="1";
-  requestAnimationFrame(()=>{ try { el.scrollIntoView({ behavior:"smooth", block:"center" }); const i=el.matches("input,select,textarea") ? el : el.querySelector("input,select,textarea"); if (i) i.focus({ preventScroll:true }); } catch {} });
+  // Run 83: wait for the form's opening motion (about 300 ms) before the keyboard rises, so the two do not move at the same time.
+  let calm=false;
+  try { calm=document.documentElement.getAttribute("data-fx")==="off" || window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch {}
+  setTimeout(()=>requestAnimationFrame(()=>{ try { el.scrollIntoView({ behavior:"smooth", block:"center" }); const i=el.matches("input,select,textarea") ? el : el.querySelector("input,select,textarea"); if (i) i.focus({ preventScroll:true }); } catch {} }),calm?0:280);
 }
 export function formMoney(v, opts) { return parseMoney(typeof v==="string" ? v.trim().replace(/\.$/,"") : v, opts); }
 // Run 42 (owner's wishlist: "the amount field should accept basic math: 45.00 - 20"): a tiny arithmetic parser (+, -, *, /, x, parentheses, unary minus).

@@ -136,7 +136,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .empty-title{font-family:var(--font);font-size:20px;font-weight:600;color:var(--ink)}
 .empty-body{font-size:13px;color:var(--ink-3);line-height:1.65;max-width:240px}
 /* Add overlay */
-.add-overlay{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;max-width:430px;margin:0 auto;animation:slideUp 340ms cubic-bezier(0.22,1,0.36,1);overflow-y:auto}
+.add-overlay{position:fixed;inset:0;background:var(--bg);z-index:100;display:flex;flex-direction:column;max-width:430px;margin:0 auto;animation:slideUp 400ms cubic-bezier(.32,.72,0,1);overflow-y:auto}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}   /* Run 29: transform only - at opacity 0.6 the screen behind showed through the moving sheet (a double exposure, seen in the 6 Nov phone video) */
 .add-bar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--rule);flex-shrink:0}
 .add-title{font-family:var(--font);font-size:17px;font-weight:700}
