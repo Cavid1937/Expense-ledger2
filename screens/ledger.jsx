@@ -7,11 +7,11 @@ import { pickerCats, readCatPrefs, cleanReimb, reimbOwedMap, reimbStatus } from 
 import { accountsMap, paidFromMatch, paidFromOptions, paidKindName, readAccounts } from "../App.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SPLIT_MAX, lc, accId, accountName, activateKey, addAmt, buildSchedules, calcMerchantProfile, catName, catTotals, fmt, fmtDate, freshTxnId, maskText, monthName, parseLocalDate, parseMoney, splitTransaction, spreadMonths, subName, tripName, tripTotals, walletId, walletName } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
-import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";
+import { Collapse, Reveal, Swap, useBackStep, usePresence } from "./motion.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
 export const LEDGER_PAGE=150;   // Run 32: rows drawn at first and per "Show more" (a throttled phone froze for seconds drawing 300+ rows at once). Whole days only.
-export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onLongPress, compact }) {
+export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onLongPress, compact, picked, onToggle }) {
   const [cap,setCap]=useState(LEDGER_PAGE);
   const owed=useMemo(()=>reimbOwedMap(all||txns),[all,txns]);   // Run 43: what is still owed back, per entry (the full list, since a filter may hide the repayments)
   const groups=useMemo(()=>{
@@ -35,7 +35,7 @@ export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onL
               {dayTotal>0&&<span className="txn-date-total" aria-label={t("ledger.daySpent",{amount:fmt(dayTotal,currency)})}>−{fmt(dayTotal,currency)}</span>}
             </div>
             <div className="txn-list">
-              {rows.map(t=><TxnRow key={t.id} txn={t} owed={owed.get(String(t.id))} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact/>)}
+              {rows.map(t=><TxnRow key={t.id} txn={t} owed={owed.get(String(t.id))} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact sel={picked?picked.has(String(t.id)):undefined} onToggle={onToggle}/>)}
             </div>
           </div>
         );
@@ -45,13 +45,22 @@ export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onL
   );
 }
 
-export function TxnRow({ txn, owed, currency, onDelete, onEdit, onView, onLongPress, compact }) {
+export function TxnRow({ txn, owed, currency, onDelete, onEdit, onView, onLongPress, compact, sel, onToggle }) {
   const cat=CAT(txn.category);
   // Press and hold a row (about half a second) to start selecting several; the tap that follows the hold is ignored.
-  const hold=useRef({ timer:0, x:0, y:0, fired:false });
-  const holdStart=(e)=>{ if (!onLongPress || (e.pointerType==="mouse" && e.button!==0)) return; const h=hold.current; h.fired=false; h.x=e.clientX; h.y=e.clientY; clearTimeout(h.timer); h.timer=setTimeout(()=>{ h.fired=true; try { navigator.vibrate&&navigator.vibrate(12); } catch { /* no vibration here */ } onLongPress(txn); },480); };
-  const holdMove=(e)=>{ const h=hold.current; if (h.timer && (Math.abs(e.clientX-h.x)>10 || Math.abs(e.clientY-h.y)>10)) { clearTimeout(h.timer); h.timer=0; } };
-  const holdEnd=()=>{ const h=hold.current; clearTimeout(h.timer); h.timer=0; };
+  // Run 83 (owner video 14 Nov: "acts strangely ... not smooth"): while held the row slowly sinks; when the hold counts it lifts back
+  // with a small spring and a haptic tick. The list itself no longer changes layout: the same rows get a tick box that slides in.
+  const hold=useRef({ timer:0, sink:0, x:0, y:0, fired:false });
+  const [press,setPress]=useState("");
+  const selecting=sel!==undefined && sel!==null;
+  const holdStart=(e)=>{ if (!onLongPress || selecting || (e.pointerType==="mouse" && e.button!==0)) return; const h=hold.current; h.fired=false; h.x=e.clientX; h.y=e.clientY; clearTimeout(h.timer); clearTimeout(h.sink);
+    h.sink=setTimeout(()=>setPress("holding"),90);
+    h.timer=setTimeout(()=>{ h.fired=true; h.timer=0; setPress("lift"); h.sink=setTimeout(()=>setPress(""),420);
+      try { const n=window.LedgerNative; if (n && n.haptic) n.haptic("confirm"); else if (navigator.vibrate) navigator.vibrate(12); } catch { /* no vibration here */ }
+      onLongPress(txn); },480); };
+  const holdMove=(e)=>{ const h=hold.current; if (h.timer && (Math.abs(e.clientX-h.x)>10 || Math.abs(e.clientY-h.y)>10)) { clearTimeout(h.timer); clearTimeout(h.sink); h.timer=0; setPress(""); } };
+  const holdEnd=()=>{ const h=hold.current; if (h.timer) { clearTimeout(h.timer); clearTimeout(h.sink); h.timer=0; setPress(""); } };
+  useEffect(()=>()=>{ clearTimeout(hold.current.timer); clearTimeout(hold.current.sink); },[]);
   const isInc=txn.type==="income";
   const displayName=maskText(txn.merchant||txn.note)||catName(txn.category);
   const displaySub=[
@@ -65,7 +74,11 @@ export function TxnRow({ txn, owed, currency, onDelete, onEdit, onView, onLongPr
     !compact?fmtDate(txn.date):null,
   ].filter(Boolean).join(" · ");
   return (
-    <div className={"txn-row"+(txn.id===freshTxnId?" txn-fresh":"")} onClick={()=>{ if (hold.current.fired) { hold.current.fired=false; return; } onView?.(txn); }} onPointerDown={holdStart} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerCancel={holdEnd} onPointerLeave={holdEnd} onContextMenu={onLongPress?e=>e.preventDefault():undefined} {...(onView ? { role:"button", tabIndex:0, onKeyDown:activateKey(()=>onView(txn)) } : {})}>
+    <div className={"txn-row"+(txn.id===freshTxnId?" txn-fresh":"")+(selecting?" selecting txn-sel-row":"")+(sel?" on":"")+(press?" "+press:"")}
+      onClick={()=>{ if (hold.current.fired) { hold.current.fired=false; return; } if (selecting) { onToggle?.(txn); return; } onView?.(txn); }}
+      onPointerDown={holdStart} onPointerMove={holdMove} onPointerUp={holdEnd} onPointerCancel={holdEnd} onPointerLeave={holdEnd} onContextMenu={onLongPress?e=>e.preventDefault():undefined}
+      {...(selecting ? { role:"checkbox", "aria-checked":!!sel, "data-picked":sel?"1":"0", tabIndex:0, onKeyDown:activateKey(()=>onToggle?.(txn)) } : onView ? { role:"button", tabIndex:0, onKeyDown:activateKey(()=>onView(txn)) } : {})}>
+      {(onLongPress||selecting)&&<span aria-hidden="true" className="txn-check-slot"><span className={"txn-check"+(sel?" on":"")}><Icon name="check" size={13}/></span></span>}
       <div className="txn-ico" style={{background:(cat?.color||"#98A5B7")+"26"}}><CatIcon catId={txn.category} size={16} color={cat?.color}/></div>
       <div className="txn-body">
         <div className="txn-name">{displayName}</div>
@@ -95,6 +108,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const [selMode, setSelMode] = useState(false);          // Run 24: select several entries, then delete them together (undo stays available)
   const [picked,  setPicked]  = useState(()=>new Set());
   const [onlySel, setOnlySel] = useState(false);          // Run 29: show only the selected entries, whatever the filters say
+  const barShow=usePresence(selMode);                      // Run 83: the selection bar slides in and out instead of popping
   useBackStep(selMode,()=>{ setSelMode(false); setPicked(new Set()); setOnlySel(false); setGrpOpen(false); });   // Run 40: Back leaves select mode (same as "Done")
   useBackStep(grpOpen,()=>setGrpOpen(false));
   const [search,     setSearch]     = useState("");
@@ -242,32 +256,29 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
         <div className="list-sub">{t("ledger.countOf",{shown:filtered.length,total:transactions.length})}</div>
         <button className={`chip${selMode?" on":""}`} aria-pressed={selMode} data-section="tx-select-toggle" onClick={()=>{ setSelMode(s=>!s); setPicked(new Set()); setOnlySel(false); setGrpOpen(false); }}>{t(selMode?"ledger.selectDone":"ledger.select")}</button>
       </div>
-      <Swap k={typeFilter+"|"+selMode}>
-      {filtered.length===0&&!(selMode&&picked.size>0)?(
-        <div className="empty" style={{padding:"36px 0"}}>
-          <div className="empty-icon"><Icon name="search" size={28}/></div>
-          <div className="empty-title">{t("ledger.noResults")}</div>
-          <div className="empty-body">{t("ledger.noResultsBody")}</div>
-        </div>
-      ):selMode?(()=>{
+      {(()=>{
         // Run 29: the selection belongs to the whole ledger, not to the current filter: it stays when the search or filters change,
         // the sum line covers every selected entry, and "Selected only" shows exactly those entries.
+        // Run 83: selecting no longer swaps the list for a different one. The same rows stay where they are and get a tick box; the tools
+        // above them glide open and closed.
         const shown=transactions.filter(x=>picked.has(String(x.id)));
         const allOn=filtered.length>0 && filtered.every(x=>picked.has(String(x.id)));
         const exp=shown.filter(x=>x.type==="expense").reduce(addAmt,0), inc=shown.filter(x=>x.type==="income").reduce(addAmt,0);
         const net=Math.round((inc-exp)*100)/100;
-        const list=onlySel?shown:filtered;
+        const list=selMode&&onlySel?shown:filtered;
+        const toggle=(x)=>setPicked(p=>{ const n=new Set(p); const k=String(x.id); n.has(k)?n.delete(k):n.add(k); return n; });
         return (
-          <div data-section="tx-select">
-            <div className="filter-bar sel-bar" style={{position:"sticky",top:0,zIndex:2,background:"var(--bg)",paddingBottom:6}}>
+          <div data-section={selMode?"tx-select":undefined}>
+            {barShow.mounted&&<div className={"filter-bar sel-bar"+(barShow.shown?"":" leaving")} aria-hidden={selMode?undefined:true} style={{position:"sticky",top:0,zIndex:2,background:"var(--bg)",paddingBottom:6}}>
               <button className="chip" data-section="tx-select-all" onClick={()=>setPicked(p=>{ const n=new Set(p); filtered.forEach(x=>allOn?n.delete(String(x.id)):n.add(String(x.id))); return n; })}>{t(allOn?"ledger.selectNone":"ledger.selectAll",{n:filtered.length})}</button>
               <button className={`chip${onlySel?" on":""}`} aria-pressed={onlySel} data-section="tx-select-only" disabled={!shown.length&&!onlySel} onClick={()=>setOnlySel(s=>!s)}>{t("ledger.selOnly")}</button>
               <button className={`chip${grpOpen?" on":""}`} aria-pressed={grpOpen} aria-expanded={grpOpen} aria-controls="tx-group-panel" data-section="tx-select-group" disabled={!shown.length&&!grpOpen} onClick={()=>setGrpOpen(o=>!o)}>{t("ledger.addToGroup")}</button>
               <button className="chip on" data-section="tx-select-delete" disabled={!shown.length} style={{background:"var(--neg-bg)",borderColor:"var(--neg-bg)",color:"var(--neg)",opacity:shown.length?1:0.5}}
                 onClick={()=>{ onDeleteMany(shown.map(x=>x.id)); setPicked(new Set()); setOnlySel(false); setSelMode(false); }}>{t("ledger.deleteSel",{n:shown.length})}</button>
-            </div>
-            <div className="list-sub" data-section="tx-select-sum" aria-live="polite" style={{margin:"0 2px 8px",fontWeight:shown.length?600:400}}>{shown.length?t("ledger.selSum",{n:shown.length,exp:fmt(exp,currency),inc:fmt(inc,currency),net:fmt(net,currency)}):t("ledger.selHint")}</div>
-            <Collapse open={grpOpen} id="tx-group-panel">
+            </div>}
+            <Collapse open={selMode} id="tx-select-tools">
+            <div className="list-sub" data-section={selMode?"tx-select-sum":undefined} aria-live="polite" style={{margin:"0 2px 8px",fontWeight:shown.length?600:400}}>{shown.length?t("ledger.selSum",{n:shown.length,exp:fmt(exp,currency),inc:fmt(inc,currency),net:(net<0?"−":net>0?"+":"")+fmt(net,currency)}):t("ledger.selHint")}</div>
+            <Collapse open={grpOpen&&selMode} id="tx-group-panel">
               <div className="card" data-section="tx-group-panel" style={{margin:"0 0 10px",padding:"12px 14px"}}>
                 <label className="field-lbl" htmlFor="tx-group-name">{t("ledger.groupName")}</label>
                 <input id="tx-group-name" className="field-input" maxLength={40} placeholder={t("ledger.groupPh")} value={grpName} onChange={e=>setGrpName(e.target.value)}/>
@@ -279,21 +290,22 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
                 </div>
               </div>
             </Collapse>
-            <div className="txn-list">
-              {list.map(x=>{ const on=picked.has(String(x.id)); return (
-                <button key={x.id} className={"list-row txn-sel-row"+(on?" on":"")} role="checkbox" aria-checked={on} data-picked={on?"1":"0"} style={{width:"100%",textAlign:"left",font:"inherit",display:"flex",alignItems:"center",gap:10,background:on?"var(--accent-bg, rgba(0,0,0,0.05))":"none",border:"none",borderBottom:"1px solid var(--rule)",padding:"10px 4px",cursor:"pointer"}}
-                  onClick={()=>setPicked(p=>{ const n=new Set(p); const k=String(x.id); n.has(k)?n.delete(k):n.add(k); return n; })}>
-                  <span aria-hidden="true" className={"txn-check"+(on?" on":"")} style={{width:20,height:20,borderRadius:6,border:"2px solid "+(on?"var(--accent)":"var(--ink-3)"),background:on?"var(--accent)":"transparent",color:on?"var(--on-accent,#fff)":"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",flex:"none"}}><Icon name="check" size={13}/></span>
-                  <span style={{flex:1,minWidth:0}}><span style={{display:"block",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{maskText(x.merchant||x.note)||catName(x.category)}</span><span className="list-sub">{fmtDate(x.date)}</span></span>
-                  <span style={{fontWeight:600}}>{x.type==="income"?"+":"−"}{fmt(x.amount,currency)}</span>
-                </button>); })}
-            </div>
+            </Collapse>
+            <Swap k={typeFilter}>
+            {list.length===0&&!(selMode&&picked.size>0)?(
+              <div className="empty" style={{padding:"36px 0"}}>
+                <div className="empty-icon"><Icon name="search" size={28}/></div>
+                <div className="empty-title">{t("ledger.noResults")}</div>
+                <div className="empty-body">{t("ledger.noResultsBody")}</div>
+              </div>
+            ):(
+              <GroupedTxns txns={list} all={transactions} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView}
+                onLongPress={x=>{ setSelMode(true); setPicked(new Set([String(x.id)])); }} picked={selMode?picked:undefined} onToggle={toggle}/>
+            )}
+            </Swap>
           </div>
         );
-      })():(
-        <GroupedTxns txns={filtered} all={transactions} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={x=>{ setSelMode(true); setPicked(new Set([String(x.id)])); }}/>
-      )}
-      </Swap>
+      })()}
       {showCatSheet&&(
         <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setShowCatSheet(false)}>
           <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("ledger.filterTitle")}>

@@ -850,6 +850,21 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--sat);ba
 .sel-bar{animation:swapIn 220ms var(--ease-out) backwards}
 .chip{transition:background-color 180ms ease-out,border-color 180ms ease-out,color 180ms ease-out,transform 120ms ease-out}
 .txn-sel-row{transition:background-color 160ms ease-out}
+/* Run 83: press-and-hold. The row sinks slowly while held, then lifts with a small spring when selection starts.
+   The tick box lives in every row of the Entries list and opens (width + fade) only in selection mode, so nothing jumps. */
+.txn-row.holding{transform:scale(.97);background-color:color-mix(in srgb,var(--ink) 5%,transparent);transition:transform 420ms cubic-bezier(.3,0,.5,1),background-color 300ms ease-out}
+.txn-row.lift{animation:rowLift 420ms cubic-bezier(.3,0,.3,1)}
+@keyframes rowLift{0%{transform:scale(.97)}40%{transform:scale(1.025)}100%{transform:scale(1)}}
+.txn-row.selecting.on{background-color:color-mix(in srgb,var(--accent) 10%,transparent)}
+.txn-check-slot{display:inline-flex;align-items:center;flex:none;width:0;margin-right:-11px;opacity:0;overflow:hidden;transition:width 280ms cubic-bezier(.32,.72,0,1),margin-right 280ms cubic-bezier(.32,.72,0,1),opacity 200ms ease-out}
+.txn-row.selecting .txn-check-slot{width:22px;margin-right:0;opacity:1;transition:width 300ms cubic-bezier(.22,1,.36,1),margin-right 300ms cubic-bezier(.22,1,.36,1),opacity 220ms ease-out 60ms}
+.txn-check{width:20px;height:20px;border-radius:6px;border:2px solid var(--ink-3);display:inline-flex;align-items:center;justify-content:center;flex:none;color:var(--on-accent,#fff)}
+.txn-check.on{border-color:var(--accent);background:var(--accent)}
+.sel-bar.leaving{animation:selOut 240ms cubic-bezier(.4,0,.8,.4) forwards;pointer-events:none}
+@keyframes selOut{to{opacity:0;transform:translateY(-6px)}}
+@media (prefers-reduced-motion:reduce){.txn-row.holding,.txn-row.lift,.txn-check-slot,.txn-row.selecting .txn-check-slot{transition:none;animation:none;transform:none}.sel-bar.leaving{animation:none;opacity:0}}
+[data-fx="off"] .txn-row.holding,[data-fx="off"] .txn-row.lift{transform:none;animation:none}
+[data-fx="off"] .txn-check-slot,[data-fx="off"] .txn-row.selecting .txn-check-slot{transition:none}
 .txn-check{transition:background-color 160ms ease-out,border-color 160ms ease-out}
 .txn-check svg{transform:scale(0.4);opacity:0;transition:transform 180ms var(--ease-out),opacity 140ms ease-out}
 .txn-check.on svg{transform:none;opacity:1}

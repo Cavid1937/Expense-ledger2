@@ -11,6 +11,10 @@ section("R24-HD1. Long-press starts selection");
   ok(await page.evaluate(() => !!document.querySelector('[data-section="tx-select"]')), "holding a row opens selection mode");
   ok(await page.evaluate(() => document.querySelectorAll('[data-picked="1"]').length === 1), "the held row is already ticked");
   ok(!(await page.$(".sheet-overlay")), "no detail sheet opened by the release");
+  // Run 83: the list keeps its look (same rows, date headers) and only gains tick boxes; the release does not untick the held row
+  await wait(400);
+  ok(await page.evaluate(() => document.querySelectorAll(".txn-row").length === 3 && document.querySelectorAll(".txn-date-hdr").length === 3 && document.querySelectorAll(".txn-row.selecting .txn-check-slot").length === 3), "same rows and date headers stay, each with a tick box");
+  ok(await page.evaluate(() => document.querySelectorAll('[data-picked="1"]').length === 1), "after the release settles, still exactly one row is ticked");
   await page.evaluate(() => document.querySelectorAll('[data-section="tx-select"] [role="checkbox"]')[1].click()); await wait(150);
   await page.evaluate(() => document.querySelector('[data-section="tx-select-delete"]').click()); await wait(400);
   const st = await state(page);
