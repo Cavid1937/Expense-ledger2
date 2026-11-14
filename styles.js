@@ -1030,6 +1030,10 @@ html,body,.app{transition:background-color 200ms ease-out}
 .setup-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:58px;padding:0 18px;border-radius:16px;background:var(--bg-card);border:1.5px solid var(--rule);
   color:var(--ink);font:inherit;font-size:16px;font-weight:600;text-align:left;cursor:pointer;transition:border-color 160ms,background 200ms,transform 120ms var(--ease-out)}
 .setup-choice:active{transform:scale(.98)}
+.setup-stmt{display:flex;flex-direction:column;gap:4px;width:100%;margin-top:22px;padding:14px 16px;border-radius:16px;border:1.5px dashed var(--rule);background:transparent;color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:border-color 160ms,background 200ms,transform 120ms var(--ease-out)}
+.setup-stmt:active{transform:scale(.98);background:var(--bg-warm)}
+.setup-stmt-t{font-size:15px;font-weight:600;color:var(--accent-text)}
+.setup-stmt-s{font-size:13px;line-height:1.45;color:var(--ink-3)}
 .setup-choice.on{border-color:var(--accent-fill);background:var(--accent-light)}
 .setup-radio{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:2px solid var(--rule-2);display:inline-flex;align-items:center;justify-content:center;transition:border-color 160ms,background 200ms}
 .setup-choice.on .setup-radio{border-color:var(--accent-fill);background:var(--accent-fill)}

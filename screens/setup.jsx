@@ -10,7 +10,7 @@ const STEPS = ["money", "income", "goal", "debts"];
 // which page holds each answer, so a refused answer can be shown on its own page
 const PAGE_OF = { cash: 0, bank: 0, salary: 1, payDay: 1, goalName: 2, goalTarget: 2 };
 
-export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, inSheet = false }) {
+export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, onStatement, inSheet = false }) {
   const [v, setV] = useState({ cash: "", bank: "", income: "", salary: "", payDay: "", goalName: "", goalTarget: "", debts: false });
   const [errors, setErrors] = useState({});
   const [step, setStep] = useState(0);
@@ -50,6 +50,12 @@ export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, inSheet = fa
             <p className="setup-sub">{t("setupq.q1sub")}</p>
             {money("cash", "setupq-cash", t("setupq.cash"))}
             {money("bank", "setupq-bank", t("setupq.bank"))}
+            {/* Run 80 (owner: "import and use that data instead of starting from zero"): a bank statement can bring the history in */}
+            {onStatement && (
+              <button type="button" className="setup-stmt" data-section="setupq-statement" onClick={onStatement}>
+                <span className="setup-stmt-t">{t("setupq.statement")}</span>
+                <span className="setup-stmt-s">{t("setupq.statementSub")}</span>
+              </button>)}
           </>)}
           {page === "income" && (<>
             <h2 className="setup-q">{t("setupq.q2")}</h2>
@@ -96,12 +102,12 @@ export function SetupSteps({ currency, onSave, onSkip, onOpenDebts, inSheet = fa
 }
 
 // The Home checklist's "Set up in a minute": the same steps in a sheet.
-export function SetupSheet({ currency, onClose, onSave, onOpenDebts }) {
+export function SetupSheet({ currency, onClose, onSave, onOpenDebts, onStatement }) {
   return (
     <div className="sheet-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="sheet setup-sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("setupq.title")} data-section="setupq">
         <div className="sheet-grip"><div className="sheet-handle" /></div>
-        <SetupSteps inSheet currency={currency} onSkip={onClose} onOpenDebts={onOpenDebts}
+        <SetupSteps inSheet currency={currency} onSkip={onClose} onOpenDebts={onOpenDebts} onStatement={onStatement ? () => { onClose(); onStatement(); } : undefined}
           onSave={(plan, extra) => { const ok = onSave(plan); if (ok === false) return; onClose(); if (extra && extra.debts && onOpenDebts) onOpenDebts(); }} />
       </div>
     </div>

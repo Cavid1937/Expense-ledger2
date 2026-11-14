@@ -75,7 +75,7 @@ function AccountPage({ onGoogle, onGuest, busy, error }) {
 }
 
 // step: "lang" (rendered on its own, before the app) · "account" · "setup" (drawn over the app, so its sheets and messages work).
-export function Onboarding({ step, lang, onLanguage, onGoogle, onGuest, busy, error, currency, onSetupSave, onSetupSkip, onBackToAccount, onOpenDebts }) {
+export function Onboarding({ step, lang, onLanguage, onGoogle, onGuest, busy, error, currency, onSetupSave, onSetupSkip, onSetupStatement, onBackToAccount, onOpenDebts }) {
   const [leaving, setLeaving] = useState(false);
   // Android Back in the questions goes to the previous page of the scene, never out of the app halfway through
   useBackStep(step === "setup" && !leaving, () => onBackToAccount && onBackToAccount());
@@ -87,7 +87,7 @@ export function Onboarding({ step, lang, onLanguage, onGoogle, onGuest, busy, er
         <div key={step} className={`ob-slide${step === "lang" ? "" : " in-next"}`}>
           {step === "lang" && <LanguagePage onChoose={onLanguage} />}
           {step === "account" && <AccountPage onGoogle={onGoogle} onGuest={onGuest} busy={busy} error={error} />}
-          {step === "setup" && <SetupSteps currency={currency} onOpenDebts={onOpenDebts}
+          {step === "setup" && <SetupSteps currency={currency} onOpenDebts={onOpenDebts} onStatement={onSetupStatement ? () => out(onSetupStatement) : undefined}
             onSkip={() => out(onSetupSkip)}
             onSave={(plan, extra) => out(() => onSetupSave(plan, extra))} />}
         </div>

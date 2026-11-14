@@ -159,7 +159,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="79 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="80 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -5722,11 +5722,12 @@ function AppInner() {
             </div>
           </div>
         )}
-        {showSetupQ&&<SetupSheet currency={currency} onClose={()=>setShowSetupQ(false)} onOpenDebts={()=>{ setDebtsStart("debts"); switchTab("debts"); }} onSave={applySetupPlan}/>}
+        {showSetupQ&&<SetupSheet currency={currency} onClose={()=>setShowSetupQ(false)} onOpenDebts={()=>{ setDebtsStart("debts"); switchTab("debts"); }} onStatement={()=>switchTab("io")} onSave={applySetupPlan}/>}
         {ob!=="done"&&<Onboarding step={ob} lang={state.language} currency={currency} busy={obBusy} error={obErr}
           onGoogle={obGoogle} onGuest={()=>{ setObErr(""); obTo("setup"); }} onBackToAccount={()=>obTo("account")}
           onOpenDebts={()=>{}}
           onSetupSkip={()=>obTo("done")}
+          onSetupStatement={()=>{ obTo("done"); switchTab("io"); }}
           onSetupSave={(plan,extra)=>{ applySetupPlan(plan); obTo("done"); if (extra&&extra.debts) { setDebtsStart("debts"); switchTab("debts"); } }}/>}
         {editBill!==undefined&&(
           <BillSheet bill={editBill} currency={currency} onSave={saveBill} onDelete={deleteBill} onClose={()=>setEditBill(undefined)} showToast={showToast}/>

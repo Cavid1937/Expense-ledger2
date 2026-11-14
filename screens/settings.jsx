@@ -765,20 +765,20 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       <LookSettings showToast={showToast} open={open} toggle={toggle}/>
       <RemindersSettings showToast={showToast} open={open} toggle={toggle}/>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupData")}</div>
+      {/* Run 80 (owner, 14 Nov: Settings "scattered, uncoordinated"; the widget card was always open and took a whole screen):
+          every group is now one list card, and the switch-heavy parts (privacy, widgets) are folds that open on a tap like the others. */}
       <div className="card list-card" data-section="more-data">
         <ListRow id="io" icon="upload" title={t("io.title")} sub={t("more.ioSub")} onClick={()=>onOpen("io")}/>
         <ListRow id="lock" icon="safe" title={t("lock.title")} sub={t("lock.rowSub")} onClick={onLock}/>
-        <ListRow id="safe" icon="safe" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
-        <ListRow id="privacy" icon="safe" title={t("info.privacy.title")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/>
+        <ListRow id="safe" icon="backup" title={t("info.safe.title")} sub={t("more.safeSub")} onClick={()=>onInfo("safe")}/>
       </div>
-      <ScreenSecurity showToast={showToast}/>
-      <WidgetSettings showToast={showToast}/>
-      <LearnSettings state={state} showToast={showToast}/>
+      <PrivacyFold state={state} showToast={showToast} open={open} toggle={toggle} onInfo={onInfo}/>
+      <WidgetSettings showToast={showToast} open={open} toggle={toggle}/>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupApp")}</div>
       <div className="card list-card" data-section="more-app">
-        <ListRow id="how" icon="list" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
+        <ListRow id="how" icon="pattern" title={t("info.how.title")} sub={t("more.howSub")} onClick={()=>onInfo("how")}/>
       {/* Run 75: write to us / report a problem (free, add-only; see sendFeedback in App.jsx) */}
-      <ListRow id="feedback" icon="list" title={t("fb.row")} sub={t("fb.rowSub")} onClick={()=>setFbOpen(true)}/>{fbOpen&&<FeedbackSheet lang={language} showToast={showToast} onClose={()=>setFbOpen(false)}/>}
+      <ListRow id="feedback" icon="edit" title={t("fb.row")} sub={t("fb.rowSub")} onClick={()=>setFbOpen(true)}/>{fbOpen&&<FeedbackSheet lang={language} showToast={showToast} onClose={()=>setFbOpen(false)}/>}
       </div>
       {/* Run 53 (owner's video: the version read "SNjTvbhv"): a version a person can read and compare; the build code stays, small, for support */}
       <div className="list-sub app-version" data-section="app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:APP_RELEASE})}{version&&<span data-section="app-build" style={{opacity:0.65}}> · {t("more.build",{v:version})}</span>}</div>
@@ -788,6 +788,19 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
 
 // Run 33 (Android app only): hide the app's content in the phone's recent-apps list and block screenshots (Android FLAG_SECURE, ScreenSecurePlugin.java).
 // Shown only inside the Android app; the choice is kept by the shell so it is already in force when the app starts.
+// Run 80: privacy switches in one fold (closed it says in one line whether anything is shared).
+function PrivacyFold({ state, showToast, open, toggle, onInfo }) {
+  const [learnOn,setLearnOn]=useState(()=>!!readLearn().on);
+  useEffect(()=>{ const f=()=>setLearnOn(!!readLearn().on); window.addEventListener("ledger-learn-changed",f); return ()=>window.removeEventListener("ledger-learn-changed",f); },[]);
+  return (
+    <Fold id="privacy" icon="eye" title={t("st.foldPrivacy")} sub={t(learnOn?"st.sumPrivOn":"st.sumPrivOff")} open={open.privacy} onToggle={()=>toggle("privacy")}>
+      {/* the privacy notice lives here too, so the page has one "Privacy", not two */}
+      <div className="card list-card" data-section="privacy-notice"><ListRow id="privacy" icon="list" title={t("st.privacyNotice")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/></div>
+      <ScreenSecurity showToast={showToast}/>
+      <LearnSettings state={state} showToast={showToast}/>
+    </Fold>
+  );
+}
 function ScreenSecurity({ showToast }) {
   const n=screenSecureNative();
   const [on,setOn]=useState(null);
@@ -805,7 +818,7 @@ function ScreenSecurity({ showToast }) {
 }
 
 // Run 33 (Android app only): the home-screen widget (two quick-add buttons). Adding it is asked from here; its optional safe-to-spend line is off by default.
-function WidgetSettings({ showToast }) {
+function WidgetSettings({ showToast, open={}, toggle=()=>{} }) {
   const w=widgetNative();
   const [can,setCan]=useState(false), [p,setP]=useState(()=>readWidgetPrefs());
   useEffect(()=>{ if (!w || typeof w.canPin!=="function") return; let alive=true; Promise.resolve(w.canPin()).then(v=>{ if (alive) setCan(v===true); }).catch(()=>{}); return ()=>{ alive=false; }; },[]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -814,8 +827,8 @@ function WidgetSettings({ showToast }) {
   const flipHide=()=>{ const n={ ...p, hideAmounts:!p.hideAmounts }; if (writeWidgetPrefs(n)) setP(n); else showToast&&showToast(t("scr.fail")); };
   const flip=()=>{ const n={ ...p, showSafe:!p.showSafe }; if (writeWidgetPrefs(n)) setP(n); else showToast&&showToast(t("scr.fail")); };
   return (
+    <Fold id="widgets" icon="digital" title={t("wdg.title")} sub={t(p.hideAmounts?"st.sumWdgHidden":"st.sumWdgShown")} open={open.widgets} onToggle={()=>toggle("widgets")}>
     <div className="card st-card" data-section="widget">
-      <div className="list-title">{t("wdg.title")}</div>
       <div className="list-sub" style={{lineHeight:1.5}}>{t("wdg.sub")}</div>
       {/* Run 76: five widgets; each can be placed from here (the launcher still asks) or from the home screen's widget list */}
       {can&&<div data-section="widget-list" style={{marginTop:10}}>{["safe","summary","budget","accounts","quick"].map(k=>(<div key={k} className="settings-row" style={{padding:"8px 0"}}><div style={{minWidth:0}}><div className="settings-row-title">{t("wdgx.name."+k)}</div><div className="settings-row-sub">{t("wdgx.desc."+k)}</div></div><button type="button" className="btn btn-sm btn-ghost" data-section={"widget-add-"+k} onClick={()=>add(k)}>{t("wdgx.add")}</button></div>))}</div>}
@@ -829,6 +842,7 @@ function WidgetSettings({ showToast }) {
         <div className={`toggle-track${p.hideAmounts?" on":""}`} data-section="widget-hide" onClick={flipHide} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flipHide(); } }} role="switch" aria-checked={!!p.hideAmounts} aria-labelledby="set-wdg-hide" tabIndex={0}><div className="toggle-knob"/></div>
       </div>
     </div>
+    </Fold>
   );
 }
 
@@ -1041,7 +1055,22 @@ export function ImportExportPage({ notices, drive, state, onExportCSV, onExportJ
   // in, 3) a spreadsheet copy, 4) how safe the data is on this device. The "do you have the file?" question lives only in the top banner.
   return (
     <div className="io-page">
-      <div className="section-title" style={{marginTop:0}}>{t("io2.moveTitle")}</div>
+      {/* Run 80 (owner: "so users can import that data instead of starting from zero"): bringing data in comes first on this page */}
+      <div className="section-title" style={{marginTop:0}}>{t("io2.importTitle")}</div>
+      <div className="card io-card drop-zone" data-section="io-import" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io2.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}} style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
+        {/* Run 39c (owner: the backup is in Google Drive but the website's picker does not show it): no type filter anywhere. Drive and other apps often label
+            a .json file as plain text or unknown, and Android's picker then greys it out. The file's contents are checked after it is chosen. */}
+        <input ref={fileRef} type="file" aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
+        <span className="io-ico" style={{color:"var(--accent-text)",flexShrink:0}}><Icon name="upload" size={24}/></span>
+        <div style={{minWidth:0}}>
+          <div className="list-title">{t("io.import")}</div>
+          <div className="list-sub" style={{lineHeight:1.5}}>{t("io2.importSub")}</div>
+        </div>
+      </div>
+
+      {onImportText&&<PasteStatement onImportText={onImportText}/>}
+
+      <div className="section-title">{t("io2.moveTitle")}</div>
       <div className="card" data-section="io-backup-card">
         <div className="list-sub" style={{lineHeight:1.55}}>{t("io2.moveSub")}</div>
         {/* one status line; a confirmed backup gets a small tick in front of it (not a separate badge) */}
@@ -1062,19 +1091,7 @@ export function ImportExportPage({ notices, drive, state, onExportCSV, onExportJ
 
       <DriveCard drive={drive}/>
       <NoticesCard notices={notices}/>
-      <div className="section-title">{t("io2.importTitle")}</div>
-      <div className="card io-card drop-zone" role="button" tabIndex={0} aria-label={`${t("io.import")}. ${t("io2.importSub")}`} onKeyDown={activateKey(()=>fileRef.current?.click())} onClick={()=>fileRef.current?.click()} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();onImportFile(e.dataTransfer.files[0]);}} style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
-        {/* Run 39c (owner: the backup is in Google Drive but the website's picker does not show it): no type filter anywhere. Drive and other apps often label
-            a .json file as plain text or unknown, and Android's picker then greys it out. The file's contents are checked after it is chosen. */}
-        <input ref={fileRef} type="file" aria-label={t("import.title")} onClick={e=>e.stopPropagation()} onChange={e=>{onImportFile(e.target.files[0]);e.target.value="";}}/>
-        <span className="io-ico" style={{color:"var(--accent-text)",flexShrink:0}}><Icon name="upload" size={24}/></span>
-        <div style={{minWidth:0}}>
-          <div className="list-title">{t("io.import")}</div>
-          <div className="list-sub" style={{lineHeight:1.5}}>{t("io2.importSub")}</div>
-        </div>
-      </div>
 
-      {onImportText&&<PasteStatement onImportText={onImportText}/>}
 
       <div className="section-title">{t("io2.sheetTitle")}</div>
       <div className="card io-card" data-section="io-csv" style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
