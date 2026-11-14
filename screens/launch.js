@@ -16,10 +16,10 @@ export const HOLD_MS = 900, OUT_MS = 560, MAX_MS = 3200;   // Run 42 (owner: "th
 // glyph on its launch screen (46 of 108 units of a 240 dp adaptive icon), so the hand-over lines up.
 export const LAUNCH_HTML = '<div id="launch" aria-hidden="true"><div class="launch-in"><svg class="launch-mark" viewBox="127 95 258 322" width="82" height="102"><rect x="136" y="104" width="240" height="304" rx="36" fill="#0E2229" stroke="#4CC9C4" stroke-width="18"/><path d="M180 190H332M180 246H332M180 302H262" stroke="#4CC9C4" stroke-opacity=".55" stroke-width="16" stroke-linecap="round"/><circle cx="338" cy="334" r="36" fill="#4CC9C4"/><path d="M322 335l11 11 21-24" stroke="#07151A" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="launch-name">Expense Ledger</div></div></div>';
 
-export const LAUNCH_CSS = "#launch{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:var(--bg,#07151A);transition:opacity 380ms cubic-bezier(.4,0,.2,1) 140ms;-webkit-tap-highlight-color:transparent}"
+export const LAUNCH_CSS = "#launch{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;background:var(--bg,#F3F1EB);transition:opacity 380ms cubic-bezier(.4,0,.2,1) 140ms;-webkit-tap-highlight-color:transparent}"
   + "#launch .launch-in{position:relative;display:flex;flex-direction:column;align-items:center;transition:transform 420ms cubic-bezier(.2,.8,.2,1),opacity 300ms ease-out 60ms}"
   + "#launch .launch-mark{display:block}"
-  + "#launch .launch-name{position:absolute;top:100%;margin-top:18px;white-space:nowrap;font:600 19px/1.2 Onest,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;letter-spacing:.2px;color:var(--ink,#F3F7F6);opacity:0;transform:translateY(6px);animation:launchName 360ms cubic-bezier(.2,.8,.2,1) 160ms forwards}"
+  + "#launch .launch-name{position:absolute;top:100%;margin-top:18px;white-space:nowrap;font:600 19px/1.2 Onest,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;letter-spacing:.2px;color:var(--ink,#252B2F);opacity:0;transform:translateY(6px);animation:launchName 360ms cubic-bezier(.2,.8,.2,1) 160ms forwards}"
   + "#launch.out{opacity:0;pointer-events:none}"
   + "#launch.out .launch-in{transform:translateY(-44px) scale(.9);opacity:0}"
   + "@keyframes launchName{to{opacity:1;transform:none}}"

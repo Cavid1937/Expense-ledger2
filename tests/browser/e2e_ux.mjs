@@ -140,7 +140,7 @@ page = await openPage(browser, { seed: seed1 });
 const lowContrast = async () => page.evaluate(() => {
   const parse = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(",").map((x) => parseFloat(x)); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
   const lum = ({ r, g, b }) => { const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
-  const bgOf = (el) => { for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c.a > 0.5) return c; } return { r: 7, g: 21, b: 26, a: 1 }; };   // page background (Caspian dark, Run 9)
+  const bgOf = (el) => { for (let e = el; e; e = e.parentElement) { const c = parse(getComputedStyle(e).backgroundColor); if (c && c.a > 0.5) return c; } return { r: 243, g: 241, b: 235, a: 1 }; };   // page background (Ivory, the Run 84 default)
   const bad = []; let n = 0;
   document.querySelectorAll("#root *").forEach((el) => {
     const own = [...el.childNodes].some((x) => x.nodeType === 3 && x.textContent.trim()); if (!own) return;
@@ -194,8 +194,8 @@ const pageBg = await page.evaluate(() => getComputedStyle(document.body).backgro
 ok(glass.blur === "none" && glass.bg === pageBg && /^rgb\(/.test(glass.bg), "reduced transparency: the top bar is solid (no blur, opaque, the page colour)", { glass, pageBg });
 await media([{ name: "prefers-reduced-transparency", value: "no-preference" }, { name: "prefers-contrast", value: "more" }]);
 const hc = await page.evaluate(() => { const cs = getComputedStyle(document.documentElement); return { ink3: cs.getPropertyValue("--ink-3").trim(), rule2: cs.getPropertyValue("--rule-2").trim() }; });
-// Run 70: each theme has its own stronger set (applyTheme); Sea glass, the theme this phone is on, moves to these exact values
-ok(await page.evaluate(() => document.documentElement.getAttribute("data-theme")) === "sea" && hc.ink3 === "#C1CEC8" && hc.rule2 === "#91A5A0", "increased contrast: text and border tokens switch to the stronger set", hc);
+// Run 70: each theme has its own stronger set (applyTheme); Ivory (Run 84 default), the theme this phone is on, moves to these exact values
+ok(await page.evaluate(() => document.documentElement.getAttribute("data-theme")) === "ivory" && hc.ink3 === "#464E52" && hc.rule2 === "#63696D", "increased contrast: text and border tokens switch to the stronger set", hc);
 await page.close();
 
 section("S7. Small screens and the on-screen keyboard");

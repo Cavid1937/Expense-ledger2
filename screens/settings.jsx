@@ -14,7 +14,7 @@ import { readLearn, writeLearn, learnPreview, readCrashLog } from "../App.jsx";
 // Run 75: report a problem
 import { sendFeedback, readScreenCounts, SCREENS_KEY, readLayouts, LAYOUTS_KEY } from "../App.jsx";
 // Run 70: theme preview cards
-import { THEME_MAIN, themePreview } from "../App.jsx";
+import { themePreview } from "../App.jsx";
 // Run 71: the Gifts row is shown only when this preference key is "1" (off for everyone by default)
 const giftsShown=()=>{ try { return localStorage.getItem("expense_ledger_v5__show_gifts")==="1"; } catch { return false; } };
 // Run 69: the "Help improve the app" card above imports these
@@ -442,8 +442,9 @@ export function LookSettings({ showToast, open, toggle }) {
       {/* Run 70: one radio group. The three main looks are preview cards drawn in their own colours (a small screen with a card, two lines
           of text, an income and a spending figure and a button), the earlier looks stay below as chips. */}
       <div role="radiogroup" aria-label={t("theme.title")} data-section="theme-chips">
+        {/* Run 84 (owner: "treat each theme as an equal"): every theme is a preview card, Ivory first */}
         <div className="theme-cards">
-          {THEME_MAIN.map(id=>{ const p=themePreview(id), on=theme===id; return (
+          {THEME_IDS.map(id=>{ const p=themePreview(id), on=theme===id; return (
             <button key={id} type="button" role="radio" aria-checked={on} data-theme-id={id} className={`theme-card${on?" on":""}`} onClick={()=>pick(id)}>
               <span className="theme-mini" aria-hidden="true" style={{background:p.bg,borderColor:p.rule}}>
                 <span className="theme-mini-card" style={{background:p.card,borderColor:p.rule}}>
@@ -456,15 +457,6 @@ export function LookSettings({ showToast, open, toggle }) {
               <span className="theme-card-sub">{t("theme.d."+id)}</span>
             </button>
           ); })}
-        </div>
-        <div className="settings-row-sub" style={{margin:"12px 0 6px"}}>{t("theme.more")}</div>
-        <div className="filter-bar" style={{flexWrap:"wrap"}}>
-          {THEME_IDS.filter(id=>!THEME_MAIN.includes(id)).map(id=>(
-            <button key={id} type="button" role="radio" aria-checked={theme===id} data-theme-id={id} className={`chip${theme===id?" on":""}`} style={{display:"inline-flex",alignItems:"center",gap:7}} onClick={()=>pick(id)}>
-              <span aria-hidden="true" style={{display:"inline-block",width:16,height:16,borderRadius:"50%",background:`linear-gradient(135deg,${THEMES[id].swatch[0]} 50%,${THEMES[id].swatch[1]} 50%)`,border:"1px solid var(--rule-2)"}}/>
-              {t("theme."+id)}
-            </button>
-          ))}
         </div>
       </div>
       {/* Run 25: Reduce effects - shadows and highlights off; layers stay readable through tone and edges */}

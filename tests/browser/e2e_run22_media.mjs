@@ -25,8 +25,8 @@ section("R22-M3. 'More contrast' on: stronger borders and secondary text");
   const page = await openPage(browser, { seed }); const before = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--rule-2").trim());
   await page.emulateMediaFeatures([{ name: "prefers-contrast", value: "more" }]); await wait(200);
   const after = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--rule-2").trim());
-  // Run 70: the phone with data is on Sea glass; its stronger divider is #91A5A0 (from #617D76)
-  ok(before !== after && before.toUpperCase() === "#617D76" && after.toUpperCase() === "#91A5A0", "the divider colour becomes the stronger one", [before, after]);
+  // Run 84: the phone is on Ivory (the default); its stronger divider is #63696D (from #848A8E)
+  ok(before !== after && before.toUpperCase() === "#848A8E" && after.toUpperCase() === "#63696D", "the divider colour becomes the stronger one", [before, after]);
   await page.close();
 }
 await browser.close();

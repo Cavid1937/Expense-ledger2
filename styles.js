@@ -10,28 +10,25 @@ export const CSS = pressed(`
 @font-face{font-family:"Onest";font-style:normal;font-weight:100 900;font-display:swap;src:url("/fonts/onest-cyrillic.woff2") format("woff2");unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 button{font-family:inherit;cursor:pointer}
-/* "Caspian Ledger" dark design (Run 9, 2026-10-27; replaces the blue redesign of the same day). Surfaces: page #07151A,
-   card #0E2229, elevated #153039, border #24414A. Text #F3F7F6, muted #A5B7B8. Brand / selection: sea-glass teal #4CC9C4;
-   filled teal controls carry dark text (white on teal is 2.0:1, dark is 9.3:1). Meaning colours: income #8BD97A (a clear
-   green, 69° of hue away from the teal — the proposed #63D6A0 was 26° away and read as "selected"), expense #FF8188,
-   warning #F0C46F, comparison #83B9F5. Every text colour is ≥ 5.5:1 on every surface. */
+/* Run 84 (owner): the base colours are Ivory, the neutral default (the same values as THEMES.ivory in App.jsx, which applyTheme sets on
+   the page root). They show before the app's script runs. The earlier "Caspian Ledger" dark base was removed at the owner's request. */
 :root{
-  color-scheme:dark;
+  color-scheme:light;
   --font:"Onest",-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
-  --bg:#07151A;--bg-card:#0E2229;--bg-warm:#153039;--bg-inset:#112A31;
-  --ink:#F3F7F6;--ink-2:#D3DFDE;--ink-3:#A5B7B8;--ink-4:#93A7A8;--ink-5:#2A464E;
-  --rule:#24414A;--rule-2:#36606A;
-  --accent:#4CC9C4;--accent-light:#123C3F;--accent-mid:#85D9D0;--accent-text:#4CC9C4;--accent-fill:#4CC9C4;--on-accent:#07151A;
-  --violet:#B3A1FF;--info:#83B9F5;
-  --pos:#8BD97A;--pos-bg:#173622;
-  --neg:#FF8188;--neg-bg:#3B1C22;
-  --warn:#F0C46F;--warn-bg:#352B14;
+  --bg:#F3F1EB;--bg-card:#F9F8F4;--bg-warm:#FFFFFF;--bg-inset:#EAE8E1;
+  --ink:#252B2F;--ink-2:#3A4246;--ink-3:#5C656A;--ink-4:#5B6469;--ink-5:#C9CBC6;
+  --rule:#DCD9D0;--rule-2:#848A8E;
+  --accent:#496A83;--accent-light:#DFE6EB;--accent-mid:#8A9EAD;--accent-text:#3F5F78;--accent-fill:#496A83;--on-accent:#FFFFFF;
+  --violet:#5B43C7;--info:#1F5A9E;
+  --pos:#1B6B3A;--pos-bg:#D9E8D6;
+  --neg:#A8360A;--neg-bg:#F3DDD6;
+  --warn:#7A5200;--warn-bg:#EFE2C2;
   --radius:18px;
 }
 html,body{background:var(--bg);color:var(--ink);font-family:var(--font);min-height:100vh;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .app{max-width:430px;margin:0 auto;min-height:100vh;background:var(--bg);display:flex;flex-direction:column}
-.topbar{position:sticky;top:0;z-index:60;background:rgba(7,21,26,0.92);background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:10px 20px 6px;min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
+.topbar{position:sticky;top:0;z-index:60;background:rgba(243,241,235,0.92);background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:10px 20px 6px;min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0}
 .wordmark{font-family:var(--font);font-size:26px;font-weight:700;color:var(--ink);letter-spacing:-0.4px;line-height:1.15;min-width:0;overflow-wrap:anywhere}
 .topbar-back{display:flex;align-items:center;gap:2px;min-width:0;margin-left:-8px}
 .topbar-back .wordmark{font-size:22px}
@@ -42,7 +39,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 @media (prefers-reduced-motion:reduce){.fab-add{transition:none}}
 .topbar-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 120ms,color 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .topbar-btn:hover{background:var(--bg-inset);color:var(--ink)}.topbar-btn:active{transform:scale(0.88)}
-.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(7,21,26,0.94);background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
+.tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(243,241,235,0.94);background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
 .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;border:none;background:transparent;cursor:pointer;color:var(--ink-3);transition:color 150ms,transform 80ms;font-family:var(--font);-webkit-tap-highlight-color:transparent}
 .tab-btn.active{color:var(--ink)}.tab-btn:active{transform:scale(0.88)}
 /* Sentence case, no extra tracking: upper-case labels were up to 30% wider, so long Azerbaijani and Russian words
@@ -800,7 +797,6 @@ html,.page,.sheet{scroll-behavior:smooth}
   .sheet-overlay{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,0.62)}
 }
 @media (prefers-contrast: more){
-  :root{--rule:#4E7580;--rule-2:#6E959E;--ink-3:#C6D4D4;--ink-4:#B7C7C8}
   .sheet-overlay{background:rgba(0,0,0,0.72)}
   .btn-ghost,.chip,.sub-chip,.field-input,.cat-tile,.search-input,.tpl-card{border-color:var(--rule-2)}
 }

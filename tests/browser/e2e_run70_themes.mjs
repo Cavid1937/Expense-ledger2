@@ -1,6 +1,6 @@
 // Run 70 in the real bundled app: Graphite, Ivory and the refined Sea glass. For each, every main screen is opened and checked for
 // (a) colours left over from the original teal look, (b) text that is too faint against what is actually behind it, (c) sideways scroll.
-// Also: a fresh install starts on Graphite, a choice survives a restart, the ledger is never touched. Synthetic data only.
+// Also (Run 84): a fresh install starts on Ivory, a choice survives a restart, the ledger is never touched. Synthetic data only.
 import { launch, openPage, openSettings, wait, ok, section, finish, baseSeed, settle, tx, tab, TODAY } from "./lib.mjs";
 const browser = await launch();
 const TK = "expense_ledger_v5__theme";
@@ -33,19 +33,25 @@ const scan = (page) => page.evaluate(() => {
 });
 const pickTheme = async (page, id) => { await openSettings(page); await wait(250); await page.evaluate((i) => document.querySelector(`[data-theme-id="${i}"]`).click(), id); await wait(400); };
 
-section("R70-B1. A fresh install starts on Graphite and writes it down once");
+section("R84-B1. A fresh install starts on Ivory and writes it down once");
 {
   const page = await openPage(browser, { seed: null, fresh: true });
   const s = await page.evaluate((k) => ({ th: document.documentElement.getAttribute("data-theme"), saved: localStorage.getItem(k), auto: localStorage.getItem(k + "_auto"), bg: getComputedStyle(document.body).backgroundColor }), TK);
-  ok(s.th === "graphite" && s.saved === "graphite" && s.auto === "1" && s.bg === "rgb(16, 20, 25)", "fresh phone: Graphite (#101419), stored as picked by the app", s);
+  ok(s.th === "ivory" && s.saved === "ivory" && s.auto === "1" && s.bg === "rgb(243, 241, 235)", "fresh phone: Ivory (#F3F1EB), stored as picked by the app", s);
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
 
-section("R70-B2. A phone that already has data and no saved theme keeps Sea glass; a saved choice is never changed");
+section("R84-B2. A phone with data and no saved theme gets Ivory; a theme the app picked moves to Ivory; a saved choice is never changed");
 {
   let page = await openPage(browser, { seed: seed(), fresh: true });
-  ok(await page.evaluate((k) => document.documentElement.getAttribute("data-theme") === "sea" && localStorage.getItem(k) === "sea", TK), "existing data, nothing saved: Sea glass, and it is now written down");
+  ok(await page.evaluate((k) => document.documentElement.getAttribute("data-theme") === "ivory" && localStorage.getItem(k) === "ivory", TK), "existing data, nothing saved: Ivory, and it is now written down");
+  await page.close();
+  page = await openPage(browser, { seed: seed(), fresh: true, pre: `localStorage.setItem("${TK}","sea");localStorage.setItem("${TK}_auto","1")` });
+  ok(await page.evaluate(() => document.documentElement.getAttribute("data-theme")) === "ivory", "Sea glass that the app picked by itself (Run 70) moves to Ivory");
+  await page.close();
+  page = await openPage(browser, { seed: seed(), fresh: true, pre: `localStorage.setItem("${TK}","sea")` });
+  ok(await page.evaluate(() => document.documentElement.getAttribute("data-theme")) === "sea", "Sea glass that the person chose is kept");
   await page.close();
   page = await openPage(browser, { seed: seed(), fresh: true, pre: `localStorage.setItem("${TK}","mist")` });
   ok(await page.evaluate(() => document.documentElement.getAttribute("data-theme")) === "mist", "an earlier saved choice (Mist) is kept");

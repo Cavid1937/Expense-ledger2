@@ -10,7 +10,7 @@ section("R31-S1. Summaries on closed rows (en)");
   ok(/120/.test(await sub(page, "accounts")) && /Total/.test(await sub(page, "accounts")), "Accounts row: total of the accounts (120)", await sub(page, "accounts"));
   ok(await page.evaluate(() => !document.querySelector('[data-more="categories"]') && !/Now in Budgets/.test(document.body.innerText)), "no 'categories moved' reminder row any more (Run 40, owner's request)");
   ok(/Safe to Spend on/.test(await sub(page, "money")), "Currency row: currency and Safe to Spend on", await sub(page, "money"));
-  ok(/Sea glass/.test(await sub(page, "look")), "Appearance row: the current theme", await sub(page, "look"));
+  ok(/Ivory/.test(await sub(page, "look")), "Appearance row: the current theme (Ivory, the Run 84 default)", await sub(page, "look"));
   ok((await sub(page, "reminders")) === null, "no Reminders row on the website");
   await page.click('[data-fold-head="accounts"]'); await wait(300);
   ok((await sub(page, "accounts")) === null, "an open row drops its summary (its content says it)");

@@ -1483,17 +1483,18 @@ const DARK_MEANING={ "--violet":"#B3A1FF","--info":"#83B9F5","--pos":"#8BD97A","
 //   Ivory secondary text #626B70 -> #5C656A (4.86:1 on input fields).  #6D9C91 is never used for text on Sea Glass (4.2:1 on raised cards).
 // The original look of the app (the Caspian palette in styles.js, until now called "Sea glass") is kept as its own choice, "caspian".
 const LIGHT_MEANING={ "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1B6B3A","--pos-bg":"#D9E8D6","--neg":"#A8360A","--neg-bg":"#F3DDD6","--warn":"#7A5200","--warn-bg":"#EFE2C2" };
+// Run 84 (owner, 14 Nov: "the app's default theme must be neutral and that neutral theme is Ivory ... remove old Caspian and treat each
+// theme as an equal in settings"): Ivory is listed first and is the default; the Caspian look is gone (a saved "caspian" opens on Ivory).
 export const THEMES={
-  graphite:{ swatch:["#101419","#4D7090"], dark:true, vars:{ ...DARK_MEANING,
-    "--bg":"#101419","--bg-card":"#171E24","--bg-warm":"#202A32","--bg-inset":"#29343D","--ink":"#EDF1F3","--ink-2":"#D3DAE0","--ink-3":"#A5B0B8","--ink-4":"#98A3AC","--ink-5":"#35414B",
-    "--rule":"#2A353F","--rule-2":"#66757F","--accent":"#8FA9BF","--accent-light":"#22303C","--accent-mid":"#B4C6D5","--accent-text":"#8FA9BF","--accent-fill":"#4D7090","--on-accent":"#FFFFFF" } },
   ivory:{ swatch:["#F3F1EB","#496A83"], dark:false, vars:{ ...LIGHT_MEANING,
     "--bg":"#F3F1EB","--bg-card":"#F9F8F4","--bg-warm":"#FFFFFF","--bg-inset":"#EAE8E1","--ink":"#252B2F","--ink-2":"#3A4246","--ink-3":"#5C656A","--ink-4":"#5B6469","--ink-5":"#C9CBC6",
     "--rule":"#DCD9D0","--rule-2":"#848A8E","--accent":"#496A83","--accent-light":"#DFE6EB","--accent-mid":"#8A9EAD","--accent-text":"#3F5F78","--accent-fill":"#496A83","--on-accent":"#FFFFFF" } },
+  graphite:{ swatch:["#101419","#4D7090"], dark:true, vars:{ ...DARK_MEANING,
+    "--bg":"#101419","--bg-card":"#171E24","--bg-warm":"#202A32","--bg-inset":"#29343D","--ink":"#EDF1F3","--ink-2":"#D3DAE0","--ink-3":"#A5B0B8","--ink-4":"#98A3AC","--ink-5":"#35414B",
+    "--rule":"#2A353F","--rule-2":"#66757F","--accent":"#8FA9BF","--accent-light":"#22303C","--accent-mid":"#B4C6D5","--accent-text":"#8FA9BF","--accent-fill":"#4D7090","--on-accent":"#FFFFFF" } },
   sea:{ swatch:["#101B1B","#6D9C91"], dark:true, vars:{ ...DARK_MEANING,
     "--bg":"#101B1B","--bg-card":"#192625","--bg-warm":"#243432","--bg-inset":"#2D3D3A","--ink":"#E9F0ED","--ink-2":"#CEDBD6","--ink-3":"#A6B8B0","--ink-4":"#9BAEA6","--ink-5":"#33443F",
     "--rule":"#2A3A38","--rule-2":"#617D76","--accent":"#6D9C91","--accent-light":"#1F3532","--accent-mid":"#B0C7BE","--accent-text":"#8DB8AD","--accent-fill":"#4E7D72","--on-accent":"#FFFFFF" } },
-  caspian:{ swatch:["#07151A","#4CC9C4"], dark:true, vars:{} },
   nordic:{ swatch:["#1F2933","#A68A64"], dark:true, vars:{ ...DARK_MEANING,
     "--bg":"#171E26","--bg-card":"#1F2933","--bg-warm":"#2B3745","--bg-inset":"#232D39","--ink":"#F7F7F2","--ink-2":"#E2E3DE","--ink-3":"#B3B8BF","--ink-4":"#A0A7AF","--ink-5":"#3A4756",
     "--rule":"#34414F","--rule-2":"#4B5B6C","--accent":"#C2A57C","--accent-light":"#3A3226","--accent-mid":"#D6BE9C","--accent-text":"#C2A57C","--accent-fill":"#A68A64","--on-accent":"#14181D" } },
@@ -1512,30 +1513,34 @@ export const THEMES={
     "--violet":"#5B43C7","--info":"#1F5A9E","--pos":"#1B6B3A","--pos-bg":"#D9E6D0","--neg":"#A8360A","--neg-bg":"#F0D9D0","--warn":"#7A5200","--warn-bg":"#EBDDB9" } },
 };
 export const THEME_IDS=Object.keys(THEMES);
-// Run 70: the three main looks get preview cards in Settings; the others stay available as smaller choices underneath.
-export const THEME_MAIN=["graphite","ivory","sea"];
-// The colours a theme's preview card is drawn with (the original look keeps its values in styles.js, repeated here for the preview only).
-const CASPIAN_BASE={ "--bg":"#07151A","--bg-card":"#0E2229","--ink":"#F3F7F6","--ink-3":"#A5B7B8","--rule":"#24414A","--accent-fill":"#4CC9C4","--accent-text":"#4CC9C4","--pos":"#8BD97A","--neg":"#FF8188" };
-export function themePreview(id) { const v={ ...CASPIAN_BASE, ...(THEMES[id]?THEMES[id].vars:{}) }; return { bg:v["--bg"], card:v["--bg-card"], ink:v["--ink"], ink3:v["--ink-3"], rule:v["--rule"], fill:v["--accent-fill"], acc:v["--accent-text"], pos:v["--pos"], neg:v["--neg"] }; }
+export const THEME_DEFAULT="ivory";
+// The colours a theme's preview card in Settings is drawn with (every theme now carries its full set).
+export function themePreview(id) { const v={ ...THEMES[THEME_DEFAULT].vars, ...(THEMES[id]?THEMES[id].vars:{}) }; return { bg:v["--bg"], card:v["--bg-card"], ink:v["--ink"], ink3:v["--ink-3"], rule:v["--rule"], fill:v["--accent-fill"], acc:v["--accent-text"], pos:v["--pos"], neg:v["--neg"] }; }
 // Anyone who had picked a removed theme (or a backup that names one) lands on the closest remaining one instead of the default.
-const LEGACY_THEMES={ sapphire:"dusk", cocoa:"nordic" };
+// Run 84: Caspian was removed at the owner's request; it opens on Ivory, the neutral default.
+const LEGACY_THEMES={ sapphire:"dusk", cocoa:"nordic", caspian:"ivory" };
 // A known id (or a removed one mapped to its closest), else null.
 const knownTheme=(v)=>typeof v==="string" && Object.prototype.hasOwnProperty.call(THEMES,v) ? v : (typeof v==="string" && Object.prototype.hasOwnProperty.call(LEGACY_THEMES,v) ? LEGACY_THEMES[v] : null);
 // Run 70: which look applies when nothing usable is saved. Until Run 69 the original look was stored as "no key", so on a phone that already
 // has ledger data "no key" may well have been a deliberate choice of Sea glass: such phones get Sea glass (now the refined palette; the
 // untouched original is the "caspian" choice). Only a phone with no ledger data at all (a fresh install) starts on Graphite.
-export function themeFallback(store=(typeof localStorage!=="undefined"?localStorage:null)) {
-  try { if (!store) return "graphite"; for (let i=0;i<store.length;i++) { const k=store.key(i); if (k && k!==THEME_KEY && k!==THEME_KEY+"_auto" && (k===KEY || k.startsWith(KEY+"__"))) return "sea"; } return "graphite"; } catch { return "graphite"; }
-}
+// Run 84 (owner): every phone without a choice of its own now starts on Ivory, the neutral default, whether or not it has ledger data.
+export function themeFallback() { return THEME_DEFAULT; }
 const themeId=(v)=>knownTheme(v)||themeFallback();
-export function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return "graphite"; } }
+export function readTheme() { try { return themeId(localStorage.getItem(THEME_KEY)); } catch { return THEME_DEFAULT; } }
 // Every choice is stored by name from Run 70 on (Sea glass too), so a saved choice can always be told apart from the default.
 export function writeTheme(id) { try { localStorage.setItem(THEME_KEY,themeId(id)); localStorage.removeItem(THEME_AUTO_KEY); return true; } catch { return false; } }
 // Run 70: on start, a phone with no saved choice gets the one it is shown (see themeFallback) written down once, so the look cannot change
 // later just because ledger data appeared. A saved choice is never overwritten; a damaged one is left for the person to change.
 // THEME_AUTO_KEY marks a theme the app picked (not the person), so restoring a backup may still bring the backup's theme (Run 37 rule).
 export const THEME_AUTO_KEY=THEME_KEY+"_auto";
-export function settleTheme() { try { if (localStorage.getItem(THEME_KEY)===null) { localStorage.setItem(THEME_KEY,themeFallback()); localStorage.setItem(THEME_AUTO_KEY,"1"); } } catch { /* storage blocked: the default is shown */ } }
+// Run 84: a theme the app picked by itself earlier (Graphite or Sea glass, marked "auto") moves to Ivory once; a person's own choice is
+// kept, and a saved "caspian" is rewritten as Ivory so the removed name does not linger.
+export function settleTheme() { try {
+  const cur=localStorage.getItem(THEME_KEY);
+  if (cur===null || (localStorage.getItem(THEME_AUTO_KEY)==="1" && cur!==THEME_DEFAULT)) { localStorage.setItem(THEME_KEY,THEME_DEFAULT); localStorage.setItem(THEME_AUTO_KEY,"1"); }
+  else if (cur==="caspian") localStorage.setItem(THEME_KEY,THEME_DEFAULT);
+} catch { /* storage blocked: the default is shown */ } }
 export function themeIsAuto() { try { return localStorage.getItem(THEME_KEY)===null || localStorage.getItem(THEME_AUTO_KEY)==="1"; } catch { return true; } }
 export function applyTheme(id) {   // sets (or clears) the colour variables on the page root; safe to call before the app renders
   if (typeof document==="undefined" || !document.documentElement) return;
@@ -4042,8 +4047,8 @@ export function widgetSnapshot(state, spendTxns, opts={}, now=new Date()) {
   const s=state||{}, cur=s.currency, tx=Array.isArray(spendTxns)?spendTxns:[], mon=localMonthStr(now);
   const hide=!!(opts.hide || opts.locked || PRIVACY);
   const money=(v,neg)=>hide?"••••":((neg||v<0)?"−":"")+fmt(Math.abs(Number(v)||0),cur);
-  const v=THEMES[readTheme()]?.vars||{}, base={ "--bg":"#07151A","--bg-card":"#0E2229","--bg-warm":"#153039","--ink":"#F3F7F6","--ink-3":"#A5B7B8","--rule":"#24414A","--accent-text":"#4CC9C4","--accent-fill":"#4CC9C4","--on-accent":"#07151A","--pos":"#8BD97A","--neg":"#FF8188","--warn":"#F0C46F" }, col=(k)=>v[k]||base[k];
-  const theme={ bg:col("--bg"), card:col("--bg-card"), raised:col("--bg-warm"), ink:col("--ink"), ink3:col("--ink-3"), rule:col("--rule"), accent:col("--accent-text"), fill:col("--accent-fill"), onFill:col("--on-accent"), pos:col("--pos"), neg:col("--neg"), warn:col("--warn"), dark:THEMES[readTheme()]?THEMES[readTheme()].dark!==false:true };
+  const v=THEMES[readTheme()]?.vars||{}, base=THEMES[THEME_DEFAULT].vars, col=(k)=>v[k]||base[k];
+  const theme={ bg:col("--bg"), card:col("--bg-card"), raised:col("--bg-warm"), ink:col("--ink"), ink3:col("--ink-3"), rule:col("--rule"), accent:col("--accent-text"), fill:col("--accent-fill"), onFill:col("--on-accent"), pos:col("--pos"), neg:col("--neg"), warn:col("--warn"), dark:THEMES[readTheme()]?THEMES[readTheme()].dark!==false:false };
   // Safe to Spend (or, when it is off, what was spent this month)
   const ms=calcMonthSummary(tx,mon,localMonthStr(new Date(now.getFullYear(),now.getMonth()-1,1)),now);
   const p=monthProgress(mon,now);
@@ -4510,10 +4515,10 @@ class ErrorBoundary extends Component {
   render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <div className="crash-screen" role="alert" style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:"24px 28px",textAlign:"center",background:"var(--bg,#07151A)",color:"var(--ink,#E8F1F2)",fontFamily:"system-ui,sans-serif"}}>
+      <div className="crash-screen" role="alert" style={{minHeight:"100vh",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,padding:"24px 28px",textAlign:"center",background:"var(--bg,#F3F1EB)",color:"var(--ink,#252B2F)",fontFamily:"system-ui,sans-serif"}}>
         <h1 style={{fontSize:22,margin:0}}>{t("crash.title")}</h1>
         <p style={{fontSize:15,lineHeight:1.5,margin:0,maxWidth:340,opacity:0.85}}>{t("crash.body")}</p>
-        <button onClick={()=>window.location.reload()} style={{minHeight:48,padding:"0 24px",border:"none",borderRadius:14,background:"var(--accent-fill,#4CC9C4)",color:"var(--on-accent,#07151A)",fontSize:16,fontWeight:700}}>{t("crash.reload")}</button>
+        <button onClick={()=>window.location.reload()} style={{minHeight:48,padding:"0 24px",border:"none",borderRadius:14,background:"var(--accent-fill,#496A83)",color:"var(--on-accent,#FFFFFF)",fontSize:16,fontWeight:700}}>{t("crash.reload")}</button>
       </div>
     );
   }
@@ -4599,7 +4604,7 @@ function AppInner() {
   useEffect(() => {
     if (document.getElementById("pwa-manifest") || document.querySelector('link[rel="manifest"]')) return;
     const manifest={name:"Expense Ledger",short_name:"Ledger",start_url:"/",display:"standalone",
-      background_color:"#07151A",theme_color:"#07151A",orientation:"portrait",
+      background_color:"#F3F1EB",theme_color:"#F3F1EB",orientation:"portrait",
       icons:[{src:"/icon-192.png",sizes:"192x192",type:"image/png",purpose:"any maskable"},
              {src:"/icon-512.png",sizes:"512x512",type:"image/png",purpose:"any maskable"}]};
     const link=document.createElement("link");
@@ -4610,7 +4615,7 @@ function AppInner() {
     addMeta("apple-mobile-web-app-capable","yes");
     addMeta("apple-mobile-web-app-status-bar-style","black-translucent");
     addMeta("apple-mobile-web-app-title","Expense Ledger");
-    addMeta("theme-color","#07151A");
+    addMeta("theme-color","#F3F1EB");
   },[]);
 
   const [storageFailed, setStorageFailed] = useState(false);
