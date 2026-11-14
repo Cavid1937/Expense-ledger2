@@ -42,7 +42,7 @@ const dupInside = CATEGORIES.filter((c) => new Set(c.subs).size !== c.subs.lengt
 const retiredAlsoOffered = CATEGORIES.filter((c) => (c.retired || []).some((s) => c.subs.includes(s))).map((c) => c.id);
 ok(dupInside.length === 0 && retiredAlsoOffered.length === 0, "no category offers a name twice, and no retired name is still offered in the same category", { dupInside, retiredAlsoOffered });
 ok(new Set(CATEGORIES.map((c) => c.id)).size === CATEGORIES.length, "category ids are unique");
-ok(["Heating", "Mortgage"].every((s) => C("housing").subs.includes(s)) && ["TV", "Home phone"].every((s) => C("digital").subs.includes(s)) && ["Cash withdrawal", "Money sent to people", "State fees"].every((s) => C("finance").subs.includes(s)), "new places from the audit: Heating, Mortgage, TV, Home phone, Cash withdrawal, Money sent to people, State fees");
+ok(["Heating", "Mortgage"].every((s) => C("housing").subs.includes(s)) && ["TV", "Home phone"].every((s) => C("digital").subs.includes(s)) && ["Cash withdrawal", "State fees"].every((s) => C("finance").subs.includes(s)) && C("transfers").subs.includes("Money sent to people") && C("finance").retired.includes("Money sent to people"), "new places from the audit: Heating, Mortgage, TV, Home phone, Cash withdrawal, State fees; Money sent to people (moved to Bank transfers in Run 88; still shown on old entries)");
 
 section("R58-2. Names in three languages, including retired ones");
 setLang("en"); ok(catName("digital") === "Phone & Subscriptions" && catTile("digital") === "Phone & subs" && catName("gifts") === "Gifts & Donations" && catName("personal") === "Personal Care", "English names", [catName("digital"), catTile("digital"), catName("gifts"), catName("personal")]);

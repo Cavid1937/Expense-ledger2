@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="87 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="88 (2026-11-15)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -358,7 +358,11 @@ export const CATEGORIES = [
     subs:["Rent","Mortgage","Utilities","Electricity","Gas","Water","Heating","Building fees","Household","Cleaning & laundry","Repairs","Home insurance","Other"] },
   // "Transfers" stays offered: it is the place for money moved between your own accounts when it is recorded as an entry at all.
   { id:"finance",  name:"Finance",               tile:"Finance",   color:"#85D9D0", income:false,
-    subs:["Bank Fees","Money sent to people","Cash withdrawal","Transfers","Taxes","State fees","Insurance","Investments","Loan payment","Interest","Other"] },
+    subs:["Bank Fees","Cash withdrawal","Taxes","State fees","Insurance","Investments","Loan payment","Interest","Other"], retired:["Money sent to people","Transfers"] },
+  // Run 88 (owner, 14 Nov: "instead of treating every bank transfer as other, it must go to its own category"). Money that leaves by transfer
+  // still counts as money out (it left the account); its twin "transferin" below is money in that is not earnings. New ids; nothing stored moves.
+  { id:"transfers", name:"Bank transfers",        tile:"Transfers", color:"#8FB3C4", income:false,
+    subs:["Card to card","Money sent to people","Between my accounts","Other"] },
   // Run 35: more everyday life. New ids only; every older id, name and subcategory is unchanged, so no stored entry moves.
   { id:"family",   name:"Family & Children",     tile:"Family",    color:"#F2A3B3", income:false,
     subs:["Childcare","Children's needs","Family support","School items","Toys & games","Other"] },
@@ -389,6 +393,7 @@ export const CATEGORIES = [
   { id:"income",   name:"Other Income",          tile:"Other income",    color:"#9FDDA0", income:true, subs:["One-time income","Unexpected income"] },
   { id:"refund",   name:"Refunds & Reimbursements", tile:"Refunds", color:"#9DB8C9", income:true, earned:false, subs:["Refund","Reimbursement","Cashback"] },
   { id:"savout",   name:"From Savings",          tile:"From savings", color:"#A7BFC9", income:true, earned:false, subs:["Savings withdrawal","Investment withdrawal","Asset sale"] },
+  { id:"transferin", name:"Transfers received",  tile:"Transfers in", color:"#A9C7D3", income:true, earned:false, subs:["Card to card","From other people","Between my accounts","Cash deposit"] },
 ];
 export const isEarnedCat = (id) => { const c=CATEGORIES.find(x=>x.id===id); return !c || c.earned!==false; };
 export const CAT = (id) => CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id==="other");
@@ -401,7 +406,7 @@ export const subName = (s) => (s && MESSAGES["sub."+s]) ? t("sub."+s) : s;
 export const catHint = (id) => MESSAGES["cathint."+id] ? t("cathint."+id) : "";
 
 const CATEGORY_MAP = {
-  "food":"food","transport":"transport","housing":"housing","digital":"digital",
+  "food":"food","transport":"transport","housing":"housing","digital":"digital","transfers":"transfers","bank transfers":"transfers","transferin":"transferin","transfers received":"transferin",
   "edu":"edu","other":"other","salary":"salary","freelance":"freelance",
   "sport":"health","personal":"personal","culture":"shopping",
   "food & dining":"food","groceries & dining":"food","groceries":"food","dining":"food",
@@ -2380,7 +2385,16 @@ export function cleanPrefs(raw) {
 // entries go on the account the person chose in the sheet (or on none).
 export function importPlanUse(plan, accData) {
   const accPlan=plan.accountData && plan.accountData.accounts && plan.accountData.accounts.length ? planAccountMerge(accData,plan.accountData) : null;
-  const stAcc=plan.kind==="statement" && plan.stOpts ? accId(plan.stOpts.account) : "";
+  let stAcc=plan.kind==="statement" && plan.stOpts ? accId(plan.stOpts.account) : "";
+  // Run 88: no account chosen and the bank's running balance is known: the entries go on a new account named after the bank that starts with the
+  // bank's own opening balance, so the app's balance ends where the bank's does (an account of that name already here is used as it is).
+  const bal=plan.kind==="statement" && plan.statement ? plan.statement.balance : null;
+  if (!stAcc && bal && plan.stOpts && plan.stOpts.newAcc) {
+    const nid="a_st"+String(plan.statement.bank||"bank").replace(/[^a-z0-9]/g,"").slice(0,8), name=STATEMENT_BANKS[plan.statement.bank]||t("st.bankOther");
+    const ap=planAccountMerge(accData,{ accounts:[{ id:nid, name, kind:"card", opening:{ amount:bal.opening/100, date:bal.from } }], transfers:[] });
+    stAcc=ap.remap[nid]||nid;
+    return { accPlan:ap, planUse:{ ...plan, transactions:plan.transactions.map(x=>({ ...x, account:stAcc })) } };
+  }
   const planUse=stAcc ? { ...plan, transactions:plan.transactions.map(x=>({ ...x, account:stAcc })) } : accPlan && accPlan.renamed ? { ...plan, transactions:remapEntryAccounts(plan.transactions,accPlan.remap) } : plan;
   return { accPlan, planUse };
 }
@@ -3952,16 +3966,29 @@ const STATEMENT_BANKS={ abb:"ABB", unibank:"Unibank" };
 // Run 58: "transfers" = money sent to (or received from) other people, on by default. "cash" = cash withdrawals and moves between the person's
 // own accounts, off by default: neither is spending, and counting a withdrawal AND the cash spending recorded later counts the same money twice.
 function statementPick(plan, opts) { return plan.stAll.filter(e=>{ const m=plan.stMeta[String(e.id)]||{}; if (m.pending && !opts.pending) return false; if (m.kind==="transfer" && !opts.transfers) return false; if ((m.kind==="cash"||m.kind==="own") && !opts.cash) return false; return true; }); }
+const isDefaultCat=(x)=>!!x && (x.category==="other" || (x.category==="income" && !x.subcategory));
+// Run 88: apply the "sort earlier entries" choice to the list after an import (by id; only entries still in a default category).
+export function applyResort(list, resort) {
+  if (!Array.isArray(resort) || !resort.length) return { list, n:0 };
+  const by=new Map(resort.map(r=>[r.id,r])); let n=0;
+  const out=list.map(x=>{ const r=by.get(String(x.id)); if (!r || !isDefaultCat(x)) return x; n++; return { ...x, category:r.category, subcategory:r.subcategory }; });
+  return { list:out, n };
+}
 function statementPlan(res, filename, transactions) {
   const memory=buildMerchantMemory(transactions);
   const raw=statementEntries(res.bank,res.rows,{ known:KNOWN_MERCHANTS, suggest:(m,type)=>{ const s=merchantSuggest(m,memory,type); return s && lc(s.merchant||"")===lc(m||"") ? { category:s.category, subcategory:s.subcategory||"" } : null; } });
   const stMeta={}; raw.forEach(e=>{ stMeta[String(e.id)]=e._st; });
   const { good }=partitionTransactions(raw.map(({ _st, ...e })=>e),{ keepCategoryId:true });
   const left=res.problems.filter(p=>/^(rows|left):/.test(p)).reduce((s,p)=>s+Number(p.split(":")[1]),0);
-  const plan={ ok:true, kind:"statement", filename, stAll:good, stMeta, stOpts:{ transfers:true, cash:false, pending:false, account:"" },
-    statement:{ bank:res.bank, check:res.check, left, sign:res.problems.includes("sign"), nTransfer:good.filter(e=>(stMeta[String(e.id)]||{}).kind==="transfer").length, nCash:good.filter(e=>["cash","own"].includes((stMeta[String(e.id)]||{}).kind)).length, nPending:good.filter(e=>(stMeta[String(e.id)]||{}).pending).length },
+  const plan={ ok:true, kind:"statement", filename, stAll:good, stMeta, stOpts:{ transfers:true, cash:false, pending:false, account:"", newAcc:!!res.balance },
+    statement:{ bank:res.bank, check:res.check, balance:res.balance||null, left, sign:res.problems.includes("sign"), nTransfer:good.filter(e=>(stMeta[String(e.id)]||{}).kind==="transfer").length, nCash:good.filter(e=>["cash","own"].includes((stMeta[String(e.id)]||{}).kind)).length, nPending:good.filter(e=>(stMeta[String(e.id)]||{}).pending).length },
     canReplace:false, skippedCount:0, skippedSummary:"", settings:{}, problems:[], warnings:[], subcategories:{}, debtData:{ debts:[], loans:[] }, accountData:{ accounts:[], transfers:[] } };
   plan.transactions=statementPick(plan,plan.stOpts);
+  // Run 88: the same statement imported again adds nothing (same ids), but its rows that an earlier version left in a default category
+  // ("Other", "Other income") can now be sorted. Only those: an entry the person moved to another category is never touched.
+  const had=new Map((Array.isArray(transactions)?transactions:[]).map(x=>[String(x.id),x]));
+  plan.resort=good.filter(e=>{ const x=had.get(String(e.id)); return x && x.type===e.type && isDefaultCat(x) && !isDefaultCat(e); }).map(e=>({ id:String(e.id), category:e.category, subcategory:e.subcategory||"" }));
+  plan.stOpts.resort=plan.resort.length>0;
   return plan;
 }
 export function fmtPct(n) { return PRIVACY ? "••%" : `${n}%`; }
@@ -5615,7 +5642,8 @@ function AppInner() {
       pruneRecoveryCopies("before_import");
     }
     const { accPlan, planUse }=importPlanUse(plan, readAccounts());
-    const next=applyImport(before, planUse, mode, { skipDuplicates:skipDup, skipSimilar:skipSim });
+    let next=applyImport(before, planUse, mode, { skipDuplicates:skipDup, skipSimilar:skipSim });
+    if (plan.kind==="statement" && plan.stOpts && plan.stOpts.resort && mode!=="replace") next={ ...next, transactions:applyResort(next.transactions,plan.resort).list };
     // Run 18: the import is all-or-nothing. The side stores are written FIRST and checked; if one cannot be written, the others are put
     // back exactly as they were and the main data is not touched. Undo restores them too.
     const snap=(k)=>{ try { return localStorage.getItem(k); } catch { return undefined; } };
@@ -5864,8 +5892,14 @@ function AppInner() {
                             <option value="">{t("acc.rm.noAccount")}</option>{accs.map(a=><option key={a.id} value={a.id}>{a.name}</option>)}
                           </PickSelect>
                         </label>)}
+                      {/* Run 88: the bank's own start and end balance, and an account that starts there so the app ends where the bank does */}
+                      {s.balance&&<div data-st="balance" style={{marginTop:8}}>{t("st.balance",{ a:fmt(s.balance.opening/100,currency), b:fmt(s.balance.closing/100,currency) })}</div>}
+                      {s.balance&&!accId(o.account)&&<label style={row}><input type="checkbox" data-st="newacc" checked={!!o.newAcc} onChange={e=>setStOpt("newAcc",e.target.checked)} style={{marginTop:2}}/><span>{t("st.newAcc",{ bank:STATEMENT_BANKS[s.bank]||t("st.bankOther"), a:fmt(s.balance.opening/100,currency) })}</span></label>}
+                      {s.balance&&!accId(o.account)&&o.newAcc&&(()=>{ const end=importPending.transactions.reduce((c,x)=>c+(x.type==="income"?1:-1)*Math.round(Number(x.amount)*100),s.balance.opening); return <div data-st="balance-end" data-same={String(end===s.balance.closing)} style={{marginTop:6,color:end===s.balance.closing?"var(--ink-2)":"var(--warn)"}}>{end===s.balance.closing ? t("st.endSame",{ b:fmt(end/100,currency) }) : t("st.endDiff",{ c:fmt(end/100,currency), b:fmt(s.balance.closing/100,currency) })}</div>; })()}
+                      {s.balance&&s.balance.moved>0&&<div data-st="dates" style={{marginTop:8,color:"var(--ink-3)"}}>{tn("st.dates",s.balance.moved)}</div>}
                       {s.nTransfer>0&&<label style={row}><input type="checkbox" data-st="transfers" checked={o.transfers} onChange={e=>setStOpt("transfers",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.transfers",s.nTransfer)}</span></label>}
                       {s.nCash>0&&<label style={row}><input type="checkbox" data-st="cash" checked={!!o.cash} onChange={e=>setStOpt("cash",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.cash",s.nCash)}</span></label>}
+                      {(importPending.resort||[]).length>0&&<label style={row}><input type="checkbox" data-st="resort" checked={!!o.resort} onChange={e=>setStOpt("resort",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.resort",importPending.resort.length)}</span></label>}
                       {s.nPending>0&&<label style={row}><input type="checkbox" data-st="pending" checked={o.pending} onChange={e=>setStOpt("pending",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.pending",s.nPending)}</span></label>}
                       {/* every row that will be added, so nothing is taken on trust (a long statement scrolls inside this box) */}
                       <div style={{fontWeight:600,marginTop:10}}>{t("st.rowsTitle")}</div>

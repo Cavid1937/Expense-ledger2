@@ -69,6 +69,15 @@ const KIND_RULES = [
   ["transfer", /\bc2c\b|\bp2p\b|card ?to ?card|karta m.?daxil|k[oö][cç][uü]rm[eə]|\btransfer\b|перевод|^(to|from)\s|top ?up|wallet|pul k[oö][cç]/i],
 ];
 const kindOf = (text) => { const k = KIND_RULES.find(([, re]) => re.test(text)); return k ? k[0] : "payment"; };
+// Run 88: money moved between cards and wallets that the words above miss. Merchant codes are the same at every bank:
+// 4829 money transfer, 6532 / 6538 / 6540 card payments and top-ups made through another bank or wallet. (6012 is NOT here: in real
+// statements it is also used for shop instalment and credit payments.) Plus the names of Azerbaijani bank apps and cash-in terminals.
+const TRANSFER_MCC = new Set([4829, 6532, 6538, 6540]);
+const TRANSFER_WORDS = /\b(iba ?mobile|birbank|leo ?app|anipay|m10|e-?manat|million|milli ?[oö]n|portmanat|terminal payment|kapital ?bank app|abb ?mobile|dr ?fin|cr ?fin)\b/i;
+export const isTransferRow = (r) => !!r && (r.kind === "transfer" || TRANSFER_MCC.has(+r.mcc) || TRANSFER_WORDS.test(String(r.merchant || "") + " " + String(r.desc || "")));
+// "to A. Person", "P2P SEND": money sent to (or from) a person rather than to one of the person's own cards
+const PERSON = /^(to|from)\s|\bp2p\b|\bsend\b/i;
+const CASH_IN = /\b(terminal payment|e-?manat|million|milli ?[oö]n|portmanat)\b/i;
 
 function abbRow(m, desc) {
   const cr = stMoney(m[3]), dr = stMoney(m[4]), bal = stMoney(m[5]);
@@ -251,7 +260,8 @@ export function readStatement(lines) {
   rows.forEach((r, i) => { if (r.pair || r.type !== "income" || mins(r) === null) return; const j = rows.findIndex((o, k) => k !== i && !o.pair && o.type === "expense" && o.date === r.date && o.cents === r.cents && mins(o) !== null && Math.abs(mins(o) - mins(r)) <= 5); if (j >= 0) { r.pair = rows[j].pair = true; } });
   const count = (k) => problems.filter((p) => p === k).length;
   const notes = problems.filter((p) => p !== "row" && p !== "zero").concat(count("row") ? ["rows:" + count("row")] : [], count("zero") ? ["zero:" + count("zero")] : []);
-  return { bank, rows, problems: notes, check: statementCheck(rows) };
+  const check = statementCheck(rows);
+  return { bank, rows, problems: notes, check, balance: statementBalance(rows, check) };
 }
 
 // ── Run 67: CSV files from banks, and "match the columns" when a table cannot be worked out ─────────────────────────────────────────
@@ -316,6 +326,17 @@ export function readMapped(grid, map) {
 }
 
 // The running balance, when the statement has one, proves every row: the balance before, plus money in, minus money out, is the balance after.
+// Run 88 (owner, 14 Nov: "they differ on the amount"): the bank's balance before the first row and after the last one, read from its own
+// running balance. Only when that balance confirms every row; otherwise null (a guess would be worse than nothing).
+// from = the earliest day a row was paid (purchase date), so an account that starts with `opening` on that day ends on `closing`.
+export function statementBalance(rows, check) {
+  if (!check || !check.has || !check.ok || !rows || !rows.length) return null;
+  const oldest = check.order === "oldest" ? rows[0] : rows[rows.length - 1], newest = check.order === "oldest" ? rows[rows.length - 1] : rows[0];
+  const opening = oldest.balance - (oldest.type === "income" ? oldest.cents : -oldest.cents);
+  const from = rows.map((r) => r.date).filter(Boolean).sort()[0] || "";
+  const moved = rows.filter((r) => r.posted && r.date && r.posted.slice(0, 7) !== r.date.slice(0, 7)).length;
+  return { opening, closing: newest.balance, from, moved };
+}
 export function statementCheck(rows) {
   const withBal = rows.filter((r) => r.balance !== null && r.balance !== undefined);
   if (withBal.length < 2 || withBal.length !== rows.length) return { has: false, ok: null, breaks: 0, order: "" };
@@ -331,12 +352,15 @@ const MCC = { 4111: ["transport", "Public transport card"], 4112: ["transport", 
   5812: ["food", "Restaurants"], 5813: ["food", "Restaurants"], 5814: ["food", "Fast Food"], 5541: ["car", "Fuel"], 5542: ["car", "Fuel"], 5912: ["health", "Pharmacy"], 8011: ["health", "Doctor / Dentist"], 8021: ["health", "Doctor / Dentist"], 8062: ["health", "Doctor / Dentist"], 8099: ["health", "Doctor / Dentist"],
   4812: ["digital", "Mobile"], 4814: ["digital", "Mobile"], 4816: ["digital", "Internet"], 4899: ["digital", "TV"], 5734: ["digital", "Software"], 5815: ["digital", "Streaming"], 5816: ["entertain", "Games"], 5817: ["digital", "Software"], 5818: ["digital", "Software"], 4900: ["housing", "Utilities"],
   5651: ["shopping", "Clothing"], 5691: ["shopping", "Clothing"], 5699: ["shopping", "Clothing"], 5661: ["shopping", "Clothing"], 5732: ["shopping", "Electronics"], 5722: ["shopping", "Appliances"], 5712: ["shopping", "Furniture"], 5942: ["edu", "Books"], 8211: ["edu", "School / Kindergarten"], 8220: ["edu", "University"], 8299: ["edu", "Courses"],
+  5311: ["shopping", "Other"], 5947: ["gifts", "Gifts"], 7922: ["entertain", "Events"],
   7832: ["entertain", "Cinema"], 7997: ["health", "Gym"], 7230: ["personal", "Barber / Hair"], 5977: ["personal", "Cosmetics"], 7011: ["travel", "Hotels"], 4511: ["travel", "Flights"], 6300: ["finance", "Insurance"], 9311: ["finance", "Taxes"] };
 const WORD_RULES = [
   [/\bmetro\b/i, "transport", "Metro"], [/^bus\b|\bbakubus\b|\btp bus\b/i, "transport", "Bus"], [/bak[iı\*]\s*\*?\s*kart|bakikart/i, "transport", "Public transport card"], [/\b(bolt|uber|yango|taxi|taksi)\b/i, "transport", "Taxi / Ride-hailing"],
   [/\b(azercell|bakcell|nar)\b/i, "digital", "Mobile"], [/\b(citynet|aztelekom|baktelekom|azeronline)\b/i, "digital", "Internet"],
   [/\b(market|bazarstore|bravo|araz|oba)\b/i, "food", "Groceries"], [/\b(aptek|pharm)/i, "health", "Pharmacy"], [/ponchik|domino|mcdonald|kfc|burger|pizza|doner|d[oö]n[eə]r/i, "food", "Fast Food"], [/\b(cafe|kafe|coffee|kofe|restoran|restaurant)\b/i, "food", "Restaurants"],
   [/\b(neft|petrol|socar|azpetrol)/i, "car", "Fuel"],
+  // Run 88: shared scooters, food couriers, crypto exchanges (buying crypto is putting money aside, not spending it on a thing)
+  [/\b(jetshr|jet ?sharing)\b/i, "transport", "Bike & scooter"], [/\bwolt\b/i, "food", "Delivery"], [/\b(binance|bfinity|bybit)\b/i, "finance", "Investments"],
 ];
 // A short stable code for a row, so the same statement imported twice gives the same entry ids (and adds nothing the second time).
 function hashKey(s) { let h1 = 0x811c9dc5, h2 = 0x1b873593; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0; h2 = Math.imul(h2 + c, 0x5bd1e995) >>> 0; h2 ^= h2 >>> 13; } return h1.toString(36) + (h2 >>> 0).toString(36); }
@@ -351,14 +375,20 @@ export function statementEntries(bank, rows, opts = {}) {
     const key = statementKey(bank, r), n = seen.get(key) || 0; seen.set(key, n + 1);
     let category = r.type === "income" ? "income" : "other", subcategory = "";
     const mine = typeof opts.suggest === "function" ? opts.suggest(r.merchant, r.type) : null;
-    if (mine && mine.category) { category = mine.category; subcategory = mine.subcategory || ""; }
+    // Run 88: a past entry still in a default category ("Other", "Other income") is not a real choice: it does not decide
+    const mineReal = mine && mine.category && !(mine.category === "other" || (mine.category === "income" && !mine.subcategory));
+    const transfer = !r.pair && r.kind !== "cash" && r.kind !== "cashback" && isTransferRow(r);
+    if (mineReal) { category = mine.category; subcategory = mine.subcategory || ""; }
     else if (r.kind === "cashback" && r.type === "income") { category = "refund"; subcategory = "Cashback"; }
     // Run 58: three different things, kept apart. Cash taken out (ATM) is not spending yet: what is bought with it is recorded later, so counting
     // the withdrawal too would count the same money twice. A pair (out and back in within minutes, same amount) is money moved between the
     // person's own accounts. Other transfers are money sent to someone else. The import sheet offers the first two separately, off by default.
-    else if (r.pair) { if (r.type === "expense") { category = "finance"; subcategory = "Transfers"; } }
+    else if (r.pair) { category = r.type === "expense" ? "transfers" : "transferin"; subcategory = "Between my accounts"; }
     else if (r.kind === "cash") { if (r.type === "expense") { category = "finance"; subcategory = "Cash withdrawal"; } }
-    else if (r.kind === "transfer") { if (r.type === "expense") { category = "finance"; subcategory = "Money sent to people"; } }
+    // Run 88 (owner: "bank transfers must go to their own category"): both directions. Money in is not earnings (transferin: earned false).
+    else if (transfer) { const w = String(r.merchant || "") + " " + String(r.desc || ""); if (r.type === "expense") { category = "transfers"; subcategory = PERSON.test(w) ? "Money sent to people" : "Card to card"; } else { category = "transferin"; subcategory = CASH_IN.test(w) ? "Cash deposit" : PERSON.test(w) ? "From other people" : "Card to card"; } }
+    // Run 88: money back from a shop (its merchant code or name is a shop's) is a refund, not income
+    else if (r.type === "income" && ((r.mcc && MCC[+r.mcc]) || WORD_RULES.some(([re]) => re.test(r.merchant)))) { category = "refund"; subcategory = "Refund"; }
     else if (r.type === "expense") {
       const m = r.mcc && MCC[+r.mcc], w = !m && WORD_RULES.find(([re]) => re.test(r.merchant));
       const k = !m && !w && Array.isArray(opts.known) ? opts.known.find(([name]) => name.length > 2 && new RegExp("(^|[^\\p{L}\\p{N}])" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^\\p{L}\\p{N}])", "iu").test(r.merchant)) : null;
@@ -366,7 +396,7 @@ export function statementEntries(bank, rows, opts = {}) {
     }
     const note = [r.orig, r.city && r.city.toUpperCase() !== "BAKU" ? r.city : ""].filter(Boolean).join(", ").slice(0, 80);
     out.push({ id: "s" + hashKey(key) + (n ? "_" + n : ""), type: r.type, amount: r.cents / 100, category, subcategory, merchant: r.merchant, note, date: r.date, recurring: false, recurFreq: null, isActive: true,
-      ...(opts.account ? { account: opts.account } : {}), _st: { kind: r.pair ? "own" : r.kind, pending: !!r.pending } });
+      ...(opts.account ? { account: opts.account } : {}), _st: { kind: r.pair ? "own" : (transfer ? "transfer" : r.kind), pending: !!r.pending } });
   });
   return out;
 }

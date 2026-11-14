@@ -15,7 +15,13 @@ section("R60-B1. A pasted bank statement put on an account: balance now and afte
     "Date\tDetails\tDebit\tCredit\tBalance\n04.10.2026\tPharmacy Plus\t9.00 AZN\t-\t61.00 AZN\n05.10.2026\tGift from aunt\t-\t100.00 AZN\t161.00 AZN");
   await page.evaluate(() => document.querySelector('[data-section="io-paste-go"]').click());
   await page.waitForSelector('[data-section="import-statement"]', { timeout: 10000 }); await wait(300);
-  ok(!(await page.$('[data-section="import-balances"]')), "with no account chosen, no balance changes, so no lines");
+  // Run 88: with no account chosen, the sheet offers a new account that starts at the bank's own opening balance (61 + 9 = 70.00)
+  const nb = await page.evaluate(() => (document.querySelector('[data-section="import-balances"]') || {}).innerText || "");
+  ok(!!(await page.$('[data-st="newacc"]')) && /161\.00/.test(nb), "with no account chosen, a new account is offered and its line ends at the bank's 161.00", nb);
+  const st = await page.evaluate(() => ["balance", "balance-end"].map((k) => { const el = document.querySelector(`[data-st="${k}"]`); return el ? el.innerText + " | same=" + el.getAttribute("data-same") : ""; }));
+  ok(/70\.00/.test(st[0]) && /161\.00/.test(st[0]) && /same=true/.test(st[1]), "the sheet says the bank's start 70.00 and end 161.00, and that the app will end at the same 161.00", st);
+  await page.evaluate(() => document.querySelector('[data-st="newacc"]').click()); await wait(300);
+  ok(!(await page.$('[data-section="import-balances"]')), "with that box unticked, no balance changes, so no lines");
   await page.select('[data-st="account"]', "a_card01"); await wait(300);
   const bal = await page.evaluate(() => (document.querySelector('[data-section="import-balances"]') || {}).innerText || "");
   ok(/ABB Card: 70\.00 ₼ now, 161\.00 ₼ after/.test(bal), "choosing ABB Card shows 100 - 30 = 70.00 now and 70 - 9 + 100 = 161.00 after, before anything is added", bal);
