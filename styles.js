@@ -1,5 +1,8 @@
 // Run 27: the app's stylesheet, moved out of App.jsx unchanged (App.jsx was ~7,100 lines). It is one template string; App.jsx imports it and renders it in a <style> tag.
-export const CSS = `
+// Run 78 (native-feel test "press"): every :active rule also applies to the class "pressed", which App.jsx puts on a control the moment a
+// finger lands (Android's browser shows :active only after a short wait). The rules are written once, with :active, below.
+const pressed = (css) => css.replace(/:active\b/g, ":is(:active,.pressed)");
+export const CSS = pressed(`
 /* Run 25: Onest (SIL OFL 1.1), self-hosted and saved offline by the service worker. Chosen because its Latin-extended file carries the
    manat sign and every Azerbaijani letter and its Cyrillic file covers Russian (measured from the font files, not assumed). */
 @font-face{font-family:"Onest";font-style:normal;font-weight:100 900;font-display:swap;src:url("/fonts/onest-latin.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
@@ -946,5 +949,16 @@ html,body,.app{transition:background-color 200ms ease-out}
 .pick-overlay.leaving .pick-sheet{animation-duration:210ms}
 @media (prefers-reduced-motion:reduce){.toggle-track,.toggle-knob,.toggle-track:active .toggle-knob,.lock-switch,.lock-switch::after,.pick-opt,.pick-day,.pick-quick .chip{transition:none}.pick-opt .pick-check,.pick-day.on,.pick-grid .pick-day,.pick-grid .pick-blank,.pick-month-label{animation:none}.pick-day:active:not(:disabled),.pick-quick .chip:active{transform:none}}
 [data-fx="off"] .toggle-knob,[data-fx="off"] .toggle-track{transition:none}[data-fx="off"] .pick-opt .pick-check,[data-fx="off"] .pick-day.on,[data-fx="off"] .pick-grid .pick-day,[data-fx="off"] .pick-grid .pick-blank,[data-fx="off"] .pick-month-label{animation:none}
-`;
+/* Run 78 (native-feel rule "buttons at least 44 points"): small buttons and chips keep their look but get an invisible touch area that
+   reaches 44 px in height (measured: these were 34-38 px tall). */
+.btn-sm,.seg-btn,.calc-key,.sub-chip,.tpl-card,.donut-row{position:relative}
+.donut-row::after{content:"";position:absolute;inset:-3px 0}
+.btn-sm::after,.calc-key::after,.seg-btn::after{content:"";position:absolute;inset:-4px 0}
+.sub-chip::after,.tpl-card::after{content:"";position:absolute;inset:-5px 0}
+/* Run 78 (native-feel test "sheet"): a sheet's title is a handle too. */
+.sheet .sheet-title{touch-action:none;user-select:none;-webkit-user-select:none}
+/* Run 78 (native-feel test "text box"): iPhones zoom the whole screen into a text box whose letters are smaller than 16 px. Only there
+   (the rule matches Safari on iOS alone), boxes use 16 px; Android keeps the current size. */
+@supports (-webkit-touch-callout:none){input:not([type=checkbox]):not([type=radio]),textarea,select,.field-input{font-size:max(16px,1em)}}
+`);
 

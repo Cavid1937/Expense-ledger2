@@ -4384,7 +4384,8 @@ function useSheetGestures() {
       anim={ raf:requestAnimationFrame(step) };
     };
     const onDown=(e)=>{
-      const grip=e.target.closest && e.target.closest(".sheet-grip"); if (!grip) return;
+      // Run 78 (native-feel test "sheet"): the sheet can be pulled by its title as well as by the small handle.
+      const grip=e.target.closest && e.target.closest(".sheet-grip,.sheet .sheet-title"); if (!grip) return;
       const sheet=grip.closest(".sheet"), overlay=grip.closest(".sheet-overlay"); if (!sheet||!overlay) return;
       stop(); let cur=0; try { cur=new DOMMatrix(getComputedStyle(sheet).transform).m42||0; } catch {}
       drag={ sheet, overlay, pid:e.pointerId, startY:e.clientY-cur, y:cur, h:sheet.getBoundingClientRect().height, samples:[{t:e.timeStamp,y:cur}] };
@@ -4438,8 +4439,21 @@ function useSheetGestures() {
       },190);
     };
     document.addEventListener("click",onClickCapture,true);
-    // Run 78 (owner, 14 Nov: soft like the Claude app): on the phone, a switch, a picker choice or a calendar day gives a short system tick.
-    const onTick=(e)=>{ const n=window.LedgerNative; if (!n || !n.haptic || !e.target || !e.target.closest) return; const el=e.target.closest('[role="switch"],.pick-opt,.pick-day,.pick-quick .chip,.seg-btn'); if (el && !el.disabled) n.haptic("tick"); };
+    // Run 78 (owner, 14 Nov: soft like the Claude app; and his native-feel video: "haptics only when something actually happens"): on the phone,
+    // flipping a switch gives a short system tick, because the switch always changes something. Pickers tick only when the choice changes
+    // (screens/pickers.jsx); saving an entry gives the firmer "confirm" tick. Ordinary taps give none. Off with "reduce effects".
+    const onTick=(e)=>{ const n=window.LedgerNative; if (!n || !n.haptic || !e.target || !e.target.closest || readFxOff()) return; const el=e.target.closest('[role="switch"]'); if (el && !el.disabled && el.getAttribute("aria-disabled")!=="true") n.haptic("tick"); };
+    // Native-feel test "press": a button must react when the finger lands, not when it lifts. Android's browser shows :active only after a short
+    // wait (it first checks whether the finger is starting a scroll), so taps looked late. The pressed control gets the class "pressed" at once
+    // (the stylesheet treats it exactly like :active); it goes when the finger lifts, moves away (a scroll) or the page scrolls.
+    const PRESSABLE='button,a[href],[role="button"],[role="switch"],[role="tab"],[role="option"],[role="menuitem"],.txn-row,.list-row,.bill-row,.acc-card,.theme-card,.chip,.seg-btn,.type-pick,.numpad-key,.calc-key,.lang-opt,.lang-pill,.toggle-track';
+    let pressed=null;
+    // A very quick tap keeps the pressed look for at least 70 ms so it is seen; a finger that slides away (a scroll) lets go at once.
+    const unpress=(e)=>{ if (!pressed) return; const p=pressed; pressed=null; const left=e && e.type==="pointerup" ? Math.max(0,70-(performance.now()-p.at)) : 0; if (left) setTimeout(()=>p.el.classList.remove("pressed"),left); else p.el.classList.remove("pressed"); };
+    const onPressDown=(e)=>{ if (e.button>0 || !e.target || !e.target.closest) return; unpress(); const el=e.target.closest(PRESSABLE); if (!el || el.disabled || el.getAttribute("aria-disabled")==="true") return; el.classList.add("pressed"); pressed={ el, x:e.clientX, y:e.clientY, at:performance.now() }; };
+    const onPressMove=(e)=>{ if (pressed && Math.hypot(e.clientX-pressed.x,e.clientY-pressed.y)>10) unpress(); };
+    document.addEventListener("pointerdown",onPressDown,true); document.addEventListener("pointermove",onPressMove,true);
+    document.addEventListener("pointerup",unpress,true); document.addEventListener("pointercancel",unpress,true); document.addEventListener("scroll",unpress,true);
     document.addEventListener("click",onTick);
     const stack=[];
     const sync=()=>{
@@ -4453,7 +4467,7 @@ function useSheetGestures() {
     const mo=new MutationObserver(sync); mo.observe(document.body,{ childList:true, subtree:true });
     document.addEventListener("pointerdown",onDown); document.addEventListener("pointermove",onMove);
     document.addEventListener("pointerup",onUp); document.addEventListener("pointercancel",onUp); document.addEventListener("keydown",onKey);
-    return ()=>{ stop(); mo.disconnect(); document.removeEventListener("click",onClickCapture,true); document.removeEventListener("click",onTick); document.removeEventListener("pointerdown",onDown); document.removeEventListener("pointermove",onMove);
+    return ()=>{ stop(); mo.disconnect(); document.removeEventListener("click",onClickCapture,true); document.removeEventListener("click",onTick); unpress(); document.removeEventListener("pointerdown",onPressDown,true); document.removeEventListener("pointermove",onPressMove,true); document.removeEventListener("pointerup",unpress,true); document.removeEventListener("pointercancel",unpress,true); document.removeEventListener("scroll",unpress,true); document.removeEventListener("pointerdown",onDown); document.removeEventListener("pointermove",onMove);
       document.removeEventListener("pointerup",onUp); document.removeEventListener("pointercancel",onUp); document.removeEventListener("keydown",onKey); };
   },[]);
 }
@@ -4634,6 +4648,12 @@ function AppInner() {
   const saveScroll=(from)=>{ try { const el=document.querySelector("main.page"); scrollMem.current[from]={ w:(window.scrollY||0)-pageDocTop(), p:el?el.scrollTop:0 }; } catch {} };
   const switchTab=useCallback((t)=>{
     const from=tabRef.current;
+    // Run 78 (native-feel test "tab"): tapping the tab you are already on glides its page back to the top, as phone apps do.
+    if (t===from) {
+      const smooth=motionOff() ? "auto" : "smooth";
+      try { const el=document.querySelector("main.page"); if (el && el.scrollTop>0) el.scrollTo({ top:0, behavior:smooth }); window.scrollTo({ top:0, behavior:smooth }); } catch { try { window.scrollTo(0,0); } catch {} }
+      return;
+    }
     if (!SUBPAGE_PARENT[from]) saveScroll(from);
     if (SUBPAGE_PARENT[from] && SUBPAGE_PARENT[from]===t && !motionOff()) {
       if (pageOutBusy.current) return;
@@ -4764,7 +4784,9 @@ function AppInner() {
     const before=stateRef.current;
     const next=withBill({...before,transactions:[{...data,...(walletId(wallet)?{wallet:walletId(wallet)}:{}),...(tripName(trip)?{trip:tripName(trip)}:{}),...(accId(account)?{account:accId(account)}:{}),...rf,id,createdAt:new Date().toISOString()},...before.transactions]},id,billChoice);
     setState(next);
-    try { if (!readFxOff() && navigator.vibrate) navigator.vibrate(10); } catch { /* no vibration here */ }   // Run 41: one short tick when an entry is saved (off with "reduce effects")
+    // Run 41: one short tick when an entry is saved (off with "reduce effects"). Run 78: on the phone app through Android's own touch feedback
+    // (the "Saved" moment is where a tick belongs; plain taps get none).
+    try { if (!readFxOff()) { const n=window.LedgerNative; if (n && n.haptic) n.haptic("confirm"); else if (navigator.vibrate) navigator.vibrate(10); } } catch { /* no vibration here */ }
     freshTxnId=id; setTimeout(()=>{ if (freshTxnId===id) freshTxnId=null; },1500);   // Run 25: the new row settles in (see TxnRow)
     const cross=budgetCrossing(before.transactions,next.transactions,next.budgets,{...data});
     const msg=cross ? t("toast.recorded")+". "+t(cross.kind==="over"?"budget.crossOver":"budget.crossNear",{ cat:catName(data.category), pct:cross.pct }) : t("toast.recorded");

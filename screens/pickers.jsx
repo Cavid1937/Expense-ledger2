@@ -4,8 +4,10 @@
 import { Children, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n.js";
-import { Icon, fmtLongDate, localDateStr, parseLocalDate, isValidDateStr } from "../App.jsx";
+import { Icon, fmtLongDate, localDateStr, parseLocalDate, isValidDateStr, readFxOff } from "../App.jsx";
 
+// On the phone app a changed choice gives one short system tick (choosing what was already chosen gives none). Off with "reduce effects".
+const tick = () => { try { const n = window.LedgerNative; if (n && n.haptic && !readFxOff()) n.haptic("tick"); } catch { /* no phone app */ } };
 const fire = (onChange, value, name, id) => { if (onChange) onChange({ target: { value, name, id }, currentTarget: { value, name, id }, preventDefault() {}, stopPropagation() {} }); };
 // The visible button gets the field's label (the <label for=id> next to it), so screen readers announce it like the real control.
 function useLabelText(id) {
@@ -59,7 +61,7 @@ export function PickSelect({ children, value, onChange, id, name, disabled, clas
   const cur = opts.find((o) => o.value === String(value ?? "")) || opts[0];
   const [just, setJust] = useState(null);
   useEffect(() => { if (open) setJust(null); }, [open]);
-  const pick = (v, close) => { setJust(v); if (v !== String(value ?? "")) fire(onChange, v, name, id); close(PICK_SHOW_MS); };
+  const pick = (v, close) => { setJust(v); if (v !== String(value ?? "")) { tick(); fire(onChange, v, name, id); } close(PICK_SHOW_MS); };
   return (
     <span className="pick-wrap" style={style && style.width ? { width: style.width } : undefined}>
       <select {...rest} id={id} name={name} value={value} onChange={onChange} disabled={disabled} className={`${className || ""} pick-native`} tabIndex={-1} aria-hidden="true">{children}</select>
@@ -92,7 +94,7 @@ export function PickDate({ value, onChange, id, name, min, max, required, disabl
   useEffect(() => { if (open) setView((isValidDateStr(value || "") ? value : today).slice(0, 7)); }, [open]);
   const ok = (d) => (!min || d >= min) && (!max || d <= max);
   const [just, setJust] = useState(null);
-  const pick = (d, close) => { setJust(d); if (d !== value) fire(onChange, d, name, id); close(PICK_SHOW_MS); };
+  const pick = (d, close) => { setJust(d); if (d !== value) { tick(); fire(onChange, d, name, id); } close(PICK_SHOW_MS); };
   const [y, m] = view.split("-").map(Number);
   const first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
   // Always six weeks of cells, so the sheet keeps its height when the month changes instead of jumping.
