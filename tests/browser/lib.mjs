@@ -43,7 +43,7 @@ export async function launch() {
 // appears, pick this language (az / en / ru) and continue; false leaves the chooser open for the test to drive.
 // (Adaptation for the language chooser added 2026-10-26: tests written before it existed get English, as before.)
 // url (Run 13): open another build of the app (e.g. the previous version) in the same browser, to test downgrades.
-export async function openPage(browser, { width = 390, height = 844, seed = baseSeed(), seedRaw = null, pre = null, dsf = 1, fresh = false, chooseLang = "en", url = null } = {}) {
+export async function openPage(browser, { width = 390, height = 844, seed = baseSeed(), seedRaw = null, pre = null, dsf = 1, fresh = false, chooseLang = "en", url = null, onboard = true } = {}) {
   const page = await browser.newPage(); await page.setViewport({ width, height, deviceScaleFactor: dsf });
   page.on("framenavigated", (f) => note(`navigated ${f === page.mainFrame() ? "MAIN" : "sub"} ${String(f.url()).slice(-50)}`)); page.on("framedetached", (f) => note(`frame detached${f === page.mainFrame() ? " (MAIN)" : ""}`));
   page.on("error", (e) => note("PAGE CRASHED " + e.message)); page.on("close", () => note("page closed"));
@@ -60,6 +60,15 @@ export async function openPage(browser, { width = 390, height = 844, seed = base
     await page.evaluate((l) => document.querySelector(`.lang-opt input[value="${l}"]`).click(), chooseLang);
     await page.evaluate(() => document.querySelector(".lang-continue").click());
     await page.waitForSelector(".tabbar");
+    // Run 79: the first launch then asks "Google or guest" and the quick questions; tests written before that go on as a guest and skip them
+    // (onboard: false leaves those steps open for the test to drive).
+    if (onboard) {
+      await page.waitForSelector('[data-ob="guest"]', { timeout: 4000 });
+      await page.evaluate(() => document.querySelector('[data-ob="guest"]').click());
+      await page.waitForSelector('[data-section="setupq-skip"]', { timeout: 4000 });
+      await page.evaluate(() => document.querySelector('[data-section="setupq-skip"]').click());
+      await page.waitForFunction(() => !document.querySelector('[data-section="onboarding"]'), { timeout: 4000 });
+    }
   }
   if (chooseLang) await wait(450);
   return page;

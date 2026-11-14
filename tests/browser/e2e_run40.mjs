@@ -132,8 +132,14 @@ section("R40-6. First start: the mark flies up onto the language screen, the cho
   ok(land.gone && land.glyph === "1" && land.opts === 3 && land.contOp === "1", "then the layer is gone: the screen's own mark, three languages and Continue are all fully shown", land);
   await page.evaluate(() => document.querySelector('.lang-opt input[value="en"]').click()); await wait(100);
   await page.evaluate(() => document.querySelector(".lang-continue").click()); await wait(80);
-  ok(await page.evaluate(() => !!document.querySelector(".lang-screen.lang-leaving") && !document.querySelector(".tabbar")), "Continue: the language screen eases away first");
+  // Run 79: Continue no longer leaves the scene; the panel's content slides on to "Google or guest"
+  await page.waitForSelector('[data-section="ob-account"]', { timeout: 3000 });
+  ok(await page.evaluate(() => !!document.querySelector(".ob-slide.in-next [data-section='ob-account']") && !!document.querySelector('[data-section="onboarding"]')), "Continue: the panel slides on to the next page of the same scene");
+  await page.evaluate(() => document.querySelector('[data-ob="guest"]').click());
+  await page.waitForSelector('[data-section="setupq-skip"]', { timeout: 3000 });
+  await page.evaluate(() => document.querySelector('[data-section="setupq-skip"]').click());
   await page.waitForSelector(".tabbar", { timeout: 3000 });
+  await page.waitForFunction(() => !document.querySelector('[data-section="onboarding"]'), { timeout: 3000 });
   ok(await page.evaluate(() => JSON.parse(localStorage.getItem("expense_ledger_v5")).language === "en"), "then Home opens in English");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();

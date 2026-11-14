@@ -960,5 +960,87 @@ html,body,.app{transition:background-color 200ms ease-out}
 /* Run 78 (native-feel test "text box"): iPhones zoom the whole screen into a text box whose letters are smaller than 16 px. Only there
    (the rule matches Safari on iOS alone), boxes use 16 px; Android keeps the current size. */
 @supports (-webkit-touch-callout:none){input:not([type=checkbox]):not([type=radio]),textarea,select,.field-input{font-size:max(16px,1em)}}
+/* Run 79 (owner's recording of another app's first start): the first launch as one scene. A dark brand band (the same colour as Android's
+   launch screen, so the opening mark lands on it without a blink) and a panel rising from below with a curved top edge, whose content slides
+   from page to page: language, Google or guest, the quick questions. */
+.ob-screen.lang-screen{position:fixed;inset:0;z-index:250;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;min-height:0;
+  background:radial-gradient(120% 60% at 50% 0%,#0F3036 0%,#07151A 62%);color:#F3F7F6;overflow:hidden}
+.ob-brand{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;text-align:center;padding:calc(var(--sat,0px) + 9vh) 24px 0;transition:padding 420ms var(--ease-out)}
+.ob-brand .lang-glyph{transition:width 420ms var(--ease-out),height 420ms var(--ease-out),margin 420ms var(--ease-out)}
+.ob-name.lang-mark{color:#F3F7F6;font-size:26px;letter-spacing:-0.3px;margin:0}
+.ob-tag{margin:8px 0 0;min-height:21px;font-size:14px;line-height:1.5;color:#A5B7B8;transition:opacity 300ms,max-height 420ms var(--ease-out);max-height:44px;overflow:hidden}
+.ob-tag-in{display:inline-block;animation:obTag 520ms var(--ease-out) both}
+@keyframes obTag{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.ob-panel{position:relative;flex:1 1 auto;margin-top:5vh;background:var(--bg);color:var(--ink);border-top-left-radius:100% 112px;overflow-y:auto;overscroll-behavior:contain;
+  padding:104px 20px calc(24px + env(safe-area-inset-bottom,0px));box-shadow:0 -18px 48px rgba(0,0,0,.28)}
+.ob-lang .ob-panel{animation:obRise 680ms cubic-bezier(.2,.8,.2,1) 260ms both}
+@keyframes obRise{from{transform:translateY(100%)}to{transform:none}}
+.ob-slide{max-width:440px;margin:0 auto}
+.ob-slide.in-next{animation:obIn 380ms var(--ease-out) both}
+@keyframes obIn{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:none}}
+.ob-screen .lang-box{max-width:none}
+/* the questions need room: the brand band folds down to the mark and the name */
+.ob-setup .ob-brand{padding-top:calc(var(--sat,0px) + 14px);flex-direction:row;justify-content:center;gap:10px}
+.ob-setup .ob-brand .lang-glyph{width:26px;height:32px;margin:0}
+.ob-setup .ob-name.lang-mark{font-size:18px}
+.ob-setup .ob-tag{display:none}
+.ob-setup .ob-panel{margin-top:16px;padding-top:52px;border-top-left-radius:100% 44px}
+.ob-leaving{animation:obFade 420ms ease-in forwards}
+.ob-leaving .ob-panel{animation:obFall 400ms cubic-bezier(.4,0,1,1) forwards}
+@keyframes obFall{to{transform:translateY(105%)}}
+@keyframes obFade{60%{opacity:1}to{opacity:0}}
+.ob-choice{display:flex;align-items:center;gap:14px;width:100%;min-height:76px;padding:14px 16px;margin:0 0 12px;border-radius:18px;background:var(--bg-card);border:1.5px solid var(--rule);
+  color:var(--ink);text-align:left;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform 120ms var(--ease-out),opacity 160ms}
+.ob-choice:active{transform:scale(.98)}
+.ob-choice:disabled{opacity:.62;cursor:default}
+.ob-google{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.ob-choice-ic{flex:0 0 auto;width:42px;height:42px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--bg-inset);color:var(--ink)}
+.ob-g{background:#FFFFFF}
+.ob-choice-txt{display:flex;flex-direction:column;gap:3px;min-width:0}
+.ob-choice-name{font-size:16px;font-weight:650;line-height:1.3}
+.ob-choice-sub{font-size:13px;line-height:1.4;opacity:.74}
+.ob-google[aria-busy="true"] .ob-g{animation:obPulse 1s ease-in-out infinite}
+@keyframes obPulse{50%{transform:scale(.88)}}
+.ob-err{margin-top:4px}
+/* the quick questions, one per page (first launch and the Home sheet) */
+.setup-steps{display:flex;flex-direction:column}
+.setup-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.setup-dots{display:flex;align-items:center;gap:6px}
+.setup-dot{width:7px;height:7px;border-radius:4px;background:var(--rule-2);opacity:.55;transition:width 360ms var(--spring-soft),background 240ms,opacity 240ms}
+.setup-dot.done{background:var(--accent-fill);opacity:.6}
+.setup-dot.on{width:24px;background:var(--accent-fill);opacity:1}
+.setup-skipall{min-height:44px;padding:0 4px;background:none;border:0;color:var(--ink-3);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.setup-q{font-size:26px;font-weight:650;letter-spacing:-0.4px;line-height:1.22;color:var(--ink);margin:14px 0 8px;overflow-wrap:anywhere}
+.setup-sub{font-size:14px;line-height:1.5;color:var(--ink-3);margin:0 0 20px}
+.setup-clip{overflow-x:clip}
+.setup-page.in-next{animation:obIn 340ms var(--ease-out) both}
+.setup-page.in-prev{animation:setupInPrev 340ms var(--ease-out) both}
+@keyframes setupInPrev{from{opacity:0;transform:translateX(-32px)}to{opacity:1;transform:none}}
+.setup-field{margin-bottom:14px}
+.setup-lbl{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin:0 0 6px}
+.setup-money{display:flex;align-items:center;gap:8px;min-height:62px;padding:0 16px;background:var(--bg-card);border:1.5px solid var(--rule);border-radius:16px;transition:border-color 160ms}
+.setup-money:focus-within{border-color:var(--accent-fill)}
+.setup-money.bad{border-color:var(--neg)}
+.setup-input{flex:1;min-width:0;padding:14px 0;background:none;border:0;outline:0;color:var(--ink);font:inherit;font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.setup-input::placeholder{color:var(--ink-4);opacity:.55}
+.setup-text{font-size:18px}
+.setup-cur{font-size:15px;font-weight:600;color:var(--ink-3)}
+.setup-err{color:var(--neg);font-size:13px;line-height:1.4;margin-top:6px}
+.setup-choices{display:flex;flex-direction:column;gap:10px}
+.setup-choice{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:58px;padding:0 18px;border-radius:16px;background:var(--bg-card);border:1.5px solid var(--rule);
+  color:var(--ink);font:inherit;font-size:16px;font-weight:600;text-align:left;cursor:pointer;transition:border-color 160ms,background 200ms,transform 120ms var(--ease-out)}
+.setup-choice:active{transform:scale(.98)}
+.setup-choice.on{border-color:var(--accent-fill);background:var(--accent-light)}
+.setup-radio{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:2px solid var(--rule-2);display:inline-flex;align-items:center;justify-content:center;transition:border-color 160ms,background 200ms}
+.setup-choice.on .setup-radio{border-color:var(--accent-fill);background:var(--accent-fill)}
+.setup-choice.on .setup-radio::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--on-accent);animation:pickPop 260ms var(--spring-soft)}
+.setup-pay{margin-top:18px}
+.setup-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:22px}
+.setup-nav .btn{margin-top:0;min-height:52px}
+.setup-next{flex:1 1 auto;max-width:260px;margin-left:auto}
+.setup-back{flex:0 0 auto}
+.setup-sheet .setup-q{font-size:22px}
+@media (prefers-reduced-motion:reduce){.ob-lang .ob-panel,.ob-slide.in-next,.setup-page.in-next,.setup-page.in-prev,.ob-tag-in,.ob-leaving,.ob-leaving .ob-panel{animation:none}.ob-brand,.ob-brand .lang-glyph,.setup-dot{transition:none}}
+[data-fx="off"] .ob-lang .ob-panel,[data-fx="off"] .ob-slide.in-next,[data-fx="off"] .setup-page.in-next,[data-fx="off"] .setup-page.in-prev,[data-fx="off"] .ob-tag-in{animation:none}
 `);
 

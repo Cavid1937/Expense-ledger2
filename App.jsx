@@ -12,15 +12,16 @@ import { HomePage } from "./screens/home.jsx";
 import { LedgerPage, TxnDetailSheet, TxnRow } from "./screens/ledger.jsx";
 import { AddEditOverlay, BillSheet } from "./screens/add.jsx";
 import { RecurringHub } from "./screens/recurring.jsx";
-import { ImportExportPage, ImportUnlock, InfoSheet, LanguageChooser, MorePage, MyAccounts } from "./screens/settings.jsx";
+import { ImportExportPage, ImportUnlock, InfoSheet, MorePage, MyAccounts } from "./screens/settings.jsx";
 import { AccountSheet } from "./screens/home.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { GiftsPage } from "./screens/gifts.jsx";
 import { ColumnMapper } from "./screens/mapcols.jsx";   // Run 67
 import { SetupSheet } from "./screens/setup.jsx";
+import { Onboarding, readOnboard, writeOnboard } from "./screens/onboard.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
-import { Collapse, motionOff, runBackStep } from "./screens/motion.jsx";
+import { Collapse, motionOff, runBackStep, backStepCount } from "./screens/motion.jsx";
 import { finishLaunch, startLaunch } from "./screens/launch.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,7 +159,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="78 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="79 (2026-11-14)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -4048,7 +4049,11 @@ export function widgetSnapshot(state, spendTxns, opts={}, now=new Date()) {
   const safePct=usable&&info.disposable>0 ? Math.max(0,Math.min(100,Math.round(((info.disposable-Math.max(0,info.remaining))/info.disposable)*100))) : 0;
   const schedules=buildSchedules(s.transactions||[],s.bills||[]).filter(x=>x.isActive&&x.type==="expense").map(x=>({ x, due:scheduleNextDue(x,s.transactions||[],now) })).filter(o=>o.due).sort((a,b)=>a.due-b.due);
   const nb=schedules[0];
-  const nextBill=nb ? t("wdgx.nextBill",{ name:maskText(nb.x.merchant||nb.x.note)||catName(nb.x.category), date:fmtDate(localDateStr(nb.due)), amount:money(nb.x.amount) }) : "";
+  const nbName=nb ? (maskText(nb.x.merchant||nb.x.note)||catName(nb.x.category)) : "";
+  const nextBill=nb ? t("wdgx.nextBill",{ name:nbName, date:fmtDate(localDateStr(nb.due)), amount:money(nb.x.amount) }) : "";
+  // Run 79 (widget redesign): the two small tiles under the bar. With Safe to Spend: what is left divided by the days left, today included
+  // (the app's own dailyAllowance; nothing when the money is already used up). Without it: what was spent so far divided by the days so far.
+  const perDayVal=usable ? (info.remaining>0&&info.daysRemaining>0 ? info.dailyAllowance : 0) : calcSpentToDate(tx,mon,now)/Math.max(1,p.daysPassed||1);
   // budgets this month (all limits together)
   const cs=calcCategorySpend(tx,mon,now), bs=calcBudgetStatus(s.budgets||{},cs,mon,now,budgetCarried(tx,s.budgets||{},readBudgetCarry(),mon,now));
   const bTotal=bs.reduce((a,b)=>a+b.limit,0), bSpent=bs.reduce((a,b)=>a+Math.min(b.spent,b.limit*10),0), bPct=bTotal>0?Math.round((bSpent/bTotal)*100):0;
@@ -4057,7 +4062,8 @@ export function widgetSnapshot(state, spendTxns, opts={}, now=new Date()) {
   const acc=readAccounts(), bal=accountBalances(acc,s.transactions||[]);
   const accounts=acc.accounts.slice(0,3).map(a=>({ name:String(a.name||accountName(a.id)||"").slice(0,24), amount:money(bal[a.id]||0), neg:(bal[a.id]||0)<0 }));
   return { v:1, asOf:localDateStr(now), hide, theme, lang:s.language||"en",
-    safe:{ title:t(usable?"wdgx.safeTitle":"wdgx.spentTitle"), amount:usable?money(info.remaining):money(ms.curExp), neg:!!(usable&&info.remaining<0), sub:usable?t("wdgx.safeSub"):t("wdgx.spentSub",{ month:monthName(mon) }), pct:usable?safePct:Math.max(0,Math.min(100,Math.round(((p.daysPassed||0)/(p.totalDays||30))*100))), days:String(p.daysRemaining||0), daysLabel:tn("wdgx.daysLeft",p.daysRemaining||0), nextBill, budgetPct:bTotal>0?bPct:-1, budgetLabel:t("wdgx.budget") },
+    safe:{ title:t(usable?"wdgx.safeTitle":"wdgx.spentTitle"), amount:usable?money(info.remaining):money(ms.curExp), neg:!!(usable&&info.remaining<0), sub:usable?t("wdgx.safeSub"):t("wdgx.spentSub",{ month:monthName(mon) }), pct:usable?safePct:Math.max(0,Math.min(100,Math.round(((p.daysPassed||0)/(p.totalDays||30))*100))), days:String(p.daysRemaining||0), daysLabel:tn("wdgx.daysLeft",p.daysRemaining||0), nextBill, budgetPct:bTotal>0?bPct:-1, budgetLabel:t("wdgx.budget"),
+      dayLabel:t(usable?"wdgx.perDay":"wdgx.avgDay"), day:money(perDayVal), nextLabel:t("wdgx.nextLabel"), nextAmt:nb?money(nb.x.amount):"", nextWhat:nb?nbName+" · "+fmtDate(localDateStr(nb.due)):t("wdgx.noBills") },
     month:{ title:t("wdgx.monthTitle",{ month:monthName(mon) }), inc:money(ms.curInc+ms.curRefundIn), exp:money(ms.curExp), bal:money(ms.curNet), balNeg:ms.curNet<0, incL:t("wdgx.income"), expL:t("wdgx.expenses"), balL:t(ms.curNet<0?"wdgx.deficit":"wdgx.surplus") },
     budget:{ title:t("wdgx.budgetTitle"), has:bTotal>0, pct:bPct, spent:money(bSpent), total:money(bTotal), line:bTotal>0?(over?tn("wdgx.over",over):t("wdgx.onTrack")):t("wdgx.noBudget") },
     accounts:{ title:t("wdgx.accTitle"), list:accounts, empty:t("wdgx.accEmpty") },
@@ -4720,6 +4726,42 @@ function AppInner() {
     return ()=>{ delete window.__ledgerNativeBack; };
   },[switchTab,showToast]);
 
+  // Run 79 (owner, 14 Nov: "swipe back"): Android 14 and later tell the page while the thumb swipes in from the screen edge (MainActivity.java,
+  // predictive back). The layer that Back would close follows the thumb: it shrinks a little and moves with the swipe. Let go = the normal Back
+  // above runs ("commit"); swipe back = it settles back ("cancel"). Only the add form, the top sheet, or a sub-page that Back would leave are
+  // moved; an open editor inside a page, the lock screen, the "unsaved changes" question and Home are left still. Older Android versions never
+  // call this, so Back there works exactly as before. scale/translate are separate from transform, so a sheet's own closing motion still plays.
+  useEffect(()=>{
+    let g=null;
+    const pick=()=>{
+      if (motionOff() || document.querySelector(".lock-screen,.discard-overlay")) return null;
+      const add=document.querySelector(".add-overlay"); if (add) return { el:add, round:false };
+      const ov=document.querySelectorAll(".sheet-overlay"); if (ov.length) { const o=ov[ov.length-1]; return { el:o.querySelector(".sheet")||o, round:false }; }
+      if (backStepCount()>0) return null;
+      if (tabRef.current!=="home") { const m=document.querySelector("main.page"); return m ? { el:m, round:true } : null; }
+      return null;
+    };
+    const ease="cubic-bezier(.2,.8,.2,1)";
+    const settle=(o,ms)=>{ const el=o.el; el.style.transition=`scale ${ms}ms ${ease}, translate ${ms}ms ${ease}, border-radius ${ms}ms ${ease}`; el.style.scale=""; el.style.translate=""; if (o.round) el.style.borderRadius=""; setTimeout(()=>{ el.style.transition=""; },ms+40); };
+    window.__ledgerBackGesture=(phase,p,edge)=>{
+      try {
+        if (phase==="start") { if (g) settle(g,0); g=pick(); if (g) g.el.style.transition="none"; return "ok"; }
+        if (!g) return "none";
+        if (phase==="move") {
+          const q=Math.max(0,Math.min(1,Number(p)||0)), e=1-(1-q)*(1-q);
+          g.el.style.scale=String(1-0.08*e); g.el.style.translate=`${(edge===1?-1:1)*Math.round(24*e)}px 0`;
+          if (g.round) g.el.style.borderRadius=`${Math.round(28*e)}px`;
+          return "ok";
+        }
+        if (phase==="cancel") { settle(g,260); g=null; return "ok"; }
+        // let go: Back closes the layer with its own motion; whatever is still on screen afterwards is put back
+        if (phase==="commit") { const o=g; g=null; setTimeout(()=>settle(o,180),450); return "ok"; }
+      } catch { g=null; }
+      return "none";
+    };
+    return ()=>{ delete window.__ledgerBackGesture; };
+  },[]);
+
   // Swipe between the five sections: a quick, clearly sideways swipe on the page. Ignored while a sheet or the add form is
   // open, on form fields, on rows that scroll sideways (e.g. the filter chips), and from the screen edges (the system's own
   // back gesture lives there).
@@ -4926,9 +4968,10 @@ function AppInner() {
   // Run 50: apply what the "set up in a minute" sheet planned (planSetup already checked every answer). Accounts go to their own store first;
   // if that cannot be saved nothing else is changed. Bill and goal are added in one state change.
   const applySetupPlan=useCallback((plan)=>{
-    if (plan.accounts.length) { let data=readAccounts(); for (const a of plan.accounts) { const r=addAccount(data,a.name,a.kind,a.amount,today()); if (r.added) data=r.data; } if (!writeAccounts(data)) { showToast(t("acc.saveFailed"),5000); return; } }
+    if (plan.accounts.length) { let data=readAccounts(); for (const a of plan.accounts) { const r=addAccount(data,a.name,a.kind,a.amount,today()); if (r.added) data=r.data; } if (!writeAccounts(data)) { showToast(t("acc.saveFailed"),5000); return false; } }
     if (plan.bill||plan.goal) setState(s=>{ const list=s.bills||[]; return { ...s, ...(plan.bill ? { bills:[...list,{ ...plan.bill, id:newBillId(new Set(list.map(x=>x.id))), active:true, createdAt:new Date().toISOString() }] } : {}), ...(plan.goal ? { goals:[...(s.goals||[]),{ ...plan.goal, id:"g"+Date.now() }] } : {}) }; });
     setCatVer(v=>v+1); showToast(t("setupq.done"));
+    return true;
   },[showToast]);
   // Deleting a bill keeps every payment; they stop pointing to it (and count as recurring payments the earlier way). Undo.
   const deleteBill=useCallback((id)=>{
@@ -5122,6 +5165,36 @@ function AppInner() {
     } catch (e) { const reason=(e&&e.reason)||"server"; showToast(t("drive.err."+(["auth","offline","space","cancelled"].includes(reason)?reason:"server")),6000); }
     finally { setDriveBusy(""); }
   },[showToast]);
+  // Run 79: the first launch's "Continue with Google". A backup that is already in this Google account is never overwritten by this new,
+  // empty phone: it is opened in the normal import preview (nothing changes until the person confirms), and Drive backup is switched on only
+  // when that import is confirmed. With no backup there yet, the first one is saved and the questions follow. Errors stay on the page,
+  // with "Continue as guest" right there.
+  const [ob,setOb]=useState(()=>readOnboard());
+  const [obBusy,setObBusy]=useState(false), [obErr,setObErr]=useState("");
+  const obTo=(v)=>{ writeOnboard(v); setOb(v); };
+  const obGoogle=async ()=>{
+    if (obBusy) return;
+    setObBusy(true); setObErr("");
+    try {
+      const tok=await driveToken({ interactive:true });
+      const got=await driveLoad(tok);
+      if (got) {
+        const name=t("drive.fileName"), plan=planImportWithCats(got.text,name);
+        obTo("done");
+        if (!plan.ok) { setImportPending({ error:plan.error, filename:name }); return; }
+        setSkipDup(true); setSkipSim(true);
+        setImportPending({ ...plan, filename:name, fromDrive:true, ...mergeCounts(stateRef.current.transactions, plan) });
+        return;
+      }
+      const saved=await driveBackupNow({ interactive:false, auto:true });
+      if (!saved) { const r=readDrive().lastError||"server"; setObErr(t("drive.err."+(["auth","offline","space","cancelled"].includes(r)?r:"server"))); return; }
+      showToast(t("drive.connected"));
+      obTo("setup");
+    } catch (e) {
+      const r=(e&&e.reason)||"server";
+      setObErr(t("drive.err."+(["auth","offline","space","cancelled"].includes(r)?r:"server")));
+    } finally { setObBusy(false); }
+  };
   const driveDisconnect=useCallback(async ()=>{ await driveSignOut(); const p={ ...cleanDrivePref(null) }; writeDrive(p); setDrivePref(p); showToast(t("drive.disconnected")); },[showToast]);
   // at most once a day, when the app opens or the data changes, only if connected and a sign-in is at hand without asking (the Android app;
   // on the website only while the sign-in from this visit is still valid). Never interrupts: failures are counted for the card's warning.
@@ -5359,6 +5432,8 @@ function AppInner() {
     if (hasDebts && !writeDebts(mergeDebtData(readDebts(),plan.debtData))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
     setState(next);
     setImportPending(null);
+    // Run 79: a backup restored from Google Drive on the first launch switches Drive backup on (the next backup then holds the restored data)
+    if (plan.fromDrive) { const p={ ...readDrive(), on:true, fails:0, lastError:"" }; if (writeDrive(p)) setDrivePref(p); }
     const delta=next.transactions.length-before.transactions.length;
     showSnackbar(settingsOnly ? t("import.settingsApplied") : mode==="replace" ? tn("import.replaced",plan.transactions.length) : tn("import.added",delta), ()=>{
       // Undo only if nothing has changed since; otherwise it would erase newer work.
@@ -5380,9 +5455,10 @@ function AppInner() {
 
   // Genuinely fresh install: the language is chosen before anything else is shown. The starter quick-fill templates are
   // given names in that language — only while they are still exactly the untouched defaults (never a user's own templates).
-  const chooseFirstLanguage=(l)=>setState(s=>({ ...s, language:l,
-    templates: JSON.stringify(s.templates)===JSON.stringify(DEFAULT_TEMPLATES) ? DEFAULT_TEMPLATES.map(tp=>MESSAGES["tpl."+tp.id]?{...tp,name:tIn(l,"tpl."+tp.id)}:tp) : s.templates }));
-  if (state.language===null) return (<><style>{CSS}</style><LanguageChooser onChoose={chooseFirstLanguage}/></>);
+  // Run 79: then the first-launch scene goes on to "Google or guest" and the quick questions (screens/onboard.jsx).
+  const chooseFirstLanguage=(l)=>{ obTo("account"); setState(s=>({ ...s, language:l,
+    templates: JSON.stringify(s.templates)===JSON.stringify(DEFAULT_TEMPLATES) ? DEFAULT_TEMPLATES.map(tp=>MESSAGES["tpl."+tp.id]?{...tp,name:tIn(l,"tpl."+tp.id)}:tp) : s.templates })); };
+  if (state.language===null) return (<><style>{CSS}</style><Onboarding step="lang" lang={null} onLanguage={chooseFirstLanguage}/></>);
 
   return (
     <>
@@ -5647,6 +5723,11 @@ function AppInner() {
           </div>
         )}
         {showSetupQ&&<SetupSheet currency={currency} onClose={()=>setShowSetupQ(false)} onOpenDebts={()=>{ setDebtsStart("debts"); switchTab("debts"); }} onSave={applySetupPlan}/>}
+        {ob!=="done"&&<Onboarding step={ob} lang={state.language} currency={currency} busy={obBusy} error={obErr}
+          onGoogle={obGoogle} onGuest={()=>{ setObErr(""); obTo("setup"); }} onBackToAccount={()=>obTo("account")}
+          onOpenDebts={()=>{}}
+          onSetupSkip={()=>obTo("done")}
+          onSetupSave={(plan,extra)=>{ applySetupPlan(plan); obTo("done"); if (extra&&extra.debts) { setDebtsStart("debts"); switchTab("debts"); } }}/>}
         {editBill!==undefined&&(
           <BillSheet bill={editBill} currency={currency} onSave={saveBill} onDelete={deleteBill} onClose={()=>setEditBill(undefined)} showToast={showToast}/>
         )}
