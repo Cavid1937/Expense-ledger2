@@ -9,8 +9,11 @@ const noWelcome = () => { try { localStorage.removeItem("expense_ledger_v5__welc
 section("R54-1. A new person: three plain sentences, at the top, until 'Got it'");
 {
   const page = await openPage(browser, { seed: empty("en"), pre: `(() => { try { if (!sessionStorage.getItem("__w")) { sessionStorage.setItem("__w", "1"); localStorage.removeItem("expense_ledger_v5__welcome"); } } catch {} })()` }); await settle(page);
+  // the card slides in after the first paint; read it once it has settled
+  await wait(700);
   let c = await card(page);
-  ok(/Welcome to Expense Ledger/.test(c) && /Write down what you spend and what you earn/.test(c) && /where your money goes and how much you can still spend/.test(c) && /Everything stays on this phone\. No account is needed/.test(c), "the card says what to do, what you gain and that it is private", c);
+  // Run 83 wording: the optional Google account is named, not "no account"
+  ok(/Welcome to Expense Ledger/.test(c) && /Write down what you spend and what you earn/.test(c) && /where your money goes and how much you can still spend/.test(c) && /kept on this phone/.test(c) && /Google account is optional/.test(c), "the card says what to do, what you gain, that entries stay on the phone and that the account is optional", c);
   ok(await page.evaluate(() => { const w = document.querySelector('[data-section="home-welcome"]'), first = document.querySelector('[data-section="home-month"], [data-section="home-safe"]'); return !!w && !!first && w.getBoundingClientRect().top < first.getBoundingClientRect().top && document.querySelectorAll('[data-section="home-welcome"] li').length === 3; }), "it sits above the numbers and has exactly three lines");
   ok(await page.evaluate(() => { const w = document.querySelector('[data-section="home-welcome"]'); return w.scrollWidth <= w.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth; }), "nothing is cut off or pushes the page sideways at phone width");
   await page.evaluate(() => document.querySelector('[data-section="welcome-ok"]').click()); await wait(300);
@@ -41,8 +44,8 @@ section("R54-2. Someone who already has entries never sees it; the numbers are n
 }
 
 section("R54-3. Azerbaijani and Russian");
-for (const [l, title, line, plain, label] of [["az", /Expense Ledger-ə xoş gəlmisiniz/, /Hər şey bu telefonda qalır/, /bu ay hələ xərcləyə biləcəyiniz məbləğ/, /Qalıb/], ["ru", /Добро пожаловать в Expense Ledger/, /Всё хранится на этом телефоне/, /ещё можно потратить в этом месяце/, /Не потрачено/]]) {
-  let p = await openPage(browser, { seed: empty(l), chooseLang: l, pre: noWelcome }); await settle(p);
+for (const [l, title, line, plain, label] of [["az", /Expense Ledger-ə xoş gəlmisiniz/, /bu telefonda saxlanılır/, /bu ay hələ xərcləyə biləcəyiniz məbləğ/, /Qalıb/], ["ru", /Добро пожаловать в Expense Ledger/, /хранятся на этом телефоне/, /ещё можно потратить в этом месяце/, /Не потрачено/]]) {
+  let p = await openPage(browser, { seed: empty(l), chooseLang: l, pre: noWelcome }); await settle(p); await wait(700);
   const c = await card(p);
   ok(title.test(c) && line.test(c), `${l}: the welcome card is translated`, c);
   await p.close();
