@@ -35,7 +35,7 @@ export function usePresence(open, ms=MOTION_MS) {
 export function Collapse({ open, children, id, className="", ms=MOTION_MS }) {
   const { mounted, shown }=usePresence(open,ms);
   const [settled,setSettled]=useState(!!open);
-  useEffect(()=>{ if (!shown) { setSettled(false); return undefined; } if (motionOff()) { setSettled(true); return undefined; } const to=setTimeout(()=>setSettled(true),ms); return ()=>clearTimeout(to); },[shown,ms]);
+  useEffect(()=>{ if (!shown) { setSettled(false); return undefined; } if (motionOff()) { setSettled(true); return undefined; } const to=setTimeout(()=>setSettled(true),ms+80); return ()=>clearTimeout(to); },[shown,ms]);
   if (!mounted) return null;
   return (
     <div id={id} className={"collapse"+(shown?" is-open":"")+(settled?" is-settled":"")+(className?" "+className:"")} aria-hidden={shown?undefined:true}>

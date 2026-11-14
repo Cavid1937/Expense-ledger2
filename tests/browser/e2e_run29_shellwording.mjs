@@ -13,9 +13,10 @@ section("R29-W1. Website: original wording");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(page);
   const s = await sheet(page, "safe");
-  ok(/no server copy/i.test(s) && !/Google backup|automatic backup/i.test(s), "website safety sheet keeps its text (no Android backup claims)");
+  ok(/no copy anywhere else/i.test(s) && !/Google backup|automatic backup/i.test(s), "website safety sheet keeps its text (no Android backup claims)");
   await page.evaluate(() => document.querySelector('[data-section="info-safe"] [data-closer]').click()); await wait(300);
-  ok(/stored only on this device/i.test(await card(page)), "website More card keeps its text");
+  // Run 83: no "only" any more, because an optional account keeps a copy too
+  ok(/kept on this device/i.test(await card(page)) && !/only on this device/i.test(await card(page)), "website More card says the data is kept on this device");
   await page.close();
 }
 section("R29-W2. Android app: honest wording in en / az / ru");
@@ -27,6 +28,9 @@ for (const [l, re, bad] of [["en", /Google/, /no server copy|nobody can restore/
   ok(/Google/.test(await card(page)), `${l}: More card mentions Google backup`);
   if (l === "en") {
     await page.evaluate(() => document.querySelector('[data-section="info-safe"]') && document.querySelector('[data-section="info-safe"] [data-closer]').click()); await wait(200);
+    // since Run 80 the privacy notice row sits inside the closed "privacy" fold, so open it first
+    await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(350);
+    await page.evaluate(() => { const h = document.querySelector('[data-fold-head="privacy"]'); if (h && h.getAttribute("aria-expanded") !== "true") h.click(); }); await wait(450);
     const p = await sheet(page, "privacy");
     ok(/Google backup is on/i.test(p) && /Without a backup file or a Google backup/i.test(p), "en: privacy sheet explains the Google copy and deletion");
   }

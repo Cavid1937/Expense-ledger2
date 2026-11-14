@@ -589,9 +589,25 @@ input,textarea,select,[contenteditable="true"],.selectable,.selectable *{-webkit
 .page.page-sub>*{animation:pageSlide 300ms cubic-bezier(0.22,1,0.36,1) backwards}   /* opened from a list (Recurring, Import/Export, Debts): comes in from the right */
 @keyframes pageSlide{from{opacity:0;transform:translateX(32px)}to{opacity:1;transform:translateX(0)}}
 .prefs-card>.settings-section-lbl:first-child{margin-top:0!important;padding-top:0}   /* Run 24: Preferences sections sit in rounded cards, like Claude's grouped settings */
-.list-row{border-radius:12px;transition:background-color 120ms ease-out}
-.list-row:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent)}   /* Run 24: a pressed row becomes a soft rounded pill (Claude-app feel) */
-@media (prefers-reduced-motion:reduce){.list-row{transition:none}}
+/* Run 83: a pressed row fills its whole strip of the card, edge to edge, so no band of a different colour shows at its sides (owner video 14 Nov). */
+.list-card{padding:0 16px}
+.list-card>.list-row:first-child{border-top-left-radius:calc(var(--radius) - 1px);border-top-right-radius:calc(var(--radius) - 1px)}
+.list-card>.list-row:last-child{border-bottom-left-radius:calc(var(--radius) - 1px);border-bottom-right-radius:calc(var(--radius) - 1px)}
+.list-card>.list-row{margin:0 -16px;width:calc(100% + 32px);padding-left:16px;padding-right:16px;border-radius:0;transition:background-color 220ms ease-out}
+.list-card>.list-row:is(:active,.pressed){opacity:1;background-color:color-mix(in srgb,var(--ink) 7%,transparent);transition:background-color 60ms ease-out}
+.list-row{transition:background-color 220ms ease-out}
+.list-row:is(:active,.pressed){opacity:1;background-color:color-mix(in srgb,var(--ink) 7%,transparent);transition:background-color 60ms ease-out}
+/* A Settings section that is a single row: the whole card sinks a little and springs back, like the reference videos. */
+.fold-card{transition:transform 380ms cubic-bezier(.34,1.45,.64,1),background-color 240ms ease-out}
+.fold-card:has(>.fold-head:is(:active,.pressed)){transform:scale(.975);background-color:color-mix(in srgb,var(--ink) 5%,var(--bg-card));transition:transform 110ms ease-out,background-color 60ms ease-out}
+.fold-card>.fold-head:is(:active,.pressed){background-color:transparent}
+@media (prefers-reduced-motion:reduce){.list-row,.list-card>.list-row,.fold-card{transition:none}.fold-card:has(>.fold-head:is(:active,.pressed)){transform:none}}
+[data-fx="off"] .fold-card:has(>.fold-head:is(:active,.pressed)){transform:none}
+.fold-sub{display:grid;grid-template-rows:1fr;opacity:1;transition:grid-template-rows 260ms cubic-bezier(.32,.72,0,1),opacity 200ms ease-out}
+.fold-sub>.list-sub{min-height:0;overflow:hidden}
+.fold-sub.gone{grid-template-rows:0fr;opacity:0}
+[data-fx="off"] .fold-sub{transition:none}
+@media (prefers-reduced-motion:reduce){.fold-sub{transition:none}}
 .list-ico{width:28px;display:inline-flex;justify-content:center;flex-shrink:0}
 .list-body{flex:1;min-width:0}
 .more-id{display:flex;align-items:center;gap:14px}
@@ -738,6 +754,7 @@ html,.page,.sheet{scroll-behavior:smooth}
    (2) A list row's separator is a drawn line, not a border: with the rounded press shape a border curved up at the row's corners.
    (3) Small round/square controls get a larger invisible tap area (44px) without changing how they look. */
 .list-row{border-bottom:none;background-image:linear-gradient(var(--rule),var(--rule));background-size:calc(100% - 28px) 1px;background-position:center bottom;background-repeat:no-repeat}
+.list-card>.list-row{background-size:calc(100% - 60px) 1px}
 .list-row:last-child{background-image:none}
 .stat-row .stat-cell:last-child:nth-child(odd){grid-column:1 / -1}   /* an odd number of figures: the last one spans the row instead of sitting half-width beside a gap */
 .io-backup{flex-direction:column;align-items:flex-start;gap:8px}   /* the status used to squeeze the text into a narrow column; it now sits above the text as a small pill */
@@ -805,8 +822,10 @@ html,.page,.sheet{scroll-behavior:smooth}
 body::before{content:"";position:fixed;top:0;left:0;right:0;height:var(--sat);background:var(--bg);z-index:150;pointer-events:none}
 /* Run 34 (7 Nov 2026): the Claude-app feel for everything that opens and closes INSIDE a screen. About 0.25 s, soft landing, no bounce, closing as smooth as opening. */
 :root{--ease-out:cubic-bezier(0.22,1,0.36,1);--ease-in:cubic-bezier(0.4,0,1,1)}
-.collapse{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:0fr;opacity:0;transition:grid-template-rows 220ms var(--ease-in),opacity 160ms ease-in}
-.collapse.is-open{grid-template-rows:1fr;opacity:1;transition:grid-template-rows 260ms var(--ease-out),opacity 220ms ease-out}
+/* Run 83: the close now slows down as it lands and the fade lasts as long as the shrink, so it no longer fades first and then snaps shut.
+   Opening: the space grows first and the content fades in just behind it. The close must stay within MOTION_MS (screens/motion.jsx). */
+.collapse{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:0fr;opacity:0;transition:grid-template-rows 250ms cubic-bezier(.32,.72,0,1),opacity 230ms cubic-bezier(.4,0,.6,1)}
+.collapse.is-open{grid-template-rows:1fr;opacity:1;transition:grid-template-rows 320ms cubic-bezier(.22,1,.36,1),opacity 260ms ease-out 60ms}
 .collapse-in{min-height:0;overflow:hidden}
 .collapse.is-settled .collapse-in{overflow:visible}
 [data-fx="off"] .collapse,[data-fx="off"] .collapse.is-open{transition:none}

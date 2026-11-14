@@ -363,7 +363,7 @@ export function Fold({ id, icon, title, sub, open, onToggle, children }) {
       <div className="card list-card fold-card">
         <button className="list-row fold-head" aria-expanded={!!open} aria-controls={`fold-${id}`} data-fold-head={id} onClick={onToggle}>
           <span className="list-ico" style={{color:"var(--accent-text)"}}><Icon name={icon} size={20}/></span>
-          <span className="list-body"><span className="list-title">{title}</span>{sub&&!open&&<span className="list-sub" data-fold-sub={id}>{sub}</span>}</span>
+          <span className="list-body"><span className="list-title">{title}</span>{sub&&<span className={"fold-sub"+(open?" gone":"")} aria-hidden={open?true:undefined}><span className="list-sub" data-fold-sub={open?undefined:id}>{sub}</span></span>}</span>
           <span className={"fold-chev"+(open?" open":"")}><Icon name="chevDown" size={16} color="var(--ink-4)"/></span>
         </button>
       </div>
