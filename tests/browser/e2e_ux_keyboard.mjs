@@ -2,7 +2,7 @@
 // banners and restrained motion. Written BEFORE the fixes. Synthetic data. Confirmed in the active source first:
 // .txn-row, the recurring-payment row, .m-col (Analytics bars) and .io-card.drop-zone are clickable <div>s; the drop zone's only
 // file input is display:none, so importing a backup had NO keyboard or screen-reader route at all.
-import { launch, openPage, state, tab, openData, wait, ok, section, finish, tx, baseSeed, KEY } from "./lib.mjs";
+import { launch, openPage, state, tab, openData, wait, ok, section, finish, tx, baseSeed, KEY, hasNotice } from "./lib.mjs";
 const browser = await launch();
 const d = new Date(), pad = (n) => String(n).padStart(2, "0");
 const ym = (o) => { const x = new Date(d.getFullYear(), d.getMonth() + o, 1); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}`; };
@@ -78,13 +78,13 @@ section("UX-K4. Analytics month bars");
   await p2.close();
 }
 
-section("UX-K5. Banners: routine reminders only where they can be acted on; critical ones everywhere");
+section("UX-K5. Routine reminders sit behind the bell on every screen (Run 85); critical warnings stay as banners everywhere");
 {
   const page = await openPage(browser, { seed: seed({ lastBackup: new Date().toISOString() }) });
-  const has = async () => !!(await page.$(".backup-banner.backup-reminder:not(.update-banner)"));
+  const has = async () => (await hasNotice(page, "backup-confirm")) && !(await page.$(".backup-banner.backup-reminder"));
   const where = {}; for (const [n, t] of [["Home", "Home"], ["Ledger", "Ledger"], ["Monthly", "Monthly"], ["Goals", "Goals"], ["More", "More"], ["Recurring", "Recurring"]]) { await tab(page, t); await wait(200); where[n] = await has(); }
   await openData(page); where.ImportExport = await has();
-  ok(where.Home && where.ImportExport && !where.Ledger && !where.Monthly && !where.Goals && !where.More && !where.Recurring, "the 'did you keep the backup file?' reminder shows on Home and Import / Export only", where);
+  ok(Object.values(where).every(Boolean), "the 'did you keep the backup file?' reminder is in the bell on every screen and never takes space as a banner", where);
   await page.close();
   const p2 = await openPage(browser, { seed: seed({ lastBackup: new Date().toISOString() }) }); await wait(300);
   await p2.evaluate(() => { const orig = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k === "expense_ledger_v5") throw new DOMException("full", "QuotaExceededError"); return orig.call(this, k, v); }; });

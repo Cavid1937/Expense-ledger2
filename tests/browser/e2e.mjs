@@ -28,10 +28,10 @@ ok(/0 or more/.test(await toast(page)) && (await state(page)).safeToSpend.saving
 await setInput(page, flo, "450"); await clickIn(page, floBtn); await wait(250);
 ok((await state(page)).safeToSpend.savingsTarget === 450, "savings floor 450 → saved");
 await openSettings(page);
-const cur = () => [...document.querySelectorAll(".settings-row")].find((r) => /Currency symbol/i.test(r.textContent)).querySelector("input");
-await setInput(page, cur, ""); await clickIn(page, () => [...document.querySelectorAll(".settings-row")].find((r) => /Currency symbol/i.test(r.textContent)).querySelector("input").parentElement.querySelector(".btn-sm-primary"));
+const cur = () => [...document.querySelectorAll(".settings-row")].find((r) => /Other symbol/i.test(r.textContent)).querySelector("input");
+await setInput(page, cur, ""); await clickIn(page, () => [...document.querySelectorAll(".settings-row")].find((r) => /Other symbol/i.test(r.textContent)).querySelector("input").parentElement.querySelector(".btn-sm-primary"));
 ok(/currency symbol/i.test(await toast(page)) && (await state(page)).currency === "₼", "empty currency → rejected, stays ₼");
-ok(await page.evaluate(() => /Display only/.test(document.querySelector(".more-page").textContent)), "currency row says 'Display only — amounts are not converted'");
+ok(await page.evaluate(() => /they are not converted/.test(document.querySelector(".more-page").textContent)), "currency row says amounts are only shown differently and not converted (Run 85 wording)");
 await wait(100);
 await openGoals(page, "goals");
 await clickIn(page, () => document.querySelector('[data-section="gl-templates"] .btn-sm'));

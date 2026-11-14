@@ -405,15 +405,17 @@ export function MoneySettings({ state, onCatsChanged, onCurrencyChange, onSafeTo
           </div>
         </div>
         {/* Currency */}
-        <div className="settings-section-lbl" style={{marginTop:14}}>{t("set.currency")}</div>
+        {/* Run 85 (owner: "a straight line between the currency symbol text and the currency itself"): the heading no longer has a rule under it,
+            and the box below is "Other symbol" instead of repeating the heading. */}
+        <div className="settings-section-lbl no-rule" id="set-cur-head" style={{marginTop:14}}>{t("set.currency")}</div>
         {/* Run 24: common currencies are one tap, so nobody has to find the symbol on the keyboard; the box below still takes any other symbol. */}
-        <div className="filter-bar" role="group" aria-label={t("set.currencyPick")} data-section="currency-chips" style={{flexWrap:"wrap",overflowX:"visible"}}>{/* Run 39: wraps, so every choice stays visible with large text */}
+        <div className="filter-bar" role="group" aria-label={t("set.currencyPick")} data-section="currency-chips" style={{flexWrap:"wrap",overflowX:"visible",paddingTop:2}}>{/* Run 39: wraps, so every choice stays visible with large text */}
           {["₼","$","€","₽","£","₺","¥","₸","₴"].map(c=>(
             <button key={c} className={`chip${currency===c?" on":""}`} aria-pressed={currency===c} onClick={()=>{ setCurSym(c); onCurrencyChange(c); showToast(t("set.currencyUpdated")); }}>{c}</button>
           ))}
         </div>
         <div className="settings-row">
-          <div><div className="settings-row-title" id="set-cur-lbl">{t("set.currency")}</div><div className="settings-row-sub">{t("set.currencySub",{currency})}</div></div>
+          <div><div className="settings-row-title" id="set-cur-lbl">{t("set.currencyOther")}</div><div className="settings-row-sub">{t("set.currencyOtherSub")}</div></div>
           <div style={{display:"flex",gap:7,alignItems:"center"}}>
             <input className="field-input" value={curSym} onChange={e=>setCurSym(e.target.value)} maxLength={3} aria-labelledby="set-cur-lbl" style={{width:52,minHeight:38,textAlign:"center",padding:"7px 8px"}}/>
             <button className="btn btn-sm btn-sm-primary" onClick={()=>{if(!curSym.trim()){showToast(t("set.currencyEmpty"));return;} onCurrencyChange(curSym.trim());showToast(t("set.currencyUpdated"));}}>{t("common.save")}</button>
@@ -547,7 +549,7 @@ export function LearnSettings({ state, showToast }) {
   const [L,setL]=useState(()=>readLearn());
   const [show,setShow]=useState(false);
   const pv=useMemo(()=>learnPreview(state.transactions,{ sent:L.sent, crashLog:readCrashLog(), crashSent:L.crashSent, screens:readScreenCounts(), layouts:readLayouts(), lang:state.language||"en", version:APP_RELEASE, platform:inNativeShell()?"android":"web" }),[state.transactions,state.language,L]);
-  const flip=()=>{ const next={ ...readLearn(), on:!readLearn().on }; if (!writeLearn(next)) { showToast(t("carry.saveFailed")); return; } if (!next.on) { try { localStorage.removeItem(SCREENS_KEY); localStorage.removeItem(LAYOUTS_KEY); } catch {} } setL(readLearn()); try { window.dispatchEvent(new Event("ledger-learn-changed")); } catch {} showToast(t(next.on?"learn.onToast":"learn.offToast")); };
+  const flip=()=>{ const next={ ...readLearn(), on:!readLearn().on, asked:true }; if (!writeLearn(next)) { showToast(t("carry.saveFailed")); return; } if (!next.on) { try { localStorage.removeItem(SCREENS_KEY); localStorage.removeItem(LAYOUTS_KEY); } catch {} } setL(readLearn()); try { window.dispatchEvent(new Event("ledger-learn-changed")); } catch {} showToast(t(next.on?"learn.onToast":"learn.offToast")); };
   return (
     <div className="card" data-section="learn" style={{marginTop:12}}>
       <div className="settings-row" style={{alignItems:"flex-start"}}>

@@ -233,7 +233,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
             {surplusRate!==null?(
               <><div className={`hero-stat-val${surplusRate>=20?" pos":surplusRate<0?" neg":""}`}>{fmtPct(surplusRate)}</div><div className="hero-stat-lbl">{t("surplus."+surplusLabel(curNet,0))}</div></>
             ):(
-              <><div className={`hero-stat-val${curNet>0?" pos":curNet<0?" neg":""}`}>{curNet<0?"−":""}{fmtShort(Math.abs(curNet),currency)}</div><div className="hero-stat-lbl">{t("month.net."+(curNet>0?"Net surplus":curNet<0?"Net deficit":"Break-even"))}</div></>
+              <><div className={`hero-stat-val${curNet>0?" pos":curNet<0?" neg":""}`}>{curNet<0?"−":""}{fmtShort(Math.abs(curNet),currency)}</div><div className="hero-stat-lbl">{curNet===0&&!(curExp>0) ? t("home.netNone") : t("month.net."+(curNet>0?"Net surplus":curNet<0?"Net deficit":"Break-even"))}</div></>
             )}
           </div>
         </div>

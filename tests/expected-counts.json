@@ -86,7 +86,7 @@
     "run42math.test.mjs": 23,
     "run42io.test.mjs": 13,
     "run42slot.test.mjs": 17,
-    "run42merch.test.mjs": 15,
+    "run42merch.test.mjs": 15, "run85merch.test.mjs": 30, "run85learn.test.mjs": 10,
     "run43reimb.test.mjs": 29,
     "run50rollover.test.mjs": 22,
     "run50net.test.mjs": 16,

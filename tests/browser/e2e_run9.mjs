@@ -1,6 +1,6 @@
 // Run 9 (2026-10-27 evening) in the real bundled app: placeholder contrast (the Add form's empty "0.00" was ≈1.4:1),
 // header actions, privacy mode, linking an existing expense to a recurring bill. Written before each fix.
-import { openAnSeg, openSafe, launch, openPage, state, clickText, openAdd, tab, wait, ok, section, finish, tx, baseSeed, settle, fs, path } from "./lib.mjs";
+import { openAnSeg, openSafe, launch, openPage, state, clickText, openAdd, tab, wait, ok, section, finish, tx, baseSeed, settle, fs, path, hasNotice, noticeAct } from "./lib.mjs";
 const browser = await launch();
 const LANGS = ["en", "az", "ru"];
 
@@ -162,14 +162,14 @@ section("R9-5. The Analytics overview names surplus, deficit and break-even in w
   }
 }
 
-section("R9-6. The routine backup reminder is compact and stays dismissed while moving around; data-loss alerts stay strong");
+section("R9-6. The routine backup reminder takes no page space (bell, Run 85) and stays dismissed while moving around; data-loss alerts stay strong");
 {
   const old = new Date(Date.now() - 9 * 86400000).toISOString();
   let page = await openPage(browser, { seed: baseSeed({ lastBackup: old, backupConfirmedAt: old }) });
-  const rem = () => page.evaluate(() => { const b = [...document.querySelectorAll(".backup-banner")].find((x) => /Back up your data/.test(x.innerText)); if (!b) return null; const r = b.getBoundingClientRect(); return { compact: b.classList.contains("backup-reminder"), h: Math.round(r.height), w: Math.round(r.width), vw: innerWidth }; });
-  const r0 = await rem();
-  ok(r0 && r0.compact && r0.h <= 64 && r0.w < r0.vw, "the reminder is a compact card (not a full-width bar), still visible", r0);
-  await page.evaluate(() => [...document.querySelectorAll(".backup-banner")].find((x) => /Back up your data/.test(x.innerText)).querySelector(".backup-dismiss").click()); await wait(200);
+  const rem = async () => ((await hasNotice(page, "backup-due")) ? true : null);
+  const r0 = await page.evaluate(() => ({ banner: [...document.querySelectorAll(".backup-banner")].some((x) => /Back up your data/.test(x.innerText)), count: document.querySelector("[data-inbox-bell] .inbox-count")?.textContent || "" }));
+  ok((await rem()) && !r0.banner && r0.count === "1", "the reminder waits in the bell with a count of 1, not as a banner", r0);
+  await noticeAct(page, "backup-due", "later"); await wait(200);
   for (const s of ["Ledger", "Monthly", "Goals", "Recurring", "Home"]) { await tab(page, s); await wait(150); }
   ok((await rem()) === null, "after dismissing, it stays away on every screen during this visit");
   await page.close();

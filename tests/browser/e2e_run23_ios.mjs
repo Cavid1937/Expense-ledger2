@@ -1,11 +1,12 @@
 // Run 23: the iPhone data-removal note. Shown once on Home to an iPhone in a browser tab; not on other devices; not to an installed Home Screen app;
 // dismissal is remembered under its own key and the ledger is never touched. Synthetic data only.
-import { launch, openPage, wait, ok, section, finish, baseSeed, tx, settle } from "./lib.mjs";
+import { launch, openPage, wait, ok, section, finish, baseSeed, tx, settle, hasNotice, noticeText, noticeAct } from "./lib.mjs";
 const browser = await launch();
 const KEY = "expense_ledger_v5", NOTE = "expense_ledger_v5__iosnote";
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
 const seed = (language) => baseSeed({ language, transactions: [tx({ merchant: "Bravo", amount: 12, category: "food" })] });
-const note = (page) => page.evaluate(() => { const e = document.querySelector('[data-section="ios-note"]'); return e ? e.innerText : null; });
+// Run 85: the note now sits behind the bell in the top bar instead of a banner on Home.
+const note = async (page) => ((await hasNotice(page, "ios-note")) ? noticeText(page, "ios-note") : null);
 const asIphone = async (page, standalone) => {
   await page.setUserAgent(IPHONE);
   await page.evaluateOnNewDocument((s) => { if (s) Object.defineProperty(navigator, "standalone", { get: () => true }); }, !!standalone);
@@ -26,7 +27,7 @@ section("R23-IOS2. iPhone in a browser tab: note, dismiss, remembered");
   await asIphone(page, false);
   const n = await note(page);
   ok(!!n && /Safari can erase/.test(n) && /Home Screen/.test(n) && /backup/i.test(n), "the note explains the risk, the Home Screen fix and the backup", n);
-  await page.evaluate(() => document.querySelector('[data-section="ios-note"] .backup-dismiss').click()); await wait(500);
+  await noticeAct(page, "ios-note", "ok"); await wait(500);
   ok((await note(page)) === null, "dismissing removes it");
   ok((await page.evaluate((k) => localStorage.getItem(k), NOTE)) === "1", "the choice is stored under its own key");
   await page.reload(); await page.waitForSelector(".tabbar"); await wait(500);

@@ -135,3 +135,13 @@ export const ok = (c, m, extra) => { console.log((c ? "  ✓ " : "  ✗ ") + m);
 export const section = (t) => console.log("\n" + t);
 export const finish = async (name, browser) => { if (browser) await browser.close(); console.log(`\n${fails === 0 ? name + ": ALL " + passes + " CHECKS PASSED" : name + ": " + fails + " FAILED, " + passes + " passed"}`); process.exit(fails ? 1 : 0); };
 export { fs, path };
+
+// Run 85: routine notices (bill restore, backup reminders, the iPhone note) live behind the bell in the top bar.
+// The bell lists the ids of the notices it holds, so a test can see a notice without opening the panel.
+export const hasNotice = (page, id) => page.evaluate((i) => (document.querySelector("[data-inbox-bell]")?.getAttribute("data-notices") || "").split(" ").includes(i), id);
+export async function openBell(page) {
+  await page.evaluate(() => { if (!document.querySelector("[data-inbox-pop]")) document.querySelector("[data-inbox-bell]")?.click(); });
+  await wait(320);
+}
+export async function noticeText(page, id) { await openBell(page); return page.evaluate((i) => document.querySelector(`[data-notice="${i}"]`)?.innerText || "", id); }
+export async function noticeAct(page, id, act) { await openBell(page); await page.evaluate(([i, a]) => document.querySelector(`[data-notice="${i}"] [data-act="${a}"]`)?.click(), [id, act]); }

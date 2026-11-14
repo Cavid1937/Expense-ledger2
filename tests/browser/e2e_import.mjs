@@ -59,8 +59,8 @@ await clickText(page, ".snackbar-undo", /Undo/); await wait(300);
 st = await state(page); ok(eq2(st.transactions, pre.transactions) && eq2(st.budgets, pre.budgets) && st.currency === pre.currency, "Undo restores the previous data exactly");
 await upload(page, write("replace.json", JSON.stringify(bk))); await sheetBtn(page, /^Replace/); await wait(300);
 await openSettings(page);   // redesign: the import is on Import / Export, the currency change that follows is in Settings
-const curInput = () => [...document.querySelectorAll(".settings-row")].find((r) => /Currency symbol/i.test(r.textContent)).querySelector("input");
-await setInput(page, curInput, "$"); await page.evaluate(() => [...document.querySelectorAll(".settings-row")].find((r) => /Currency symbol/i.test(r.textContent)).querySelector(".btn-sm-primary").click()); await wait(200);
+const curInput = () => [...document.querySelectorAll(".settings-row")].find((r) => /Other symbol/i.test(r.textContent)).querySelector("input");
+await setInput(page, curInput, "$"); await page.evaluate(() => [...document.querySelectorAll(".settings-row")].find((r) => /Other symbol/i.test(r.textContent)).querySelector(".btn-sm-primary").click()); await wait(200);
 await clickText(page, ".snackbar-undo", /Undo/); await wait(250);
 st = await state(page); ok(st.transactions.length === 2 && st.currency === "$", "Undo after a later change refuses (it would erase newer work)", { n: st.transactions.length, cur: st.currency });
 ok(/Can't undo/.test(await toast(page, 50)), "…and says why");
@@ -132,8 +132,8 @@ page = await openPage(browser, { seed: null, seedRaw: badSeed });
 const banner = () => page.evaluate(() => [...document.querySelectorAll(".backup-banner")].map((b) => b.innerText));
 ok((await banner()).some((t) => /2 unreadable records set aside/.test(t) && /negative amount/.test(t) && /missing date/.test(t)), "recovery banner explains what was set aside and why", await banner());
 await openSettings(page);
-const cur2 = () => [...document.querySelectorAll(".settings-row")].find((r) => /Currency symbol/i.test(r.textContent)).querySelector("input");
-for (let i = 0; i < 3; i++) { await setInput(page, cur2, ""); await page.evaluate(() => [...document.querySelectorAll(".settings-row")].find((r) => /Currency symbol/i.test(r.textContent)).querySelector(".btn-sm-primary").click()); await wait(120); }
+const cur2 = () => [...document.querySelectorAll(".settings-row")].find((r) => /Other symbol/i.test(r.textContent)).querySelector("input");
+for (let i = 0; i < 3; i++) { await setInput(page, cur2, ""); await page.evaluate(() => [...document.querySelectorAll(".settings-row")].find((r) => /Other symbol/i.test(r.textContent)).querySelector(".btn-sm-primary").click()); await wait(120); }
 ok((await banner()).some((t) => /unreadable records set aside/.test(t)), "…and it is still there after several toasts (nothing can replace it)");
 await wait(100);
 await page.evaluate(() => [...document.querySelectorAll(".backup-banner")].find((b) => /unreadable/.test(b.innerText)).querySelector(".backup-dismiss").click()); await wait(200);

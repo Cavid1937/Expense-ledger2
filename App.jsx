@@ -23,6 +23,7 @@ import { Onboarding, readOnboard, writeOnboard } from "./screens/onboard.jsx";
 import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
 import { Collapse, motionOff, runBackStep, backStepCount } from "./screens/motion.jsx";
+import { NoticeBell } from "./screens/inbox.jsx";
 import { finishLaunch, startLaunch } from "./screens/launch.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2578,19 +2579,44 @@ export const KNOWN_MERCHANTS=[
   ["Kontakt","shopping","Electronics"],["Baku Electronics","shopping","Electronics"],
   ["Amazon","shopping","Online Shopping"],["AliExpress","shopping","Online Shopping"],["Trendyol","shopping","Online Shopping"],["Temu","shopping","Online Shopping"],["Birmarket","shopping","Online Shopping"],["Umico","shopping","Online Shopping"],["Rossmann","personal","Cosmetics"],["Avromed","health","Pharmacy"],["Gapgo","transport","Taxi / Ride-hailing"],["Azeronline","digital","Internet"],["iTicket","entertain","Events"],
   ["CinemaPlus","entertain","Cinema"],["Park Cinema","entertain","Cinema"],
+  // Run 85: registered internet providers from the Ministry of Digital Development and Transport register (research seed S01, 14 Nov 2026).
+  ["Starlink","digital","Internet"],["UniNet","digital","Internet"],["UlTel","digital","Internet"],
+];
+// Run 85 (merchant research seed, 14 Nov 2026; audit in handoff/merchant-audit-20261114.md): other names people type for a place above.
+// [what is typed, the name it means]. Only whole-name matches use them, so a short or common word never picks a category by itself
+// ("Oba", "Metro", "Favorite", "Connect" are deliberately absent). Bolt and Bolt Food, Yango and its delivery service stay apart.
+export const KNOWN_MERCHANT_ALIASES=[
+  ["Bolt Taxi","Bolt"],["Bolt Ride","Bolt"],["BoltFood","Bolt Food"],["Bolt Yemək","Bolt Food"],["Bolt Yemek","Bolt Food"],
+  ["Yango Taxi","Yango"],["Yango Ride","Yango"],
+  ["Azercell Balans","Azercell"],["Bakcell Balans","Bakcell"],["Nar Mobile","Nar"],["Nar Balans","Nar"],["Azerfon","Nar"],
+  ["Azerigas","Azəriqaz"],["SOCAR Azəriqaz","Azəriqaz"],["Azəristiliktəchizat","Azəristilik"],["Azeristiliktechizat","Azəristilik"],
+  ["Kontakt Home","Kontakt"],["Wolt Market","Wolt"],
 ];
 // Matches what is typed against the start of the name or of any word in it (at least 2 letters). Returns suggestion objects shaped like merchant-memory entries.
 export function knownMerchants(query, type="expense", limit=4) {
   const q=lc(String(query||"").trim()); if (type==="income" || q.length<2) return [];
-  const out=[];
+  const out=[], has=new Set();
+  const hit=(n)=>n.startsWith(q) || n.split(/[\s'’./-]+/).some(w=>w.length>0 && w.startsWith(q));
   for (const [name,category,subcategory] of KNOWN_MERCHANTS) {
-    const n=lc(name); if (n.startsWith(q) || n.split(/[\s'’./-]+/).some(w=>w.length>0 && w.startsWith(q))) out.push({ type:"expense", merchant:name, category, subcategory, count:0, totalSpent:0, builtin:true });
+    if (hit(lc(name))) { out.push({ type:"expense", merchant:name, category, subcategory, count:0, totalSpent:0, builtin:true }); has.add(name); }
+    if (out.length>=limit) return out;
+  }
+  // Run 85: an alias that matches suggests the place it means (once), never the alias itself.
+  for (const [alias,name] of KNOWN_MERCHANT_ALIASES) {
+    if (has.has(name) || !hit(lc(alias))) continue;
+    const m=KNOWN_MERCHANTS.find(x=>x[0]===name); if (!m) continue;
+    out.push({ type:"expense", merchant:m[0], category:m[1], subcategory:m[2], count:0, totalSpent:0, builtin:true }); has.add(name);
     if (out.length>=limit) break;
   }
   return out;
 }
-// The one exact match (whole name, any letter case) or null.
-export function knownMerchantExact(name) { const q=lc(String(name||"").trim()); if (!q) return null; const m=KNOWN_MERCHANTS.find(x=>lc(x[0])===q); return m ? { merchant:m[0], category:m[1], subcategory:m[2] } : null; }
+// The one exact match (whole name or a listed alias, any letter case) or null. merchant is always the place's own name.
+export function knownMerchantExact(name) {
+  const q=lc(String(name||"").trim().replace(/\s+/g," ")); if (!q) return null;
+  let m=KNOWN_MERCHANTS.find(x=>lc(x[0])===q);
+  if (!m) { const a=KNOWN_MERCHANT_ALIASES.find(x=>lc(x[0])===q); if (a) m=KNOWN_MERCHANTS.find(x=>x[0]===a[1]); }
+  return m ? { merchant:m[0], category:m[1], subcategory:m[2] } : null;
+}
 // S6: Full merchant profile per spec — frequency, timing, recurrence detection, forecasting
 function detectRecurrence(txns) {
   if (txns.length < 3) return { isRecurring: false, recurringFreq: "irregular", recurringConfidence: 0, avgDaysBetween: null };
@@ -4205,7 +4231,7 @@ export function writeAccount(v) { try { const c=cleanSession(v); if (c) localSto
 export const LEARN_KEY=KEY+"__learn";
 const LEARN_URL="https://qkztocsrxhubsljtsjpd.supabase.co/rest/v1/", LEARN_PUBLIC_KEY="sb_publishable_L1ADxl6MJw9fmRjroFsoMA_EUYqwIuD";
 const LEARN_SKIP_CATS=new Set(["gifts","family","finance","other","giftin","familyin","alimony","income","personal"]);
-export function readLearn() { try { const v=JSON.parse(localStorage.getItem(LEARN_KEY)||"null"); return { on:!!(v&&v.on===true), lastDay:v&&typeof v.lastDay==="string"?v.lastDay:"", sent:Array.isArray(v&&v.sent)?v.sent.filter(x=>typeof x==="string").slice(-1000):[], crashSent:v&&typeof v.crashSent==="string"?v.crashSent:"" }; } catch { return { on:false, lastDay:"", sent:[], crashSent:"" }; } }
+export function readLearn() { try { const v=JSON.parse(localStorage.getItem(LEARN_KEY)||"null"); return { on:!!(v&&v.on===true), lastDay:v&&typeof v.lastDay==="string"?v.lastDay:"", sent:Array.isArray(v&&v.sent)?v.sent.filter(x=>typeof x==="string").slice(-1000):[], crashSent:v&&typeof v.crashSent==="string"?v.crashSent:"", asked:!!(v&&v.asked===true) }; } catch { return { on:false, lastDay:"", sent:[], crashSent:"", asked:false }; } }
 export function writeLearn(v) { try { localStorage.setItem(LEARN_KEY,JSON.stringify(v)); return true; } catch { return false; } }
 // A place name as it may leave the phone, or "" when it must not.
 export function cleanPlace(s) {
@@ -4832,6 +4858,7 @@ function AppInner() {
     return { ...s, transactions:r.transactions, bills:r.bills };
   };
   const addTransaction=useCallback((txn)=>{
+    countScreen("do-add");
     const { billChoice, wallet, trip, account, refundFor, fx, spread, reimb, reimbFor, ...data }=txn, id=Date.now()+Math.random();
     const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}), ...(data.type==="expense" && cleanReimb(reimb) ? { reimb:cleanReimb(reimb) } : {}), ...(data.type==="income" && data.category==="refund" && reimbForRef(reimbFor)!==null ? { reimbFor:reimbForRef(reimbFor) } : {}) };   // Run 39: fx kept only when valid; Run 41: spread only on expenses, 2 to 24
     // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
@@ -4850,6 +4877,7 @@ function AppInner() {
 
   // Run 50: several entries written as one sentence, saved in one step with one Undo (the review list already showed each one).
   const addManyTransactions=useCallback((items)=>{
+    countScreen("do-addmany");
     const list=(items||[]).filter(i=>i&&i.ok&&(i.type==="expense"||i.type==="income")&&i.amount>0&&isValidDateStr(i.date));
     if (!list.length) return;
     const before=stateRef.current, stamp=new Date().toISOString();
@@ -4883,6 +4911,7 @@ function AppInner() {
   const debtLinked=(id)=>{ const tx=stateRef.current.transactions.find(x=>x.id===id); if (!tx || !debtLinkRef(tx.debtLink)) return false;
     const dd=readDebts(), d=dd.debts.find(x=>x.id===tx.debtLink.debtId); return !!(d && d.payments.some(p=>p.id===tx.debtLink.paymentId)); };
   const updateTransaction=useCallback((id,txn)=>{
+    countScreen("do-edit");
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
     const { billChoice, wallet, trip, account, refundFor, fx, spread, reimb, reimbFor, ...data }=txn;
     const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}), ...(data.type==="expense" && cleanReimb(reimb) ? { reimb:cleanReimb(reimb) } : {}), ...(data.type==="income" && data.category==="refund" && reimbForRef(reimbFor)!==null ? { reimbFor:reimbForRef(reimbFor) } : {}) };   // Run 39: switching back to manat removes fx; Run 41: an empty spread removes it
@@ -4929,6 +4958,7 @@ function AppInner() {
 
   // Run 24: splitting replaces one entry with several that add up to it; undo puts the original back unless something changed since.
   const splitEntry=useCallback((id,parts)=>{
+    countScreen("do-split");
     const before=stateRef.current, orig=before.transactions.find(x=>x.id===id);
     if (!orig) return false;
     const r=splitTransaction(orig,parts); if (!r.ok) return false;
@@ -4939,6 +4969,7 @@ function AppInner() {
   },[showSnackbar,showToast]);
 
   const deleteTransaction=useCallback((id)=>{
+    countScreen("do-delete");
     const removed=stateRef.current.transactions.find(t=>t.id===id);
     if (!removed) return;
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
@@ -4974,6 +5005,7 @@ function AppInner() {
     showSnackbar(tn("bill.converted",r.created),()=>{ if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; } setState(before); },10000,"bills");
   },[showToast,showSnackbar]);
   const saveBill=useCallback((b)=>{
+    countScreen("do-bill");
     setState(s=>{ const list=s.bills||[];
       return b.id ? { ...s, bills:list.map(x=>x.id===b.id?b:x) } : { ...s, bills:[...list, { ...b, id:newBillId(new Set(list.map(x=>x.id))) }] }; });
     setEditBill(undefined); showToast(t("bill.saved"));
@@ -5027,6 +5059,15 @@ function AppInner() {
   useEffect(()=>{ const f=()=>setRemindTick(n=>n+1); window.addEventListener(REMIND_EVENT,f); return ()=>window.removeEventListener(REMIND_EVENT,f); },[]);
   // Run 69: turning "Help improve the app" on (Settings) sends the first day's rows without waiting for the next start
   const [learnTick,setLearnTick]=useState(0);
+  const [learnAsk,setLearnAsk]=useState(()=>readLearn());
+  useEffect(()=>{ setLearnAsk(readLearn()); },[learnTick]);
+  const answerLearn=useCallback((yes)=>{
+    const next={ ...readLearn(), on:yes, asked:true };
+    if (!writeLearn(next)) { showToast(t("carry.saveFailed")); return; }
+    setLearnAsk(next);
+    try { window.dispatchEvent(new Event("ledger-learn-changed")); } catch { /* the Settings card reads it again when opened */ }
+    showToast(t(yes?"learn.onToast":"learn.askNoToast"));
+  },[showToast]);
   useEffect(()=>{ const f=()=>setLearnTick(n=>n+1); window.addEventListener("ledger-learn-changed",f); return ()=>window.removeEventListener("ledger-learn-changed",f); },[]);
   useEffect(()=>{
     if (!remindersAvailable()) return;
@@ -5219,7 +5260,7 @@ function AppInner() {
         return obAccount(tok,n.raw);
       }
       if (!el) return false;
-      await renderGoogleButton(el,n.hashed,(tok)=>{ obAccount(tok,n.raw); },{ locale:stateRef.current.language||"en", dark:document.documentElement.getAttribute("data-dark")==="1" });
+      await renderGoogleButton(el,n.hashed,(tok)=>{ obAccount(tok,n.raw); },{ locale:stateRef.current.language||"en", dark:document.documentElement.getAttribute("data-scheme")==="dark" });
       return "button";
     } catch (e) {
       const r=acctReason(e);
@@ -5285,7 +5326,7 @@ function AppInner() {
       const n=await makeNonce();
       if (nativeGoogleIdAvailable()) { setAcctBusy("signin"); let tok; try { tok=await nativeGoogleIdToken(n.hashed); } finally { setAcctBusy(""); } return acctFinish(tok,n.raw); }
       if (!el) return false;
-      await renderGoogleButton(el,n.hashed,(tok)=>{ acctFinish(tok,n.raw); },{ locale:stateRef.current.language||"en", dark:document.documentElement.getAttribute("data-dark")==="1" });
+      await renderGoogleButton(el,n.hashed,(tok)=>{ acctFinish(tok,n.raw); },{ locale:stateRef.current.language||"en", dark:document.documentElement.getAttribute("data-scheme")==="dark" });
       return "button";
     } catch (e) { const r=acctReason(e); if (r!=="cancelled") showToast(t("acct.err."+r),6000); return false; }
   };
@@ -5367,6 +5408,7 @@ function AppInner() {
     return ()=>clearTimeout(tm);
   },[state.transactions,state.budgets,state.goals,state.bills]);
   const exportCSV=useCallback(async ()=>{
+    countScreen("do-csv");
     const save=nativeSaveHook();
     if (save) {   // Run 37: the Android app saves the spreadsheet into Downloads
       const r=await saveViaNative(save,`ledger-${today()}.csv`,buildCsv(state.transactions),"text/csv");
@@ -5387,6 +5429,7 @@ function AppInner() {
 
   const shareBackupRef=useRef(null);
   const exportJSON=useCallback(async (opts)=>{
+    countScreen("do-backup");
     const pick=!!(opts && opts.pick===true);   // Run 39b: "Save to a folder I choose…" (system Save-as screen)
     const save=nativeSaveHook();
     if (save) {
@@ -5545,6 +5588,7 @@ function AppInner() {
 
   // mode: "merge" · "replace" · "settings" (a file with no usable transactions: apply its settings, keep every transaction).
   const commitImport=useCallback((mode)=>{
+    countScreen("do-import");
     const plan=importPending;
     if (!plan || plan.error) return;
     if (mode==="replace" && !plan.canReplace) return;
@@ -5625,6 +5669,18 @@ function AppInner() {
     templates: JSON.stringify(s.templates)===JSON.stringify(DEFAULT_TEMPLATES) ? DEFAULT_TEMPLATES.map(tp=>MESSAGES["tpl."+tp.id]?{...tp,name:tIn(l,"tpl."+tp.id)}:tp) : s.templates })); };
   if (state.language===null) return (<><style>{CSS}</style><Onboarding step="lang" lang={null} onLanguage={chooseFirstLanguage}/></>);
 
+  // Run 85: the routine notices shown behind the bell (screens/inbox.jsx). Same conditions as the banners they replace, on every screen.
+  const notices=[];
+  if (restoreOpen) notices.push({ id:"bill-restore", text:tn("bill.restoreAsk",restoreOffer.bills.length), actions:[{ key:"yes", label:t("bill.restoreBtn"), primary:true, onClick:restoreBills },{ key:"no", label:t("bill.restoreNo"), onClick:()=>setRestoreClosed(true) }] });
+  if (!backupDismissed&&backupReminder==="due"&&transactions.length>0) notices.push({ id:"backup-due", text:t("banner.backupDue"), actions:[{ key:"now", label:t("banner.backUpNow"), primary:true, onClick:exportJSON }], onDismiss:()=>setBackupDismissed(true) });
+  if (!backupDismissed&&backupReminder==="confirm"&&transactions.length>0) notices.push({ id:"backup-confirm", text:t("banner.backupConfirm"), actions:[{ key:"have", label:t("banner.haveFile"), primary:true, onClick:()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); } }], onDismiss:()=>setBackupDismissed(true) });
+  // Run 85 (owner: "did you add analytics?"): the opt-in sharing existed since Run 69 but was only a switch deep in Settings, so almost nobody
+  // could say yes. Ask ONCE, in the bell, after the person has used the app a little (5 entries). Either answer is final; Settings can change it.
+  if (!learnAsk.on && !learnAsk.asked && transactions.length>=5) notices.push({ id:"learn-ask", text:t("learn.ask"), actions:[
+    { key:"yes", label:t("learn.askYes"), primary:true, onClick:()=>answerLearn(true) },
+    { key:"no", label:t("learn.askNo"), onClick:()=>answerLearn(false) } ] });
+  if (iosNote) notices.push({ id:"ios-note", text:t("banner.iosNote"), actions:[{ key:"ok", label:t("inbox.gotIt"), onClick:()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } } }] });
+
   return (
     <>
       <style>{CSS}</style>
@@ -5642,13 +5698,6 @@ function AppInner() {
             <button className="backup-dismiss" onClick={()=>setRecoveryNotice(null)} aria-label={t("common.dismissNotice")}>×</button>
           </div>
         )}
-        {restoreOpen&&(
-          <div className="backup-banner backup-reminder bill-restore" role="alert">
-            <span>{tn("bill.restoreAsk",restoreOffer.bills.length)}</span>
-            <button className="backup-banner-btn bill-restore-yes" onClick={restoreBills}>{t("bill.restoreBtn")}</button>
-            <button className="backup-banner-btn bill-restore-no" style={{background:"transparent",color:"var(--ink-2)",border:"1px solid var(--rule-2)"}} onClick={()=>setRestoreClosed(true)}>{t("bill.restoreNo")}</button>
-          </div>
-        )}
         {storageFailed&&(
           <div className="backup-banner" role="alert" style={{background:"var(--neg-bg)",borderBottomColor:"var(--neg)",color:"var(--neg)"}}>
             <span>{SAVE_BLOCKED?t(SAVE_BLOCKED_READ?"banner.readPaused":"banner.savePaused"):t("banner.saveFailed")}</span>
@@ -5661,30 +5710,8 @@ function AppInner() {
             <button className="backup-banner-btn update-now" onClick={()=>window.location.reload()}>{t("update.now")}</button>
           </div>
         )}
-        {/* Run 14: the routine backup reminders appear where they can be acted on (Home, Import / Export), not above every screen.
-            Warnings about the data's safety (recovery notices, "cannot save", update) above stay on every screen. */}
-        {/* Run 34: these notices slide away (height + fade) when dismissed or when you leave the screen, instead of vanishing in one frame. */}
-        <Collapse open={!backupDismissed&&(tab==="home"||tab==="io")&&backupReminder==="due"&&transactions.length>0}>
-          <div className="backup-banner backup-reminder" role="alert">
-            <span>{t("banner.backupDue")}</span>
-            <button className="backup-banner-btn" onClick={exportJSON}>{t("banner.backUpNow")}</button>
-            <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label={t("common.dismiss")}>×</button>
-          </div>
-        </Collapse>
-        <Collapse open={!backupDismissed&&(tab==="home"||tab==="io")&&backupReminder==="confirm"&&transactions.length>0}>
-          <div className="backup-banner backup-reminder" role="status">
-            <span>{t("banner.backupConfirm")}</span>
-            <button className="backup-banner-btn" onClick={()=>{ setState(s=>({...s,backupConfirmedAt:new Date().toISOString()})); showToast(tn("banner.confirmThanks",BACKUP_REMINDER_DAYS)); }}>{t("banner.haveFile")}</button>
-            <button className="backup-dismiss" onClick={()=>setBackupDismissed(true)} aria-label={t("common.dismiss")}>×</button>
-          </div>
-        </Collapse>
-
-        <Collapse open={!!iosNote&&tab==="home"}>
-          <div className="backup-banner backup-reminder" role="note" data-section="ios-note">
-            <span>{t("banner.iosNote")}</span>
-            <button className="backup-dismiss" onClick={()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } }} aria-label={t("common.dismiss")}>×</button>
-          </div>
-        </Collapse>
+        {/* Run 85: routine notices (backup reminders, the iPhone note, the bill-restore offer) moved behind the bell in the top bar (screens/inbox.jsx).
+            Warnings about the data's safety (recovery notices, "cannot save", update) above stay as banners on every screen. */}
 
         <header className="topbar">
           {SUBPAGE_PARENT[tab]
@@ -5694,6 +5721,7 @@ function AppInner() {
               </div>
             : <h1 className="wordmark">{tab==="home"?t(greetingKey())+(state.profileName?", "+state.profileName:""):tab==="goals"?t("goals.pageTitle"):t("nav."+tab)}</h1>}
           <div className="topbar-right">
+            <NoticeBell notices={notices}/>
             <button className={`topbar-btn privacy-toggle${privacy?" on":""}`} aria-pressed={privacy} aria-label={t(privacy?"privacy.show":"privacy.hide")} title={t(privacy?"privacy.show":"privacy.hide")}
               onClick={()=>{ setPrivacy(p=>!p); showToast(t(privacy?"privacy.offToast":"privacy.onToast")); }}><Icon key={privacy?"off":"on"} name={privacy?"eyeOff":"eye"} size={20}/></button>
           </div>

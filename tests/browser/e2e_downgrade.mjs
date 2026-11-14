@@ -2,7 +2,7 @@
 // tests/fixtures/app-v9) after bills exist. Written BEFORE the protection. The old app is built and run for real, in the same
 // browser profile, on a ledger written by the current app. Dates are relative to today. Synthetic data only.
 import { spawnSync } from "child_process"; import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath, pathToFileURL } from "url";
-import { launch, openPage, state, tab, openSafe, wait, ok, section, finish, tx, baseSeed, KEY } from "./lib.mjs";
+import { launch, openPage, state, tab, openSafe, wait, ok, section, finish, tx, baseSeed, KEY, hasNotice, noticeText, noticeAct } from "./lib.mjs";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MIRROR = KEY + "__bills_mirror";
 const out = fs.mkdtempSync(path.join(os.tmpdir(), "ledger-v9-page-"));
@@ -49,37 +49,37 @@ await page.close();
 
 section("DG-3. Back on the current app: the loss is offered back, never applied silently");
 page = await openPage(browser, { seed: null });
-ok(!!(await page.$(".bill-restore")) && /2 of your bills/.test(await page.evaluate(() => document.querySelector(".bill-restore").innerText)), "a banner says an older version removed 2 bills and offers to restore them");
+ok((await hasNotice(page, "bill-restore")) && /2 of your bills/.test(await noticeText(page, "bill-restore")), "a banner says an older version removed 2 bills and offers to restore them");
 let st = await state(page);
 ok(!st.bills?.length && st.transactions.every((t) => !t.billId), "nothing was restored by itself");
 ok(JSON.stringify((await stored(page, MIRROR))?.bills) === JSON.stringify(before.bills), "while the offer is open the mirror is kept as it was (ignoring the banner loses nothing)");
-await page.evaluate(() => document.querySelector(".bill-restore-yes")?.click()); await wait(500);
+await noticeAct(page, "bill-restore", "yes"); await wait(500);
 st = await state(page);
 ok(JSON.stringify(st.bills) === JSON.stringify(before.bills) && JSON.stringify(st.transactions.map((t) => t.billId)) === JSON.stringify(before.transactions.map((t) => t.billId)) && ids(st) === ids(before), "Restore brings back the same 2 bills (same ids and fields) and the same 3 links; no entry changed");
 ok(/\+1,892\.00/.test(await discretionary(page)), "Safe to Spend is +1,892 again");
-ok((await rawKeys(page)).some((k) => /before_bills_restore/.test(k)) && !(await page.$(".bill-restore")), "a recovery copy of the data was kept first, and the banner is gone");
+ok((await rawKeys(page)).some((k) => /before_bills_restore/.test(k)) && !(await hasNotice(page, "bill-restore")), "a recovery copy of the data was kept first, and the banner is gone");
 await page.evaluate(() => document.querySelector(".snackbar-undo")?.click()); await wait(400);
 st = await state(page);
-ok(!st.bills?.length && !!(await page.$(".bill-restore")) && JSON.stringify((await stored(page, MIRROR))?.bills) === JSON.stringify(before.bills), "Undo puts the data back as it was before restoring, and the offer is open again (the mirror still has the bills)");
-await page.evaluate(() => document.querySelector(".bill-restore-yes")?.click()); await wait(500);
+ok(!st.bills?.length && (await hasNotice(page, "bill-restore")) && JSON.stringify((await stored(page, MIRROR))?.bills) === JSON.stringify(before.bills), "Undo puts the data back as it was before restoring, and the offer is open again (the mirror still has the bills)");
+await noticeAct(page, "bill-restore", "yes"); await wait(500);
 await page.reload(); await page.waitForSelector(".tabbar"); await wait(500);
 st = await state(page);
-ok(st.bills.length === 2 && !(await page.$(".bill-restore")) && /\+1,892\.00/.test(await discretionary(page)), "after reloading: the 2 bills are there, no banner, +1,892");
+ok(st.bills.length === 2 && !(await hasNotice(page, "bill-restore")) && /\+1,892\.00/.test(await discretionary(page)), "after reloading: the 2 bills are there, no banner, +1,892");
 ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
 await page.close();
 
 section("DG-4. 'No thanks' is final, and nothing is offered without a real loss");
 page = await openPage(browser, { url: V9, seed: null }); await wait(600); await page.close();   // wipe again with the old app
 page = await openPage(browser, { seed: null });
-ok(!!(await page.$(".bill-restore")), "after another rollback the offer appears again");
-await page.evaluate(() => document.querySelector(".bill-restore-no")?.click()); await wait(500);
+ok((await hasNotice(page, "bill-restore")), "after another rollback the offer appears again");
+await noticeAct(page, "bill-restore", "no"); await wait(500);
 st = await state(page);
-ok(!st.bills?.length && !(await page.$(".bill-restore")) && (await stored(page, MIRROR))?.bills.length === 0, "No thanks: nothing restored, the banner closes, and the mirror now follows the ledger (no repeated nagging)");
+ok(!st.bills?.length && !(await hasNotice(page, "bill-restore")) && (await stored(page, MIRROR))?.bills.length === 0, "No thanks: nothing restored, the banner closes, and the mirror now follows the ledger (no repeated nagging)");
 await page.reload(); await page.waitForSelector(".tabbar"); await wait(400);
-ok(!(await page.$(".bill-restore")), "after reloading there is no banner");
+ok(!(await hasNotice(page, "bill-restore")), "after reloading there is no banner");
 await page.close();
 page = await openPage(browser, { fresh: true, seed: null });
-ok(!(await page.$(".bill-restore")) && !(await rawKeys(page)).includes(MIRROR), "a brand-new install: no banner and no mirror key (users without bills get no extra storage)");
+ok(!(await hasNotice(page, "bill-restore")) && !(await rawKeys(page)).includes(MIRROR), "a brand-new install: no banner and no mirror key (users without bills get no extra storage)");
 await page.close();
 page = await openPage(browser, { seed: ledger() }); await wait(500);
 await tab(page, "Recurring"); await page.evaluate(() => [...document.querySelectorAll(".bill-row")].find((r) => /Kommunal/.test(r.innerText)).click()); await page.waitForSelector(".bill-sheet"); await wait(300);
@@ -87,7 +87,7 @@ await page.evaluate(() => document.querySelector(".bill-delete").click()); await
 const afterDelete = await stored(page, MIRROR);
 ok(afterDelete?.bills.length === 1, "deleting a bill on purpose updates the mirror too (1 bill left)", afterDelete?.bills.length);
 await page.reload(); await page.waitForSelector(".tabbar"); await wait(500);
-ok(!(await page.$(".bill-restore")), "after reloading there is no banner: a deliberate delete is not mistaken for a rollback");
+ok(!(await hasNotice(page, "bill-restore")), "after reloading there is no banner: a deliberate delete is not mistaken for a rollback");
 ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
 await page.close();
 await browser.close();

@@ -2,7 +2,7 @@
 // (1) Replace with an older (version 9) backup on a device that has bills: the sheet says the bills stay. (2) Converting when the
 // recovery copy cannot be kept. (3) The ledger itself cannot be saved. (4) Restoring bills when the recovery copy cannot be kept.
 // Synthetic data; downloads/imports go to the temp folders set by tests/run-browser.mjs.
-import { launch, openPage, state, tab, openData, openSafe, wait, ok, section, finish, tx, baseSeed, clickText, bodyText, fs, path, KEY } from "./lib.mjs";
+import { launch, openPage, state, tab, openData, openSafe, wait, ok, section, finish, tx, baseSeed, clickText, bodyText, fs, path, KEY, hasNotice, noticeAct } from "./lib.mjs";
 const IMP = process.env.E2E_IMP_DIR || path.join(process.env.TEMP || ".", "ledger-e2e-imp"); fs.mkdirSync(IMP, { recursive: true });
 const MIRROR = KEY + "__bills_mirror";
 const browser = await launch();
@@ -78,7 +78,7 @@ section("R13-B3. The ledger itself cannot be saved (storage full)");
   ok(JSON.stringify(await stored(page)) === stored0 && JSON.stringify(await stored(page, MIRROR)) === mirror0, "the saved ledger and the mirror are exactly as they were (nothing half-written)");
   await allowWrites(page); await page.reload(); await page.waitForSelector(".tabbar"); await wait(500);
   const st = await state(page);
-  ok(st.bills.length === 2 && !(await page.$(".bill-restore")), "after reloading: the 2 earlier bills are intact (the unsaved third is gone, as the banner said) and no restore offer appears");
+  ok(st.bills.length === 2 && !(await hasNotice(page, "bill-restore")), "after reloading: the 2 earlier bills are intact (the unsaved third is gone, as the banner said) and no restore offer appears");
   await page.close();
 }
 
@@ -87,15 +87,15 @@ section("R13-B4. Restoring bills when the recovery copy cannot be kept");
   const ledger = withBills(), wiped = { ...ledger, bills: undefined, transactions: ledger.transactions.map(({ billId, ...r }) => r) };
   const mirror = { v: 1, savedAt: new Date().toISOString(), bills: ledger.bills, links: { 1790000200002: "bE", 1790000200003: "bW" } };
   const page = await openPage(browser, { seed: wiped, pre: `if(!sessionStorage.getItem("__m")){sessionStorage.setItem("__m","1");localStorage.setItem(${JSON.stringify(MIRROR)},${JSON.stringify(JSON.stringify(mirror))});}` });
-  ok(!!(await page.$(".bill-restore")), "(setup) the ledger without bills plus its mirror: the restore offer is shown");
+  ok((await hasNotice(page, "bill-restore")), "(setup) the ledger without bills plus its mirror: the restore offer is shown");
   await failWrites(page, /before_bills_restore/);
-  await page.evaluate(() => document.querySelector(".bill-restore-yes").click()); await wait(500);
+  await noticeAct(page, "bill-restore", "yes"); await wait(500);
   let st = await state(page);
-  ok(!st.bills?.length && !!(await page.$(".bill-restore")) && /Couldn't keep a copy/.test(await page.evaluate(() => (document.querySelector(".toast") || {}).textContent || "")), "no recovery copy possible: nothing is restored, the user is told why, and the offer stays");
+  ok(!st.bills?.length && (await hasNotice(page, "bill-restore")) && /Couldn't keep a copy/.test(await page.evaluate(() => (document.querySelector(".toast") || {}).textContent || "")), "no recovery copy possible: nothing is restored, the user is told why, and the offer stays");
   await allowWrites(page);
-  await page.evaluate(() => document.querySelector(".bill-restore-yes").click()); await wait(500);
+  await noticeAct(page, "bill-restore", "yes"); await wait(500);
   st = await state(page);
-  ok(st.bills.length === 2 && st.transactions.filter((t) => t.billId).length === 2 && !(await page.$(".bill-restore")), "once a copy can be kept, Restore brings back the 2 bills and the 2 links");
+  ok(st.bills.length === 2 && st.transactions.filter((t) => t.billId).length === 2 && !(await hasNotice(page, "bill-restore")), "once a copy can be kept, Restore brings back the 2 bills and the 2 links");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }

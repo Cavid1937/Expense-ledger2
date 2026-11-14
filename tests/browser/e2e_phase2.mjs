@@ -1,6 +1,6 @@
 // Phase 2 browser checks (2026-10-26) in the real bundled app: Safe to Spend income timing, the Analytics per-day tile,
 // and the backup reminder. Dates are relative to the real today, so the expected numbers are computed below.
-import { openSafe, launch, openPage, state, toast, clickText, openSettings, openData, tab, wait, ok, section, finish, tx, baseSeed, TODAY, daysAgo, ymd, bodyText } from "./lib.mjs";
+import { openSafe, launch, openPage, state, toast, clickText, openSettings, openData, tab, wait, ok, section, finish, tx, baseSeed, TODAY, daysAgo, ymd, bodyText, openBell, noticeAct } from "./lib.mjs";
 const browser = await launch();
 const now = new Date(), y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
 const lastDay = new Date(y, m + 1, 0).getDate();
@@ -59,11 +59,12 @@ ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
 await page.close();
 
 section("E2-C. Backup reminder");
-const banners = (page) => page.evaluate(() => [...document.querySelectorAll(".backup-banner")].map((b) => b.innerText));
+// Run 85: the backup reminders moved from banners into the bell; read both so nothing can hide in either place.
+const banners = async (page) => { await openBell(page); return page.evaluate(() => [...document.querySelectorAll(".backup-banner, [data-notice]")].map((b) => b.innerText)); };
 page = await openPage(browser, { seed: baseSeed({ lastBackup: iso(0.01) }) });
 let b = (await banners(page)).join(" | ");
 ok(/A backup file was created/.test(b) && /I have the file/.test(b) && !/Back up your data to avoid losing it/.test(b), "file created but never confirmed → the banner asks the user to confirm (not hidden for 7 days)", b);
-await clickText(page, ".backup-banner-btn", /I have the file/); await wait(250);
+await noticeAct(page, "backup-confirm", "have"); await wait(250);
 let st = await state(page);
 ok(typeof st.backupConfirmedAt === "string" && Date.parse(st.backupConfirmedAt) >= Date.parse(st.lastBackup), "tapping 'I have the file' stores backupConfirmedAt (not earlier than the file's creation)", st.backupConfirmedAt);
 ok(!(await banners(page)).some((t) => /backup/i.test(t)), "…and the reminder disappears");
@@ -82,7 +83,7 @@ await page.close();
 page = await openPage(browser, { seed: baseSeed({ lastBackup: iso(8), backupConfirmedAt: iso(8) }) });
 b = (await banners(page)).join(" | ");
 ok(/Back up your data to avoid losing it/.test(b), "last confirmed backup 8 days ago → 'Back up your data' reminder", b);
-await page.evaluate(() => [...document.querySelectorAll(".backup-banner")].find((x) => /Back up your data/.test(x.innerText)).querySelector(".backup-dismiss").click()); await wait(450);   // Run 34: the banner eases out (about 0.25 s) before it is removed
+await noticeAct(page, "backup-due", "later"); await wait(450);
 ok(!(await banners(page)).some((t) => /Back up your data/.test(t)), "dismiss hides it for this visit");
 await page.close();
 page = await openPage(browser, { seed: baseSeed({ lastBackup: iso(1), backupConfirmedAt: iso(1) }) });

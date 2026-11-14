@@ -1097,5 +1097,29 @@ html,body,.app{transition:background-color 200ms ease-out}
 .setup-sheet .setup-q{font-size:22px}
 @media (prefers-reduced-motion:reduce){.ob-lang .ob-panel,.ob-slide.in-next,.setup-page.in-next,.setup-page.in-prev,.ob-tag-in,.ob-leaving,.ob-leaving .ob-panel{animation:none}.ob-brand,.ob-brand .lang-glyph,.setup-dot{transition:none}}
 [data-fx="off"] .ob-lang .ob-panel,[data-fx="off"] .ob-slide.in-next,[data-fx="off"] .setup-page.in-next,[data-fx="off"] .setup-page.in-prev,[data-fx="off"] .ob-tag-in{animation:none}
+/* Run 85 (owner's photo: a white box around "Continue with Google" on a dark theme): Google's button is an iframe whose page is light.
+   When our page is dark, Chrome paints an opaque white backdrop behind a light iframe; giving the iframe the same light scheme removes it. */
+iframe[src*="accounts.google.com"]{color-scheme:light}
+/* Run 85: notifications bell + panel (screens/inbox.jsx) */
+.inbox-wrap{position:static}
+.inbox-bell{position:relative}
+.inbox-bell.has{color:var(--ink)}
+.inbox-bell.on{background:var(--bg-inset);color:var(--ink)}
+.inbox-count{position:absolute;top:2px;right:1px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--accent-fill);color:var(--on-accent);font-size:10px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--bg);font-variant-numeric:tabular-nums}
+.inbox-bell.nod svg{animation:bellNod 820ms cubic-bezier(0.22,1,0.36,1);transform-origin:50% 12%}
+@keyframes bellNod{0%{transform:rotate(0)}18%{transform:rotate(14deg)}40%{transform:rotate(-10deg)}62%{transform:rotate(5deg)}100%{transform:rotate(0)}}
+.inbox-pop{position:absolute;top:calc(100% - 2px);right:12px;left:12px;max-height:min(70vh,520px);overflow:auto;background:var(--bg-card);border:1px solid var(--rule);border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,0.22),0 2px 8px rgba(0,0,0,0.08);padding:12px;opacity:0;transform:translateY(-6px) scale(0.97);transform-origin:top right;transition:opacity 220ms cubic-bezier(0.22,1,0.36,1),transform 220ms cubic-bezier(0.22,1,0.36,1);z-index:70}
+.inbox-pop.in{opacity:1;transform:none}
+.inbox-title{font-size:13px;font-weight:700;color:var(--ink-3);padding:2px 4px 8px}
+.inbox-none{font-size:14px;color:var(--ink-3);padding:6px 4px 8px}
+.inbox-item{padding:12px;border-radius:14px;background:var(--bg-inset)}
+.inbox-item+.inbox-item{margin-top:8px}
+.inbox-text{font-size:14px;line-height:1.45;color:var(--ink)}
+.inbox-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.inbox-btn{min-height:36px;padding:6px 14px;border-radius:999px;border:1px solid var(--rule-2);background:transparent;color:var(--ink-2);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform 80ms,background 120ms}
+.inbox-btn:active{transform:scale(0.96)}
+.inbox-btn.primary{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--on-accent)}
+@media (prefers-reduced-motion:reduce){.inbox-pop{transition:none}.inbox-bell.nod svg{animation:none}}
+[data-fx="off"] .inbox-pop{transition:none}[data-fx="off"] .inbox-bell.nod svg{animation:none}
 `);
 
