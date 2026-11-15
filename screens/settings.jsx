@@ -797,21 +797,6 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
   useEffect(()=>{ if (!scrollTo) return; const k=scrollTo==="my-accounts"?"accounts":scrollTo; setOpen(o=>({...o,[k]:true})); const id=setTimeout(()=>{ const el=document.querySelector(`[data-section="${scrollTo}"]`); if (el && el.scrollIntoView) el.scrollIntoView({ behavior:"smooth", block:"start" }); if (onScrolled) onScrolled(); },340); return ()=>clearTimeout(id); },[scrollTo]);
   return (
     <div className="more-page">
-      {/* Run 17: this tab is Settings. Profile name (used in the Home greeting) and the interface language are set here. */}
-      <div className="card st-card st-ident" data-section="st-profile" role="group" aria-label={t("st.profile")}>
-        {/* Run 31: one identity card (it replaces three separate cards: name, brand and "stored on this device"). */}
-        <div className="st-ident-top">
-          <span className="more-mark" aria-hidden="true"><span style={{fontSize:22,fontWeight:700,color:"var(--accent)",lineHeight:1}}>{cleanProfileName(profileName)?Array.from(cleanProfileName(profileName))[0].toLocaleUpperCase(locale()):"₼"}</span></span>
-          <div><div className="list-title">{cleanProfileName(profileName)||"Expense Ledger"}</div><div className="list-sub" data-section="st-local">{tShell("more.localData")}</div></div>
-        </div>
-        <label className="field-lbl" htmlFor="profile-name">{t("st.profileName")}</label>
-        <div style={{display:"flex",gap:8}}>
-          <input id="profile-name" className="field-input" autoComplete="off" maxLength={PROFILE_NAME_MAX*2} placeholder={t("st.profilePh")} value={name} onChange={e=>setName(e.target.value)} style={{flex:1}}/>
-          <button className="btn btn-sm btn-sm-primary" data-section="st-name-save" disabled={cleanProfileName(name)===cleanProfileName(profileName)} onClick={()=>{ onProfileName(name); setName(cleanProfileName(name)); }}>{t("common.save")}</button>
-        </div>
-        <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
-      </div>
-      <AccountCard account={account}/>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupMoney")}</div>
       <MoneySettings state={state} onCatsChanged={onCatsChanged} onCurrencyChange={onCurrencyChange} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast} accTools={accTools} open={open} toggle={toggle} onOpen={onOpen}/>
       <div className="card list-card" data-section="more-money">
@@ -838,6 +823,23 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       </div>
       <LookSettings showToast={showToast} open={open} toggle={toggle}/>
       <RemindersSettings showToast={showToast} open={open} toggle={toggle}/>
+      {/* Run 90 (design review 8): Money and Look come first; the account and the name follow, so Settings no longer opens like a sign-up form.
+          The account card keeps its privacy text visible (owner's rule), now two sentences. */}
+      <AccountCard account={account}/>
+      {/* Run 17: this tab is Settings. Profile name (used in the Home greeting) and the interface language are set here. */}
+      <div className="card st-card st-ident" data-section="st-profile" role="group" aria-label={t("st.profile")}>
+        {/* Run 31: one identity card (it replaces three separate cards: name, brand and "stored on this device"). */}
+        <div className="st-ident-top">
+          <span className="more-mark" aria-hidden="true"><span style={{fontSize:22,fontWeight:700,color:"var(--accent)",lineHeight:1}}>{cleanProfileName(profileName)?Array.from(cleanProfileName(profileName))[0].toLocaleUpperCase(locale()):"₼"}</span></span>
+          <div><div className="list-title">{cleanProfileName(profileName)||"Expense Ledger"}</div><div className="list-sub" data-section="st-local">{tShell("more.localData")}</div></div>
+        </div>
+        <label className="field-lbl" htmlFor="profile-name">{t("st.profileName")}</label>
+        <div style={{display:"flex",gap:8}}>
+          <input id="profile-name" className="field-input" autoComplete="off" maxLength={PROFILE_NAME_MAX*2} placeholder={t("st.profilePh")} value={name} onChange={e=>setName(e.target.value)} style={{flex:1}}/>
+          <button className="btn btn-sm btn-sm-primary" data-section="st-name-save" disabled={cleanProfileName(name)===cleanProfileName(profileName)} onClick={()=>{ onProfileName(name); setName(cleanProfileName(name)); }}>{t("common.save")}</button>
+        </div>
+        <div className="list-sub" style={{marginTop:6}}>{t("st.profileSub")}</div>
+      </div>
       <div className="settings-section-lbl more-group-lbl">{t("st.groupData")}</div>
       {/* Run 80 (owner, 14 Nov: Settings "scattered, uncoordinated"; the widget card was always open and took a whole screen):
           every group is now one list card, and the switch-heavy parts (privacy, widgets) are folds that open on a tap like the others. */}
