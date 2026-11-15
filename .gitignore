@@ -1,0 +1,25 @@
+# Expense Ledger — files that are generated or machine-local.
+# Added 2026-11-15. This only stops NEW untracked files from showing up;
+# it does not remove anything already tracked.
+
+# Installed packages and build output
+node_modules/
+dist/
+
+# Test bundle written by tests/run-browser.mjs (tests/browser/build.mjs)
+page/
+
+# Android installers are large binaries; they are sent to the owner, not stored in git
+*.apk
+
+# Machine-local Claude Code settings (.claude/launch.json stays visible on purpose)
+.claude/settings.local.json
+
+# Editor and OS clutter
+.DS_Store
+Thumbs.db
+*.log
+
+# Not ignored on purpose (owner decision pending):
+# - package-lock.json  (committing it changes how Vercel installs packages)
+# - tests/.out/        (already tracked; generated, but kept for provenance until reviewed)
