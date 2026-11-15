@@ -69,6 +69,9 @@ pc = calcHelperCards([sep(150, 3), sep(200, 9)], { food: 300 }, [], { enabled: f
 ok(pc && /fully used/.test(pc.impact) && /50\.00 ₼ over/.test(pc.impact), "overspent → 'fully used … 50.00 ₼ over'", pc && pc.impact);
 pc = calcHelperCards([sep(150, 3), sep(150, 9)], { food: 300 }, [], { enabled: false }, "₼").find(c => c.id === "pace");
 ok(pc && /fully used/.test(pc.impact) && !/over\)/.test(pc.impact), "exactly at budget → 'fully used', no 'over'", pc && pc.impact);
+// Run 90 (design review 1): the card names the budgeted category that is ahead, not a total that seems to contradict Safe to Spend
+pc = calcHelperCards([sep(100, 3), sep(100, 9)], { food: 300 }, [], { enabled: false }, "₼").find(c => c.id === "pace");
+ok(pc && /^Food/.test(pc.text) && /50\.00 ₼ ahead of its budget/.test(pc.text), "the pace card names Food as 50.00 ahead of its budget (200 spent, 150 expected by day 15)", pc && pc.text);
 
 section("9. Month-end-safe dates");
 ok(D(addMonths(new Date(2026, 0, 31), 1)) === "2026-02-28" && D(addMonths(new Date(2024, 0, 31), 1)) === "2024-02-29" && D(addMonths(new Date(2026, 7, 31), 6)) === "2027-02-28" && D(addMonths(new Date(2024, 1, 29), 12)) === "2025-02-28", "Jan 31+1m = Feb 28; leap Feb 29; Aug 31+6m = Feb 28; Feb 29+12m = Feb 28");

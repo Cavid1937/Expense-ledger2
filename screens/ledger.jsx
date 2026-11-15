@@ -166,6 +166,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const filtered=useMemo(()=>preDate.filter(x=>(!dateFrom||x.date>=dateFrom)&&(!dateTo||x.date<=dateTo)),[preDate,dateFrom,dateTo]);
   const rStats=useMemo(()=>(dateFrom||dateTo) ? rangeStats(preDate,dateFrom,dateTo) : null,[preDate,dateFrom,dateTo]);
   const RANGE_KEYS=["d7","d30","d90","month","lastMonth","year"];
+  // written out so the unused-key check can see each label
+  const RANGE_LABEL={ d7:"range.d7", d30:"range.d30", d90:"range.d90", month:"range.month", lastMonth:"range.lastMonth", year:"range.year" };
   const rangeKey=RANGE_KEYS.find(k=>{ const r=rangePreset(k); return r.from===dateFrom && r.to===dateTo; })||"";
   const paidOpts=useMemo(()=>paidFromOptions(transactions,accMap),[transactions,accMap]);
   const paidUseful=paidOpts.some(o=>o.value!=="none");   // offered only when at least one entry says how it was paid
@@ -264,7 +266,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
         {/* Run 88: ready-made ranges, offered only here (the Entries date filter) */}
         <div className="filter-bar" role="group" aria-label={t("range.quick")} data-section="tx-range-quick" style={{marginTop:8}}>
           {RANGE_KEYS.map(k=>(
-            <button key={k} type="button" className={`chip${rangeKey===k?" on":""}`} aria-pressed={rangeKey===k} data-range={k} onClick={()=>{ const r=rangePreset(k); setDateFrom(r.from); setDateTo(r.to); }}>{t("range."+k)}</button>
+            <button key={k} type="button" className={`chip${rangeKey===k?" on":""}`} aria-pressed={rangeKey===k} data-range={k} onClick={()=>{ const r=rangePreset(k); setDateFrom(r.from); setDateTo(r.to); }}>{t(RANGE_LABEL[k])}</button>
           ))}
         </div>
       </Collapse>

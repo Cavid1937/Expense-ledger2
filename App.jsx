@@ -6134,10 +6134,18 @@ export function calcHelperCards(transactions, budgets, goals, safeToSpend, curre
   if (paceInfo.onTrack === false && paceInfo.daysRemaining > 0 && spentToDate > 0) {
     const overage = spentToDate - paceInfo.expectedByToday;
     const remainingBudget = budgetTotal - curExp;
+    // Run 90 (design review 1): a total that seems to contradict Safe to Spend confuses people; name the budgeted category that is
+    // furthest ahead of its own share for today instead. The old total sentence stays only when no single category is ahead.
+    let worst=null;
+    for (const b of budgetItems) {
+      const expected = paceInfo.state==="past" ? b.limit : (b.limit/paceInfo.totalDays)*paceInfo.daysPassed;
+      const ahead = Math.round((b.spent-expected)*100)/100;
+      if (ahead>0 && (!worst || ahead>worst.ahead)) worst={ catId:b.catId, ahead };
+    }
     cards.push({
       id:"pace", type:"warn", icon:"pace",
       title:t("pace.title"),
-      text:t("help.paceText",{amount:fmt(overage,currency)}),
+      text: worst ? t("help.paceCat",{cat:catName(worst.catId),amount:fmt(worst.ahead,currency)}) : t("help.paceText",{amount:fmt(overage,currency)}),
       impact: remainingBudget>0
         ? tn("help.paceLeft",paceInfo.daysRemaining,{ left:fmt(remainingBudget,currency), perDay:fmt(remainingBudget/paceInfo.daysRemaining,currency) })
         : remainingBudget<0

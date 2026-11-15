@@ -1,7 +1,7 @@
 {
   "_note": "Number of checks each test file must execute. The runners fail a file whose executed count differs, so a check that is silently skipped (or a file that stops early but exits 0) cannot look green. When a test is deliberately added or removed, update the number here in the same change.",
   "logic": {
-    "core.test.mjs": 39,
+    "core.test.mjs": 40,
     "data.test.mjs": 122,
     "finance.test.mjs": 91,
     "i18n.test.mjs": 89,
@@ -198,7 +198,7 @@
     "e2e_native.mjs": 14,
     "e2e_ux.mjs": 30,
     "e2e_ux_lang.mjs": 8,
-    "e2e_ux_keyboard.mjs": 21,
+    "e2e_ux_keyboard.mjs": 22,
     "e2e_run15.mjs": 35,
     "e2e_run15_feedback.mjs": 9,
     "e2e_run15_a11y.mjs": 18,

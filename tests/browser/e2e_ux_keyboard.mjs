@@ -43,8 +43,10 @@ section("UX-K2. Recurring payments / bills");
   ok(!!(await page.$(".bill-sheet")), "Enter opens the bill sheet");
   await page.close();
   const p2 = await openPage(browser, { seed: seed() }); await tab(p2, "Recurring"); await wait(300);
-  await p2.evaluate(() => { const b = [...document.querySelectorAll("button")].find((x) => /Pause/.test(x.innerText)); b.focus(); }); await p2.keyboard.press("Enter"); await wait(400);
-  ok(!(await p2.$(".bill-sheet")) && (await state(p2)).bills[0].active === false, "pressing Enter on 'Pause' pauses the bill and does NOT also open the sheet (no double action)");
+  // Run 90 (design review 5): a bill row keeps one button, Record payment; pausing moved into the bill sheet's Active switch
+  ok(await p2.evaluate(() => ![...document.querySelectorAll(".bill-row button")].some((x) => /^Pause$/.test(x.innerText.trim()))), "the bill row has no Pause button any more");
+  await p2.evaluate(() => document.querySelector(".bill-row .rec-record").focus()); await p2.keyboard.press("Enter"); await wait(400);
+  ok(!(await p2.$(".bill-sheet")) && !!(await p2.$(".amount-input")), "pressing Enter on 'Record payment' opens the add form and does NOT also open the bill sheet (no double action)");
   await p2.close();
 }
 

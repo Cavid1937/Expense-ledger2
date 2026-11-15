@@ -34,7 +34,7 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
     const nowD=new Date();
     return buildSchedules(transactions,bills).map(x=>{
       const st=x.isActive ? scheduleMonthStatus(x,transactions,localMonthStr(nowD),nowD) : null;
-      return { ...x, nextDue:scheduleNextDue(x,transactions,nowD), monthly:scheduleMonthly(x), left:billPaymentsLeft(x,transactions,nowD), unrecordedThisMonth:st?st.overdue.length:0 };
+      return { ...x, nextDue:scheduleNextDue(x,transactions,nowD), monthly:scheduleMonthly(x), left:billPaymentsLeft(x,transactions,nowD), unrecordedThisMonth:st?st.overdue.length:0, missedOn:st&&st.overdue.length?st.overdue[0]:null };
     }).sort((a,b)=>{ if (a.isActive!==b.isActive) return a.isActive?-1:1; return (a.nextDue?a.nextDue.getTime():Infinity)-(b.nextDue?b.nextDue.getTime():Infinity); });
   },[transactions,bills]);
   const inferred=schedules.filter(x=>!x.billId).length;
@@ -92,17 +92,19 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
           <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{maskText(x.merchant||x.note)||catName(x.category)}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,lineHeight:1.4}}>
             {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""} · {t("freq."+x.freq)}
+            {/* Run 90 (design review 5): the monthly / yearly estimates moved here from the right column, which now holds only the amount and one button */}
+            {x.freq!=="monthly"&&x.isActive&&<span> · {t("rec.perMonthApprox",{amount:fmt(x.monthly,currency)})}</span>}
+            {!isInc&&x.isActive&&<span data-yearly="1"> · {t("rec.perYearApprox",{amount:fmt(x.monthly*12,currency)})}</span>}
           </div>
-          <div style={{fontSize:11,marginTop:1,color:near&&x.isActive?"var(--warn)":"var(--ink-4)",fontWeight:near&&x.isActive?700:400}}>
-            {x.isActive?dueText(x):t("rec.paused")}{x.left!=null&&x.isActive&&<span> · {x.left>0?tn("bill.paymentsLeft",x.left):t("bill.endedOn",{date:fmtDate(x.bill.endDate)})}</span>} · {x.occurrences.length?t("rec.last",{date:fmtDate(x.occurrences[x.occurrences.length-1])}):t("bill.noPayments")}
-            {x.unrecordedThisMonth>0&&<span style={{color:"var(--warn)",fontWeight:700}}> · {tn("rec.notRecorded",x.unrecordedThisMonth)}</span>}
-          </div>
+          {/* Run 90 (design review 5): one clear status. A missed payment says so in red; otherwise when the next one is due. */}
+          {x.isActive&&x.missedOn
+            ? <div data-section="rec-missed" style={{fontSize:11,marginTop:1,color:"var(--neg)",fontWeight:700}}>{t("rec.missedOn",{date:fmtDate(x.missedOn)})}{x.unrecordedThisMonth>1&&<span> · {tn("rec.notRecorded",x.unrecordedThisMonth)}</span>}</div>
+            : <div style={{fontSize:11,marginTop:1,color:near&&x.isActive?"var(--warn)":"var(--ink-4)",fontWeight:near&&x.isActive?700:400}}>
+                {x.isActive?dueText(x):t("rec.paused")}{x.left!=null&&x.isActive&&<span> · {x.left>0?tn("bill.paymentsLeft",x.left):t("bill.endedOn",{date:fmtDate(x.bill.endDate)})}</span>}{x.occurrences.length>0&&<span> · {t("rec.last",{date:fmtDate(x.occurrences[x.occurrences.length-1])})}</span>}
+              </div>}
         </div>
         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3,flexShrink:0}}>
           <div style={{fontFamily:"var(--font)",fontSize:14,fontWeight:600,color:isInc?"var(--pos)":"var(--ink)"}}>{isInc?"+":"−"}{fmt(x.amount,currency)}</div>
-          {x.freq!=="monthly"&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}}>{t("rec.perMonthApprox",{amount:fmt(x.monthly,currency)})}</div>}
-          {/* Run 41: what it costs over a year (the monthly estimate x 12), so a small monthly charge is seen for its real size */}
-          {!isInc&&x.isActive&&<div style={{fontSize:10,color:"var(--ink-4)",fontStyle:"italic"}} data-yearly="1">{t("rec.perYearApprox",{amount:fmt(x.monthly*12,currency)})}</div>}
           {/* Run 6 (D20): a payment only settles a bill when it is recorded as that bill (same details, Recurring on).
               This opens the Add form filled in exactly that way, dated today; the user can still change anything. */}
           {x.isActive&&onRecordPayment&&(
@@ -110,9 +112,11 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
               {t(isInc?"rec.recordIncome":"rec.recordPayment")}
             </button>
           )}
-          <button onClick={e=>{e.stopPropagation(); if (x.billId) onToggleBill(x.billId,!x.isActive); else onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--warn)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"var(--font)",textDecoration:"underline",textUnderlineOffset:2}}>
+          {/* Run 90 (design review 5): a bill is paused from its own sheet (the Active switch), so its row keeps one button. A schedule found
+              from past entries has no sheet, so it keeps a quiet Pause here; Reactivate always stays on a paused row. */}
+          {(!x.isActive||!x.billId)&&<button onClick={e=>{e.stopPropagation(); if (x.billId) onToggleBill(x.billId,!x.isActive); else onToggleSchedule(x.memberIds,!x.isActive);}} style={{fontSize:11,fontWeight:700,color:x.isActive?"var(--ink-3)":"var(--pos)",background:"none",border:"none",cursor:"pointer",padding:"8px 0",minHeight:36,fontFamily:"var(--font)",textDecoration:"underline",textUnderlineOffset:2}}>
             {x.isActive?t("rec.pause"):t("rec.reactivate")}
-          </button>
+          </button>}
         </div>
       </div>
       <PaymentsFold ids={x.memberIds} byId={byId} currency={currency} onView={onView}/>

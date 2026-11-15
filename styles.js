@@ -705,7 +705,8 @@ input,textarea,select,[contenteditable="true"],.selectable,.selectable *{-webkit
 .txn-row:only-child{border-radius:var(--radius)}
 .txn-name{font-size:15px}.txn-sub{font-size:12.5px}
 .txn-amt{font-size:15px;font-weight:600}
-.txn-amt.exp{color:var(--neg)}
+/* Run 90 (design review 3): an ordinary purchase is not an alarm. Expenses in normal ink with the minus sign, income green; red stays for problems. */
+.txn-amt.exp{color:var(--ink)}
 .search-input{border-radius:12px;padding:11px 12px 11px 36px;font-size:14px}
 .chip,.cat-filter-btn{border-radius:999px;padding:6px 14px;font-size:13px}
 .a-card-title,.stat-lbl,.month-stat-lbl,.field-lbl,.settings-section-lbl,.date-lbl{letter-spacing:0.3px;text-transform:none;font-size:12px;font-weight:600}
