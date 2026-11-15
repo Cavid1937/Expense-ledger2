@@ -23,7 +23,7 @@ section("R85-B2. After 5 entries the app asks once; 'No' is final");
   const page = await openPage(browser, { seed: baseSeed({ transactions: five(), lastBackup: new Date().toISOString(), backupConfirmedAt: new Date().toISOString() }) });
   ok(await hasNotice(page, "learn-ask"), "5 entries: the question waits in the bell");
   const txt = await noticeText(page, "learn-ask");
-  ok(/anonymous/.test(txt) && /Never amounts/.test(txt) && /Settings/.test(txt), "it says what is shared, what never is, and where to change it", txt);
+  ok(/usage counts/.test(txt) && /does not send amounts/.test(txt) && /Settings/.test(txt), "it says what is shared, what never is, and where to change it", txt);
   await noticeAct(page, "learn-ask", "no"); await wait(300);
   const L = await learn(page);
   ok(L && L.asked === true && L.on === false, "No: remembered as answered, sharing off", L);

@@ -20,7 +20,7 @@ section("R24-C1. One tap changes the currency everywhere; the ledger is otherwis
   await page.close();
 }
 section("R24-C2. Labels in az and ru");
-for (const [l, re] of [["az", /Geniş yayılmış valyutalar/], ["ru", /Частые валюты/]]) {
+for (const [l, re] of [["az", /Geniş yayılmış valyutalar/], ["ru", /Популярные валюты/]]) {
   const page = await openPage(browser, { seed: seed(l) }); await settle(page);
   await openSettings(page);
   ok(await page.evaluate((s) => new RegExp(s).test(document.querySelector('[data-section="currency-chips"]').getAttribute("aria-label")), re.source), `${l}: group label`);

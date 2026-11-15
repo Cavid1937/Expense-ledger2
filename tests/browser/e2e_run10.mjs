@@ -59,7 +59,7 @@ section("R10-3. Install offer");
 {
   const page = await openPage(browser, { pre: fakeStorage(true, true) + fakeShare("none") });
   await goIO(page);
-  ok(/Install on the Home Screen/.test(await ioText(page)) && /Add to Home screen/.test(await ioText(page)) && !(await page.$(".io-install")), "the steps to install are shown; no Install button until the browser offers one");
+  ok(/Install on the home screen/i.test(await ioText(page)) && /Add to Home screen/.test(await ioText(page)) && !(await page.$(".io-install")), "the steps to install are shown; no Install button until the browser offers one");
   await page.evaluate(() => { const e = new Event("beforeinstallprompt", { cancelable: true }); window.__prompted = 0; e.prompt = () => { window.__prompted++; }; e.userChoice = Promise.resolve({ outcome: "accepted" }); window.dispatchEvent(e); }); await wait(300);
   ok(!!(await page.$(".io-install")), "when the browser offers installing, an 'Install the app' button appears");
   await page.evaluate(() => document.querySelector(".io-install").click()); await wait(300);

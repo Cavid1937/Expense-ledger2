@@ -23,7 +23,7 @@ section("R65C-3. Names in three languages");
 setLang("az"); const az = ["Alcohol", "Tobacco & vaping", "Lottery & betting"].map(subName);
 setLang("ru"); const ru = ["Alcohol", "Tobacco & vaping", "Lottery & betting"].map(subName);
 setLang("en");
-ok(eq(az, ["Spirtli içkilər", "Tütün və elektron siqaret", "Lotereya və mərc oyunları"]) && eq(ru, ["Алкоголь", "Табак и вейпы", "Лотереи и ставки"]), "az and ru names exist (drafts until a native speaker checks them)", { az, ru });
+ok(eq(az, ["Spirtli içkilər", "Tütün və elektron siqaretlər", "Lotereya və mərc oyunları"]) && eq(ru, ["Алкоголь", "Табак и вейпы", "Лотереи и ставки"]), "az and ru names exist (drafts until a native speaker checks them)", { az, ru });
 
 section("R65C-4. Older records and backups");
 const old = [E(1, { subcategory: "Drinks", amount: 4 }), E(2, { category: "entertain", subcategory: "Games", amount: 9.99 }), E(3, { type: "income", category: "savout", amount: 300 }), E(4, { type: "income", category: "refund", amount: 15 })];

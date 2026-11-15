@@ -15,7 +15,7 @@ await goSettings(page);
 ok(await has(page, '[data-fold-head="widgets"]') && await has(page, '[data-fold-head="privacy"]'), "Widgets and Privacy are rows like the other sections");
 ok(!(await has(page, '[data-section="widget-show"]')) && !(await has(page, '[data-section="learn-toggle"]')), "their switches are not spread over the page until opened");
 const subs = await page.evaluate(() => [document.querySelector('[data-fold-sub="widgets"]')?.innerText, document.querySelector('[data-fold-sub="privacy"]')?.innerText]);
-ok(subs[0] === "Amounts shown on widgets" && subs[1] === "Nothing is shared", "closed, each says where things stand", subs);
+ok(subs[0] === "Amounts shown on widgets" && subs[1] === "App usage sharing is off", "closed, each says where things stand", subs);
 const order = await page.evaluate(() => [...document.querySelectorAll(".more-page [data-fold], .more-page [data-section='more-data'], .more-page [data-section='more-app']")].map((e) => e.getAttribute("data-fold") || e.getAttribute("data-section")));
 ok(await page.evaluate(() => [...document.querySelectorAll(".more-page .list-title")].filter((e) => e.innerText.trim() === "Privacy").length === 1), "only one item on the page is called Privacy");
 await click(page, '[data-fold-head="privacy"]'); await wait(500);

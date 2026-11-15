@@ -15,7 +15,7 @@ section("R17-C1. A drawing error shows a recovery screen, keeps the records, and
   await tab(page, "Goals"); await wait(500);
   ok(!!(await page.$(".crash-screen")), "a recovery screen is shown instead of a blank page");
   const txt = await page.evaluate(() => (document.querySelector(".crash-screen") || {}).innerText || "");
-  ok(/Something went wrong/.test(txt) && /records are safe/i.test(txt), "it says what happened and that the records are safe", txt.slice(0, 120));
+  ok(/Something went wrong/.test(txt) && /Entries you already saved stay on this device/.test(txt), "it says what happened and that the records are safe", txt.slice(0, 120));
   ok((await page.$$(".crash-screen button")).length === 1, "it offers exactly one action: reload");
   const afterRaw = await raw(page, "expense_ledger_v5");
   ok(afterRaw === before, "the stored records are byte-for-byte unchanged");

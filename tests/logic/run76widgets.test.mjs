@@ -41,7 +41,7 @@ const rent = { id: "b_rent", type: "expense", amount: 300, name: "Rent", categor
 const sb = widgetSnapshot({ ...state, bills: [rent] }, tx, {}, now);
 ok(sb.safe.nextAmt === "300.00 ₼" && /^Rent · /.test(sb.safe.nextWhat) && /20/.test(sb.safe.nextWhat), "a monthly bill on the 20th: 300.00 ₼, 'Rent · 20 …'", [sb.safe.nextAmt, sb.safe.nextWhat]);
 const off = widgetSnapshot({ ...state, safeToSpend: { enabled: false } }, tx, {}, now);
-ok(off.safe.dayLabel === "A day so far" && off.safe.day === "14.29 ₼", "without Safe to Spend: 200 spent in the first 14 days = 14.285… → 14.29 ₼ a day", [off.safe.dayLabel, off.safe.day]);
+ok(off.safe.dayLabel === "Daily average so far" && off.safe.day === "14.29 ₼", "without Safe to Spend: 200 spent in the first 14 days = 14.285… → 14.29 ₼ a day", [off.safe.dayLabel, off.safe.day]);
 const used = widgetSnapshot({ ...state, safeToSpend: { enabled: true, savingsTarget: 1900 } }, tx, {}, now);
 ok(used.safe.neg && used.safe.day === "0.00 ₼", "money already used up (2,000 − 1,900 − 200 < 0): per day is 0, never a negative daily amount", [used.safe.amount, used.safe.day]);
 ok(h.safe.day === "••••" && widgetSnapshot({ ...state, bills: [rent] }, tx, { hide: true }, now).safe.nextAmt === "••••", "hidden amounts stay hidden in the tiles too");

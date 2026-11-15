@@ -65,7 +65,7 @@ section("R33-N4. Income, unclear text, no amount");
   await page.close();
 }
 section("R33-N5. az and ru wording");
-for (const [l, sw, chk] of [["az", "Son proqramlarda gizlət və ekran şəkillərini blokla", "Paylaşılan mesajdan dolduruldu"], ["ru", "Скрывать приложение в недавних и блокировать снимки экрана", "Заполнено по полученному сообщению"]]) {
+for (const [l, sw, chk] of [["az", "Son açılan tətbiqlərdə gizlədin və ekran görüntülərini bloklayın", "Paylaşılan mesajdan dolduruldu"], ["ru", "Скрывать приложение в списке последних приложений и блокировать снимки экрана", "Заполнено по полученному сообщению"]]) {
   const page = await openPage(browser, { seed: baseSeed({ language: l }), pre: SHELL }); await settle(page);
   await send(page, "Purchase 5 AZN at Shop");
   ok((await bodyText(page)).includes(chk), `${l}: the shared-text notice is translated`);

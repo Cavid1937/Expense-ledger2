@@ -1,8 +1,9 @@
-Azerbaijani localization audit — 2026-11-06T16:42:58.077Z
-Catalog: 1127 keys, 1221 rendered forms (plural forms counted separately). Keys passed directly to t()/tn() in App.jsx: 757.
+Azerbaijani localization audit — 2026-11-15T14:44:20.531Z
+Catalog: 2085 keys, 2230 rendered forms (plural forms counted separately). Keys passed directly to t()/tn() in App.jsx: 1313.
 Review sheet: az-review-sheet.csv (UTF-8, opens in Excel/Sheets) — one row per form, example values filled in, empty reviewer columns.
 
-A. Turkish spellings in Azerbaijani text: 0
+A. Turkish spellings in Azerbaijani text: 1
+   acct.err.noaccount: Bu telefonda Google hesabı yoxdur. Telefonun Ayarlar > Hesablar bölməsində əlavə edin, sonra yenidən cəhd edin.
 B. A value slotted in directly before a suffix-bearing word (ending cannot agree with the value): 0
 C. Short month names passed into sentences: 0
 

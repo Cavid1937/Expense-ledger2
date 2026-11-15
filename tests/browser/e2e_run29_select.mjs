@@ -43,7 +43,7 @@ section("R29-S1. Sums, selection kept across a changed search, Selected only");
 section("R29-S2. Leaving select mode clears everything; az and ru wording");
 {
   const page = await openPage(browser, { seed: seed("en") }); await settle(page); await ledger(page);
-  await click(page, '[data-section="tx-select-toggle"]'); await pick(page, "Row1"); await click(page, '[data-section="tx-select-only"]');
+  await click(page, '[data-section="tx-select-toggle"]'); await page.waitForSelector('[data-section="tx-select"] [role="checkbox"]'); await pick(page, "Row1"); await click(page, '[data-section="tx-select-only"]');
   await click(page, '[data-section="tx-select-toggle"]'); await wait(200);
   await click(page, '[data-section="tx-select-toggle"]'); await wait(300);
   ok(/Tap entries/.test(await sum(page)) && await page.evaluate(() => document.querySelectorAll('[data-section="tx-select"] [role="checkbox"]').length) === 4, "Done then Select again: nothing selected, all four rows listed");
