@@ -330,11 +330,15 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
       </div>
       <div className="add-body">
         {/* Run 25: the first choice is WHAT you are recording (expense, income, loan, debt), as four equal tiles; editing an entry offers only expense/income */}
-        <div className={`type-picker${!editId&&onOtherKind?"":" two"}`} role="group" aria-label={t("add.kindPrompt")} data-section="add-type-picker">
+        {/* Run 90 (design review 6): Expense and Income are the main switch; Loan and Debt are a quieter second line under it */}
+        <div className="type-picker two" role="group" aria-label={t("add.kindPrompt")} data-section="add-type-picker">
           <button type="button" className={`type-pick type-btn${type==="expense"?" active":""}`} aria-pressed={type==="expense"} onClick={()=>setType("expense")}><span className="type-dot" style={{background:"var(--neg)"}} aria-hidden="true"/>{t("add.expense")}</button>
           <button type="button" className={`type-pick type-btn${type==="income"?" active":""}`} aria-pressed={type==="income"} onClick={()=>setType("income")}><span className="type-dot" style={{background:"var(--pos)"}} aria-hidden="true"/>{t("add.income")}</button>
-          {!editId&&onOtherKind&&["loans","debts"].map(k=><button key={k} type="button" className="type-pick" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}><span className="type-dot" style={{background:k==="loans"?"var(--info)":"var(--warn)"}} aria-hidden="true"/>{t(k==="loans"?"add.loan":"add.debt")}</button>)}
         </div>
+        {!editId&&onOtherKind&&<div className="type-more" data-section="add-type-more">
+          <span className="type-more-lbl">{t("add.moreTypes")}</span>
+          {["loans","debts"].map(k=><button key={k} type="button" className="type-more-btn" data-section={"add-other-"+k} onClick={()=>onOtherKind(k)}><span className="type-dot" style={{background:k==="loans"?"var(--info)":"var(--warn)"}} aria-hidden="true"/>{t(k==="loans"?"add.loan":"add.debt")}</button>)}
+        </div>}
         {!editId&&!prefill&&onSaveMany&&<QuickTextPanel currency={currency} memory={merchantMemory} onSaveMany={onSaveMany}/>}
         {/* Run 75: on narrow phones (≤360 px) the amount is drawn at most 38 px tall, so "0.00" fits beside the calculator keys (it was cut off) */}
         <div className="amount-zone" onClick={()=>amtRef.current?.focus()}>
@@ -350,12 +354,13 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           </div>
           {/* Run 42: simple arithmetic in the amount (45 - 20): the four sign buttons add to the text, the line under it shows the result as you type */}
           {isExprText(amount) && <div className="list-sub" data-section="amt-expr" role="status" style={{textAlign:"center",marginTop:2}}>{(()=>{ const v=evalAmountExpr(amount); return v===null ? t("calc.bad") : "= "+fmt(v,fxCur||currency); })()}</div>}
-          <div className="calc-row" data-section="amt-ops" role="group" aria-label={t("calc.group")} onClick={e=>e.stopPropagation()}>
+          {/* Run 90 (design review 6): the four sign keys appear once a number is typed, so an empty form stays calm */}
+          {/[0-9]/.test(String(amount))&&<div className="calc-row" data-section="amt-ops" role="group" aria-label={t("calc.group")} onClick={e=>e.stopPropagation()}>
             {[["+","calc.plus"],["−","calc.minus"],["×","calc.times"],["÷","calc.divide"]].map(([sym,k])=>(
               <button key={sym} type="button" className="calc-key" data-op={sym} aria-label={t(k)} disabled={!/[0-9)]$/.test(String(amount).trim())}
                 onClick={()=>{ setAmount(a=>cleanExprText(String(a).trim()+sym)); setErr(""); amtRef.current?.focus(); }}>{sym}</button>
             ))}
-          </div>
+          </div>}
         </div>
         {/* Run 39: paid in another currency — choose it; the official rate of that day turns it into manat */}
         <Collapse open={fxPick} id="fx-pick">
@@ -632,7 +637,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
 
         </div></div>
         {!isEditing&&<div className="field" data-section="add-photo"><ReceiptPhoto id={draft.current.key}/></div>}
-        <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
+        {/* Run 90 (design review 6): no Cancel button here; the close (✕) button at the top and swiping down already close the form */}
       </div>
       <div className="add-foot">
         <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={()=>submit()}>

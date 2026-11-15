@@ -191,8 +191,8 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
       </>)}
 
       {seg==="goals"&&(<>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"4px 2px 10px"}}>
-          <span className="section-title" style={{margin:0}}>{t("set.financialGoals")}</span>
+        <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"center",gap:8,margin:"4px 2px 10px"}}>
+          <span className="section-title" style={{margin:0,minWidth:0}}>{t("set.financialGoals")}</span>
           <button className="btn btn-sm" onClick={()=>{ if (showNewGoal) { setEditGoalId(null); setGoalName(""); setGoalTarget(""); setGoalSaved(""); setGoalMonthly(""); setGoalDate(""); } setShowNewGoal(s=>!s); }}>{showNewGoal?t("common.cancel"):t("set.add")}</button>
         </div>
         <Collapse open={showNewGoal&&!editGoalId} id="goal-new">{renderGoalForm()}</Collapse>

@@ -763,6 +763,7 @@ export const MESSAGES = {
   "common.undo":   { en: "Undo", az: "Geri qaytar", ru: "Отменить" },
   "common.dismissNotice": { en: "Dismiss notice", az: "Bildirişi bağla", ru: "Закрыть уведомление" },
   "common.ok":     { en: "OK", az: "Oldu", ru: "ОК" },
+  "add.moreTypes":    { en: "More types:", az: "Digər növlər:", ru: "Другие типы:" },
   "common.cancel": { en: "Cancel", az: "Ləğv et", ru: "Отмена" },
   "common.close":  { en: "Close", az: "Bağla", ru: "Закрыть" },
   "common.save":   { en: "Save", az: "Yadda saxla", ru: "Сохранить" },

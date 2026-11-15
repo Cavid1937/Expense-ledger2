@@ -663,8 +663,8 @@ export function TemplatesSection({ templates, currency, onAddTemplate, onDeleteT
   );
   return (
     <div data-section="gl-templates">
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,margin:"14px 2px 10px"}}>
-        <span className="section-title" style={{margin:0}}>{t("set.templates")}</span>
+      <div style={{display:"flex",flexWrap:"wrap",justifyContent:"space-between",alignItems:"center",gap:8,margin:"14px 2px 10px"}}>
+        <span className="section-title" style={{margin:0,minWidth:0}}>{t("set.templates")}</span>
         <button className="btn btn-sm" onClick={()=>{ if (showNewTpl) { setEditTplId(null); setTplName(""); setTplAmt(""); setTplSubcat(""); setTplMerchant(""); setTplNote(""); } setShowNewTpl(s=>!s); }}>{showNewTpl?t("common.cancel"):t("set.add")}</button>
       </div>
       <Collapse open={showNewTpl&&!editTplId} id="tpl-new">{tplForm(false)}</Collapse>

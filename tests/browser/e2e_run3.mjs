@@ -16,7 +16,7 @@ const esc = async (page) => { await page.keyboard.press("Escape"); await wait(35
 const back = async (page) => { await page.evaluate(() => history.back()); await wait(500); };
 const routes = {
   "×": async (p) => { await click(p, ".add-close"); await wait(350); },
-  "Cancel": async (p) => { await clickText(p, ".add-overlay button", "Cancel"); await wait(350); },
+  // Run 90 (design review 6): the form no longer has a Cancel button; × and swiping down (Back) close it
   "Escape": esc,
   "phone Back": back,
 };

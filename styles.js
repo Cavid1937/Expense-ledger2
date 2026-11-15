@@ -198,6 +198,11 @@ input[type=number]{-moz-appearance:textfield}
 .type-other-row{display:flex;flex-wrap:wrap;gap:8px;margin:-6px 0 14px}
 .type-picker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:14px}
 .type-picker.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* Run 90 (design review 6): Loan and Debt as a quiet line under the main Expense / Income switch */
+.type-more{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:-6px 0 14px}
+.type-more-lbl{font-size:12.5px;color:var(--ink-3);margin-right:2px}
+.type-more-btn{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--rule);background:none;color:var(--ink-2);font:inherit;font-size:13.5px;cursor:pointer}
+.type-more-btn:active{background:var(--bg-sunk,rgba(0,0,0,.04))}
 .type-pick{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:64px;padding:10px 4px;border:1px solid var(--rule);border-radius:16px;background:var(--bg-card);color:var(--ink-2);font-family:var(--font);font-size:14px;font-weight:600;line-height:1.15;text-align:center;overflow-wrap:anywhere;cursor:pointer;transition:background 160ms,border-color 160ms,color 160ms,transform 120ms}
 .type-pick:active{transform:scale(0.96)}
 .type-pick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -212,6 +217,8 @@ input[type=number]{-moz-appearance:textfield}
 .type-btn:not(:last-child){border-right:1px solid var(--rule)}.type-btn.active{background:var(--accent-fill);color:var(--on-accent)}
 /* Cat/sub */
 .cat-scroll{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none}.cat-scroll::-webkit-scrollbar{display:none}
+/* Run 90 (design review 6): a soft fade at the right edge shows that more categories scroll in */
+.cat-scroll{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);padding-right:24px}
 .cat-tile{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:5px;width:auto;min-width:68px;padding:9px 10px;border:1px solid var(--rule);border-radius:8px;background:var(--bg-card);cursor:pointer;transition:border-color 150ms,background 150ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .cat-tile.sel{border-color:var(--accent);background:var(--accent-light)}
 .cat-tile:active{transform:scale(0.93)}
