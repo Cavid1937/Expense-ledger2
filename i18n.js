@@ -763,6 +763,10 @@ export const MESSAGES = {
   "common.undo":   { en: "Undo", az: "Geri qaytar", ru: "Отменить" },
   "common.dismissNotice": { en: "Dismiss notice", az: "Bildirişi bağla", ru: "Закрыть уведомление" },
   "common.ok":     { en: "OK", az: "Oldu", ru: "ОК" },
+  "an.topCats":       { en: "Top categories", az: "Ən çox xərc gedən kateqoriyalar", ru: "Основные категории расходов" },
+  "an.seeSpending":    { en: "All categories", az: "Bütün kateqoriyalar", ru: "Все категории" },
+  "an.seeInsights":    { en: "More insights", az: "Digər müşahidələr", ru: "Другие наблюдения" },
+  "an.allTime":        { en: "All time", az: "Bütün dövr üzrə", ru: "За всё время" },
   "add.moreTypes":    { en: "More types:", az: "Digər növlər:", ru: "Другие типы:" },
   "common.cancel": { en: "Cancel", az: "Ləğv et", ru: "Отмена" },
   "common.close":  { en: "Close", az: "Bağla", ru: "Закрыть" },
@@ -1513,7 +1517,6 @@ export const MESSAGES = {
   "detail.hist.last30": { en: "In the last 30 days: {amount}.", az: "Son 30 gündə: {amount}.", ru: "За последние 30 дней: {amount}." },
 
   // ── Settings
-  "set.overview":      { en: "Overview", az: "İcmal", ru: "Обзор" },
   "set.totalIncome":   { en: "Total income", az: "Ümumi gəlir", ru: "Всего доходов" },
   "set.totalExpenses": { en: "Total expenses", az: "Ümumi xərclər", ru: "Всего расходов" },
   "set.safeEnable":    { en: "Enable Safe to Spend", az: "«Xərcləmək olar»-ı aktivləşdir", ru: "Включить «Можно потратить»" },

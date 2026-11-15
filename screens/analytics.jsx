@@ -229,6 +229,32 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
 
   const catData = Object.entries(catSpend).map(([id, amt]) => ({ ...CAT(id) || { id, name: id, color:"#98A5B7" }, amt })).sort((a,b) => b.amt - a.amt);
   const maxCat = catData[0]?.amt || 1;
+  // Run 90 (design review 2): one place that turns a coach finding into its sentence (used by Overview and Insights)
+  const coachLine = (c) => {
+    const num=(n)=>PRIVACY?"••":n, amt=(q)=>fmt(q/100,currency);
+    return c.id==="incomplete" ? t("coach.incomplete",{days:c.days})
+      : c.id==="noIncome" ? t("coach.noIncome")
+      : c.id==="spent" ? t("coach.spent",{pct:num(c.pct),kept:num(c.kept)})
+      : c.id==="over" ? t("coach.over",{pct:num(c.pct)})
+      : c.id==="future" ? t("coach.future",{n:c.n})
+      : c.id==="welcome" ? t("coach.welcome")
+      : c.id==="incomeDip" ? t("coach.incomeDip",{have:c.have,of:c.of,pct:num(c.pct)})
+      : c.id==="loanShare" ? t("coach.loanShare",{pct:num(c.pct)})
+      : c.id==="loanShareHigh" ? t("coach.loanShareHigh",{pct:num(c.pct)})
+      : c.id==="billsShare" ? t("coach.billsShare",{pct:num(c.pct)})
+      : c.id==="catUp" ? t("coach.catUp",{cat:catName(c.cat),pct:num(c.pct)})
+      : c.id==="loanInterest" ? t("coach.loanInterest",{lender:maskText(c.lender),amount:amt(c.amount)})
+      : c.id==="microSpill" ? t("coach.microSpill",{n:num(c.n),total:amt(c.total)})
+      : c.id==="lifestyle" ? t("coach.lifestyle",{inc:num(c.inc),spend:num(c.spend),share:num(c.share)})
+      : c.id==="windfall" ? t("coach.windfall",{amount:amt(c.amount),cat:catName(c.cat)})
+      : c.id==="monthLeft" ? t("coach.monthLeft",{amount:amt(c.amount)})
+      : c.id==="incomeHill" ? t("coach.incomeHill",{pct:num(c.pct)})
+      : c.id==="priceUp" ? t("coach.priceUp",{merchant:maskText(c.merchant),from:amt(c.from),to:amt(c.to),pct:num(c.pct)})
+      : c.id==="noCover" ? t("coach.noCover",{lender:maskText(c.lender)})
+      : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
+      : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
+      : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
+  };
   const merchantTotals = {};
   expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
   const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
@@ -303,6 +329,32 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         </div>
       </div>
       <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:-8,marginBottom:16}}/>
+      <div data-section="an-trend"><SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/></div>
+      {/* Run 90 (design review 2): the Overview is four blocks: month result, trend, top three categories, one insight; the rest lives in the other tabs */}
+      {catData.length>0&&(
+        <div className="a-card" data-section="an-topcats">
+          <div className="a-card-title">{t("an.topCats")}</div>
+          {catData.slice(0,3).map((cat,i)=>(
+            <div key={i} className="cat-bar">
+              <div className="cat-bar-name"><CatIcon catId={cat.id} size={13} color={cat.color}/>{catName(cat.id)}</div>
+              <div className="cat-bar-track"><div className="cat-bar-fill" style={{width:`${(cat.amt/maxCat)*100}%`,background:catInk(cat.color)}}/></div>
+              <div className="cat-bar-amt">{fmt(cat.amt,currency)}</div>
+              <div className="cat-bar-pct">{fmtPct(curExp>0?Math.round((cat.amt/curExp)*100):0)}</div>
+            </div>
+          ))}
+          <button type="button" className="btn btn-sm" data-section="an-topcats-more" style={{marginTop:10}} onClick={()=>{ setSeg("spending"); setActiveBar(null); setCalDay(null); }}>{t("an.seeSpending")}</button>
+        </div>
+      )}
+      {(()=>{ const c=isCurrentMon ? coach.filter(x=>COACH_ACTIONS.includes(x.id)||!muted.includes(x.id))[0] : null; return c ? (
+        <div className="a-card" data-section="an-oneinsight">
+          <div className="a-card-title">{t("coach.title")}</div>
+          <div style={{fontSize:13,lineHeight:1.5,color:"var(--ink)"}}>{coachLine(c)}</div>
+          <button type="button" className="btn btn-sm" data-section="an-oneinsight-more" style={{marginTop:10}} onClick={()=>{ setSeg("insights"); setActiveBar(null); setCalDay(null); }}>{t("an.seeInsights")}</button>
+        </div>
+      ) : null; })()}
+      </AnPanel>
+
+      <AnPanel id="spending" seg={seg}>
       {debtCash.n>0&&(
         <div className="list-sub" data-section="an-debtcash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
           {t("an.debtCash",{out:fmt(debtCash.out,currency),inn:fmt(debtCash.in,currency)})}
@@ -314,7 +366,14 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           {loanCash.unknown>0&&<> {t("an.loanCashUnknown",{n:loanCash.unknown})}</>}
         </div>
       )}
-      <div data-section="an-trend"><SpendingTrend transactions={transactions} mon={selectedMon} prv={prv} currency={currency}/></div>
+      {recurringCount>0&&(
+        <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"var(--ink-3)"}}>
+          <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",recurringCount)}
+        </div>
+      )}
+      </AnPanel>
+
+      <AnPanel id="insights" seg={seg}>
       {isCurrentMon&&(
         <div className="a-card" data-section="an-forecast">
           <div className="a-card-title">{t("an.forecast")}</div>
@@ -327,41 +386,11 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           </>):<div className="list-sub">{t("an.forecastNeed")}</div>}
         </div>
       )}
-      {recurringCount>0&&(
-        <div style={{background:"var(--bg-warm)",borderRadius:8,padding:"10px 13px",marginBottom:14,fontSize:12,color:"var(--ink-3)"}}>
-          <Icon name="repeat" size={12} color="var(--ink-4)"/> {tn("month.recurringCount",recurringCount)}
-        </div>
-      )}
-      </AnPanel>
-
-      <AnPanel id="insights" seg={seg}>
       {isCurrentMon&&coach.length>0&&(
         <div className="a-card" data-section="an-coach">
           <div className="a-card-title">{t("coach.title")}</div>
           {coach.filter(c=>COACH_ACTIONS.includes(c.id)||!muted.includes(c.id)).map((c,i)=>{
-            const num=(n)=>PRIVACY?"••":n, amt=(q)=>fmt(q/100,currency);
-            const line = c.id==="incomplete" ? t("coach.incomplete",{days:c.days})
-              : c.id==="noIncome" ? t("coach.noIncome")
-              : c.id==="spent" ? t("coach.spent",{pct:num(c.pct),kept:num(c.kept)})
-              : c.id==="over" ? t("coach.over",{pct:num(c.pct)})
-              : c.id==="future" ? t("coach.future",{n:c.n})
-              : c.id==="welcome" ? t("coach.welcome")
-              : c.id==="incomeDip" ? t("coach.incomeDip",{have:c.have,of:c.of,pct:num(c.pct)})
-              : c.id==="loanShare" ? t("coach.loanShare",{pct:num(c.pct)})
-              : c.id==="loanShareHigh" ? t("coach.loanShareHigh",{pct:num(c.pct)})
-              : c.id==="billsShare" ? t("coach.billsShare",{pct:num(c.pct)})
-              : c.id==="catUp" ? t("coach.catUp",{cat:catName(c.cat),pct:num(c.pct)})
-              : c.id==="loanInterest" ? t("coach.loanInterest",{lender:maskText(c.lender),amount:amt(c.amount)})
-              : c.id==="microSpill" ? t("coach.microSpill",{n:num(c.n),total:amt(c.total)})
-              : c.id==="lifestyle" ? t("coach.lifestyle",{inc:num(c.inc),spend:num(c.spend),share:num(c.share)})
-              : c.id==="windfall" ? t("coach.windfall",{amount:amt(c.amount),cat:catName(c.cat)})
-              : c.id==="monthLeft" ? t("coach.monthLeft",{amount:amt(c.amount)})
-              : c.id==="incomeHill" ? t("coach.incomeHill",{pct:num(c.pct)})
-              : c.id==="priceUp" ? t("coach.priceUp",{merchant:maskText(c.merchant),from:amt(c.from),to:amt(c.to),pct:num(c.pct)})
-              : c.id==="noCover" ? t("coach.noCover",{lender:maskText(c.lender)})
-              : c.id==="loanDue" ? t("coach.loanDue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
-              : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
-              : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
+            const line = coachLine(c);
             return (
               <div key={c.id+i} className={"coach-line"+(isLeaving("c-"+c.id)?" row-leaving":"")} data-coach={c.id} style={{fontSize:13,lineHeight:1.5,padding:"8px 0",borderTop:i?"1px solid var(--rule)":"none",color:"var(--ink)"}}>
                 {line}
@@ -536,7 +565,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           const allIn=transactions.filter(x=>x.type==="income"&&(isEarnedCat(x.category)||x.category==="refund")).reduce(addAmt,0), totalInc=transactions.filter(x=>x.type==="income"&&isEarnedCat(x.category)).reduce(addAmt,0), totalExp=transactions.filter(x=>x.type==="expense").reduce(addAmt,0);
           return (
             <div className="a-card" data-section="an-overview">
-              <div className="a-card-title">{t("set.overview")}</div>
+              <div className="a-card-title">{t("an.allTime")}</div>
               {[[t("set.totalIncome"),fmt(totalInc,currency),"var(--pos)"],[t("set.totalExpenses"),fmt(totalExp,currency),"var(--neg)"],[t("surplus."+surplusLabel(allIn,totalExp)),fmt(Math.abs(allIn-totalExp),currency),surplusColor(allIn,totalExp)],[t("an.transactions"),String(transactions.length),"var(--ink)"]].map(([lbl,val,col])=>(
                 <div key={lbl} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"6px 0",borderBottom:"1px solid var(--rule)"}}>
                   <span style={{fontSize:12,color:"var(--ink-3)"}}>{lbl}</span>

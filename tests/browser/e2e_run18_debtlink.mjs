@@ -16,7 +16,8 @@ const start = async (dir) => {
   return page;
 };
 const pay = async (page, amt) => { await setVal(page, ".debt-pay-input", amt); await click(page, ".debt-pay-btn"); };
-const analyticsText = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[2].click()); await wait(500); return page.evaluate(() => document.body.innerText); };
+// Run 90 (design review 2): the debt and loan cash lines moved from Overview to the Spending tab of Analytics
+const analyticsText = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[2].click()); await wait(500); await page.evaluate(() => document.querySelector('[data-seg="spending"]').click()); await wait(300); return page.evaluate(() => document.body.innerText); };
 
 section("R18-DLa. Repaying someone: asked first; Yes creates a paid-out entry linked to the payment");
 {
