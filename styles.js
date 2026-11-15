@@ -37,6 +37,9 @@ input::placeholder,textarea::placeholder{color:var(--ink-4)}
 .fab-add:active{transform:scale(0.92)}
 .fab-add.fab-hide{transform:translateY(96px);opacity:0;pointer-events:none}
 @media (prefers-reduced-motion:reduce){.fab-add{transition:none}}
+/* Run 90 (design review 9): the + sits a little closer to the tab bar so it covers less of a list when a screen opens
+   (it already slides away while scrolling down, and every page ends with room below the last row) */
+.fab-add{bottom:calc(72px + env(safe-area-inset-bottom,0px) + 8px)}
 .topbar-btn{width:34px;height:34px;border-radius:8px;background:transparent;border:none;color:var(--ink-3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 120ms,color 120ms,transform 80ms;-webkit-tap-highlight-color:transparent}
 .topbar-btn:hover{background:var(--bg-inset);color:var(--ink)}.topbar-btn:active{transform:scale(0.88)}
 .tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:rgba(243,241,235,0.94);background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(24px);border-top:1px solid var(--rule);display:flex;z-index:60;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px))}
@@ -703,6 +706,14 @@ input,textarea,select,[contenteditable="true"],.selectable,.selectable *{-webkit
 .txn-list{border-top:1px solid var(--rule);border-radius:var(--radius)}
 .txn-row:first-child{border-radius:var(--radius) var(--radius) 0 0}
 .txn-row:only-child{border-radius:var(--radius)}
+/* Run 90 (design review 4): the whole list is one surface; each day is a section inside it with a quiet header and a divider line */
+.txn-surface{background:var(--bg-card);border:1px solid var(--rule);border-radius:var(--radius);overflow:hidden}
+.txn-surface .txn-group{margin:0}
+.txn-surface .txn-group+.txn-group{border-top:1px solid var(--rule)}
+.txn-surface .txn-date-hdr{padding:10px 13px 4px}
+.txn-surface .txn-list{border:none;border-radius:0;background:none}
+.txn-surface .txn-row,.txn-surface .txn-row:first-child,.txn-surface .txn-row:last-child,.txn-surface .txn-row:only-child{border-radius:0}
+.txn-surface .txn-row:last-child{border-bottom:none}
 .txn-name{font-size:15px}.txn-sub{font-size:12.5px}
 .txn-amt{font-size:15px;font-weight:600}
 /* Run 90 (design review 3): an ordinary purchase is not an alarm. Expenses in normal ink with the minus sign, income green; red stays for problems. */

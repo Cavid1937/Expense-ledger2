@@ -26,6 +26,9 @@ export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onL
   },[groups,cap,txns.length]);
   return (
     <>
+      {/* Run 90 (design review 4): one surface for the whole list, the days as divided sections inside it (like Home's latest entries),
+          instead of a separate card for every day; about twice as many entries fit on a phone screen. */}
+      {visible.length>0&&<div className="txn-surface">
       {visible.map(([date,rows])=>{
         const dayTotal=rows.filter(t=>t.type==="expense").reduce(addAmt,0);
         return (
@@ -41,6 +44,7 @@ export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onL
           </div>
         );
       })}
+      </div>}
       {left>0&&<button className="btn btn-ghost btn-full" data-section="tx-show-more" style={{marginTop:8}} onClick={()=>setCap(c=>c+LEDGER_PAGE)}>{t("ledger.showMore",{n:left})}</button>}
     </>
   );

@@ -51,7 +51,8 @@ section("R29-S2. Leaving select mode clears everything; az and ru wording");
 }
 for (const [l, re] of [["az", /seçilib/], ["ru", /Выбрано/]]) {
   const page = await openPage(browser, { seed: seed(l) }); await settle(page); await ledger(page);
-  await click(page, '[data-section="tx-select-toggle"]'); await pick(page, "Row2"); await wait(200);
+  // Run 90: the rows' tick boxes follow the Select button a frame later (the button answers at once), so wait for them
+  await click(page, '[data-section="tx-select-toggle"]'); await page.waitForSelector('[data-section="tx-select"] [role="checkbox"]'); await pick(page, "Row2"); await wait(200);
   ok(re.test(await sum(page)), `${l}: sum line wording`, await sum(page));
   await page.close();
 }
