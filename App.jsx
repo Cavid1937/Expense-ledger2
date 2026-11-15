@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="92 (2026-11-15)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="93 (2026-11-15)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -2052,17 +2052,31 @@ function splitDelimited(text, d) {
   row.push(cur); if (row.some(x=>x.trim()!=="")) rows.push(row);
   return rows;
 }
-function bankMoney(s) {   // "1 234,56" "1.234,56" "1,234.56" "-12,5 AZN" "(45.00)" -> cents (integer, signed) or null
-  let v=String(s==null?"":s).replace(/[\u00A0\s]/g,"").trim(); if (!v) return null;
-  let neg=false; if (/^\(.*\)$/.test(v)) { neg=true; v=v.slice(1,-1); }
-  v=v.replace(/[^\d.,+\-]/g,""); if (/^-/.test(v)) { neg=!neg; } v=v.replace(/[+\-]/g,"");
-  if (!/\d/.test(v)) return null;
-  const lc=v.lastIndexOf(","), ld=v.lastIndexOf(".");
-  if (lc>-1 && ld>-1) v = lc>ld ? v.replace(/\./g,"").replace(",",".") : v.replace(/,/g,"");
-  else if (lc>-1) v = /,\d{1,2}$/.test(v) && v.indexOf(",")===lc ? v.replace(",",".") : v.replace(/,/g,"");
-  else if (ld>-1 && v.indexOf(".")!==ld) v=v.replace(/\./g,"");
-  if (!/^\d*\.?\d+$|^\d+\.$/.test(v)) return null;
-  const c=Math.round(parseFloat(v)*100); return neg ? -c : c;
+// "1 234,56" "1.234,56" "1,234.56" "-12,5 AZN" "(45.00)" "45.00-" -> cents (integer, signed) or null.
+// Run 93: the same strict rules as stMoney in statement.js (copied, because the test harness loads App.jsx without its imports).
+const BANK_CUR_RE = /(AZN|USD|EUR|GBP|RUB|TRY|GEL|KZT|UAH|AED|CHF)/ig;
+function bankMoney(s) {
+  let v = String(s == null ? "" : s).replace(/[\u00A0\u202F\u2009]/g, " ").trim(); if (!v) return null;
+  v = v.replace(BANK_CUR_RE, "").replace(/[₼$€£₽₺]/g, "").trim();
+  let neg = false; if (/^\(.*\)$/.test(v)) { neg = true; v = v.slice(1, -1).trim(); }
+  if (/^[\-−–]/.test(v)) { neg = !neg; v = v.slice(1).trim(); }
+  else if (/^\+/.test(v)) v = v.slice(1).trim();
+  else if (/\d\s*[\-−–]$/.test(v)) { neg = !neg; v = v.slice(0, -1).trim(); }
+  v = v.replace(/^(\d+)[.,]$/, "$1");
+  let int = v, frac = "", dec = "";
+  const m = v.match(/^(.*?)([.,])(\d{1,2})$/); if (m) { int = m[1]; dec = m[2]; frac = m[3]; }
+  let digits;
+  if (int === "" && frac) digits = "0";
+  else if (/^\d+$/.test(int)) digits = int;
+  else {
+    const g = int.match(/^[1-9]\d{0,2}([ '.,])\d{3}(?:\1\d{3})*$/);
+    if (!g || g[1] === dec) return null;
+    if (!dec && g[1] === "." && int.split(".").length === 2) return null;
+    digits = int.split(g[1]).join("");
+  }
+  const c = Number(digits) * 100 + Number(frac.padEnd(2, "0") || 0);
+  if (!Number.isSafeInteger(c) || c > 1e14) return null;
+  return neg ? -c : c;
 }
 function bankDate(s) {   // yyyy-mm-dd, dd.mm.yyyy, dd/mm/yyyy, dd-mm-yyyy (day first); times ignored; real calendar dates only
   const v=String(s||"").trim(); let y,m,d, x;

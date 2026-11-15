@@ -36,6 +36,12 @@ read from code or config but not run on a device or server. **Unverified risk** 
 | N1 | Android package name is `com.example.expenseledger.spike`. | `Expense-ledger2-capacitor/android/app/build.gradle:7` | Google Play refuses `com.example` names, and a package name cannot change after the first upload. | Blocker for Play | Strong evidence (rule from Play documentation; not tried) | Pick the final ID before the first upload. **Owner decision.** | Play Console accepts the upload. |
 | N2 | Android source has 33 uncommitted changes on top of `a09ebee`; the installed APKs were built from that uncommitted state. | `git status` in the capacitor repo | The shipped app cannot be rebuilt exactly, and a disk failure loses it. | High | Confirmed | Commit the shell (local commit, no push without OK). | `git status` clean; rebuilt APK matches. |
 
+**Update, Run 93 (same day):** A4a and A4b are fixed. `stMoney` (`statement.js`) and `bankMoney` (`App.jsx`) now share one
+strict rule set: whole-number arithmetic, at most 2 decimals, 3-digit thousands groups, trailing minus = negative, and
+"1e3", "0,015", "1.2.3" and a lone "1.234" are refused. Refused CSV rows are counted in the import warnings.
+Evidence: `tests/logic/run93money.test.mjs` passes 70 of 70 (33 of the 70 fail on the old code). On the owner's private Birbank
+statement, the rows are identical before and after (no values recorded). A4c (warn-only checks) is still open.
+
 ### Unverified risks
 
 | ID | Risk | Evidence | Severity | Next check |

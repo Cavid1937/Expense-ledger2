@@ -12,20 +12,31 @@ const CUR_WORDS = ["AZN", "USD", "EUR", "GBP", "RUB", "TRY", "GEL", "KZT", "UAH"
 const CUR_SIGNS = { "₼": "AZN", "$": "USD", "€": "EUR", "£": "GBP", "₽": "RUB", "₺": "TRY" };
 const curOf = (s) => { const u = String(s || "").toUpperCase(); const w = CUR_WORDS.find((c) => u.includes(c)); if (w) return w; for (const k of Object.keys(CUR_SIGNS)) if (u.includes(k)) return CUR_SIGNS[k]; return ""; };
 
-// "35.00 AZN" "-0.02 AZN" ".90" "1,234.56" "1 234,56" "AZN0.90" "-0.90₼" "(45.00)" "+12" -> signed whole qapik, or null when it is not money.
+// "35.00 AZN" "-0.02 AZN" ".90" "1,234.56" "1 234,56" "AZN0.90" "-0.90₼" "(45.00)" "+12" "45.00-" -> signed whole qapik, or null when it is not money.
+// Run 93 (strict): at most 2 decimals; thousands groups of exactly 3 digits with one separator; a lone "1.234" (dot, 3 digits) is
+// ambiguous and refused; a lone "1,234" stays 1234; a trailing minus means negative; exponents, letters and "1.2.3" are refused.
+// Whole numbers only, no floating point. bankMoney in App.jsx is a copy of this; tests/logic/run93money.test.mjs checks they agree.
 export function stMoney(s) {
-  let v = String(s == null ? "" : s).replace(/[  ]/g, " ").trim(); if (!v) return null;
+  let v = String(s == null ? "" : s).replace(/[\u00A0\u202F\u2009]/g, " ").trim(); if (!v) return null;
   v = v.replace(new RegExp("(" + CUR_WORDS.join("|") + ")", "ig"), "").replace(/[₼$€£₽₺]/g, "").trim();
   let neg = false; if (/^\(.*\)$/.test(v)) { neg = true; v = v.slice(1, -1).trim(); }
-  if (/^[\-−–]/.test(v)) { neg = !neg; v = v.slice(1).trim(); } else if (/^\+/.test(v)) v = v.slice(1).trim();
-  if (!/^[\d .,']+$/.test(v) || !/\d/.test(v)) return null;
-  v = v.replace(/[ ']/g, "");
-  const lc = v.lastIndexOf(","), ld = v.lastIndexOf(".");
-  if (lc > -1 && ld > -1) v = lc > ld ? v.replace(/\./g, "").replace(",", ".") : v.replace(/,/g, "");
-  else if (lc > -1) v = /,\d{1,2}$/.test(v) && v.indexOf(",") === lc ? v.replace(",", ".") : v.replace(/,/g, "");
-  else if (ld > -1 && v.indexOf(".") !== ld) v = v.replace(/\./g, "");
-  if (!/^\d*\.?\d+$|^\d+\.$/.test(v)) return null;
-  const c = Math.round(parseFloat(v) * 100); if (!Number.isFinite(c) || c > 1e14) return null;
+  if (/^[\-−–]/.test(v)) { neg = !neg; v = v.slice(1).trim(); }
+  else if (/^\+/.test(v)) v = v.slice(1).trim();
+  else if (/\d\s*[\-−–]$/.test(v)) { neg = !neg; v = v.slice(0, -1).trim(); }
+  v = v.replace(/^(\d+)[.,]$/, "$1");
+  let int = v, frac = "", dec = "";
+  const m = v.match(/^(.*?)([.,])(\d{1,2})$/); if (m) { int = m[1]; dec = m[2]; frac = m[3]; }
+  let digits;
+  if (int === "" && frac) digits = "0";
+  else if (/^\d+$/.test(int)) digits = int;
+  else {
+    const g = int.match(/^[1-9]\d{0,2}([ '.,])\d{3}(?:\1\d{3})*$/);
+    if (!g || g[1] === dec) return null;
+    if (!dec && g[1] === "." && int.split(".").length === 2) return null;
+    digits = int.split(g[1]).join("");
+  }
+  const c = Number(digits) * 100 + Number(frac.padEnd(2, "0") || 0);
+  if (!Number.isSafeInteger(c) || c > 1e14) return null;
   return neg ? -c : c;
 }
 const pad = (n) => String(n).padStart(2, "0");
