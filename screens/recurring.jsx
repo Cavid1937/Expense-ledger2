@@ -82,11 +82,13 @@ export function RecurringHub({ transactions, bills=[], currency, onView, onToggl
     return (<div data-section="rec-item">
       {/* A paused schedule is marked by its "Paused" text and a faded icon; its text keeps full contrast (fading the whole row
           made it 2.2–3.9:1, including the Reactivate button the user needs). */}
-      <div style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)"}}>
-        <div aria-hidden="true" onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{width:38,height:38,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,cursor:"pointer",opacity:x.isActive?1:0.5}}>
+      {/* Run 89 (owner video 15 Nov: "edges are a problem in the recurring section"): the whole row is the button, so a press tints the row
+          from edge to edge of the card instead of a smaller box around the name. Record payment / Pause stay separate buttons. */}
+      <div className={x.billId?"bill-row rec-row":"rec-row"} role="button" tabIndex={0} onKeyDown={activateKey(()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest))} onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderBottom:"1px solid var(--rule)",cursor:"pointer"}}>
+        <div aria-hidden="true" style={{width:38,height:38,borderRadius:"50%",background:(cat.color)+"26",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:x.isActive?1:0.5}}>
           <CatIcon catId={cat.id} size={16} color={cat.color}/>
         </div>
-        <div className={x.billId?"bill-row":undefined} role="button" tabIndex={0} onKeyDown={activateKey(()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest))} onClick={()=>x.billId?onEditBill?.(x.bill):onView?.(x.latest)} style={{flex:1,minWidth:0,cursor:"pointer"}}>
+        <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:13,fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{maskText(x.merchant||x.note)||catName(x.category)}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",marginTop:1,lineHeight:1.4}}>
             {catName(x.category)}{x.subcategory?` / ${subName(x.subcategory)}`:""} · {t("freq."+x.freq)}

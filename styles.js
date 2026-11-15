@@ -428,10 +428,12 @@ html.launch-first .lang-hint{animation:langUp 460ms cubic-bezier(.2,.8,.2,1) 460
 @keyframes langDot{from{transform:scale(0)}to{transform:none}}
 @media (prefers-reduced-motion:reduce){.lang-opt.sel,.lang-opt.sel .lang-mark-sel::after{animation:none}}
 [data-fx="off"] .lang-opt.sel,[data-fx="off"] .lang-opt.sel .lang-mark-sel::after{animation:none}
-html.theme-vt::view-transition-old(root){animation:none}
-html.theme-vt::view-transition-new(root){animation:themeReveal 620ms cubic-bezier(.2,.8,.2,1) both}
-@keyframes themeReveal{from{clip-path:circle(0 at var(--vt-x,50%) var(--vt-y,50%))}to{clip-path:circle(150vmax at var(--vt-x,50%) var(--vt-y,50%))}}
-html.theme-fading,html.theme-fading *{transition:background-color 420ms ease,color 420ms ease,border-color 420ms ease,fill 420ms ease !important}
+html.theme-vt::view-transition-group(root){animation-duration:640ms}
+html.theme-vt::view-transition-old(root){animation:themeSink 640ms cubic-bezier(.4,0,.2,1) both;transform-origin:var(--vt-x,50%) var(--vt-y,50%)}
+html.theme-vt::view-transition-new(root){animation:themeReveal 640ms cubic-bezier(.65,0,.25,1) both;mix-blend-mode:normal}
+@keyframes themeReveal{from{clip-path:circle(0px at var(--vt-x,50%) var(--vt-y,50%))}to{clip-path:circle(var(--vt-r,150vmax) at var(--vt-x,50%) var(--vt-y,50%))}}
+@keyframes themeSink{from{transform:scale(1)}to{transform:scale(.97)}}
+html.theme-fading body,html.theme-fading .card,html.theme-fading .tabbar,html.theme-fading .topbar{transition:background-color 380ms ease,color 380ms ease,border-color 380ms ease !important}
 .lang-opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
 .lang-continue{margin-top:6px;min-height:48px}
 .lang-hint{display:flex;flex-direction:column;gap:2px;text-align:center;font-size:12px;color:var(--ink-2);line-height:1.45;margin:14px 0 0}
@@ -558,6 +560,11 @@ html.theme-fading,html.theme-fading *{transition:background-color 420ms ease,col
 .txn-row{transition:background-color 120ms ease-out,transform 120ms ease-out}
 .txn-row:active{transform:none}
 .bill-row[role="button"]:active{opacity:1;background:color-mix(in srgb,var(--ink) 8%,transparent);border-radius:12px}
+.rec-row{transition:background-color 220ms ease-out}
+.rec-row.bill-row[role="button"]:active{border-radius:0}
+.rec-row:is(:active,.pressed):not(:has(button:is(:active,.pressed))){opacity:1;border-radius:0;background-color:color-mix(in srgb,var(--ink) 7%,transparent);transition:background-color 60ms ease-out}
+.rec-row:has(button:is(:active,.pressed)){background-color:transparent}
+[data-section="rec-item"]:last-child>.rec-row{border-bottom:none!important}
 .field-input,.date-input{transition:border-color 200ms ease-out,box-shadow 200ms ease-out,background-color 200ms ease-out}
 @media (prefers-reduced-motion:reduce){.toggle-knob,.toggle-track,.txn-row{transition:none}}
 .txn-row{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}   /* press-and-hold selects rows, not text */

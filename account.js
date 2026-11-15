@@ -137,12 +137,35 @@ export async function nativeGoogleIdToken(hashedNonce) {
   if (!r || typeof r.idToken !== "string") throw new AccountError("cancelled");
   return r.idToken;
 }
+// Waits until Google's button has really been drawn: its frame is in place and has loaded, plus a moment for Google to settle its text.
+// Run 89 (owner video 15 Nov: "Google sign in acts strangely"): the button was shown while Google was still drawing it, so it appeared in
+// the phone's language first and then switched. It is now kept hidden until this resolves (never longer than about 3 s).
+function googleFrameReady(el, wait = (ms) => new Promise((r) => setTimeout(r, ms))) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const look = async () => {
+      const f = el && el.querySelector && el.querySelector("iframe");
+      if (f) {
+        await Promise.race([new Promise((r) => f.addEventListener("load", r, { once: true })), wait(2500)]);
+        await wait(250);
+        resolve(true); return;
+      }
+      if (Date.now() - started > 1500) { resolve(false); return; }
+      setTimeout(look, 60);
+    };
+    look();
+  });
+}
 // Draws Google's button into `el` (only after the person opened the account sheet). onToken(idToken) is called when they pick an account.
+// Resolves once the button is drawn. Google's own account chooser is also asked to open at once, so one tap is usually enough; if the
+// browser does not show it, the drawn button remains.
 export async function renderGoogleButton(el, hashedNonce, onToken, opts = {}) {
   await loadGis();
-  window.google.accounts.id.initialize({ client_id: GOOGLE_WEB_CLIENT_ID, nonce: hashedNonce, use_fedcm_for_button: true, itp_support: true,
+  window.google.accounts.id.initialize({ client_id: GOOGLE_WEB_CLIENT_ID, nonce: hashedNonce, use_fedcm_for_button: true, use_fedcm_for_prompt: true, itp_support: true,
     callback: (resp) => { if (resp && typeof resp.credential === "string") onToken(resp.credential); } });
   el.innerHTML = "";
   window.google.accounts.id.renderButton(el, { type: "standard", theme: opts.dark ? "filled_black" : "outline", size: "large", shape: "pill",
     text: "continue_with", logo_alignment: "left", locale: opts.locale || "en", width: Math.min(360, Math.max(200, el.clientWidth || 300)) });
+  await googleFrameReady(el);
+  try { if (opts.prompt !== false) window.google.accounts.id.prompt(); } catch { /* the drawn button still works */ }
 }

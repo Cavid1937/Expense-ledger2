@@ -37,7 +37,7 @@ section("UX-K1. Transaction rows work from the keyboard");
 section("UX-K2. Recurring payments / bills");
 {
   const page = await openPage(browser, { seed: seed() }); await tab(page, "Recurring"); await wait(300);
-  const info = await page.evaluate(() => { const r = document.querySelector(".bill-row"); return { role: r.getAttribute("role"), tab: r.getAttribute("tabindex"), iconHidden: r.previousElementSibling && r.previousElementSibling.getAttribute("aria-hidden") }; });
+  const info = await page.evaluate(() => { const r = document.querySelector(".bill-row"); return { role: r.getAttribute("role"), tab: r.getAttribute("tabindex"), iconHidden: (r.firstElementChild && r.firstElementChild.getAttribute("aria-hidden")) || (r.previousElementSibling && r.previousElementSibling.getAttribute("aria-hidden")) }; });
   ok(info.role === "button" && info.tab === "0" && info.iconHidden === "true", "the bill row is one keyboard-focusable button; its decorative icon is hidden from screen readers (one tab stop, not two)", info);
   await page.evaluate(() => document.querySelector(".bill-row").focus()); await page.keyboard.press("Enter"); await wait(400);
   ok(!!(await page.$(".bill-sheet")), "Enter opens the bill sheet");

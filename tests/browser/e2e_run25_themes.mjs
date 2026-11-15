@@ -16,6 +16,8 @@ section("R25-TB1. Choosing a theme changes the colours at once and is remembered
   await pick(page, "mist"); await wait(400);
   ok((await rootVar(page, "--bg")) === "#DEDCDC" && (await bodyBg(page)) === "rgb(222, 220, 220)", "Mist: the page background is now #DEDCDC");
   ok(await page.evaluate(() => localStorage.getItem("expense_ledger_v5__theme")) === "mist", "the choice is saved under its own key");
+  // Run 89: the notice now waits until the colour circle has finished (about 0.65 s), so it does not compete with the animation
+  await wait(500);
   ok(/Theme changed/.test(await page.evaluate(() => (document.querySelector(".toast") || {}).innerText || "")), "a notice confirms it");
   ok(await page.evaluate(() => document.querySelector('[data-theme-id="mist"]').getAttribute("aria-checked")) === "true", "the Mist button shows as selected");
   if (shot) await page.screenshot({ path: `${shot}/mist-settings.png` });

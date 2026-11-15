@@ -65,14 +65,15 @@ function AccountPage({ onGoogle, onGuest, busy, error }) {
   // Run 82: on the website Google's own button has to be shown and tapped (the app's button only reveals it)
   const gRef = useRef(null);
   const [gShown, setGShown] = useState(false);
-  const google = async () => { const r = await onGoogle(gRef.current); if (r === "button") setGShown(true); };
+  const [opening, setOpening] = useState(false);
+  const google = async () => { setOpening(true); try { const r = await onGoogle(gRef.current); if (r === "button") setGShown(true); } finally { setOpening(false); } };
   return (
     <div className="ob-page ob-account" data-section="ob-account">
       <h2 className="setup-q">{t("ob.acc.title")}</h2>
       <p className="setup-sub">{t("ob.acc.sub")}</p>
-      <div ref={gRef} data-section="ob-gbtn" style={{ display: gShown ? "flex" : "none", justifyContent: "center", minHeight: 44, margin: "4px 0 6px" }} />
+      <div ref={gRef} data-section="ob-gbtn" style={{ display: "flex", justifyContent: "center", minHeight: gShown ? 44 : 0, height: gShown ? "auto" : 0, overflow: gShown ? "visible" : "hidden", opacity: gShown ? 1 : 0, transition: "opacity 280ms ease-out", margin: gShown ? "4px 0 6px" : 0 }} />
       {gShown && <p className="setup-sub" style={{ textAlign: "center", marginTop: 0 }}>{busy ? t("ob.busy") : t("acct.tapGoogle")}</p>}
-      {!gShown && <button type="button" className="ob-choice ob-google" data-ob="google" disabled={!!busy} aria-busy={!!busy} onClick={google}>
+      {!gShown && <button type="button" className="ob-choice ob-google" data-ob="google" disabled={!!busy || opening} aria-busy={!!busy || opening} onClick={google}>
         <span className="ob-choice-ic ob-g" dangerouslySetInnerHTML={{ __html: GOOGLE_G }} />
         <span className="ob-choice-txt"><span className="ob-choice-name">{busy ? t("ob.busy") : t("ob.google")}</span><span className="ob-choice-sub">{t("ob.googleSub")}</span></span>
       </button>}

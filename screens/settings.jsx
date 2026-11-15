@@ -1,5 +1,6 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { Collapse, EditSwap, motionOff, useBackStep, useFlip, useLeave } from "./motion.jsx";
@@ -437,18 +438,24 @@ export function LookSettings({ showToast, open, toggle }) {
   const toggleFx=()=>{ const n=!fxOff; if (!writeFxOff(n)) { showToast(t("theme.saveFailed"),5000); return; } applyFx(n); setFxOff(n); };
   // Run 88 (owner: "the theme changing must be animated"): the new colours spread out in a circle from the card that was tapped. Phones
   // without that browser feature get a short colour fade instead; with reduced motion or effects off the change is instant as before.
+  // Run 89 (owner video 15 Nov: "a little bit laggy and kinda not impressive"): the page is now redrawn in one go inside the transition
+  // (flushSync), the circle grows exactly to the farthest corner (before, most of its time was spent outside the screen, so it looked
+  // abrupt and then stalled), the old colours sink back slightly underneath, and the toast waits until the animation has finished so it
+  // does not compete with it. The fallback fade no longer animates every element on the page, only the large surfaces.
   const pick=(id,ev)=>{ if (theme===id) return; if (!writeTheme(id)) { showToast(t("theme.saveFailed"),5000); return; }
-    const swapNow=()=>{ applyTheme(id); setTheme(id); };
+    const swapNow=()=>{ applyTheme(id); flushSync(()=>setTheme(id)); try { window.dispatchEvent(new Event("ledger-widget-changed")); } catch {} };
+    const after=()=>showToast(t("theme.changed"));
     const root=document.documentElement;
-    if (motionOff()) swapNow();
+    if (motionOff()) { swapNow(); after(); }
     else if (typeof document.startViewTransition==="function") {
       const r=ev&&ev.currentTarget&&ev.currentTarget.getBoundingClientRect ? ev.currentTarget.getBoundingClientRect() : null;
-      root.style.setProperty("--vt-x",(r?Math.round(r.left+r.width/2):Math.round(window.innerWidth/2))+"px");
-      root.style.setProperty("--vt-y",(r?Math.round(r.top+r.height/2):Math.round(window.innerHeight/2))+"px");
+      const x=r?Math.round(r.left+r.width/2):Math.round(window.innerWidth/2), y=r?Math.round(r.top+r.height/2):Math.round(window.innerHeight/2);
+      const far=Math.ceil(Math.hypot(Math.max(x,window.innerWidth-x),Math.max(y,window.innerHeight-y)));
+      root.style.setProperty("--vt-x",x+"px"); root.style.setProperty("--vt-y",y+"px"); root.style.setProperty("--vt-r",far+"px");
       root.classList.add("theme-vt");
-      try { const vt=document.startViewTransition(swapNow); vt.finished.finally(()=>root.classList.remove("theme-vt")); } catch { root.classList.remove("theme-vt"); swapNow(); }
-    } else { root.classList.add("theme-fading"); swapNow(); setTimeout(()=>root.classList.remove("theme-fading"),520); }
-    showToast(t("theme.changed")); try { window.dispatchEvent(new Event("ledger-widget-changed")); } catch {} };
+      try { const vt=document.startViewTransition(swapNow); vt.finished.finally(()=>{ root.classList.remove("theme-vt"); after(); }); } catch { root.classList.remove("theme-vt"); swapNow(); after(); }
+    } else { root.classList.add("theme-fading"); swapNow(); setTimeout(()=>{ root.classList.remove("theme-fading"); },520); after(); }
+  };
   return (
     <Fold id="look" icon="eye" title={t("st.foldLook")} sub={fxOff?t("st.sumLookFx",{theme:t("theme."+theme)}):t("theme."+theme)} open={open.look} onToggle={()=>toggle("look")}>
     <div className="card st-card" data-section="st-look">
@@ -730,14 +737,15 @@ function AccountCard({ account }) {
   useEffect(()=>{ setBtnShown(false); },[sk]);
   if (!account) return null;
   const { s, busy="", onStart, onSave, onSettle, onReview, onKeepPhone, onSignOut, onDelete }=account;
-  const start=async ()=>{ const r=await onStart(gRef.current); if (r==="button") setBtnShown(true); };
+  const [opening,setOpening]=useState(false);
+  const start=async ()=>{ setOpening(true); try { const r=await onStart(gRef.current); if (r==="button") setBtnShown(true); } finally { setOpening(false); } };
   if (!s) return (
     <div className="card st-card" data-section="st-account">
       <div className="list-title" style={{display:"flex",alignItems:"center",gap:8}}><Icon name="safe" size={16}/>{t("acct.title")}</div>
       <div className="list-sub" style={{lineHeight:1.55,marginTop:4}}>{t("acct.sub")}</div>
       <div className="list-sub" style={{lineHeight:1.55,marginTop:6}}>{t("acct.what")}</div>
-      {!btnShown&&<button type="button" className="btn btn-primary btn-full" data-section="acct-signin" disabled={!!busy} style={{marginTop:12}} onClick={start}>{busy?t("acct.working"):t("acct.signIn")}</button>}
-      <div ref={gRef} data-section="acct-gbtn" style={{marginTop:btnShown?12:0,display:"flex",justifyContent:"center",minHeight:btnShown?44:0}}/>
+      {!btnShown&&<button type="button" className="btn btn-primary btn-full" data-section="acct-signin" disabled={!!busy||opening} aria-busy={opening} style={{marginTop:12}} onClick={start}>{busy||opening?t("acct.working"):t("acct.signIn")}</button>}
+      <div ref={gRef} data-section="acct-gbtn" style={{marginTop:btnShown?12:0,display:"flex",justifyContent:"center",minHeight:btnShown?44:0,height:btnShown?"auto":0,overflow:btnShown?"visible":"hidden",opacity:btnShown?1:0,transition:"opacity 280ms ease-out"}}/>
       {btnShown&&<div className="list-sub" style={{marginTop:6,textAlign:"center"}}>{busy?t("acct.working"):t("acct.tapGoogle")}</div>}
     </div>
   );
@@ -759,8 +767,8 @@ function AccountCard({ account }) {
       ) : !s.version ? (
         <button type="button" className="btn btn-primary btn-full" data-section="acct-settle" disabled={!!busy} style={{marginTop:12}} onClick={onSettle}>{busy?t("acct.working"):t("acct.retry")}</button>
       ) : s.lastError==="auth" ? (<>
-        {!btnShown&&<button type="button" className="btn btn-primary btn-full" data-section="acct-again" disabled={!!busy} style={{marginTop:12}} onClick={start}>{busy?t("acct.working"):t("acct.signInAgain")}</button>}
-        <div ref={gRef} data-section="acct-gbtn" style={{marginTop:btnShown?12:0,display:"flex",justifyContent:"center",minHeight:btnShown?44:0}}/>
+        {!btnShown&&<button type="button" className="btn btn-primary btn-full" data-section="acct-again" disabled={!!busy||opening} aria-busy={opening} style={{marginTop:12}} onClick={start}>{busy||opening?t("acct.working"):t("acct.signInAgain")}</button>}
+        <div ref={gRef} data-section="acct-gbtn" style={{marginTop:btnShown?12:0,display:"flex",justifyContent:"center",minHeight:btnShown?44:0,height:btnShown?"auto":0,overflow:btnShown?"visible":"hidden",opacity:btnShown?1:0,transition:"opacity 280ms ease-out"}}/>
       </>) : (
         <button type="button" className="btn btn-ghost btn-full" data-section="acct-save" disabled={!!busy} style={{marginTop:12}} onClick={onSave}>{busy==="save"?t("acct.working"):t("acct.saveNow")}</button>
       )}
