@@ -77,7 +77,7 @@ const TRANSFER_WORDS = /\b(iba ?mobile|birbank|leo ?app|anipay|m10|e-?manat|mill
 export const isTransferRow = (r) => !!r && (r.kind === "transfer" || TRANSFER_MCC.has(+r.mcc) || TRANSFER_WORDS.test(String(r.merchant || "") + " " + String(r.desc || "")));
 // "to A. Person", "P2P SEND": money sent to (or from) a person rather than to one of the person's own cards
 const PERSON = /^(to|from)\s|\bp2p\b|\bsend\b/i;
-const CASH_IN = /\b(terminal payment|e-?manat|million|milli ?[oö]n|portmanat)\b/i;
+const CASH_IN = /\b(terminal payment|e-?manat|million|milli ?[oö]n|portmanat|cash-in)\b/i;
 
 function abbRow(m, desc) {
   const cr = stMoney(m[3]), dr = stMoney(m[4]), bal = stMoney(m[5]);
@@ -227,12 +227,106 @@ function genericParse(lines) {
   return { rows, problems };
 }
 
+// ── Run 91: a PDF table with a heading row (Birbank and others) ─────────────────────────────────────────────────
+// When the heading names a date column and at least two money columns, every value is read by the column it is printed in: a "0" under
+// "money in" means nothing came in, a description wrapped onto lines above and below joins its row (also across a page break), and a
+// "last 4 digits of the card" column is left out. The bank's own summary above the table (totals for the period) is read too, so the
+// import can say when the rows do not add up to it.
+const DATE_HEAD = /^(tarix|tarixi|əməliyyat tarixi|emeliyyat tarixi|date|transaction date|дата|дата операции)$/i;
+const DESC_HEAD = /^(təsvir|tesvir|təyinat|teyinat|məlumat|description|details|narrative|описание|назначение|детали)/i;
+const CARD_HEAD = /son 4|last 4|kart.*rəqəm|card no|card number|номер карты/i;
+const MONEY_ROLES = ["credit", "debit", "balance", "amount"];
+function headRole(text) { const t = clean(text).toLowerCase(); if (DATE_HEAD.test(t)) return "date"; if (CARD_HEAD.test(t)) return "card"; if (DESC_HEAD.test(t)) return "desc"; return roleOf(text) || "other"; }
+const BAKU = /^(baku|baki|bakı)( city| sh\.?)?$/i;
+// A processing-network description "CODE/NAME,ADDRESS,CITY,AZ/TAIL" -> a readable merchant, its city, and what kind of move it is.
+// Phone numbers, card numbers and payment codes are taken out: they are not needed and should not be kept.
+export function describeRow(raw, type) {
+  let d = clean(String(raw || "").replace(/\d{6,8}[* ]*\*[* ]*\d{3,4}(\s*\|\s*\d+)?/g, " ").replace(/VENDORVAL=[^;]*;?/gi, "").replace(/\bP=\d+-\s*\d*;?/g, "").replace(/CMS_ID=\d+;?/gi, "").replace(/\+?994\d{9}/g, " ").replace(/\bauto=\d;?/gi, ""));
+  const out = (merchant, kind, city = "") => ({ desc: d, merchant: clean(merchant).slice(0, 80), kind: kind || kindOf(merchant), city: BAKU.test(clean(city)) ? "" : clean(city) });
+  if (/bak[iı]\s*kart/i.test(d)) { d = clean(d.replace(/birbank_bk\/birbank,?/i, "")); return out("BakıKart", "payment"); }
+  if (/ipsout|ipscardtopup|\bips\b/i.test(d)) return out("IPS transfer", "transfer");
+  if (/www\.birbank\.az/i.test(d)) return out("Birbank transfer", "transfer");
+  if (/pashapay_m10|\bm10\b/i.test(d)) return out("m10", "transfer");
+  if (/cash_in_charge|online kiosk/i.test(d)) return out("Cash-in kiosk", "transfer");
+  if (/^digdeposit/i.test(d)) return out("Deposit", "transfer");
+  // A payment to a service the statement names only by number: kept apart by that number, so the category chosen once is remembered
+  let m = d.match(/\bVID=(\d+)/i); if (m) { d = clean(d.replace(/\S*birbank\S*/gi, "")); return out("Payment service " + m[1], "payment"); }
+  if (/^cy=\d+\//i.test(d)) return out("Payment service", "payment");
+  // "BirBank50" money in: sent from another Birbank card by phone number (round sums from people), so not earnings
+  if (type === "income" && /^birbank\d+\//i.test(d)) return out("Birbank incoming", "transfer");
+  m = d.match(/^[A-Z0-9_]{2,}\/([^/]+?)(?:\/(.*))?$/i);
+  if (m) {
+    const parts = m[1].split(",").map(clean).filter(Boolean), tail = clean(m[2] || "");
+    const city = parts.length > 2 && /^az$/i.test(parts[parts.length - 1]) ? parts[parts.length - 2] : "";
+    // "/A 10" at the end is the network's mark for a cash machine; such rows name the operator, not a shop
+    if (type === "expense" && /^A \d+$/.test(tail)) return out("ATM", "cash", city);
+    let name = parts[0] || ""; if (/^kaps$/i.test(name) && parts[1]) name = parts[1];
+    return out(name || d, "", city);
+  }
+  return out(d, "");
+}
+function columnParse(L) {
+  if (L.length < 2 || !L.every((l) => !l.grid && typeof l.y === "number" && Array.isArray(l.xs) && l.xs.length === l.cells.length)) return null;
+  const hi = L.findIndex((l) => { const r = l.cells.map(headRole); return r.includes("date") && r.filter((x) => MONEY_ROLES.includes(x)).length >= 2; });
+  if (hi < 0) return null;
+  const H = L[hi], cols = H.cells.map((c, k) => ({ x: H.xs[k], role: headRole(c) }));
+  const money = cols.filter((c) => MONEY_ROLES.includes(c.role)), has = (r) => money.some((c) => c.role === r);
+  if (new Set(money.map((c) => c.role)).size !== money.length || !(has("amount") || (has("credit") && has("debit")))) return null;
+  const colOf = (x) => { let best = null, bd = Infinity; for (const c of cols) { const dd = Math.abs(c.x - x); if (dd < bd) { bd = dd; best = c; } } return best; };
+  const cell = (l, role) => clean(l.cells.filter((s, k) => s && colOf(l.xs[k]).role === role).join(" "));
+  const amt = (s) => (!s || s === "-" || s === "–" ? 0 : stMoney(s));
+  const dateOf = (l) => { const s = cell(l, "date"); return s ? stDate(s) || stDate(s.split(/\s+/)[0]) : null; };
+  const isAnchor = (l) => { if (!dateOf(l)) return false; const v = money.map((c) => cell(l, c.role)); return v.some(Boolean) && v.every((s) => !s || amt(s) !== null); };
+  const isWrap = (l) => l.cells.every((s, k) => colOf(l.xs[k]).role === "desc");
+  const body = L.slice(hi + 1), anchors = body.filter(isAnchor).map((l) => ({ l, before: [], after: [] }));
+  if (!anchors.length) return null;
+  // A wrapped line belongs to the nearest row on its page when it is closer than half the usual gap between rows; a line above every row
+  // of its page finishes the last row of the page before, a line below every row starts the first row of the next page.
+  const gaps = []; anchors.forEach((a, i) => { const p = anchors[i - 1]; if (p && p.l.page === a.l.page) gaps.push(Math.abs(p.l.y - a.l.y)); });
+  gaps.sort((a, b) => a - b); const half = Math.max(10, (gaps[Math.floor(gaps.length / 2)] || 26) / 2);
+  body.forEach((l) => {
+    if (isAnchor(l) || !isWrap(l)) return;
+    const mine = anchors.filter((a) => a.l.page === l.page);
+    let best = null, bd = half; for (const a of mine) { const dd = Math.abs(a.l.y - l.y); if (dd < bd) { bd = dd; best = a; } }
+    if (best) { (l.y > best.l.y ? best.before : best.after).push(l); return; }
+    if (!mine.length || l.y > Math.max(...mine.map((a) => a.l.y))) { const prev = anchors.filter((a) => a.l.page < l.page).pop(); if (prev) prev.after.push({ ...l, y: -1e6 + prev.after.length * -1 }); }
+    else if (l.y < Math.min(...mine.map((a) => a.l.y))) { const next = anchors.find((a) => a.l.page > l.page); if (next) next.before.push({ ...l, y: 1e6 - next.before.length }); }
+  });
+  const rows = [], problems = [];
+  let birbank = 0;
+  anchors.forEach((a) => {
+    const d = dateOf(a.l), g = (r) => (has(r) ? amt(cell(a.l, r)) : null);
+    const cr = g("credit"), dr = g("debit"), am = g("amount"), bal = has("balance") ? g("balance") : null;
+    let type = "expense", cents = 0;
+    if (cr) { type = "income"; cents = Math.abs(cr); } else if (dr) cents = Math.abs(dr); else if (am) { cents = Math.abs(am); type = am > 0 ? "income" : "expense"; }
+    if (!cents) { problems.push("zero"); return; }
+    const byY = (p, q) => q.y - p.y, text = (l) => cell(l, "desc");
+    const raw = clean([...a.before.sort(byY).map(text), text(a.l), ...a.after.sort(byY).map(text)].join(" "));
+    if (/birbank/i.test(raw)) birbank++;
+    const ds = describeRow(raw, type);
+    rows.push({ date: d.date, posted: "", time: d.time || "", type, cents, desc: ds.desc, merchant: ds.merchant, balance: bal, ref: "", mcc: "", cur: "", orig: "", city: ds.city, pending: false, kind: ds.kind });
+  });
+  if (has("amount") && !rows.some((r) => r.type === "income") && !money.some((c) => c.role === "credit")) problems.push("sign");
+  // The bank's summary above the table: totals for the period, opening and closing balance (label in one cell, the number in the next).
+  const sum = {}, blocked = /blok|block|hold|заблок/i;
+  L.slice(0, hi).forEach((l) => l.cells.forEach((c, k) => {
+    const t = clean(c).toLowerCase(), v = stMoney(l.cells[k + 1] || ""); if (v === null || blocked.test(t)) return;
+    const bal = /balans|qalıq|balance|остат/.test(t);
+    if (bal && /əvvəl|начал|opening|beginning/.test(t)) sum.opening = v;
+    else if (bal && /sonu|конец|конц|closing|ending/.test(t)) sum.closing = v;
+    else if (!bal && /mədaxil|medaxil|поступлен|приход|зачислен|credits?\b|money in|paid in/.test(t)) sum.credit = v;
+    else if (!bal && /məxaric|mexaric|расход|списан|debits?\b|money out|paid out/.test(t)) sum.debit = v;
+  }));
+  const summary = sum.credit !== undefined && sum.debit !== undefined ? { ...sum, rowsCredit: rows.filter((r) => r.type === "income").reduce((s, r) => s + r.cents, 0), rowsDebit: rows.filter((r) => r.type === "expense").reduce((s, r) => s + r.cents, 0) } : null;
+  return { bank: birbank >= Math.max(2, rows.length * 0.05) ? "birbank" : "generic", rows, problems, summary };
+}
+
 // ── The one entry point ──────────────────────────────────────────────────────
 export function readStatement(lines) {
   const L = (Array.isArray(lines) ? lines : []).filter((l) => l && Array.isArray(l.cells));
   const texts = L.map(lineText);
   const uniN = texts.filter((t) => UNI_START.test(t)).length, abbN = texts.filter((t) => ABB_ROW.test(t)).length, abbMark = texts.some((t) => ABB_MARK.test(t));
-  let bank = "generic", rows = [], problems = [];
+  let bank = "generic", rows = [], problems = [], summary = null;
   if (uniN >= 1 && uniN >= abbN) {
     bank = "unibank";
     const done = (text) => /\/\s*[\d.,]+\s*[A-Z]{3}$/.test(text);
@@ -253,7 +347,9 @@ export function readStatement(lines) {
       const r = abbRow(m, desc.replace(/\.\.\s+(?=\d{4}~)/, "..")); if (r.cents) rows.push(r); else problems.push("row");
     });
   } else {
-    const g = genericParse(L); rows = g.rows; problems = g.problems;
+    const c = columnParse(L);
+    if (c && c.rows.length) { bank = c.bank; rows = c.rows; problems = c.problems; summary = c.summary; }
+    else { const g = genericParse(L); rows = g.rows; problems = g.problems; }
   }
   // Two rows that are one move: money in and the same money out within five minutes (a wallet top-up passing through the card).
   const mins = (r) => (r.time ? +r.time.slice(0, 2) * 60 + +r.time.slice(3) : null);
@@ -261,7 +357,7 @@ export function readStatement(lines) {
   const count = (k) => problems.filter((p) => p === k).length;
   const notes = problems.filter((p) => p !== "row" && p !== "zero").concat(count("row") ? ["rows:" + count("row")] : [], count("zero") ? ["zero:" + count("zero")] : []);
   const check = statementCheck(rows);
-  return { bank, rows, problems: notes, check, balance: statementBalance(rows, check) };
+  return { bank, rows, problems: notes, check, balance: statementBalance(rows, check), summary };
 }
 
 // ── Run 67: CSV files from banks, and "match the columns" when a table cannot be worked out ─────────────────────────────────────────
@@ -358,7 +454,7 @@ const WORD_RULES = [
   [/\bmetro\b/i, "transport", "Metro"], [/^bus\b|\bbakubus\b|\btp bus\b/i, "transport", "Bus"], [/bak[iı\*]\s*\*?\s*kart|bakikart/i, "transport", "Public transport card"], [/\b(bolt|uber|yango|taxi|taksi)\b/i, "transport", "Taxi / Ride-hailing"],
   [/\b(azercell|bakcell|nar)\b/i, "digital", "Mobile"], [/\b(citynet|aztelekom|baktelekom|azeronline)\b/i, "digital", "Internet"],
   [/\b(market|bazarstore|bravo|araz|oba)\b/i, "food", "Groceries"], [/\b(aptek|pharm)/i, "health", "Pharmacy"], [/ponchik|domino|mcdonald|kfc|burger|pizza|doner|d[oö]n[eə]r/i, "food", "Fast Food"], [/\b(cafe|kafe|coffee|kofe|restoran|restaurant)\b/i, "food", "Restaurants"],
-  [/\b(neft|petrol|socar|azpetrol)/i, "car", "Fuel"],
+  [/\b(neft|petrol|socar|azpetrol)/i, "car", "Fuel"], [/\b(erzaq|ərzaq)\b/i, "food", "Groceries"],
   // Run 88: shared scooters, food couriers, crypto exchanges (buying crypto is putting money aside, not spending it on a thing)
   [/\b(jetshr|jet ?sharing)\b/i, "transport", "Bike & scooter"], [/\bwolt\b/i, "food", "Delivery"], [/\b(binance|bfinity|bybit)\b/i, "finance", "Investments"],
 ];

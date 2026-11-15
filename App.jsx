@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="90 (2026-11-15)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="91 (2026-11-15)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -3989,7 +3989,7 @@ export function maskText(s) { return PRIVACY && s ? "•••••" : s; }
 // Run 52: a bank statement that statement.js has read, shaped like a backup's plan so the same review sheet, merge rules and Undo apply.
 // The person's own history decides a category first (only when the merchant name is exactly one they have used); then the bank's merchant
 // code, then words, then the built-in merchant list. Transfers and not-yet-posted rows are kept apart so the sheet can offer them as choices.
-const STATEMENT_BANKS={ abb:"ABB", unibank:"Unibank" };
+const STATEMENT_BANKS={ abb:"ABB", unibank:"Unibank", birbank:"Birbank" };
 // Run 58: "transfers" = money sent to (or received from) other people, on by default. "cash" = cash withdrawals and moves between the person's
 // own accounts, off by default: neither is spending, and counting a withdrawal AND the cash spending recorded later counts the same money twice.
 function statementPick(plan, opts) { return plan.stAll.filter(e=>{ const m=plan.stMeta[String(e.id)]||{}; if (m.pending && !opts.pending) return false; if (m.kind==="transfer" && !opts.transfers) return false; if ((m.kind==="cash"||m.kind==="own") && !opts.cash) return false; return true; }); }
@@ -4008,7 +4008,7 @@ function statementPlan(res, filename, transactions) {
   const { good }=partitionTransactions(raw.map(({ _st, ...e })=>e),{ keepCategoryId:true });
   const left=res.problems.filter(p=>/^(rows|left):/.test(p)).reduce((s,p)=>s+Number(p.split(":")[1]),0);
   const plan={ ok:true, kind:"statement", filename, stAll:good, stMeta, stOpts:{ transfers:true, cash:false, pending:false, account:"", newAcc:!!res.balance },
-    statement:{ bank:res.bank, check:res.check, balance:res.balance||null, left, sign:res.problems.includes("sign"), nTransfer:good.filter(e=>(stMeta[String(e.id)]||{}).kind==="transfer").length, nCash:good.filter(e=>["cash","own"].includes((stMeta[String(e.id)]||{}).kind)).length, nPending:good.filter(e=>(stMeta[String(e.id)]||{}).pending).length },
+    statement:{ bank:res.bank, check:res.check, balance:res.balance||null, summary:res.summary||null, left, sign:res.problems.includes("sign"), nTransfer:good.filter(e=>(stMeta[String(e.id)]||{}).kind==="transfer").length, nCash:good.filter(e=>["cash","own"].includes((stMeta[String(e.id)]||{}).kind)).length, nPending:good.filter(e=>(stMeta[String(e.id)]||{}).pending).length },
     canReplace:false, skippedCount:0, skippedSummary:"", settings:{}, problems:[], warnings:[], subcategories:{}, debtData:{ debts:[], loans:[] }, accountData:{ accounts:[], transfers:[] } };
   plan.transactions=statementPick(plan,plan.stOpts);
   // Run 88: the same statement imported again adds nothing (same ids), but its rows that an earlier version left in a default category
@@ -5814,10 +5814,10 @@ function AppInner() {
     <>
       <style>{CSS}</style>
       <div className={`app${privacy?" privacy-on":""}`} lang={state.language}>
-        {toast&&<div className="toast" role="status" style={{"--toast-out":Math.max(0,toastMs.current-220)+"ms"}}>{toast}</div>}
+        {toast&&<div className={"toast"+(snackbar?" over-snack":"")} role="status" style={{"--toast-out":Math.max(0,toastMs.current-220)+"ms"}}><span className="toast-dot" aria-hidden="true"/><span>{toast}</span></div>}
         {snackGhost&&<div className="snackbar snack-ghost" aria-hidden="true" key={"g-"+snackGhost.msg}><span>{snackGhost.msg}</span></div>}
         {snackbar&&(
-          <div className="snackbar" role="status" key={snackbar.msg} style={{"--snack-out":Math.max(0,(snackbar.ms||4000)-220)+"ms"}}>
+          <div className="snackbar" role="status" key={snackbar.msg} ref={(el)=>{if(el)document.documentElement.style.setProperty("--snack-h",el.offsetHeight+"px");}} style={{"--snack-out":Math.max(0,(snackbar.ms||4000)-220)+"ms"}}>
             {snackbar.kind==="add"&&!storageFailed&&<svg className="snack-tick" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.5"/><path d="M6 10.4l2.7 2.6L14.2 7.5"/></svg>}
             <span>{snackbar.msg}</span>
             {snackbar.onUndo&&<button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();closeSnack();}}>{snackbar.label||t("common.undo")}</button>}
@@ -5972,6 +5972,8 @@ function AppInner() {
                       <div style={{fontWeight:600}} data-st="bank">{s.bank==="notification" ? t("st.notifTitle") : t("st.title",{ bank:STATEMENT_BANKS[s.bank]||t("st.bankOther") })}</div>
                       <div data-st="check" data-ok={s.check.has?String(s.check.ok):"none"} style={s.check.has&&!s.check.ok?{color:"var(--warn)"}:null}>{!s.check.has ? t("st.checkNone") : s.check.ok ? t("st.checkOk") : t("st.checkBad",{n:s.check.breaks})}</div>
                       {s.left>0&&<div data-st="left" style={{color:"var(--warn)"}}>{t("st.left",{n:s.left})}</div>}
+                      {/* Run 91: the bank's own totals at the top of the statement, when the rows below them do not add up to the same */}
+                      {s.summary&&(s.summary.debit!==s.summary.rowsDebit||s.summary.credit!==s.summary.rowsCredit)&&<div data-st="summary" style={{color:"var(--warn)"}}>{t("st.summaryDiff",{ a:fmt(s.summary.debit/100,currency), b:fmt(s.summary.credit/100,currency), c:fmt(s.summary.rowsDebit/100,currency), d:fmt(s.summary.rowsCredit/100,currency) })}</div>}
                       {s.sign&&<div data-st="sign" style={{color:"var(--warn)"}}>{t("st.sign")}</div>}
                       {accs.length>0&&(
                         <label style={{display:"block",marginTop:8}}>{t("st.account")}

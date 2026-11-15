@@ -1194,5 +1194,26 @@ iframe[src*="accounts.google.com"]{color-scheme:light}
 .photo-full img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
 .photo-full-close{position:absolute;top:calc(env(safe-area-inset-top,0px) + 12px);right:12px;width:44px;height:44px;border-radius:50%;border:none;background:rgba(255,255,255,0.16);color:#fff;font-size:26px;line-height:1;cursor:pointer}
 @media (prefers-reduced-motion:reduce){.photo-full{animation:none}}[data-fx="off"] .photo-full{animation:none}
+
+/* Run 91 (owner, Redmi Note 8T: the top of New entry was cut). Full-screen layers drawn above the page also leave room for the status bar:
+   the strip that covers it (body::before) sits above them and hid their first line. */
+.add-overlay{padding-top:var(--sat)}
+.lock-screen{padding-top:max(20px,calc(var(--sat) + 12px))}
+.photo-full{padding-top:calc(var(--sat) + 16px)}
+.photo-full-close{top:calc(var(--sat) + 12px)}
+/* Run 91 (owner: the top notices covered page titles). Short messages now appear where the Undo bar does, just above the tab bar,
+   in the same calm style; a message shown while the Undo bar is up sits above it. Nothing covers a title or the status bar any more. */
+.toast{top:auto;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 8px);display:flex;align-items:center;gap:10px;text-align:left;padding:11px 16px;font-size:13px;font-weight:600;border:1px solid var(--rule-2);background:var(--bg-warm);color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,0.16),0 2px 6px rgba(0,0,0,0.08);max-width:min(calc(100vw - 24px),420px)}
+.toast.over-snack{bottom:calc(72px + env(safe-area-inset-bottom,0px) + 16px + var(--snack-h,56px))}
+.toast-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--accent-text)}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(10px)}}
+@media (prefers-reduced-motion:reduce){.toast{animation:none}}[data-fx="off"] .toast{animation:none}
+/* Run 91 (owner: tablets, especially iPad). On a wide screen the app is a wider column (600px instead of a phone's 430px), centred, with the
+   tab bar, the add button, New entry and the bottom sheets lined up with it. Phones are unchanged. */
+@media (min-width:700px){
+  .app,.tabbar,.add-overlay,.sheet{max-width:600px}
+  .fab-add{left:calc(50% + 300px - 72px)}
+}
 `);
 
