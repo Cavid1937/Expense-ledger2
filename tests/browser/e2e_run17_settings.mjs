@@ -72,7 +72,9 @@ section("R17-T5. Savings floor and templates are on Goals");
   await setInput(page, () => document.querySelector('[data-section="gl-floor"] input'), "120"); await wait(100);
   await clickText(page, '[data-section="gl-floor"] button', /save/i); await wait(300);
   ok((await state(page)).safeToSpend.savingsTarget === 120, "saving it stores 120", (await state(page)).safeToSpend);
-  ok(await page.evaluate(() => !!document.querySelector('[data-section="gl-templates"]')), "a Quick-add templates section is on Goals");
+  // Run 90: the templates moved to the Budgets half
+  await openGoals(page, "budgets");
+  ok(await page.evaluate(() => !!document.querySelector('[data-section="gl-templates"]')), "a Quick-add templates section is on Budgets");
   await page.close();
   const p2 = await openPage(browser, { seed: seed({ safeToSpend: { enabled: false, savingsTarget: 0 } }) }); await settle(p2); await openGoals(p2, "goals");
   ok(await p2.evaluate(() => !document.querySelector('[data-section="gl-floor"]')), "with Safe to Spend off there is no floor box");
@@ -80,7 +82,7 @@ section("R17-T5. Savings floor and templates are on Goals");
 }
 section("R17-T6. A template can carry a subcategory");
 {
-  const page = await openPage(browser, { seed: seed({ templates: [] }) }); await settle(page); await openGoals(page, "goals");
+  const page = await openPage(browser, { seed: seed({ templates: [] }) }); await settle(page); await openGoals(page, "budgets");
   await clickText(page, '[data-section="gl-templates"] button', /add/i); await wait(200);
   await setInput(page, () => document.querySelector("#tpl-name"), "Lunch"); await setInput(page, () => document.querySelector("#tpl-amt"), "6.5");
   await page.select("#tpl-cat", "food"); await wait(150);

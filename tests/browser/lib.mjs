@@ -125,7 +125,8 @@ export const openFolds = async (page) => { await page.evaluate(() => document.qu
 export const openHowSheet = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(250); await page.evaluate(() => document.querySelector('.more-page [data-more="how"]').click()); await page.waitForSelector(".sheet"); await wait(350); await settle(page); };
 // Run 27b: Preferences is no longer a sheet. "Opening settings" now means going to the Settings tab, where accounts, categories, currency, theme and effects are open.
 // Run 38: own categories and category order / visibility live on Budgets & Goals (the "Goals" half, next to quick-add templates).
-export const openCategories = async (page) => { await tab(page, "Goals"); await page.waitForSelector(".seg .seg-btn"); await page.evaluate(() => document.querySelectorAll(".seg .seg-btn")[1].click()); await page.waitForSelector('[data-section="my-categories"]'); await wait(300); await settle(page); };
+// Run 90: they moved to the "Budgets" half (index 0), with the quick-add templates.
+export const openCategories = async (page) => { await tab(page, "Goals"); await page.waitForSelector(".seg .seg-btn"); await page.evaluate(() => document.querySelectorAll(".seg .seg-btn")[0].click()); await page.waitForSelector('[data-section="my-categories"]'); await wait(300); await settle(page); };
 export const openSettings = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(400); await openFolds(page); await settle(page); };
 // Run 9: "+" adds a transaction only on Home and Transactions (elsewhere it adds a budget, goal or bill, or is absent),
 // so the helper goes to Home first when the current screen is not one of those two.

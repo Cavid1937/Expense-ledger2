@@ -34,7 +34,7 @@ section("R34-2. 'Reduce effects' makes the same thing instant (as before)");
 section("R34-3. Deleting a quick-add template leaves smoothly and can be undone");
 {
   const page = await openPage(browser, {});
-  await openGoals(page, "goals"); await settle(page);
+  await openGoals(page, "budgets"); await settle(page);
   ok((await state(page)).templates.length === 1, "one template to start with");
   await click(page, '[data-section="gl-templates"] .topbar-btn'); await wait(60);
   ok(await exists(page, '[data-section="gl-templates"] .row-leaving'), "the row plays its leaving motion first");

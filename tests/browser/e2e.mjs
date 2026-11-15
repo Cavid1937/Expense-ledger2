@@ -33,7 +33,8 @@ await setInput(page, cur, ""); await clickIn(page, () => [...document.querySelec
 ok(/currency symbol/i.test(await toast(page)) && (await state(page)).currency === "₼", "empty currency → rejected, stays ₼");
 ok(await page.evaluate(() => /they are not converted/.test(document.querySelector(".more-page").textContent)), "currency row says amounts are only shown differently and not converted (Run 85 wording)");
 await wait(100);
-await openGoals(page, "goals");
+// Run 90: the templates moved to the Budgets half
+await openGoals(page, "budgets");
 await clickIn(page, () => document.querySelector('[data-section="gl-templates"] .btn-sm'));
 const F = (label) => eval(`()=>[...document.querySelectorAll(".goals-page .field")].find(f=>/${label}/i.test((f.querySelector("label")||{}).textContent||"")).querySelector("input")`);
 const saveT = () => [...document.querySelectorAll(".goals-page .btn-primary")].find((b) => /save template/i.test(b.textContent));

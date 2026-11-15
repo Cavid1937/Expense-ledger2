@@ -28,6 +28,8 @@ section("R24-ED2. Template and goal");
   await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => /save goal/i.test(b.innerText))?.click()); await wait(350);
   let st = await page.evaluate(() => JSON.parse(localStorage.getItem("expense_ledger_v5")));
   ok(st.goals.length === 1 && st.goals[0].id === "g1" && st.goals[0].name === "Summer trip" && st.goals[0].target === 1500 && st.goals[0].saved === 100, "the goal is changed in place (name, target), not duplicated", st.goals);
+  // Run 90: templates live on the Budgets half now
+  await page.evaluate(() => [...document.querySelectorAll(".seg-btn")].find((b) => /budgets/i.test(b.innerText))?.click()); await wait(300);
   const hasTpl = await page.evaluate(() => !!document.querySelector('[data-section="tpl-edit"]'));
   ok(hasTpl, "the template has an Edit button");
   if (hasTpl) {

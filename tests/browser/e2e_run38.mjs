@@ -70,6 +70,8 @@ section("R38-5. Edit / Cancel trade places smoothly (templates, goals) and debts
   ok(mid, "80 ms after Cancel the form is still there, easing closed (it used to vanish in one frame)");
   await wait(400);
   ok(await page.evaluate(() => ![...document.querySelectorAll('[data-section="gl-templates"] input')].length), "and then it is gone");
+  // Run 90: templates are on the Budgets half, goals on the Goals half
+  await page.evaluate(() => document.querySelectorAll(".seg .seg-btn")[1].click()); await wait(300);
   await page.evaluate(() => document.querySelector('[data-section="goal-edit"]').click()); await wait(80);
   ok(await page.evaluate(() => !!document.querySelector('[data-section="goal-form"]') && !!document.querySelector('[data-section="goal-card"]')), "goal: card and form are both drawn while they trade places");
   await page.close();

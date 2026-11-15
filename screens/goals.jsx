@@ -178,6 +178,16 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
           ))}
           {unbudgeted.length>UNB_SHOW&&(<button className="list-row" data-section="bg-unb-toggle" aria-expanded={unbAll} onClick={()=>setUnbAll(v=>!v)} style={{justifyContent:"center",color:"var(--accent-text)",fontWeight:600,fontSize:13,minHeight:48}}>{unbAll?t("budgets.showFewer"):t("budgets.showAll",{n:unbudgeted.length})}</button>)}
         </div>
+        <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} onUpdateTemplate={onUpdateTemplate} showToast={showToast}/>
+        {/* Run 38 (owner): your own categories and the order / visibility of all of them live here, next to the quick-add templates.
+            Run 90 (owner, 15 Nov): templates and categories moved from Goals to Budgets: they are about spending, not saving.
+            The "in use" check reads the full ledger (rawState), not the spending view, so a category used by any entry is never removable. */}
+        <div data-section="gl-categories">
+          <div className="section-title" style={{margin:"18px 2px 10px"}}>{t("mycat.title")}</div>
+          {tidyTools&&<TidyCategories transactions={(rawState||state).transactions} currency={currency} tools={tidyTools}/>}
+          <MyCategories state={rawState||state} onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
+          <CategoryOrder onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
+        </div>
       </>)}
 
       {seg==="goals"&&(<>
@@ -289,15 +299,6 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
           </div>
         )}
         <SavingsFloorCard safeToSpend={safeToSpend} onSafeToSpendChange={onSafeToSpendChange} showToast={showToast}/>
-        <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} onUpdateTemplate={onUpdateTemplate} showToast={showToast}/>
-        {/* Run 38 (owner): your own categories and the order / visibility of all of them live here, next to the quick-add templates.
-            The "in use" check reads the full ledger (rawState), not the spending view, so a category used by any entry is never removable. */}
-        <div data-section="gl-categories">
-          <div className="section-title" style={{margin:"18px 2px 10px"}}>{t("mycat.title")}</div>
-          {tidyTools&&<TidyCategories transactions={(rawState||state).transactions} currency={currency} tools={tidyTools}/>}
-          <MyCategories state={rawState||state} onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
-          <CategoryOrder onChanged={onCatsChanged||(()=>{})} showToast={showToast}/>
-        </div>
       </>)}
     </div>
   );
