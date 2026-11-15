@@ -74,8 +74,7 @@ export function CategoryOrder({ onChanged, showToast }) {
   const listRef=useRef(null); useFlip(listRef,"data-catord",(income?"i:":"e:")+list.map(c=>c.id).join(","));   // Run 40: a moved row glides
   return (
     <div className="card prefs-card" data-section="cat-order" style={{marginTop:10}}>
-      <div className="settings-row-title">{t("catord.title")}</div>
-      <div className="list-sub" style={{margin:"2px 0 8px"}}>{t("catord.sub")}</div>
+      <TipHead id="catord" text={t("catord.sub")} style={{marginBottom:8}}><div className="settings-row-title">{t("catord.title")}</div></TipHead>
       <div className="filter-bar" role="group" aria-label={t("mycat.type")}>
         {[false,true].map(v=>(<button key={String(v)} className={`chip${income===v?" on":""}`} aria-pressed={income===v} data-section={v?"catord-income":"catord-expense"} onClick={()=>setIncome(v)}>{t(v?"add.income":"add.expense")}</button>))}
       </div>
@@ -1136,24 +1135,19 @@ export function ImportExportPage({ notices, drive, state, onExportCSV, onExportJ
       <NoticesCard notices={notices}/>
 
 
-      <div className="section-title">{t("io2.sheetTitle")}</div>
-      <div className="card io-card" data-section="io-csv" style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
-        <span className="io-ico" style={{color:"var(--violet)",flexShrink:0}}><Icon name="download" size={24}/></span>
-        <div style={{minWidth:0,flex:1}}>
-          <div className="list-sub" style={{lineHeight:1.5}}>{t("io2.csvSub")}</div>
-          <button className="btn btn-sm" onClick={onExportCSV} style={{marginTop:8}}><Icon name="download" size={12}/>{t("io.exportCsv")}</button>
+      {/* Run 90 (owner: import/export polish): the CSV and Excel copies share one card; what each file holds sits behind the info tip. */}
+      <div className="card io-card" data-section="io-csv" style={{textAlign:"left"}}>
+        <TipHead id="io-sheet" text={inNativeShell()?t("io2.csvSub"):t("io2.csvSub")+" "+t("xl.ioSub")}><div className="list-title">{t("io2.sheetTitle")}</div></TipHead>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:10}}>
+          <button className="btn btn-sm" onClick={onExportCSV}><Icon name="download" size={12}/>{t("io.exportCsv")}</button>
+          {/* Run 64 (owner batch E11): everything in one Excel workbook, for reading; a "Read me" sheet explains each sheet. Not in the Android app yet (its save bridge takes text only). */}
+          {!inNativeShell()&&(
+            <span data-section="io-xlsx" style={{display:"contents"}}>
+              <button className="btn btn-sm" data-section="io-xlsx-go" onClick={()=>{ try { const sheets=buildWorkbookSheets(state,{ accountData:readAccounts(), debtData:readDebts(), budgetCarry:readBudgetCarry() }); downloadFile(buildXlsx(sheets),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",`ledger-${todayStr()}.xlsx`); } catch { /* nothing to undo: no data was changed */ } }}><Icon name="download" size={12}/>{t("xl.ioBtn")}</button>
+            </span>
+          )}
         </div>
       </div>
-      {/* Run 64 (owner batch E11): everything in one Excel workbook, for reading; a "Read me" sheet explains each sheet. Not in the Android app yet (its save bridge takes text only). */}
-      {!inNativeShell()&&(
-        <div className="card io-card" data-section="io-xlsx" style={{flexDirection:"row",alignItems:"center",gap:12,textAlign:"left"}}>
-          <span className="io-ico" style={{color:"var(--violet)",flexShrink:0}}><Icon name="download" size={24}/></span>
-          <div style={{minWidth:0,flex:1}}>
-            <div className="list-sub" style={{lineHeight:1.5}}>{t("xl.ioSub")}</div>
-            <button className="btn btn-sm" data-section="io-xlsx-go" style={{marginTop:8}} onClick={()=>{ try { const sheets=buildWorkbookSheets(state,{ accountData:readAccounts(), debtData:readDebts(), budgetCarry:readBudgetCarry() }); downloadFile(buildXlsx(sheets),"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",`ledger-${todayStr()}.xlsx`); } catch { /* nothing to undo: no data was changed */ } }}><Icon name="download" size={12}/>{t("xl.ioBtn")}</button>
-          </div>
-        </div>
-      )}
 
       {/* Run 10: how safe the data is on this device, and what makes it safer (last: it is about the device, not about a file) */}
       <div className="section-title">{t("io.safety")}</div>

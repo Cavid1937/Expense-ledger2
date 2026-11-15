@@ -579,6 +579,8 @@ input,textarea,select,[contenteditable="true"],.selectable,.selectable *{-webkit
 .snackbar>span{min-width:0}
 .snackbar-undo{flex-shrink:0}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+/* Run 90 (owner: polish the top notices): clear of the phone's status bar and notch, easier to read, one calm style */
+.toast{top:calc(env(safe-area-inset-top,0px) + 14px);font-size:13.5px;font-weight:600;padding:11px 18px;border-radius:18px;border:1px solid var(--rule);letter-spacing:0}
 @keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(-8px)}}
 .snackbar{animation:snackIn 300ms cubic-bezier(0.22,1,0.36,1),snackOut 200ms ease-in var(--snack-out,3800ms) forwards;border-radius:16px}   /* in-app notices rise from the bottom edge, no scale, and ease out before they go */
 @keyframes snackIn{from{opacity:0;transform:translateX(-50%) translateY(24px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}

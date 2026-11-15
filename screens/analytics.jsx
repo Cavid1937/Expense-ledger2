@@ -10,6 +10,8 @@ import { catInk } from "../App.jsx";
 // tint less (--heat-scale) so the dark day number stays readable, and dark themes switch the number to the button text colour on strong days.
 const heat=(x)=>`color-mix(in srgb, var(--accent-fill) calc(${Math.round(x*100)}% * var(--heat-scale, 1)), var(--bg-card))`;   // Run 57: Analytics groups spending by the same "paid from" rule as the entry filter
 import { budgetCarried, readBudgetCarry, notSpentHistory } from "../App.jsx";   // Run 59
+// Run 90: the card's explanation moved into an info tip
+import { TipHead } from "./tip.jsx";
 
 // Run 59 (owner-approved): money not spent = money in minus money out, from what was recorded (notSpentHistory in App.jsx has the exact rule).
 // A quiet line for the chosen month and a running total over FINISHED months, with its working one tap away. Never called savings; unused
@@ -23,9 +25,8 @@ function NotSpentCard({ raw, currency }) {
   const sign=(n)=>(n<0?"−":"")+fmt(Math.abs(n),currency);
   return (
     <div className="a-card" data-section="an-notspent">
-      <div className="a-card-title">{t("notspent.title")}</div>
+      <TipHead id="notspent" text={t("notspent.note")}><div className="a-card-title" style={{marginBottom:0}}>{t("notspent.title")}</div></TipHead>
       <div className="big-num" data-section="notspent-total" style={{color:h.total<0?"var(--neg)":"var(--ink)"}}><MoneyText v={sign(h.total)}/></div>
-      <div className="list-sub" style={{marginTop:4,lineHeight:1.5}}>{t("notspent.note")}</div>
       <button type="button" className="btn btn-sm" data-section="notspent-toggle" aria-expanded={open} style={{marginTop:10}} onClick={()=>setOpen(o=>!o)}>{t(open?"notspent.hide":"notspent.show")}</button>
       <Collapse open={open}>
         <div data-section="notspent-rows" role="list" style={{marginTop:10}}>
