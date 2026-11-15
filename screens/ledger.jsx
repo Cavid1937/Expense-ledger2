@@ -1,5 +1,5 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
@@ -36,7 +36,7 @@ export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onL
               {dayTotal>0&&<span className="txn-date-total" aria-label={t("ledger.daySpent",{amount:fmt(dayTotal,currency)})}>−{fmt(dayTotal,currency)}</span>}
             </div>
             <div className="txn-list">
-              {rows.map(t=><TxnRow key={t.id} txn={t} owed={owed.get(String(t.id))} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact sel={picked?picked.has(String(t.id)):undefined} onToggle={onToggle}/>)}
+              {rows.map(t=><TxnRowM key={t.id} txn={t} owed={owed.get(String(t.id))} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView} onLongPress={onLongPress} compact sel={picked?picked.has(String(t.id)):undefined} onToggle={onToggle}/>)}
             </div>
           </div>
         );
@@ -46,6 +46,8 @@ export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onL
   );
 }
 
+// Run 90: rows are memoised so pressing Select / Done or ticking one entry redraws only the rows that changed
+const TxnRowM=memo(function TxnRowMemo(p){ return <TxnRow {...p}/>; });
 export function TxnRow({ txn, owed, currency, onDelete, onEdit, onView, onLongPress, compact, sel, onToggle }) {
   const cat=CAT(txn.category);
   // Press and hold a row (about half a second) to start selecting several; the tap that follows the hold is ignored.
@@ -112,6 +114,10 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const barShow=usePresence(selMode);                      // Run 83: the selection bar slides in and out instead of popping
   useBackStep(selMode,()=>{ setSelMode(false); setPicked(new Set()); setOnlySel(false); setGrpOpen(false); });   // Run 40: Back leaves select mode (same as "Done")
   useBackStep(grpOpen,()=>setGrpOpen(false));
+  // Run 90 (owner: Select / Done felt laggy): the button flips at once; the tick boxes on the rows follow a moment later
+  const listSel=useDeferredValue(selMode);
+  const toggle=useCallback((x)=>setPicked(p=>{ const n=new Set(p); const k=String(x.id); n.has(k)?n.delete(k):n.add(k); return n; }),[]);
+  const startSel=useCallback((x)=>{ setSelMode(true); setPicked(new Set([String(x.id)])); },[]);
   const [search,     setSearch]     = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [catFilter,  setCatFilter]  = useState("all");
@@ -159,7 +165,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   // Run 88: the date range is cut last, so the range totals below can apply the spending rules to the other filters' list first
   const filtered=useMemo(()=>preDate.filter(x=>(!dateFrom||x.date>=dateFrom)&&(!dateTo||x.date<=dateTo)),[preDate,dateFrom,dateTo]);
   const rStats=useMemo(()=>(dateFrom||dateTo) ? rangeStats(preDate,dateFrom,dateTo) : null,[preDate,dateFrom,dateTo]);
-  const rangeKey=["week","month","lastMonth","d30","year"].find(k=>{ const r=rangePreset(k); return r.from===dateFrom && r.to===dateTo; })||"";
+  const RANGE_KEYS=["d7","d30","d90","month","lastMonth","year"];
+  const rangeKey=RANGE_KEYS.find(k=>{ const r=rangePreset(k); return r.from===dateFrom && r.to===dateTo; })||"";
   const paidOpts=useMemo(()=>paidFromOptions(transactions,accMap),[transactions,accMap]);
   const paidUseful=paidOpts.some(o=>o.value!=="none");   // offered only when at least one entry says how it was paid
   // Run 22: trips in use with their totals; the trip filter is offered only when at least one entry has a trip.
@@ -256,8 +263,8 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
         </div>
         {/* Run 88: ready-made ranges, offered only here (the Entries date filter) */}
         <div className="filter-bar" role="group" aria-label={t("range.quick")} data-section="tx-range-quick" style={{marginTop:8}}>
-          {["week","month","lastMonth","d30","year"].map(k=>(
-            <button key={k} type="button" className={`chip${rangeKey===k?" on":""}`} aria-pressed={rangeKey===k} data-range={k} onClick={()=>{ const r=rangePreset(k); setDateFrom(r.from); setDateTo(r.to); }}>{{ week:t("range.week"), month:t("range.month"), lastMonth:t("range.lastMonth"), d30:t("range.d30"), year:t("range.year") }[k]}</button>
+          {RANGE_KEYS.map(k=>(
+            <button key={k} type="button" className={`chip${rangeKey===k?" on":""}`} aria-pressed={rangeKey===k} data-range={k} onClick={()=>{ const r=rangePreset(k); setDateFrom(r.from); setDateTo(r.to); }}>{t("range."+k)}</button>
           ))}
         </div>
       </Collapse>
@@ -291,7 +298,9 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
         const exp=shown.filter(x=>x.type==="expense").reduce(addAmt,0), inc=shown.filter(x=>x.type==="income").reduce(addAmt,0);
         const net=Math.round((inc-exp)*100)/100;
         const list=selMode&&onlySel?shown:filtered;
-        const toggle=(x)=>setPicked(p=>{ const n=new Set(p); const k=String(x.id); n.has(k)?n.delete(k):n.add(k); return n; });
+        // Run 90: the line names only what the selection holds: spending only, income only, or both with the difference
+        const hasExp=shown.some(x=>x.type==="expense"), hasInc=shown.some(x=>x.type==="income");
+        const sumKey=hasExp&&hasInc?"ledger.selSum":hasExp?"ledger.selSumExp":hasInc?"ledger.selSumInc":"ledger.selSumN";
         return (
           <div data-section={selMode?"tx-select":undefined}>
             {barShow.mounted&&<div className={"filter-bar sel-bar"+(barShow.shown?"":" leaving")} aria-hidden={selMode?undefined:true} style={{position:"sticky",top:0,zIndex:2,background:"var(--bg)",paddingBottom:6}}>
@@ -302,7 +311,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
                 onClick={()=>{ onDeleteMany(shown.map(x=>x.id)); setPicked(new Set()); setOnlySel(false); setSelMode(false); }}>{t("ledger.deleteSel",{n:shown.length})}</button>
             </div>}
             <Collapse open={selMode} id="tx-select-tools">
-            <div className="list-sub" data-section={selMode?"tx-select-sum":undefined} aria-live="polite" style={{margin:"0 2px 8px",fontWeight:shown.length?600:400}}>{shown.length?t("ledger.selSum",{n:shown.length,exp:fmt(exp,currency),inc:fmt(inc,currency),net:(net<0?"−":net>0?"+":"")+fmt(net,currency)}):t("ledger.selHint")}</div>
+            <div className="list-sub" data-section={selMode?"tx-select-sum":undefined} aria-live="polite" style={{margin:"0 2px 8px",fontWeight:shown.length?600:400}}>{shown.length?t(sumKey,{n:shown.length,exp:fmt(exp,currency),inc:fmt(inc,currency),net:(net<0?"−":net>0?"+":"")+fmt(net,currency)}):t("ledger.selHint")}</div>
             <Collapse open={grpOpen&&selMode} id="tx-group-panel">
               <div className="card" data-section="tx-group-panel" style={{margin:"0 0 10px",padding:"12px 14px"}}>
                 <label className="field-lbl" htmlFor="tx-group-name">{t("ledger.groupName")}</label>
@@ -325,7 +334,7 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
               </div>
             ):(
               <GroupedTxns txns={list} all={transactions} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView}
-                onLongPress={x=>{ setSelMode(true); setPicked(new Set([String(x.id)])); }} picked={selMode?picked:undefined} onToggle={toggle}/>
+                onLongPress={startSel} picked={listSel?picked:undefined} onToggle={toggle}/>
             )}
             </Swap>
           </div>

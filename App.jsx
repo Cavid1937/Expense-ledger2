@@ -11,7 +11,7 @@ import { CSS } from "./styles.js";
 import { LockGate, LockSheet } from "./screens/lock.jsx";
 import { HomePage } from "./screens/home.jsx";
 import { LedgerPage, TxnDetailSheet, TxnRow } from "./screens/ledger.jsx";
-import { copyPhoto, sweepPhotos } from "./screens/photo.jsx";
+import { copyPhoto, deletePhoto, sweepPhotos } from "./screens/photo.jsx";
 import { AddEditOverlay, BillSheet } from "./screens/add.jsx";
 import { RecurringHub } from "./screens/recurring.jsx";
 import { ImportExportPage, ImportUnlock, InfoSheet, MorePage, MyAccounts } from "./screens/settings.jsx";
@@ -706,7 +706,9 @@ export function rangePreset(key, now=new Date()) {
   if (key==="week") { const wd=(now.getDay()+6)%7; return { from:s(new Date(y,m,d-wd)), to:today }; }
   if (key==="month") return { from:s(new Date(y,m,1)), to:today };
   if (key==="lastMonth") return { from:s(new Date(y,m-1,1)), to:s(new Date(y,m,0)) };
+  if (key==="d7") return { from:s(new Date(y,m,d-6)), to:today };
   if (key==="d30") return { from:s(new Date(y,m,d-29)), to:today };
+  if (key==="d90") return { from:s(new Date(y,m,d-89)), to:today };
   if (key==="year") return { from:s(new Date(y,0,1)), to:today };
   return { from:"", to:"" };
 }
@@ -4450,6 +4452,7 @@ const ICONS = {
   download:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
   upload:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`,
   filter:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>`,
+  clock:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>`,
   calendar:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
   arrowUp:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>`,
   arrowDown:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>`,
@@ -4965,7 +4968,9 @@ function AppInner() {
   };
   const addTransaction=useCallback((txn)=>{
     countScreen("do-add");
-    const { billChoice, wallet, trip, account, refundFor, fx, spread, reimb, reimbFor, ...data }=txn, id=Date.now()+Math.random();
+    const { billChoice, wallet, trip, account, refundFor, fx, spread, reimb, reimbFor, photoDraft, ...data }=txn, id=Date.now()+Math.random();
+    // Run 90: a receipt photo taken in the New entry sheet moves from its draft key to the saved entry
+    if (photoDraft) copyPhoto(photoDraft,id).then(ok=>{ if (ok) return deletePhoto(photoDraft); }).catch(()=>{});
     const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}), ...(data.type==="expense" && cleanReimb(reimb) ? { reimb:cleanReimb(reimb) } : {}), ...(data.type==="income" && data.category==="refund" && reimbForRef(reimbFor)!==null ? { reimbFor:reimbForRef(reimbFor) } : {}) };   // Run 39: fx kept only when valid; Run 41: spread only on expenses, 2 to 24
     // Run 16: adding can be undone for a few seconds (deleting always could). Undo restores the whole earlier state, including a
     // bill the entry may have created, and refuses if something else changed in the meantime, like the other undo windows.

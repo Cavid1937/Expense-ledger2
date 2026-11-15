@@ -2,7 +2,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 // Run 75: the app's own date and option pickers
-import { PickSelect, PickDate } from "./pickers.jsx";
+import { PickSelect, PickDate, PickTime } from "./pickers.jsx";
 import { Collapse, EditSwap, motionOff, useBackStep, useFlip, useLeave } from "./motion.jsx";
 import { TipHead } from "./tip.jsx";
 import { LAUNCH_GLYPH } from "./launch.js";
@@ -20,7 +20,7 @@ import { themePreview } from "../App.jsx";
 const giftsShown=()=>{ try { return localStorage.getItem("expense_ledger_v5__show_gifts")==="1"; } catch { return false; } };
 // Run 69: the "Help improve the app" card above imports these
 import { buildXlsx } from "../xlsxWrite.js";
-import { APP_RELEASE, accountName, accountRemovalPlan, findDoubleEntries, maskText, offerUndo, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
+import { APP_RELEASE, accountName, accountRemovalPlan, maskText, offerUndo, removeAccountSafely, restoreRemovedAccount } from "../App.jsx";
 import { ACC_KINDS, CATEGORIES, CCAT_COLORS, CCAT_LEN, CatIcon, Icon, PROFILE_NAME_MAX, THEMES, THEME_IDS, accountBalances, creditOwed, cleanWorkHours, readWorkHours, writeWorkHours, accountInUse, activateKey, addAccount, addCustomCat, addTransfer, applyCustomCats, applyFx, applyTheme, catName, cleanMoneyText, cleanProfileName, customCatInUse, editAccount, editCustomCat, fmt, fmtDate, fmtLongDate, formMoney, nativeShareHook, parseMoney, readAccounts, readCustomCats, readFxOff, readReminders, readSubcats, readTheme, remindersAvailable, fmtPct, readWidgetPrefs, revealFocus, screenSecureNative, storageUsage, widgetNative, writeWidgetPrefs, writeReminders, subName, today, writeAccounts, writeCustomCats, writeFxOff, writeTheme, netPosition, readDebts } from "../App.jsx";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -539,13 +539,13 @@ export function RemindersSettings({ showToast, open, toggle }) {
         {/* Run 40: the bill/recurring time sits with those two switches; the daily check-in has its own time, shown when it is on. */}
         <div className="settings-row">
           <div><div className="settings-row-title" id="set-rem-time">{t("remind.time")}</div></div>
-          <input className="field-input" type="time" value={p.time} aria-labelledby="set-rem-time" data-section="rem-time" onChange={e=>{ if (e.target.value) save({ time:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
+          <PickTime className="field-input" value={p.time} aria-labelledby="set-rem-time" data-section="rem-time" onChange={e=>{ if (e.target.value) save({ time:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
         </div>
         <Row k="daily" title={t("remind.daily")} sub={t("remind.dailySub",{ time:p.dailyTime })}/><Row k="report" title={t("remind.report")} sub={t("remind.reportSub",{ time:p.time })}/>
         <Collapse open={p.daily} id="rem-dtime-wrap">
           <div className="settings-row">
             <div><div className="settings-row-title" id="set-rem-dtime">{t("remind.dailyTime")}</div></div>
-            <input className="field-input" type="time" value={p.dailyTime} aria-labelledby="set-rem-dtime" data-section="rem-dtime" onChange={e=>{ if (e.target.value) save({ dailyTime:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
+            <PickTime className="field-input" value={p.dailyTime} aria-labelledby="set-rem-dtime" data-section="rem-dtime" onChange={e=>{ if (e.target.value) save({ dailyTime:e.target.value }); }} style={{width:110,minHeight:38,padding:"7px 8px"}}/>
           </div>
         </Collapse>
         <Row k="hideAmount" title={t("remind.hide")} sub={t("remind.hideSub")}/>
@@ -972,40 +972,8 @@ function EncryptedBackup({ onExportEncrypted }) {
   );
 }
 
-// Run 51 (owner: a merge counted most things twice): a look at entries already here that share a day and an amount. The person ticks the
-// copies to delete; nothing is ticked to begin with, nothing is deleted without the button, and the delete has the usual Undo.
-function DoubleEntries({ transactions, currency, onDeleteMany }) {
-  const [open,setOpen]=useState(false), [picked,setPicked]=useState(()=>new Set());
-  const groups=useMemo(()=>findDoubleEntries(transactions),[transactions]);
-  const here=useMemo(()=>new Set(transactions.map(x=>String(x.id))),[transactions]);
-  const live=[...picked].filter(id=>here.has(id)), SHOW=40;
-  const words=(x)=>[x.merchant||x.note,x.subcategory ? subName(x.subcategory) : "",catName(x.category),x.account ? accountName(x.account) : ""].filter(Boolean).join(", ");
-  const toggle=(id)=>setPicked(p=>{ const n=new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  return (
-    <div className="card" data-section="io-doubles">
-      <div className="list-sub" data-dbl="summary" style={{lineHeight:1.55}}>{groups.length ? tn("dbl.found",groups.length) : t("dbl.none")}</div>
-      {groups.length>0&&!open&&<button className="btn btn-ghost btn-full" data-dbl="open" style={{marginTop:10}} onClick={()=>setOpen(true)}>{t("dbl.show")}</button>}
-      {groups.length>0&&open&&(<>
-        <div className="list-sub" style={{lineHeight:1.55,marginTop:8}}>{t("dbl.how")}</div>
-        <button className="btn btn-sm" data-dbl="tick-extra" style={{marginTop:8}} onClick={()=>setPicked(new Set(groups.flatMap(g=>g.extra.map(x=>String(x.id)))))}>{t("dbl.tickExtra")}</button>
-        {groups.slice(0,SHOW).map(g=>(
-          <div key={g.date+"|"+g.type+"|"+g.amount} data-dbl-group="1" style={{marginTop:12,paddingTop:10,borderTop:"1px solid var(--rule)"}}>
-            <div className="list-title">{fmtDate(g.date)} · {g.type==="income"?"+":"−"}{fmt(g.amount,currency)}</div>
-            {g.items.map(x=>(
-              <label key={String(x.id)} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"8px 0",minHeight:24,fontSize:13,lineHeight:1.45,color:"var(--ink-2)"}}>
-                <input type="checkbox" data-dbl-pick={String(x.id)} checked={picked.has(String(x.id))} onChange={()=>toggle(String(x.id))} style={{marginTop:2}}/>
-                <span style={{overflowWrap:"anywhere"}}>{maskText(words(x))}</span>
-              </label>
-            ))}
-          </div>
-        ))}
-        {groups.length>SHOW&&<div className="list-sub" style={{marginTop:10}}>{t("dbl.more",{n:groups.length-SHOW})}</div>}
-        <button className="btn btn-primary btn-full" data-dbl="delete" style={{marginTop:12}} disabled={!live.length} onClick={()=>{ onDeleteMany(live); setPicked(new Set()); }}>{t("dbl.delete",{n:live.length})}</button>
-      </>)}
-    </div>
-  );
-}
-
+// Run 90 (owner, 15 Nov): the "Entries counted twice?" look-up is gone. Paying for the same bus twice a day is normal, so it
+// mostly listed real payments. Merging a backup still offers to skip entries that look the same (it says so and can be unticked).
 // Run 52: a bank statement can also be pasted as text (for a bank that gives no file, or a file the app cannot open). The text is read on
 // this phone only and goes to the same review sheet as a file.
 function PasteStatement({ onImportText }) {
@@ -1186,11 +1154,6 @@ export function ImportExportPage({ notices, drive, state, onExportCSV, onExportJ
           </div>
         </div>
       )}
-
-      {onDeleteMany&&(<>
-        <div className="section-title">{t("io2.doubleTitle")}</div>
-        <DoubleEntries transactions={transactions} currency={state.currency} onDeleteMany={onDeleteMany}/>
-      </>)}
 
       {/* Run 10: how safe the data is on this device, and what makes it safer (last: it is about the device, not about a file) */}
       <div className="section-title">{t("io.safety")}</div>

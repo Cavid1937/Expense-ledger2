@@ -84,6 +84,41 @@ export function PickSelect({ children, value, onChange, id, name, disabled, clas
   );
 }
 
+// Run 90 (owner, 15 Nov: "the time selection must be like the calendar"): drop-in for <input type="time">, value "HH:MM".
+// First the hour, then the minute (every 5 minutes); choosing the minute saves and closes. The real input stays hidden and holds the value.
+export function PickTime({ value, onChange, id, name, disabled, className, style, ...rest }) {
+  const [open, setOpen] = useState(false);
+  const label = useLabelText(id) || (rest["aria-labelledby"] && typeof document !== "undefined" ? (document.getElementById(rest["aria-labelledby"])?.textContent || "").trim() : "");
+  const ok = /^\d{2}:\d{2}$/.test(value || "");
+  const [hh, setHh] = useState(ok ? value.slice(0, 2) : "09");
+  useEffect(() => { if (open) setHh(/^\d{2}:\d{2}$/.test(value || "") ? value.slice(0, 2) : "09"); }, [open]);
+  const curM = ok ? value.slice(3) : "";
+  const pickM = (mm, close) => { const v = hh + ":" + mm; if (v !== value) { tick(); fire(onChange, v, name, id); } close(PICK_SHOW_MS); };
+  const H = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")), M = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
+  return (
+    <span className="pick-wrap" style={style && style.width ? { width: style.width } : undefined}>
+      <input {...rest} type="time" id={id} name={name} value={value} onChange={onChange} disabled={disabled} className={`${className || ""} pick-native`} tabIndex={-1} aria-hidden="true" />
+      <button type="button" className={`${className || "field-input"} pick-btn`} style={style} disabled={disabled} aria-haspopup="dialog" aria-expanded={open} aria-label={label ? `${label}: ${ok ? value : t("pick.noTime")}` : undefined} data-pick-time={rest["data-section"]} onClick={() => setOpen(true)}>
+        <span className="pick-text" style={{ fontVariantNumeric: "tabular-nums" }}>{ok ? value : t("pick.noTime")}</span><Icon name="clock" size={15} />
+      </button>
+      {open && (
+        <PickSheet title={label || t("pick.time")} onClose={() => setOpen(false)} section="pick-time-sheet">
+          {(close) => (<>
+          <div className="pick-tlabel">{t("pick.hour")}</div>
+          <div className="pick-tgrid" role="group" aria-label={t("pick.hour")}>
+            {H.map((h) => <button key={h} type="button" className={`pick-day${h === hh ? " on" : ""}`} aria-pressed={h === hh} data-hour={h} onClick={() => { if (h !== hh) tick(); setHh(h); }}>{h}</button>)}
+          </div>
+          <div className="pick-tlabel">{t("pick.minute")}</div>
+          <div className="pick-tgrid" role="group" aria-label={t("pick.minute")}>
+            {M.map((mm) => <button key={mm} type="button" className={`pick-day${ok && hh === value.slice(0, 2) && mm === curM ? " on" : ""}`} data-minute={mm} onClick={() => pickM(mm, close)}>:{mm}</button>)}
+          </div>
+          </>)}
+        </PickSheet>
+      )}
+    </span>
+  );
+}
+
 // Drop-in for <input type="date">: value "YYYY-MM-DD" (or ""), min / max respected, required means no Clear.
 export function PickDate({ value, onChange, id, name, min, max, required, disabled, className, style, ...rest }) {
   const [open, setOpen] = useState(false);

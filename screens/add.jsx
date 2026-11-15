@@ -6,6 +6,7 @@ import { locale, t, tn } from "../i18n.js";
 import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo, catHint } from "../App.jsx";
 import { Collapse, Reveal, motionOff } from "./motion.jsx";
 import { TipHead } from "./tip.jsx";
+import { ReceiptPhoto, deletePhoto } from "./photo.jsx";
 import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, scheduleMonthly, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // Run 42: the amount box also takes simple arithmetic ("45 - 20", "12.5 x 3"); amountOf gives the number either way (null when not valid).
@@ -122,6 +123,10 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [billChoice, setBillChoice] = useState(prefill?.billId||(hasInferred?"auto":"new"));
   const [askBill, setAskBill] = useState(null);   // a same-name bill exists: ask before making another one
   const isEditing=!!editId;
+  // Run 90 (owner: "I couldn't find add receipt photo in the + section"): a new entry can take its photo here. Until the entry is saved the
+  // photo waits under a draft key; saving moves it to the entry (App.jsx addTransaction), closing without saving throws it away.
+  const draft=useRef({ key:"draft-"+Date.now()+"-"+Math.random().toString(36).slice(2), saved:false });
+  useEffect(()=>()=>{ if (!draft.current.saved) deletePhoto(draft.current.key).catch(()=>{}); },[]);
   const [type,     setType]     = useState(prefill?.type||"expense");
   // Run 39: paid in another currency. fxCur "" = the ledger's own currency. An entry that already has fx opens in that currency and rate.
   const baseCode=ledgerCode(currency), fxOk=!!baseCode, pfx0=fxOk?cleanFx(prefill?.fx):null, pfx=pfx0&&pfx0.cur!==baseCode?pfx0:null;   // Run 53: any ledger currency a rate exists for
@@ -308,7 +313,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
       const same=who ? bills.find(b=>b.type===type && norm(b.name)===who) : null;
       if (same) { setAskBill(same); return; }   // payment of that bill, or a separate bill? Never decided silently.
     }
-    onSave({type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",fx,spread:type==="expense"&&!recur?spread:0,reimb,reimbFor:isEditing&&type==="income"&&catId==="refund"?prefill?.reimbFor:undefined,
+    if (!isEditing) draft.current.saved=true;
+    onSave({...(isEditing?{}:{ photoDraft:draft.current.key }),type,amount:amt,category:catId,subcategory:subcat,merchant:merchant.trim(),note:note.trim(),date,recurring:recur,recurFreq:recur?(chosenBill?chosenBill.freq:freq):null,isActive,wallet,trip:tripName(trip),account,refundFor:type==="income"&&catId==="refund"?refundFor:"",fx,spread:type==="expense"&&!recur?spread:0,reimb,reimbFor:isEditing&&type==="income"&&catId==="refund"?prefill?.reimbFor:undefined,
       billChoice: recur ? (chosenBill ? chosenBill.id : (hasInferred ? null : "new")) : null});
   };
 
@@ -625,6 +631,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
         </Collapse>
 
         </div></div>
+        {!isEditing&&<div className="field" data-section="add-photo"><ReceiptPhoto id={draft.current.key}/></div>}
         <button className="btn btn-ghost btn-full" onClick={requestClose}>{t("common.cancel")}</button>
       </div>
       <div className="add-foot">

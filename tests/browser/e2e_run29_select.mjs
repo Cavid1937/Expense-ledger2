@@ -17,7 +17,8 @@ section("R29-S1. Sums, selection kept across a changed search, Selected only");
   await click(page, '[data-section="tx-select-toggle"]'); await wait(300);
   ok(/Tap entries to select/.test(await sum(page)), "hint shown while nothing is selected");
   await pick(page, "Row1"); await wait(200);
-  ok(/Net −10\.10/.test(await sum(page)), "only an expense selected: the net is negative, −10.10", await sum(page));
+  // Run 90 (owner): with only expenses selected the line shows only what was spent, no income or net
+  { const s1 = await sum(page); ok(/1 selected · Spent 10\.10/.test(s1) && !/Income|Net/.test(s1), "only an expense selected: only the spent amount is shown", s1); }
   await pick(page, "Pay4"); await wait(200);
   let s = await sum(page);
   ok(/2 selected/.test(s) && /10\.10/.test(s) && /100\.05/.test(s) && /89\.95/.test(s), "2 selected: spent 10.10, income 100.05, net 89.95 to the cent", s);
