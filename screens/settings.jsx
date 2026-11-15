@@ -11,7 +11,7 @@ import { PUBLIC_URL, nativeDownloadsHook, nativeSaveHook } from "../App.jsx";
 import { CPREF_UNHIDEABLE, moveCat, orderedCats, pickerCats, readCatPrefs, toggleHiddenCat, writeCatPrefs } from "../App.jsx";
 import { applyLink, linkCandidates, undoLink } from "../App.jsx";
 import { buildWorkbookSheets, downloadFile, inNativeShell, readBudgetCarry, today as todayStr } from "../App.jsx";   // Run 64
-import { readLearn, writeLearn, learnPreview, readCrashLog } from "../App.jsx";
+import { readLearn, writeLearn, learnPreview, readCrashLog, readCountPref, writeCountPref } from "../App.jsx";
 // Run 75: report a problem
 import { sendFeedback, readScreenCounts, SCREENS_KEY, readLayouts, LAYOUTS_KEY } from "../App.jsx";
 // Run 70: theme preview cards
@@ -595,6 +595,25 @@ export function LearnSettings({ state, showToast }) {
     </div>
   );
 }
+// Run 91: "Count me as a user" (on unless switched off): the anonymous daily count (App.jsx activeDayPlan). Off also forgets this month's id.
+export function CountSettings({ showToast }) {
+  const [off,setOff]=useState(()=>readCountPref().off);
+  const flip=()=>{
+    const cur=readCountPref(), next=cur.off ? { ...cur, off:false } : { off:true, month:"", id:"", lastDay:cur.lastDay };
+    if (!writeCountPref(next)) { showToast(t("carry.saveFailed")); return; }
+    setOff(next.off);
+    try { window.dispatchEvent(new Event("ledger-count-changed")); } catch { /* the summary updates next time */ }
+    showToast(t(next.off?"count.offToast":"count.onToast"));
+  };
+  return (
+    <div className="card" data-section="count" style={{marginTop:12}}>
+      <div className="settings-row" style={{alignItems:"flex-start"}}>
+        <div><div className="settings-row-title" id="set-count" style={{fontWeight:700}}>{t("count.title")}</div><div className="settings-row-sub" style={{lineHeight:1.5}}>{t("count.sub")}</div></div>
+        <div className={`toggle-track${!off?" on":""}`} data-section="count-toggle" onClick={flip} onKeyDown={e=>{ if (e.key===" "||e.key==="Enter") { e.preventDefault(); flip(); } }} role="switch" aria-checked={!off} aria-labelledby="set-count" tabIndex={0}><div className="toggle-knob"/></div>
+      </div>
+    </div>
+  );
+}
 export function SavingsFloorCard({ safeToSpend={}, onSafeToSpendChange, showToast }) {
   const [savingsT,setSavingsT]=useState(String(safeToSpend.savingsTarget||0));
   if (!safeToSpend.enabled) return null;
@@ -704,7 +723,7 @@ export function ListRow({ icon, title, sub, onClick, color="var(--accent-text)",
 // Run 16: "How it works" (four short steps) and the privacy notice, one simple sheet each. The notice describes what the app does
 // today (no account, no analytics, nothing sent); it is not legal advice and must be kept true if the app ever changes.
 export function InfoSheet({ kind, onClose }) {
-  const n=kind==="how"?6:kind==="safe"?6:8;   // Run 36: "how" gained part 5 (income, money in and refunds); Run 43b part 6 (money others will pay back)
+  const n=kind==="how"?6:kind==="safe"?6:kind==="privacy"?9:8;   // Run 36: "how" gained part 5 (income, money in and refunds); Run 43b part 6 (money others will pay back)
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("info."+kind+".title")} data-section={"info-"+kind}>
@@ -868,12 +887,15 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
 function PrivacyFold({ state, showToast, open, toggle, onInfo }) {
   const [learnOn,setLearnOn]=useState(()=>!!readLearn().on);
   useEffect(()=>{ const f=()=>setLearnOn(!!readLearn().on); window.addEventListener("ledger-learn-changed",f); return ()=>window.removeEventListener("ledger-learn-changed",f); },[]);
+  const [countOn,setCountOn]=useState(()=>!readCountPref().off);
+  useEffect(()=>{ const f=()=>setCountOn(!readCountPref().off); window.addEventListener("ledger-count-changed",f); return ()=>window.removeEventListener("ledger-count-changed",f); },[]);
   return (
-    <Fold id="privacy" icon="eye" title={t("st.foldPrivacy")} sub={t(learnOn?"st.sumPrivOn":"st.sumPrivOff")} open={open.privacy} onToggle={()=>toggle("privacy")}>
+    <Fold id="privacy" icon="eye" title={t("st.foldPrivacy")} sub={t(learnOn?"st.sumPrivOn":countOn?"st.sumPrivCount":"st.sumPrivOff")} open={open.privacy} onToggle={()=>toggle("privacy")}>
       {/* the privacy notice lives here too, so the page has one "Privacy", not two */}
       <div className="card list-card" data-section="privacy-notice"><ListRow id="privacy" icon="list" title={t("st.privacyNotice")} sub={t("more.privacySub")} onClick={()=>onInfo("privacy")}/></div>
       <ScreenSecurity showToast={showToast}/>
       <LearnSettings state={state} showToast={showToast}/>
+      <CountSettings showToast={showToast}/>
     </Fold>
   );
 }

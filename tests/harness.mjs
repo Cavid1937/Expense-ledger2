@@ -57,6 +57,8 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   "readLearn","writeLearn","cleanPlace","learnPreview","sendLearning","LEARN_KEY",
   // Run 88: explore notes in the bell
   "exploreTip","EXPLORE_GAP_FIRST","EXPLORE_GAP_NEXT",
+  // Run 91: anonymous daily count
+  "readCountPref","writeCountPref","activeDayPlan","countablePlace","sendActiveDay","randomMonthId","COUNT_KEY",
   // interface language (from i18n.js when present)
   "t","tn","tIn","setLang","getLang","MESSAGES","LANGS","LANG_NAMES","LOCALES","catName","subName","monthName","monthShort","fmtLongDate"];
 const have = names.filter((n) => new RegExp("(function\\s+" + n + "\\b|const\\s+" + n + "\\b)").test(body));

@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="91 (2026-11-15)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="92 (2026-11-15)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -4375,6 +4375,48 @@ export async function sendLearning(preview, fetchFn=(typeof fetch!=="undefined"?
   } catch { return false; }
 }
 
+// Run 91 (owner: "real user count ... I myself use the app a lot, it can be misleading"; chose "Anonymous daily count"). On unless switched
+// off (Settings > Privacy > "Count me as a user"). At most once a day, with a connection, one row goes to the add-only table active_days:
+// the date, web or Android, the language, the version, and a random id made on this phone that is REPLACED EVERY CALENDAR MONTH. So a phone
+// is counted in daily and monthly users but cannot be followed over time. Nothing from the ledger. Only the live site or the Android app
+// sends it: test pages, local copies, previews and automated browsers never do, so tests and development do not inflate the count.
+// Described in Privacy (info.privacy.9).
+export const COUNT_KEY=KEY+"__count";
+export function readCountPref() { try { const v=JSON.parse(localStorage.getItem(COUNT_KEY)||"null"); return { off:!!(v&&v.off===true), month:v&&typeof v.month==="string"?v.month:"", id:v&&typeof v.id==="string"&&/^[0-9a-f-]{36}$/i.test(v.id)?v.id:"", lastDay:v&&typeof v.lastDay==="string"?v.lastDay:"" }; } catch { return { off:false, month:"", id:"", lastDay:"" }; } }
+export function writeCountPref(v) { try { localStorage.setItem(COUNT_KEY,JSON.stringify(v)); return true; } catch { return false; } }
+export function randomMonthId(c=typeof crypto!=="undefined"?crypto:null) {
+  if (c && typeof c.randomUUID==="function") return c.randomUUID();
+  const b=new Uint8Array(16);
+  if (c && typeof c.getRandomValues==="function") c.getRandomValues(b); else for (let i=0;i<16;i++) b[i]=Math.floor(Math.random()*256);
+  b[6]=(b[6]&15)|64; b[8]=(b[8]&63)|128;
+  const h=[...b].map(x=>x.toString(16).padStart(2,"0")).join("");
+  return h.slice(0,8)+"-"+h.slice(8,12)+"-"+h.slice(12,16)+"-"+h.slice(16,20)+"-"+h.slice(20);
+}
+// What to send today, or null (switched off, or already sent today). A new month gets a new random id.
+export function activeDayPlan(rec, opts={}) {
+  const day=localDateStr(opts.now||new Date()), month=day.slice(0,7);
+  if (!rec || rec.off || rec.lastDay===day) return null;
+  const id=rec.month===month && rec.id ? rec.id : (opts.makeId||randomMonthId)();
+  return { row:{ month_id:id, day, platform:opts.platform==="android"?"android":"web", app_version:String(opts.version||"").slice(0,40), lang:String(opts.lang||"en").slice(0,5) }, next:{ off:false, month, id, lastDay:day } };
+}
+// Only a real copy of the app counts: the Android app, or the live site itself.
+export function countablePlace(win=typeof window!=="undefined"?window:null) {
+  try {
+    if (!win || !win.location) return false;
+    if (win.navigator && win.navigator.webdriver) return false;
+    if (win.LedgerNative) return true;
+    return win.location.protocol==="https:" && win.location.hostname===new URL(PUBLIC_URL).hostname;
+  } catch { return false; }
+}
+export async function sendActiveDay(row, fetchFn=(typeof fetch!=="undefined"?fetch:null)) {
+  if (!fetchFn || !row) return false;
+  try {
+    const r=await fetchFn(LEARN_URL+"active_days",{ method:"POST", headers:{ apikey:LEARN_PUBLIC_KEY, Authorization:"Bearer "+LEARN_PUBLIC_KEY, "Content-Type":"application/json", Prefer:"return=minimal" }, body:JSON.stringify(row) });
+    return !!r && r.ok;
+  } catch { return false; }
+}
+let countBusy=false;
+
 // Run 88 (owner: "the notification center must remember the choices made at first launch and use them to remind people to explore"): one
 // "try this" note at a time in the bell, picked from the first-launch answers and what the person has (not) set up yet. The first comes a day
 // after setting up; after one is answered the next waits 3 days. Each is shown once: "Show me" opens the place, "Not now" just ends it.
@@ -5206,6 +5248,22 @@ function AppInner() {
     sendLearning(pv).then(ok=>{ if (!ok) return; const cur=readLearn();
       writeLearn({ ...cur, lastDay:day, sent:[...cur.sent,...pv.places.map(p=>p.key)].slice(-1000), crashSent:pv.crashes.length?pv.crashes[pv.crashes.length-1].at:cur.crashSent }); try { localStorage.removeItem(SCREENS_KEY); localStorage.removeItem(LAYOUTS_KEY); } catch { /* counted again next time */ } });
   },[learnTick]);
+  // Run 91: the anonymous daily count (activeDayPlan): on start and whenever the app comes back to the screen; sent at most once a day
+  useEffect(()=>{
+    const go=()=>{
+      try {
+        if (countBusy || !countablePlace() || (typeof navigator!=="undefined" && navigator.onLine===false)) return;
+        const plan=activeDayPlan(readCountPref(),{ platform:remindersAvailable()?"android":"web", version:APP_RELEASE, lang:state.language||"en" });
+        if (!plan) return;
+        countBusy=true;
+        sendActiveDay(plan.row).then(ok=>{ countBusy=false; if (ok && !readCountPref().off) writeCountPref(plan.next); });
+      } catch { countBusy=false; }
+    };
+    go();
+    const vis=()=>{ if (document.visibilityState==="visible") go(); };
+    document.addEventListener("visibilitychange",vis);
+    return ()=>document.removeEventListener("visibilitychange",vis);
+  },[state.language]);
   // Run 30 (Android app only): long-press shortcuts on the app icon ("Add expense" / "Add income") open the add form.
   useEffect(()=>{
     const nat=window.LedgerNative; if (!nat || typeof nat.onShortcut!=="function") return;

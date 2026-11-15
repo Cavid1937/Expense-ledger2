@@ -114,6 +114,7 @@
     "run51integrity.test.mjs": 50,
     "run52statement.test.mjs": 52,
     "run91birbank.test.mjs": 41,
+  "run91count.test.mjs": 29,
     "run53currency.test.mjs": 28,
     "run57paidfrom.test.mjs": 30,
     "run58cats.test.mjs": 30,

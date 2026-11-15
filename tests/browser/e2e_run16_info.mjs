@@ -15,7 +15,8 @@ section("R16-I1. More lists the two new rows after the first three, and each ope
   ok(/account with Google \(optional/i.test(how.text) && /backup file/i.test(how.text), "it says the Google account is optional and, without one, to keep a backup file (Run 83 wording)");
   await page.evaluate(() => document.querySelector('[data-section="info-how"] .btn-primary').click()); await wait(300); ok(!(await sheet(page, "how")), "Close closes it");
   await openRow(page, "privacy"); const pr = await sheet(page, "privacy");
-  ok(!!pr && pr.heads.length === 8 && /no ads/i.test(pr.text) && /Nothing you enter is analysed or sent/i.test(pr.text) && /none of your entries or amounts is sent to us/i.test(pr.text) && /Vercel Web Analytics/.test(pr.text) && /Vercel/.test(pr.text), "Privacy: eight short sections; says no ads, nothing analysed or sent (unless shared on purpose), and names the website host", pr && pr.heads);
+  // Run 92: a ninth section explains the anonymous daily user count
+  ok(!!pr && pr.heads.length === 9 && /no ads/i.test(pr.text) && /Nothing you enter is analysed or sent/i.test(pr.text) && /none of your entries or amounts is sent to us/i.test(pr.text) && /Vercel Web Analytics/.test(pr.text) && /Vercel/.test(pr.text) && /Count me as a user/.test(pr.text), "Privacy: nine short sections; says no ads, nothing analysed or sent (unless shared on purpose), names the website host and how to turn off the daily count", pr && pr.heads);
   await page.evaluate(() => document.querySelector('[data-section="info-privacy"] [aria-label="Close"]').click()); await wait(300); ok(!(await sheet(page, "privacy")), "the x button closes it");
   await openRow(page, "safe"); const sf = await sheet(page, 'safe');
   ok(!!sf && sf.heads.length === 6 && /Downloads/.test(sf.text) && /Add to Home Screen/.test(sf.text) && /Clearing the browser/.test(sf.text) && /backup/i.test(sf.text), 'Keep your data safe: six sections (Run 20 added where to find the backup file); names what erases data, backups, the Downloads folder and adding the app to the home screen', sf && sf.heads);
@@ -34,7 +35,7 @@ section("R16-I3. az and ru show real text, nothing overflows, and the app asks f
 for (const lang of ["az", "ru"]) {
   const page = await openPage(browser, { seed: baseSeed({ language: lang }) }); await tab(page, "More"); await settle(page);
   await openRow(page, "privacy"); const pr = await sheet(page, "privacy");
-  ok(!!pr && pr.heads.length === 8 && pr.heads.every((h) => h.length > 3 && !/info\./.test(h)) && !/info\.privacy/.test(pr.text), `${lang}: six translated sections, no raw keys`, pr && pr.heads);
+  ok(!!pr && pr.heads.length === 9 && pr.heads.every((h) => h.length > 3 && !/info\./.test(h)) && !/info\.privacy/.test(pr.text), `${lang}: nine translated sections, no raw keys`, pr && pr.heads);
   const ov = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1); ok(!ov, `${lang}: no horizontal overflow`);
   await page.close();
 }
