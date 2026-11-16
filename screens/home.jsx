@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 // Run 75: monthly summary
 import { MonthReportCard } from "./report.jsx";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, unassignedEntries, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse, useRolling } from "./motion.jsx";
@@ -136,9 +136,53 @@ export function AccountSheet({ id, transactions, currency, onClose, onManage, on
     </div>
   );
 }
-export function HomeAccounts({ transactions, currency, onManage, onAccount }) {
+// Run 99: the entries that are in no balance, each with the person's accounts as one-tap choices. Nothing is decided for them:
+// an entry paid with money that is not tracked here is simply left as it is. Every change can be undone from the bar that follows.
+export function LooseSheet({ loose, accounts, currency, onAssign, onClose }) {
+  const rows=loose.list.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,100);
+  const words=(x)=>[x.merchant||x.note,x.subcategory,catName(x.category)].filter(Boolean).join(", ");
+  return (
+    <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("loose.title")} data-section="loose-sheet">
+        <div className="sheet-grip"><div className="sheet-handle"/></div>
+        <div className="sheet-title">{t("loose.title")}</div>
+        {rows.length===0 ? (
+          <div className="list-sub" data-section="loose-empty" style={{margin:"4px 0 14px",lineHeight:1.5}}>{t("loose.empty")}</div>
+        ) : (<>
+          <div className="list-sub" style={{margin:"0 0 10px",lineHeight:1.5}}>{t("loose.intro",{ date:fmtDate(loose.since) })}</div>
+          <div data-section="loose-all" style={{marginBottom:10}}>
+            <div className="field-lbl">{tn("loose.all",loose.list.length)}</div>
+            <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
+              {accounts.map(a=><button key={a.id} type="button" className="sub-chip" data-loose-all={a.id} onClick={()=>onAssign(loose.list.map(x=>x.id),a.id)}>{a.name}</button>)}
+            </div>
+          </div>
+          <div role="list" style={{maxHeight:"46vh",overflowY:"auto",borderTop:"1px solid var(--rule)"}}>
+            {rows.map(x=>(
+              <div key={x.id} role="listitem" data-loose-row={x.id} style={{padding:"8px 0",borderBottom:"1px solid var(--rule)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",gap:8,fontSize:13}}>
+                  <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fmtDate(x.date)} · {words(x)}</span>
+                  <span style={{flexShrink:0,fontVariantNumeric:"tabular-nums"}}><MoneyText v={fmt(x.amount,currency)}/></span>
+                </div>
+                <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible",marginTop:6}}>
+                  {accounts.map(a=><button key={a.id} type="button" className="sub-chip" data-loose-pick={a.id} aria-label={a.name+": "+words(x)+", "+fmt(x.amount,currency)} onClick={()=>onAssign([x.id],a.id)}>{a.name}</button>)}
+                </div>
+              </div>
+            ))}
+          </div>
+          {loose.list.length>rows.length&&<div className="list-sub" style={{marginTop:6}}>{t("st.moreRows",{n:loose.list.length-rows.length})}</div>}
+        </>)}
+        <button type="button" className="btn btn-ghost btn-full" data-closer="1" style={{marginTop:12}} onClick={onClose}>{t("common.close")}</button>
+      </div>
+    </div>
+  );
+}
+export function HomeAccounts({ transactions, currency, onManage, onAccount, onAssign }) {
+  const [fix,setFix]=useState(false);
   const data=readAccounts(), shown=data.accounts.filter(a=>!a.hidden);
   if (!shown.length) return null;
+  // Run 99: spending with no account is in none of the balances below; say so where the balances are shown, with a way to put it right
+  let loose={ known:false, since:"", list:[] }; try { loose=unassignedEntries(data,transactions); } catch { loose={ known:false, since:"", list:[] }; }
+  const looseSum=loose.list.reduce((c,x)=>c+Math.round((Number(x.amount)||0)*100),0)/100;
   const bal=accountBalances(data,transactions);
   const np=netPosition(data,transactions,readDebts());   // Run 28: null unless some debt or loan exists
   const kindName={ cash:t("acc.kind.cash"), card:t("acc.kind.card"), wallet:t("acc.kind.wallet"), bank:t("acc.kind.bank"), credit:t("acc.kind.credit"), other:t("acc.kind.other") };
@@ -160,6 +204,13 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount }) {
       {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</div>}
       {owedCredit>0&&<div className="list-sub" data-section="home-credit-owed" style={{margin:"4px 2px 0"}}>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</div>}
       {np&&<div className="list-sub" data-section="home-netpos" style={{margin:"4px 2px 0"}}>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</div>}
+      {loose.known&&loose.list.length>0&&(
+        <div className="list-sub" data-section="home-loose" role="note" style={{margin:"6px 2px 0",lineHeight:1.45,color:"var(--warn)"}}>
+          {tn("acc.loose",loose.list.length,{ amount:fmt(looseSum,currency), date:fmtDate(loose.since) })}
+          {onAssign&&<> <button type="button" className="btn btn-sm" data-section="home-loose-fix" style={{marginLeft:4}} onClick={()=>setFix(true)}>{t("acc.looseFix")}</button></>}
+        </div>
+      )}
+      {fix&&<LooseSheet loose={loose} accounts={shown} currency={currency} onAssign={onAssign} onClose={()=>setFix(false)}/>}
     </div>
   );
 }
@@ -180,7 +231,7 @@ export function WelcomeCard({ show }) {
   );
 }
 
-export function HomePage({ showToast, transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onFirstGo, onInfo, onAccounts, onAccount }) {
+export function HomePage({ showToast, transactions, accountTxns, latest=[], bills=[], budgets, templates, currency, safeToSpend, goals, setup, rollover=null, onSetupWizard, onSetupHide, onSetupGo, onAdd, onTemplate, onView, onOpenLedger, onFirstGo, onInfo, onAccounts, onAccount, onAssignAccount }) {
   const now=curMon(), prv=prevMon();
   const { curExp,curInc,curIn,curNet,curRefundIn,curSavOut,prevExp,momDiff,surplusRate,plannedExp,plannedInc,cmpKind }=calcMonthSummary(transactions,now,prv);
   const catSpend    =calcCategorySpend(transactions,now);
@@ -249,7 +300,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
         <PlannedNote plannedExp={plannedExp} plannedInc={plannedInc} currency={currency} style={{marginTop:10}}/>
       </div>
 
-      <HomeAccounts transactions={accountTxns||transactions} currency={currency} onManage={onAccounts} onAccount={onAccount}/>
+      <HomeAccounts transactions={accountTxns||transactions} currency={currency} onManage={onAccounts} onAccount={onAccount} onAssign={onAssignAccount}/>
 
       {/* Due within 7 days */}
       {upcomingSchedules.length>0&&(

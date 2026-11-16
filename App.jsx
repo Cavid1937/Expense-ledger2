@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="98 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="99 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -1132,17 +1132,28 @@ export function statementNeedsOk(st) {
 // it so the app can say so with the amount. Only spending dated from the earliest opening date of a shown account up to today: before that
 // date the typed opening balance already includes it. When no shown account has an opening date the app cannot know (known:false).
 // It is never taken out of a balance: the money may have come from somewhere the person does not track here (cash in a pocket).
-export function unassignedSpend(data, transactions, now=new Date()) {
+export function unassignedEntries(data, transactions, now=new Date()) {
   const d=cleanAccountData(data), ids={}, todayStr=localDateStr(now);
   d.accounts.forEach(a=>{ ids[a.id]=1; });
   let since="";
   d.accounts.forEach(a=>{ if (!a.hidden && a.opening.date && (!since || a.opening.date<since)) since=a.opening.date; });
-  if (!since) return { known:false, since:"", count:0, sum:0 };
-  let count=0, cents=0;
-  (transactions||[]).forEach(x=>{ if (!x || x.type!=="expense" || (accId(x.account) in ids) || !isValidDateStr(x.date) || x.date<since || x.date>todayStr) return; count++; cents+=centsOf(x.amount); });
-  return { known:true, since, count, sum:cents/100 };
+  if (!since) return { known:false, since:"", list:[] };
+  return { known:true, since, list:(transactions||[]).filter(x=>x && x.type==="expense" && !(accId(x.account) in ids) && isValidDateStr(x.date) && x.date>=since && x.date<=todayStr) };
 }
-// Run 98: "same as last time" for the Add form. The account of the entry of this kind that was recorded last, when that account is still
+export function unassignedSpend(data, transactions, now=new Date()) {
+  const r=unassignedEntries(data,transactions,now);
+  return { known:r.known, since:r.since, count:r.list.length, sum:r.list.reduce((c,x)=>c+centsOf(x.amount),0)/100 };
+}
+// Run 99: put entries that have no account onto one (the person's own choice, from the "Entries with no account" sheet). Only the account
+// changes; an entry that already has an account that still exists is left alone. Returns the entries with the change applied and how many changed.
+export function assignAccount(transactions, ids, accountData, accountId) {
+  const d=cleanAccountData(accountData), id=accId(accountId), have={};
+  d.accounts.forEach(a=>{ have[a.id]=1; });
+  if (!id || !have[id]) return { list:transactions||[], changed:[] };
+  const want=new Set((ids||[]).map(String)), changed=[];
+  const list=(transactions||[]).map(x=>{ if (!x || !want.has(String(x.id)) || (accId(x.account) in have)) return x; changed.push(x.id); return { ...x, account:id }; });
+  return { list, changed };
+}// Run 98: "same as last time" for the Add form. The account of the entry of this kind that was recorded last, when that account is still
 // here and shown; "" when that entry had no account (so someone who pays cash from a pocket is not given a card by default).
 export function lastAccountFor(data, transactions, type) {
   const d=cleanAccountData(data);
@@ -4262,7 +4273,8 @@ export function widgetSnapshot(state, spendTxns, opts={}, now=new Date()) {
   const over=bs.filter(b=>b.over).length;
   // accounts (the person's own; none means the widget invites them to add one)
   const acc=readAccounts(), bal=accountBalances(acc,s.transactions||[]);
-  const accounts=acc.accounts.slice(0,3).map(a=>({ name:String(a.name||accountName(a.id)||"").slice(0,24), amount:money(bal[a.id]||0), neg:(bal[a.id]||0)<0 }));
+  // Run 99: an account the person hid is not shown on the home-screen widget either (it used to be)
+  const accounts=acc.accounts.filter(a=>!a.hidden).slice(0,3).map(a=>({ name:String(a.name||accountName(a.id)||"").slice(0,24), amount:money(bal[a.id]||0), neg:(bal[a.id]||0)<0 }));
   return { v:1, asOf:localDateStr(now), hide, theme, lang:s.language||"en",
     safe:{ title:t(usable?"wdgx.safeTitle":"wdgx.spentTitle"), amount:usable?money(info.remaining):money(ms.curExp), neg:!!(usable&&info.remaining<0), sub:usable?t("wdgx.safeSub"):t("wdgx.spentSub",{ month:monthName(mon) }), pct:usable?safePct:Math.max(0,Math.min(100,Math.round(((p.daysPassed||0)/(p.totalDays||30))*100))), days:String(p.daysRemaining||0), daysLabel:tn("wdgx.daysLeft",p.daysRemaining||0), nextBill, budgetPct:bTotal>0?bPct:-1, budgetLabel:t("wdgx.budget"),
       dayLabel:t(usable?"wdgx.perDay":"wdgx.avgDay"), day:money(perDayVal), nextLabel:t("wdgx.nextLabel"), nextAmt:nb?money(nb.x.amount):"", nextWhat:nb?nbName+" · "+fmtDate(localDateStr(nb.due)):t("wdgx.noBills") },
@@ -5207,6 +5219,15 @@ function AppInner() {
     return true;
   },[showSnackbar]);
 
+  // Run 99: entries with no account are put onto one, from the Home sheet. Undo takes the account off again (only where it is still the one given).
+  const assignAccountMany=useCallback((ids,accountId)=>{
+    const r=assignAccount(stateRef.current.transactions,ids,readAccounts(),accountId);
+    if (!r.changed.length) return 0;
+    const done=new Set(r.changed.map(String)), id=accId(accountId);
+    setState(s=>({...s,transactions:assignAccount(s.transactions,r.changed,readAccounts(),id).list}));
+    showSnackbar(tn("loose.done",r.changed.length,{name:accountName(id)}),()=>setState(s=>({...s,transactions:s.transactions.map(x=>{ if (!done.has(String(x.id)) || x.account!==id) return x; const { account:_a, ...rest }=x; return rest; })})),8000,"account");
+    return r.changed.length;
+  },[showSnackbar]);
   // Run 24: splitting replaces one entry with several that add up to it; undo puts the original back unless something changed since.
   const splitEntry=useCallback((id,parts)=>{
     countScreen("do-split");
@@ -6025,7 +6046,7 @@ function AppInner() {
         </header>
 
         <main className={(SUBPAGE_PARENT[tab]?"page page-sub":"page")+(pageOut?" page-out":"")+(pfCount.current>0?(pfCount.current%2?" pf-a":" pf-b"):"")} key={tabKey}>
-          {tab==="home"      && <HomePage showToast={showToast} transactions={spendTxns} accountTxns={transactions} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onFirstGo={k=>{ if (k==="debts") { setDebtsStart("debts"); switchTab("debts"); } else if (k==="io") switchTab("io"); }} onInfo={setInfoKind}
+          {tab==="home"      && <HomePage showToast={showToast} transactions={spendTxns} accountTxns={transactions} onAssignAccount={assignAccountMany} onAccounts={()=>switchTab("accounts")} onAccount={id=>setViewAcc(id)} latest={latestTxns} bills={bills} budgets={budgets} templates={templates} currency={currency} safeToSpend={safeToSpend} goals={goals} onAdd={()=>openAdd()} onTemplate={tpl=>openAdd({type:"expense",amount:tpl.amount,category:tpl.catId,subcategory:tpl.subcat||"",merchant:tpl.merchant||"",note:tpl.note||tpl.name,recurring:false,recurFreq:null})} onView={txn=>setViewTxn(txn)} onOpenLedger={()=>switchTab("ledger")} onFirstGo={k=>{ if (k==="debts") { setDebtsStart("debts"); switchTab("debts"); } else if (k==="io") switchTab("io"); }} onInfo={setInfoKind}
             rollover={{ offer:readLeftoverGoal() ? rolloverOffer(spendTxns,goals,rolloverSeen) : null /* Run 59: only when turned on (Budgets & Goals > Goals) */, onSkip:()=>{ const m=rolloverOffer(spendTxns,goals,rolloverSeen)?.month; if (m) { writeRolloverSeen(m); setRolloverSeen(m); } },
               onApply:(g)=>{ const o=rolloverOffer(spendTxns,goals,rolloverSeen); if (!o) return; setState(s=>({...s,goals:applyRollover(s.goals,g.id,g.amount)})); writeRolloverSeen(o.month); setRolloverSeen(o.month); showToast(t("rollover.done",{ amount:fmt(g.amount,currency), goal:g.name||t("rollover.goalFallback") })); } }}
             setup={{hidden:!!state.setupHidden,backedUp:!!(state.lastBackup||state.backupConfirmedAt)}} onSetupHide={()=>setState(s=>({...s,setupHidden:true}))}
