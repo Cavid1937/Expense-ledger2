@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="97 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="98 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -1120,6 +1120,37 @@ export function accountBalances(data, transactions, asOf) {
   d.transfers.forEach(x=>{ if (!happened(x.date)) return; out[x.from]-=centsOf(x.amount); out[x.to]+=centsOf(x.amount); });
   Object.keys(out).forEach(k=>{ out[k]=out[k]/100; });
   return out;
+}
+// Run 98 (audit A4c): a statement whose rows do not add up with the bank's own running balance, or whose totals differ from the bank's summary,
+// may have a missing or misread row. It can still be added, but only after the person ticks that they looked (one tap used to be enough).
+export function statementNeedsOk(st) {
+  if (!st || typeof st!=="object") return false;
+  const c=st.check, s=st.summary;
+  return !!(c && c.has && !c.ok) || !!(s && (s.debit!==s.rowsDebit || s.credit!==s.rowsCredit));
+}
+// Run 98: spending recorded with no account moves no balance, so every balance-based figure can look too good by that much. This counts
+// it so the app can say so with the amount. Only spending dated from the earliest opening date of a shown account up to today: before that
+// date the typed opening balance already includes it. When no shown account has an opening date the app cannot know (known:false).
+// It is never taken out of a balance: the money may have come from somewhere the person does not track here (cash in a pocket).
+export function unassignedSpend(data, transactions, now=new Date()) {
+  const d=cleanAccountData(data), ids={}, todayStr=localDateStr(now);
+  d.accounts.forEach(a=>{ ids[a.id]=1; });
+  let since="";
+  d.accounts.forEach(a=>{ if (!a.hidden && a.opening.date && (!since || a.opening.date<since)) since=a.opening.date; });
+  if (!since) return { known:false, since:"", count:0, sum:0 };
+  let count=0, cents=0;
+  (transactions||[]).forEach(x=>{ if (!x || x.type!=="expense" || (accId(x.account) in ids) || !isValidDateStr(x.date) || x.date<since || x.date>todayStr) return; count++; cents+=centsOf(x.amount); });
+  return { known:true, since, count, sum:cents/100 };
+}
+// Run 98: "same as last time" for the Add form. The account of the entry of this kind that was recorded last, when that account is still
+// here and shown; "" when that entry had no account (so someone who pays cash from a pocket is not given a card by default).
+export function lastAccountFor(data, transactions, type) {
+  const d=cleanAccountData(data);
+  let last=null;
+  (transactions||[]).forEach(x=>{ if (!x || x.type!==type) return; const k=String(x.createdAt||""); if (!last || k>last.k || (k===last.k && Number(x.id)>Number(last.x.id))) last={ k, x }; });
+  if (!last) return "";
+  const a=d.accounts.find(a=>a.id===accId(last.x.account));
+  return a && !a.hidden ? a.id : "";
 }
 // Run 41: what is still owed on credit-card accounts today, in money (exact to the cent): for each account of kind "credit" whose balance is below zero, that amount.
 // Spending on the card is already counted as spending on its day; this only shows the bill that is still to be paid (a transfer to the card pays it off).
@@ -6178,7 +6209,8 @@ function AppInner() {
                       {rows.map(r=><div key={r.id} data-bal={r.id} style={{overflowWrap:"anywhere"}}>{r.before===null ? t("import.balNew",{ name:maskText(r.name), after:fmt(r.after,currency) }) : t("import.balLine",{ name:maskText(r.name), before:(r.before<0?"−":"")+fmt(Math.abs(r.before),currency), after:(r.after<0?"−":"")+fmt(Math.abs(r.after),currency) })}</div>)}
                       <div style={{color:"var(--ink-3)",marginTop:2}}>{t("import.balNote")}</div>
                     </div>); })()}
-                  <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="import-go" disabled={importPending.kind==="statement"&&!importPending.transactions.length} onClick={()=>commitImport("merge")}>{t(importPending.kind==="statement"?"st.addBtn":"import.mergeBtn")}</button>
+                  {importPending.kind==="statement"&&statementNeedsOk(importPending.statement)&&importPending.transactions.length>0&&<label data-st="anyway-row" style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:10,fontSize:12,lineHeight:1.45,color:"var(--warn)"}}><input type="checkbox" data-st="anyway" checked={!!(importPending.stOpts&&importPending.stOpts.anyway)} onChange={e=>setStOpt("anyway",e.target.checked)} style={{marginTop:2}}/><span>{t("st.anyway")}</span></label>}
+              <button className="btn btn-primary btn-full" style={{marginTop:0}} data-section="import-go" disabled={importPending.kind==="statement"&&(!importPending.transactions.length||(statementNeedsOk(importPending.statement)&&!(importPending.stOpts&&importPending.stOpts.anyway)))} onClick={()=>commitImport("merge")}>{t(importPending.kind==="statement"?"st.addBtn":"import.mergeBtn")}</button>
                   {importPending.canReplace
                     ? <button className="btn btn-ghost btn-full" style={{marginTop:8,color:"var(--neg)",borderColor:"var(--neg-bg)"}} onClick={()=>commitImport("replace")}>{t("import.replaceBtn")}</button>
                     : Object.keys(importPending.settings||{}).length>0

@@ -7,7 +7,7 @@ import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs
 import { Collapse, Reveal, motionOff } from "./motion.jsx";
 import { TipHead } from "./tip.jsx";
 import { ReceiptPhoto, deletePhoto } from "./photo.jsx";
-import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, scheduleMonthly, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
+import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, scheduleMonthly, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, lastAccountFor, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
 
 // Run 42: the amount box also takes simple arithmetic ("45 - 20", "12.5 x 3"); amountOf gives the number either way (null when not valid).
 const EXPR_TEXT=/[+*\/×÷]|[0-9.,)]\s*[-−]\s*[0-9.,(]/;
@@ -166,7 +166,12 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [reimbAmt, setReimbAmt] = useState(cleanReimb(prefill?.reimb) ? String(cleanReimb(prefill.reimb).amt) : "");
   const [reimbWho, setReimbWho] = useState(cleanReimb(prefill?.reimb)?.who || "");
   const accData=useMemo(()=>readAccounts(),[]);   // Run 24: optional account (card, cash...) the entry belongs to
-  const [account, setAccount] = useState(accId(prefill?.account));
+  // Run 98: a new entry made from scratch starts on the account used last time for this kind of entry ("same as last time"); it is named on
+  // the "More details" line, so it is never chosen unseen. Editing, templates and offered entries keep exactly what they carry.
+  const [account, setAccount] = useState(()=>accId(prefill?.account) || (!prefill && !editId ? lastAccountFor(accData,transactions,"expense") : ""));
+  // Switching to income (or back) follows the account used last for that kind, until the person picks one themself.
+  const accTouched=useRef(false);
+  useEffect(()=>{ if (!prefill && !editId && !accTouched.current) setAccount(lastAccountFor(accData,transactions,type)); },[type]);   // eslint-disable-line react-hooks/exhaustive-deps
   // Run 36: a refund can say which kind of spending it gives money back to; then it lowers that category's spending instead of counting as money in.
   const [refundFor, setRefundFor] = useState(typeof prefill?.refundFor==="string" ? prefill.refundFor : "");
   const knownTrips=useMemo(()=>tripTotals(transactions).map(x=>x.name),[transactions]);
@@ -224,7 +229,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const catHits=searchCats(pickList,catQ,mySubs);
   const displayCats=catHits.map(h=>h.cat);
   const selectedCat=CAT(catId);
-  const moreSummary=[merchant.trim(), note.trim(), wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
+  const moreSummary=[merchant.trim(), note.trim(), account?((accData.accounts.find(a=>a.id===account)||{}).name||""):"", wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
 
   // Run 83: the keyboard used to rise while the sheet was still sliding up (owner: "a little bit instant"). It now waits until the
   // slide (400 ms, styles.js .add-overlay) has almost landed, so the sheet arrives first and the keys follow. Reduced motion: at once.
@@ -495,7 +500,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
             <div className="field-lbl" id="txn-acc-lbl">{t(type==="income"?"wallet.labelIn":"acc.paidFrom")} {optional}</div>
             <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
               {accData.accounts.filter(a=>!a.hidden||a.id===account).map(a=>(
-                <button key={a.id} type="button" role="radio" aria-checked={account===a.id} data-acc-pick={a.id} className={`sub-chip${account===a.id?" sel":""}`} onClick={()=>setAccount(account===a.id?"":a.id)}>{a.name}</button>
+                <button key={a.id} type="button" role="radio" aria-checked={account===a.id} data-acc-pick={a.id} className={`sub-chip${account===a.id?" sel":""}`} onClick={()=>{ accTouched.current=true; setAccount(account===a.id?"":a.id); }}>{a.name}</button>
               ))}
               {wallet&&<button type="button" role="radio" aria-checked="true" className="sub-chip sel" data-section="add-old-wallet" title={t("wallet.label")} onClick={()=>setWallet("")}>{walletName(wallet)} ×</button>}
             </div>

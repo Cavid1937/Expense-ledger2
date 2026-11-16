@@ -90,7 +90,7 @@ Limits: mostly English and Russian reviews from the US, EU and Russia. I found *
 | W2 | The per-day figure divides by days left in the calendar month, not days until the next income. | Confirmed in code | High (same decision) |
 | W3 | Entries saved with no account do not change any balance, so every balance-based figure can look too good. | Confirmed in code | Medium |
 | W4 | The app is not on Google Play; the Android package name is still `com.example...`; phones block installing the notice reader from a file. | Confirmed earlier (13 and 15 Nov) | High for any launch |
-| W5 | Bank-CSV import can misread some amounts. | Confirmed in the 15 Nov audit; not fixed | Medium |
+| W5 | A bank statement that does not add up could be added with one tap. (Correction, Run 98: the amount misreads from the 15 Nov audit were already fixed in Run 93; I wrote "not fixed" here by mistake. What stayed open was this one-tap import.) | Confirmed in the 15 Nov audit; fixed in Run 98 | Medium |
 | W6 | The notice reader has never been proven on a real Xiaomi/Poco over several days. | Emulator only | Medium |
 | W7 | We cannot see whether new users reach a useful first moment; only an anonymous daily count exists. | Confirmed | Medium |
 | W8 | Many features, no single story. A new user meets budgets, goals, sinking funds, debts, coach, insights at once. | Opinion, from inspecting Home and Settings | Medium |
@@ -132,7 +132,7 @@ Partly. Your PDF is right on three points and I agree: no single health score, l
 | 4 | Prove the notice reader on a real phone for a week | Typing chore is why manual apps die | Low | Waiting for your phone test |
 | 5 | Default account for new entries, or a nudge when an entry has none | Fixes W3 | Low to medium | Proposed |
 | 6 | Google Play listing with a proper package name | W4; nobody can install it today | Costs $25 to $30; one-way package rename | **Needs your approval and payment** |
-| 7 | Fix bank-CSV amount misreads | W5 | Low | Proposed |
+| 7 | Statement that does not add up needs a tick before adding | W5 | Low | Built in Run 98 |
 | 8 | "Instalment" as a plain-language entry point to the existing loan plans | Local fit | Low; demand unproven | After interviews |
 | 9 | Backup confidence: last-backup date in view, a restore rehearsal | Data-loss fear | Low | Proposed |
 
