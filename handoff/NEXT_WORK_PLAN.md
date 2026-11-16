@@ -503,3 +503,20 @@ Order proposed (see reports\Product discovery and differentiation 2026-11-16.md,
 9. Backup confidence (last-backup date in view, restore rehearsal).
 Frozen until the core figure works for every pay day: new coach rules, AI advisor, health score, household sync, open-banking link.
 Validation: 5-10 interviews, script in section 14 of the report. Owner runs them.
+## 2026-11-16 - MASTER BACKLOG after Run 98 (master evolution mission, cycle 1). Earlier text above is kept.
+Done in cycle 1 (local commit 441c7ae, not published):
+- Entries with no account: Add form "same as last time" + exact note on the "Until your next income" card. VERIFIED in tests; not seen on a phone.
+- Audit A4c: statement that does not add up needs a tick. VERIFIED in tests.
+- docs/MONEY_FIGURES.md started (5 figures defined). Capacitor repo work since APK 82 committed locally (8cc8827).
+Next, in order (reason in brackets):
+1. OWNER DECISION: Safe to Spend on the pay cycle from account funds. [the core promise; changes an established rule]
+2. One shared "money position" calculation used by Home, the until-card, forecast and net position. [Safe to Spend, run-out day, forecast and until-card each gather bills/loans themselves; write the regression tests first, then move them onto one function without changing results]
+3. "What changed since last month" in plain words on one screen, traceable to entries. [intelligence K; calcWhatChanged exists, check its reach first]
+4. What-if (scenario) for one purchase: "if I buy X, what is left until income". [intelligence I; reuses calcUntilPay; nothing is saved]
+5. Reconcile an account: "the bank says X today" -> one visible adjusting entry, never a silent change. [balances drift; needs owner wording OK]
+6. First-run path to the figure in two minutes. [activation]
+7. Notice reader proven on the owner's phone for a week. [BLOCKED on device]
+8. Google Play + package name. [owner approval and payment]
+9. Finish docs/MONEY_FIGURES.md for forecast, run-out day, net position, loans, budgets, goals.
+10. az/ru native-reader review of Runs 96-98 texts. [BLOCKED: needs a person]
+Deferred with reason: open-banking link (registration, cost), AI advisor (server, privacy), health score (no valid basis), household sync (server), voice entry (dropped by owner), more coach rules (no demand shown).
