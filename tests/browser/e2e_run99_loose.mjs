@@ -23,6 +23,8 @@ section("R99-B1. The Accounts card says what is in no balance");
   section("R99-B2. Choose accounts: one entry, then undo, then all");
   await click(page, '[data-section="home-loose-fix"]'); r = await look(page);
   ok(r.sheet !== null && r.rows === 2 && /Bakery/.test(r.sheet) && /Taxi/.test(r.sheet) && !/Before the balance/.test(r.sheet) && !/On the card/.test(r.sheet), "the sheet lists exactly the 2 entries", r.sheet);
+  // found by a screenshot: inside the Accounts card the sheet was drawn BEHIND the cards that follow. It must be the thing on top.
+  ok(await page.evaluate(() => { const s = document.querySelector('[data-section="loose-sheet"]'), t = s.querySelector(".sheet-title").getBoundingClientRect(), b = s.querySelector("[data-loose-pick]").getBoundingClientRect(); const at = (r) => document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return s.contains(at(t)) && s.contains(at(b)); }), "the sheet is on top of the page: its title and its first account button are what a finger would touch");
   const before = await state(page);
   await page.evaluate(() => { const row = [...document.querySelectorAll("[data-loose-row]")].find((e) => /Bakery/.test(e.textContent)); row.querySelector('[data-loose-pick="a_cash01"]').click(); }); await wait(400); r = await look(page);
   let st = await state(page); const bakery = (s) => s.transactions.find((x) => x.merchant === "Bakery"), taxi = (s) => s.transactions.find((x) => x.merchant === "Taxi");

@@ -3846,6 +3846,16 @@ export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date
   };
 }
 
+// Run 99: "what if I buy something?" A hypothetical only: nothing is saved and no figure of the app changes. It takes a figure the app
+// already shows (kind "safe": Safe to Spend and its days left; kind "until": what is left until the next income and its days) and says
+// what that same figure would be after spending `amount`. Whole qapik. The per-day figure follows the card it belongs to: Safe to Spend
+// divides as that card does; "until" rounds down to the qapik. Not valid (ok:false) for a missing, zero, negative or absurd amount.
+export function whatIfSpend(amount, kind, left, days) {
+  const a=Math.round(Number(amount)*100), l=Math.round(Number(left)*100), d=Math.floor(Number(days));
+  if (!Number.isFinite(a) || a<=0 || a>=1e11 || !Number.isFinite(l) || (kind!=="safe" && kind!=="until")) return { ok:false };
+  const after=l-a, per=(c)=>c>0 && d>0 ? (kind==="until" ? Math.floor(c/d)/100 : c/100/d) : 0;
+  return { ok:true, kind, amount:a/100, before:l/100, after:after/100, covers:after>=0, short:after<0 ? -after/100 : 0, perDayBefore:per(l), perDayAfter:per(after), days:d>0 ? d : 0 };
+}
 // Run 97 (product research, 16 Nov): the days BEFORE this month's income arrives. Safe to Spend is built on this month's income, so
 // from the 1st until pay day it could only say "waiting", which is when money is tightest. This is a separate, clearly named figure
 // and changes nothing in Safe to Spend:

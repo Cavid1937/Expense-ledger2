@@ -1,9 +1,10 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 // Run 75: monthly summary
 import { MonthReportCard } from "./report.jsx";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, unassignedEntries, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, unassignedEntries, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, whatIfSpend, formMoney, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse, useRolling } from "./motion.jsx";
@@ -210,7 +211,8 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount, onAs
           {onAssign&&<> <button type="button" className="btn btn-sm" data-section="home-loose-fix" style={{marginLeft:4}} onClick={()=>setFix(true)}>{t("acc.looseFix")}</button></>}
         </div>
       )}
-      {fix&&<LooseSheet loose={loose} accounts={shown} currency={currency} onAssign={onAssign} onClose={()=>setFix(false)}/>}
+      {/* drawn at the top of the page: inside this card it would sit behind the cards that follow */}
+      {fix&&typeof document!=="undefined"&&createPortal(<LooseSheet loose={loose} accounts={shown} currency={currency} onAssign={onAssign} onClose={()=>setFix(false)}/>,document.body)}
     </div>
   );
 }
@@ -399,6 +401,30 @@ export function accountsHeld(transactions) {
   const bal=accountBalances(data,transactions);
   return shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0)/100;
 }
+// Run 99: "What if I buy something?" under the figure it is about. A hypothetical: it reads the figure on the card and shows what it
+// would be after the purchase. Nothing is saved; closing clears it.
+export function WhatIf({ kind, left, days, currency }) {
+  const [on,setOn]=useState(false), [txt,setTxt]=useState("");
+  const amt=formMoney(txt,{positive:true}), r=amt ? whatIfSpend(amt,kind,left,days) : { ok:false };
+  if (!on) return <button type="button" className="safe-toggle" data-section="whatif-open" data-kind={kind} onClick={()=>setOn(true)}>{t("whatif.open")}</button>;
+  return (
+    <div data-section="whatif" data-kind={kind} role="group" aria-label={t("whatif.open")} style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
+      <label className="field-lbl" htmlFor={"whatif-"+kind}>{t("whatif.label")}</label>
+      <input id={"whatif-"+kind} className="field-input" data-section="whatif-amount" inputMode="decimal" autoComplete="off" placeholder="0.00" value={txt} onChange={e=>setTxt(e.target.value)}/>
+      <div data-section="whatif-result" role="status" aria-live="polite" style={{marginTop:8,minHeight:20}}>
+        {r.ok&&(<>
+          <div className="safe-row">
+            <span className="safe-lbl">{t(kind==="safe"?"whatif.leftSafe":"whatif.leftUntil")}</span>
+            <span className="safe-val" style={{color:r.covers?"var(--ink)":"var(--neg)"}}>{fmt(r.after,currency)}</span>
+          </div>
+          <div className="list-sub" style={{lineHeight:1.45}}>{r.covers ? (r.perDayAfter>0 ? t("whatif.perDay",{ a:fmt(r.perDayAfter,currency), b:fmt(r.perDayBefore,currency) }) : "") : t("whatif.short",{ amount:fmt(r.short,currency) })}</div>
+        </>)}
+      </div>
+      <div className="safe-note">{t("whatif.note")}</div>
+      <button type="button" className="btn btn-sm" data-section="whatif-close" style={{marginTop:8}} onClick={()=>{ setOn(false); setTxt(""); }}>{t("common.close")}</button>
+    </div>
+  );
+}
 export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null, untilPay=null, loose=null }) {
   // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
   // summary and upcoming bills out of the first screen.
@@ -425,6 +451,7 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
           {safeInfo.daysRemaining>0&&(()=>{ const t0=new Date(), dim=new Date(t0.getFullYear(),t0.getMonth()+1,0).getDate(), left=Math.min(safeInfo.daysRemaining,dim), gone=dim-left; return (   /* Run 27d: the month as a row of day-ticks: days gone are filled, today is taller, days ahead are faint */
             <div className="runway" aria-hidden="true">{Array.from({length:dim},(_,i)=><i key={i} className={i<gone?"on":i===gone?"now":""}/>)}</div>
           ); })()}
+          {safeInfo.daysRemaining>0&&<WhatIf kind="safe" left={safeInfo.remaining} days={safeInfo.daysRemaining} currency={currency}/>}
           <button className="safe-toggle" aria-expanded={open} aria-controls="safe-breakdown" onClick={()=>setOpen(o=>!o)}>
             {t(open?"safe.hideHow":"safe.showHow")}<span className={"fold-chev r90"+(open?" open":"")}><Icon name="chevRight" size={14}/></span>
           </button>
@@ -532,6 +559,7 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
               </div>
             )}
           </div>
+          <WhatIf kind="until" left={untilPay.left} days={untilPay.days} currency={currency}/>
           {loose&&loose.known&&loose.count>0&&(
             <div data-section="until-loose" role="note" style={{marginTop:8,borderTop:"1px solid var(--rule)",paddingTop:8}}>
               <div className="safe-row">
