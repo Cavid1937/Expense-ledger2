@@ -100,7 +100,7 @@
     "run75feedback.test.mjs": 10,
     "run75screens.test.mjs": 5,
     "run75report.test.mjs": 12,
-    "run75notices.test.mjs": 5,
+    "run75notices.test.mjs": 10,
     "run75layouts.test.mjs": 6,
     "run76loadorder.test.mjs": 1,
     "run76widgets.test.mjs": 16,

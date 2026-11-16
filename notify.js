@@ -30,8 +30,14 @@ export function readNotification(text, now = new Date()) {
   const lines = String(text || "").split(/\r?\n/).map(clean).filter(Boolean);
   if (!lines.length) return null;
   let amount = null, balance = null, words = [], inHint = 0;
-  for (const l of lines) {
-    if (BALANCE.test(l)) { const b = moneyIn(l.replace(BALANCE, "")); if (b) balance = b.cents; continue; }
+  for (let l of lines) {
+    // Run 94: ABB puts merchant, card and balance on one line ("Bus 594 Card: **2416 Balance: 10.86₼"). The balance is read from the part
+    // after the word; the part before it, without the card, is still read as a normal line so the merchant is not lost.
+    if (BALANCE.test(l)) {
+      const at = l.search(BALANCE), b = moneyIn(l.slice(at).replace(BALANCE, "")); if (b) balance = b.cents;
+      l = clean(l.slice(0, at).replace(/\b(card|kart|карта)\s*:?/gi, " ").replace(/(\*{2,}|\.{2}|•{2})\s?\d{4}\b/g, " "));
+      if (!l) continue;
+    }
     if (LIMIT.test(l)) continue;
     if (IN_WORDS.test(l)) inHint = 1; else if (OUT_WORDS.test(l) && inHint === 0) inHint = -1;
     const mo = !amount ? moneyIn(l) : null;

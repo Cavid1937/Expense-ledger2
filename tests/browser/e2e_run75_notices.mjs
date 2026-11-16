@@ -35,8 +35,9 @@ section("R75-NB2. With access: the payment is offered in the usual review, never
 }
 section("R75-NB3. A notice the app cannot read is kept only as a masked layout, and only with sharing on");
 {
-  // a credit notice in a format the reader does not know yet (invented)
-  const odd = [{ text: "Hesabınıza 50 AZN mədaxil olundu. Qalıq: 120 AZN", time: now - 60000, app: "bank" }];
+  // a credit notice in a format the reader does not know yet (invented). Run 94: the old sample ("... 50 AZN mədaxil olundu. Qalıq: 120 AZN")
+  // is now read correctly (one-line balance), so this one keeps the currency away from the number.
+  const odd = [{ text: "AZN hesab: 50 mədaxil olundu", time: now - 60000, app: "bank" }];
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }), fresh: true, pre: SHELL(true, odd) + `localStorage.setItem("expense_ledger_v5__notices","1");localStorage.setItem("expense_ledger_v5__learn",JSON.stringify({on:true,lastDay:"2099-01-01",sent:[],crashSent:""}));` });
   await wait(1500);
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("expense_ledger_v5__layouts") || "[]"));
