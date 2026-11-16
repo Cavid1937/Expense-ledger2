@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="95 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="96 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -5726,11 +5726,14 @@ function AppInner() {
   // notification access in Android's settings. Kept notices are read when the app opens, comes back to the screen, or a new one arrives,
   // and shown in the usual review (duplicates recognised, nothing added without the person's OK). Never while another review is open.
   const [noticesOn,setNoticesOn]=useState(()=>readNoticesPref());
+  const [noticeMissed,setNoticeMissed]=useState(0);
   const pendingRef=useRef(null); pendingRef.current=importPending;
   const pullNotices=useCallback(async ()=>{
     const n=typeof window!=="undefined" && window.LedgerNative && window.LedgerNative.notices;
     if (!n || !readNoticesPref() || pendingRef.current) return;
     let items=[]; try { items=await n.take(); } catch { return; }
+    // Run 96: the Android side counts bank notices the phone made it miss (found later in the shade); only then is the fix offered
+    if (n.info) Promise.resolve(n.info()).then(i=>setNoticeMissed((i&&i.missed)||0)).catch(()=>{});
     if (!items.length) return;
     const res=readNoticeItems(items);
     // notices the reader could not understand teach it new formats, masked, only with "Help improve the app" on
@@ -5885,6 +5888,13 @@ function AppInner() {
       const end=(go)=>{ const c=readFirstChoices()||{}; writeFirstChoices({ exploreDone:[...(Array.isArray(c.exploreDone)?c.exploreDone:[]),tip.id], exploreAt:Date.now() }); setExploreTick(n=>n+1); if (go) switchTab(tip.to); };
       notices.push({ id:"explore-"+tip.id, text:TEXT[tip.id], actions:[{ key:"go", label:t("explore.go"), primary:true, onClick:()=>end(true) },{ key:"no", label:t("explore.later"), onClick:()=>end(false) }] });
     }
+  }
+  // Run 96 (owner: no battery instructions for everyone): shown only after the app has proof the phone stopped the reader. One tap opens
+  // the setting that keeps it running; either answer clears it until the phone misses another payment.
+  if (noticeMissed>0 && noticesOn) {
+    const nn=window.LedgerNative&&window.LedgerNative.notices;
+    const done=(open)=>{ setNoticeMissed(0); try { Promise.resolve(open&&nn.openPower ? nn.openPower() : nn.clearMissed&&nn.clearMissed()).catch(()=>{}); } catch { /* cleared here; asked again only after another miss */ } };
+    notices.push({ id:"notices-missed", text:t("notices.missed"), actions:[{ key:"fix", label:t("notices.missedFix"), primary:true, onClick:()=>done(true) },{ key:"no", label:t("explore.later"), onClick:()=>done(false) }] });
   }
   if (iosNote) notices.push({ id:"ios-note", text:t("banner.iosNote"), actions:[{ key:"ok", label:t("inbox.gotIt"), onClick:()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } } }] });
 

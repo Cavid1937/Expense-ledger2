@@ -1041,7 +1041,11 @@ function NoticesCard({ notices }) {
       {notices.on&&allowed===true&&info&&(<div data-section="notices-health" style={{marginTop:8}}>
         <div className="list-sub" style={{lineHeight:1.5}}>{info.seen?t("notices.seen",{time:when(info.seen)}):t("notices.waiting")}</div>
         {info.kept>0&&<div className="list-sub" style={{lineHeight:1.5,marginTop:4}}>{t("notices.kept",{time:when(info.kept)})}</div>}
-        <div className="list-sub" style={{lineHeight:1.5,marginTop:4}}>{t("notices.battery")}</div>
+        {/* Run 96: the phone setting is offered only to people whose phone actually stopped the reading (the app found a missed notice) */}
+        {info.missed>0&&native.openPower&&(<div data-section="notices-missed" style={{marginTop:6}}>
+          <div className="list-sub" style={{lineHeight:1.5,color:"var(--warn)"}}>{t("notices.missed")}</div>
+          <button type="button" className="btn btn-sm btn-sm-primary" data-section="notices-power" style={{marginTop:8}} onClick={()=>{ setInfo(i=>({ ...i, missed:0 })); Promise.resolve(native.openPower()).catch(()=>{}); }}>{t("notices.missedFix")}</button>
+        </div>)}
       </div>)}
     </div>
   );

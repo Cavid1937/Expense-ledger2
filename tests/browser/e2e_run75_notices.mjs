@@ -47,5 +47,23 @@ section("R75-NB3. A notice the app cannot read is kept only as a masked layout, 
   ok(/could not read \(masked\)/.test(await page.evaluate(() => document.querySelector('[data-section="learn-layouts"]').innerText)), "'Show what would be shared' lists it, masked, before anything is sent");
   await page.close();
 }
+section("R96-NB4. The phone setting is offered only after the Android side proved it missed a notice");
+{
+  const SH = (missed) => `window.__power = 0; window.__cleared = 0; window.LedgerNative = { notices: { status: async () => true, info: async () => ({ connected: 1, seen: 1, kept: 1, missed: ${missed}, listening: true }), openSettings: async () => {}, openPower: async () => { window.__power++; }, clearMissed: async () => { window.__cleared++; }, take: async () => [], onAdded: async () => ({ remove() {} }) } }; localStorage.setItem("expense_ledger_v5__notices","1");`;
+  let page = await openPage(browser, { seed: baseSeed({ language: "en" }), fresh: true, pre: SH(0) }); await wait(1200);
+  ok(!/notices-missed/.test(await page.evaluate(() => (document.querySelector("[data-inbox-bell]") || {}).getAttribute?.("data-notices") || "")), "no miss: nothing about phone settings in the bell");
+  await openData(page); await wait(400);
+  ok(!(await page.$('[data-section="notices-missed"]')) && !/Xiaomi|Autostart/.test(await page.evaluate(() => (document.querySelector('[data-section="io-notices"]') || {}).innerText || "")), "no miss: the Settings card has no battery instructions");
+  await page.close();
+  page = await openPage(browser, { seed: baseSeed({ language: "en" }), fresh: true, pre: SH(2) }); await wait(1200);
+  ok(/notices-missed/.test(await page.evaluate(() => document.querySelector("[data-inbox-bell]").getAttribute("data-notices"))), "after a proven miss: one notice in the bell");
+  await page.evaluate(() => document.querySelector("[data-inbox-bell]").click()); await wait(400);
+  const fix = await page.evaluate(() => [...document.querySelectorAll("button")].filter((b) => /Open the setting/.test(b.innerText)).length);
+  ok(fix === 1, "it has one button: Open the setting", fix);
+  await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => /Open the setting/.test(b.innerText)).click()); await wait(400);
+  ok((await page.evaluate(() => window.__power)) === 1 && !/notices-missed/.test(await page.evaluate(() => document.querySelector("[data-inbox-bell]").getAttribute("data-notices") || "")), "tapping it opens the phone setting and the notice goes away");
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
 await browser.close();
 finish("e2e_run75_notices");

@@ -164,7 +164,7 @@
     "e2e_run75_subs.mjs": 6,
     "e2e_run75_feedback.mjs": 7,
     "e2e_run75_report.mjs": 8,
-    "e2e_run75_notices.mjs": 10,
+    "e2e_run75_notices.mjs": 16,
     "e2e_run76_widgets.mjs": 8,
     "e2e_run50sinking.mjs": 5,
     "e2e_run50text.mjs": 14,
