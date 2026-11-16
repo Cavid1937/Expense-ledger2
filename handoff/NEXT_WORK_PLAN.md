@@ -489,3 +489,17 @@ Full proposal: handoff/CATEGORY_AUDIT_20261112.md (supersedes the 10 Nov 'expand
 | Repeating bills | Only "N payments recorded" and the last date | GAP: list each payment (date, amount) under the bill |
 | Budgets | Only this month | GAP: last 6 months (spent vs limit) per budget |
 Plan: Run 63 fills the two gaps, read-only views (no stored data changes).
+
+## 2026-11-16 - after the product discovery mission (Run 97). Earlier plan above is kept.
+Order proposed (see reports\Product discovery and differentiation 2026-11-16.md, section 10):
+1. OWNER DECISION: Safe to Spend follows the pay cycle (pay day to pay day, from account funds) instead of the calendar month. Not started.
+2. DONE locally (Run 97): "Until your next income" card. Waiting for the owner's "publish".
+3. First-run path that reaches the figure in two minutes (accounts, pay day, 2-3 fixed payments).
+4. Notice reader proven on a real phone for a week (owner's phone test).
+5. Entries with no account: default account or a nudge (protects every balance-based figure).
+6. Google Play listing + real package name (owner approval and payment).
+7. Bank-CSV amount misreads (audit 15 Nov).
+8. "Instalment" plain-language entry to the loan plans - only after interviews.
+9. Backup confidence (last-backup date in view, restore rehearsal).
+Frozen until the core figure works for every pay day: new coach rules, AI advisor, health score, household sync, open-banking link.
+Validation: 5-10 interviews, script in section 14 of the report. Owner runs them.

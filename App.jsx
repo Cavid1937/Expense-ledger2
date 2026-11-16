@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="96 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="97 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -3802,6 +3802,53 @@ export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date
     disposable, remaining, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAllowance,
     feasible:curInc>0,
   };
+}
+
+// Run 97 (product research, 16 Nov): the days BEFORE this month's income arrives. Safe to Spend is built on this month's income, so
+// from the 1st until pay day it could only say "waiting", which is when money is tightest. This is a separate, clearly named figure
+// and changes nothing in Safe to Spend:
+//   left = what the visible accounts hold today − payments due before the next income − expenses already dated before it.
+// Shown only when the app knows all three: accounts exist (held), no income is recorded yet this month, and a next income date is
+// known (an income entry dated ahead, or an active income bill). Never optimistic: bills of this month that are overdue and not
+// recorded still count, loan payments from the Debts page count, and the per-day figure is rounded down. If an income bill was due
+// already (today or earlier) and nothing is recorded, the app cannot know whether the money came, so it shows nothing.
+// All sums in whole qapik. `held` is money (accountsHeld), `debtData` is the Debts store (loan payments are whole qapik).
+export function calcUntilPay(transactions, bills=[], held=null, debtData=null, now=new Date()) {
+  const none={ show:false };
+  if (typeof held!=="number" || !Number.isFinite(held)) return none;
+  const tx=collapseSpreads(Array.isArray(transactions)?transactions:[]), todayStr=localDateStr(now), mon=localMonthStr(now);
+  if (tx.some(t=>t.type==="income" && t.date.startsWith(mon) && t.date<=todayStr)) return none;
+  const sch=buildSchedules(tx,bills||[]).filter(s=>s.isActive);
+  let pay="";
+  tx.forEach(t=>{ if (t.type==="income" && t.date>todayStr && (!pay || t.date<pay)) pay=t.date; });
+  for (const s of sch) {
+    if (s.type!=="income") continue;
+    if (scheduleMonthStatus(s,tx,mon,now).overdue.length) return none;
+    const d=scheduleNextDue(s,tx,now); if (!d) continue;
+    const ds=localDateStr(d);
+    if (ds<=todayStr) return none;
+    if (!pay || ds<pay) pay=ds;
+  }
+  if (!pay) return none;
+  const days=daysBetween(parseLocalDate(todayStr),parseLocalDate(pay));
+  if (!(days>=1) || days>45) return none;
+  const C=(x)=>Math.round((Number(x)||0)*100), endMon=pay.slice(0,7);
+  let due=0, dueCount=0;
+  sch.forEach(s=>{
+    if (s.type!=="expense") return;
+    for (let i=0;i<3;i++) {
+      const m=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i)); if (m>endMon) break;
+      const n=scheduleMonthStatus(s,tx,m,now).remaining.filter(d=>d<pay).length;
+      due+=C(s.amount)*n; dueCount+=n;
+    }
+  });
+  (debtData && Array.isArray(debtData.loans) ? debtData.loans : []).forEach(l=>{
+    const sc=loanSchedule(l), k=Array.isArray(l.payments)?l.payments.length:0; if (!sc) return;
+    for (let i=k;i<sc.payments.length && sc.payments[i].date<pay;i++) { due+=sc.payments[i].payment; dueCount++; }
+  });
+  const planned=tx.reduce((s,t)=>t.type==="expense" && t.date>todayStr && t.date<pay ? s+C(t.amount) : s,0);
+  const heldC=Math.round(held*100), left=heldC-due-planned;
+  return { show:true, payDate:pay, days, held:heldC/100, due:due/100, dueCount, planned:planned/100, left:left/100, perDay:left>0 ? Math.floor(left/days)/100 : 0 };
 }
 
 // S1: Goals — full funding plan with target date and what-if

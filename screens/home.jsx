@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 // Run 75: monthly summary
 import { MonthReportCard } from "./report.jsx";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse, useRolling } from "./motion.jsx";
@@ -189,6 +189,9 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
   const paceInfo    =calcSpendingPace(spentToDate,now,budgetTotal);
   const safeInfo   =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills);
   const runOut      =useMemo(()=>safeInfo.feasible&&safeToSpend?.enabled ? calcRunOutDay(transactions,bills,safeInfo.remaining,safeInfo.daysRemaining) : { show:false },[transactions,bills,safeInfo.feasible,safeInfo.remaining,safeInfo.daysRemaining,safeToSpend?.enabled]);   // Run 43
+  // Run 97: before this month's income arrives, Safe to Spend has nothing to count; show what the accounts cover until the income instead.
+  const held        =accountsHeld(accountTxns||transactions);
+  const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled || safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts); },[transactions,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curIn>0;   // Run 35b: any money in (a refund or savings withdrawal is spendable too); the Income figure itself is earnings only
 
@@ -208,7 +211,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
       {/* Run 75: last month's summary, in the first week of a month */}
       <MonthReportCard transactions={transactions} budgets={budgets} goals={goals} currency={currency} showToast={showToast}/>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
-      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={accountsHeld(accountTxns||transactions)}/>
+      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={held} untilPay={untilPay}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount" data-section="hero-spent"><RollingMoney v={curExp} currency={currency}/></div>
@@ -343,7 +346,7 @@ export function accountsHeld(transactions) {
   const bal=accountBalances(data,transactions);
   return shown.reduce((s,a)=>s+Math.round((bal[a.id]||0)*100),0)/100;
 }
-export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null }) {
+export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null, untilPay=null }) {
   // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
   // summary and upcoming bills out of the first screen.
   const [open,setOpen]=useState(false);
@@ -445,7 +448,41 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
       )}
 
       {/* Safe to Spend is on but no income has arrived yet this month: say so instead of showing nothing. */}
-      {safeToSpend?.enabled&&!safeInfo.feasible&&(
+      {/* Run 97: no income yet this month, but the accounts and the next income date are known: what the money covers until then.
+          A separate figure with its own name; Safe to Spend itself is unchanged and starts when the income is recorded. */}
+      {safeToSpend?.enabled&&!safeInfo.feasible&&untilPay&&untilPay.show&&(
+        <div className="safe-card section-enter section-enter-2" data-section="home-untilpay">
+          <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
+            <Icon name="safe" size={12} color="var(--ink-3)"/>{t("until.title")}
+          </div>
+          <div className="safe-amount" style={{color:untilPay.left>=0?"var(--ink)":"var(--neg)"}}>
+            <MoneyText v={fmt(untilPay.left,currency)}/>
+          </div>
+          <div className="list-sub" data-section="until-plain" style={{marginTop:2,marginBottom:4,lineHeight:1.45}}>{t(untilPay.left>=0?"until.plain":"until.plainOver",{ date:fmtDate(untilPay.payDate) })}</div>
+          <div className="safe-daily" data-section="until-daily">
+            {untilPay.left>0?t("safe.perDay",{amount:fmt(untilPay.perDay,currency)}):""}
+            {tn("until.days",untilPay.days,{ date:fmtDate(untilPay.payDate) })}
+          </div>
+          <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
+            <div className="safe-row">
+              <span className="safe-lbl">{t("until.held")}</span>
+              <span className="safe-val">{fmt(untilPay.held,currency)}</span>
+            </div>
+            <div className="safe-row">
+              <span className="safe-lbl" style={untilPay.due>0?undefined:{color:"var(--ink-4)"}}>{t("until.due")}{untilPay.dueCount>0?` (${untilPay.dueCount})`:""}</span>
+              <span className="safe-val" style={{color:untilPay.due>0?"var(--warn)":"var(--ink-4)"}}>{untilPay.due>0?`−${fmt(untilPay.due,currency)}`:t("until.none")}</span>
+            </div>
+            {untilPay.planned>0&&(
+              <div className="safe-row">
+                <span className="safe-lbl">{t("until.planned")}</span>
+                <span className="safe-val" style={{color:"var(--ink-3)"}}>−{fmt(untilPay.planned,currency)}</span>
+              </div>
+            )}
+          </div>
+          <div className="safe-note">{t("until.note")}</div>
+        </div>
+      )}
+      {safeToSpend?.enabled&&!safeInfo.feasible&&!(untilPay&&untilPay.show)&&(
         <div className="safe-card section-enter section-enter-2" role="status" data-section="home-safe">
           <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
             <Icon name="safe" size={12} color="var(--ink-3)"/>{t("safe.title")}
