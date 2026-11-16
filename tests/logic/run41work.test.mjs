@@ -34,4 +34,14 @@ ok(hoursOfWork(10.1, 1000) === 1 && hoursOfWork(10.5, 1000) === 1.1, "to one dec
 section("R41-W4. In backups");
 ok(cleanPrefs({ workHours: 160 }).workHours === 160, "kept in a backup's preferences");
 ok(!("workHours" in cleanPrefs({ workHours: 5000 })) && !("workHours" in cleanPrefs({})), "refused or missing: not written");
+
+section("R94-W5. What the Add screen says (workTime)");
+const { workTime } = H;
+ok(workTime(0.3, 1000)?.minutes === 2, "0.30 at 10.00 an hour = 1.8 min, shown as 2 minutes (was 'about 0 hours')");
+ok(workTime(0.01, 1000)?.minutes === 1, "the smallest cost still shows at least 1 minute");
+ok(workTime(5, 1000)?.minutes === 30, "5.00 at 10.00 an hour = 30 minutes");
+ok(workTime(9.9, 1000)?.minutes === 59, "9.90 = 59.4 min stays in minutes");
+ok(workTime(9.92, 1000)?.hours === 1, "9.92 = 59.52 min becomes 1 hour, never '60 minutes'");
+ok(workTime(95, 1000)?.hours === 9.5 && workTime(10.5, 1000)?.hours === 1.1, "hours to one decimal, same as before");
+ok(workTime(0, 1000) === null && workTime(-5, 1000) === null && workTime(5, 0) === null && workTime(5, null) === null, "no figure for zero, negative, or no hourly rate");
 finish();

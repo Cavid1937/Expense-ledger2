@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Qəpik character concept</title>
+<style>
+:root{--bg:#F3F1EB;--ink:#22282C;--sub:#5C656A;--body:#496A83;--face:#F7F5EF;--cheek:#E9B9A4;--card:#FFFFFF;--line:#E2DED4}
+@media (prefers-color-scheme:dark){:root{--bg:#16191B;--ink:#ECEAE4;--sub:#A3ABAF;--card:#1F2326;--line:#2C3135}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:760px;margin:0 auto;padding:28px 16px 48px}
+h1{font-size:28px;margin:0 0 4px;font-weight:650}p{margin:0 0 14px;color:var(--sub);max-width:62ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin:22px 0 28px}
+.mood{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;text-align:center}
+.mood svg{width:96px;height:96px}.mood b{display:block;margin-top:6px}.mood span{font-size:14px;color:var(--sub)}
+h2{font-size:19px;margin:26px 0 8px}ul{margin:0;padding-left:20px;color:var(--sub)}li{margin:4px 0}
+.where{display:flex;gap:14px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin:8px 0}
+.where svg{width:48px;height:48px;flex:none}
+</style></head><body><main>
+<h1>Qəpik</h1>
+<p>A small round coin with a face, named after the smallest coin in Azerbaijan. Same in all three languages. Colours are the app's Ivory theme, so it belongs to the app rather than sitting on top of it.</p>
+
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="b" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" rx="34" fill="#496A83"/><rect x="18" y="18" width="64" height="64" rx="28" fill="none" stroke="#F7F5EF" stroke-opacity=".25" stroke-width="2"/></symbol>
+</defs></svg>
+
+<div class="grid">
+<div class="mood"><svg viewBox="0 0 100 100" role="img" aria-label="Calm"><use href="#b"/><circle cx="39" cy="47" r="5" fill="#F7F5EF"/><circle cx="61" cy="47" r="5" fill="#F7F5EF"/><path d="M42 62 q8 4 16 0" stroke="#F7F5EF" stroke-width="3" fill="none" stroke-linecap="round"/></svg><b>Calm</b><span>Most of the time. Says nothing.</span></div>
+<div class="mood"><svg viewBox="0 0 100 100" role="img" aria-label="Glad"><use href="#b"/><path d="M33 48 q6 -7 12 0 M55 48 q6 -7 12 0" stroke="#F7F5EF" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M38 60 q12 10 24 0" stroke="#F7F5EF" stroke-width="3.5" fill="none" stroke-linecap="round"/><circle cx="30" cy="60" r="4" fill="#E9B9A4"/><circle cx="70" cy="60" r="4" fill="#E9B9A4"/></svg><b>Glad</b><span>A goal reached, a month under budget.</span></div>
+<div class="mood"><svg viewBox="0 0 100 100" role="img" aria-label="Curious"><use href="#b"/><circle cx="39" cy="46" r="5" fill="#F7F5EF"/><circle cx="62" cy="44" r="6.5" fill="#F7F5EF"/><circle cx="50" cy="64" r="4" fill="none" stroke="#F7F5EF" stroke-width="3"/></svg><b>Curious</b><span>Empty screens: "Nothing here yet."</span></div>
+<div class="mood"><svg viewBox="0 0 100 100" role="img" aria-label="Careful"><use href="#b"/><path d="M33 42 l10 3 M67 42 l-10 3" stroke="#F7F5EF" stroke-width="3" stroke-linecap="round"/><circle cx="39" cy="51" r="4.5" fill="#F7F5EF"/><circle cx="61" cy="51" r="4.5" fill="#F7F5EF"/><path d="M42 65 h16" stroke="#F7F5EF" stroke-width="3" stroke-linecap="round"/></svg><b>Careful</b><span>Close to a limit. Never sad, never blaming.</span></div>
+</div>
+
+<h2>Where it would appear</h2>
+<div class="where"><svg viewBox="0 0 100 100"><use href="#b"/><circle cx="39" cy="47" r="5" fill="#F7F5EF"/><circle cx="61" cy="47" r="5" fill="#F7F5EF"/><path d="M42 62 q8 4 16 0" stroke="#F7F5EF" stroke-width="3" fill="none" stroke-linecap="round"/></svg><div><b>First launch and empty screens</b><br><span style="color:var(--sub)">Greets you when choosing a language; fills empty Goals, Debts, Entries lists.</span></div></div>
+<div class="where"><svg viewBox="0 0 100 100"><use href="#b"/><path d="M33 48 q6 -7 12 0 M55 48 q6 -7 12 0" stroke="#F7F5EF" stroke-width="3.5" fill="none" stroke-linecap="round"/><path d="M38 60 q12 10 24 0" stroke="#F7F5EF" stroke-width="3.5" fill="none" stroke-linecap="round"/></svg><div><b>Real milestones only</b><br><span style="color:var(--sub)">Goal reached, debt paid off, a full month recorded. Once, then gone.</span></div></div>
+
+<h2>Rules, so it never hurts trust</h2>
+<ul>
+<li>Never next to a balance, amount or chart. Numbers stay plain and serious.</li>
+<li>Never jokes about debt, never guilt, never "you spent too much!" faces.</li>
+<li>Silent: no speech bubbles with advice. Its face does the talking; the text stays the app's normal plain text.</li>
+<li>One switch in Settings to turn it off. Respects "reduce motion".</li>
+<li>Same shape at 24 px and 200 px, so it also works as the widget and notification picture later.</li>
+</ul>
+</main></body></html>

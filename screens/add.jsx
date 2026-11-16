@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
-import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, hoursOfWork, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo, catHint } from "../App.jsx";
+import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs, searchCats, FX_CODES, cleanFx, fetchLedgerRate, lastSavedRate, ledgerCode, fxToBase, workTime, incomePerHour, readWorkHours, spreadMonths, evalAmountExpr, slotCategory, knownMerchants, knownMerchantExact, cleanReimb, offerUndo, catHint } from "../App.jsx";
 import { Collapse, Reveal, motionOff } from "./motion.jsx";
 import { TipHead } from "./tip.jsx";
 import { ReceiptPhoto, deletePhoto } from "./photo.jsx";
@@ -285,7 +285,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const fxBase=fxEff && fxAmt!==null ? fxToBase(fxAmt,fxEff.rate) : null;
   // Run 41: "how many hours of my work is this?" Only for expenses, only when the user set their monthly hours and has earned income on record.
   const perHour=useMemo(()=>incomePerHour(transactions,readWorkHours()),[transactions]);
-  const hoursTxt=(()=>{ if (type!=="expense" || !perHour) return ""; const b=fxCur ? fxBase : amountOf(amount); const h=hoursOfWork(b,perHour); return h===null ? "" : t("work.line",{ hours:String(h) }); })();
+  const hoursTxt=(()=>{ if (type!=="expense" || !perHour) return ""; const b=fxCur ? fxBase : amountOf(amount); const w=workTime(b,perHour); if (!w) return ""; return w.minutes ? t("work.lineMin",{ minutes:String(w.minutes) }) : t("work.line",{ hours:w.hours.toLocaleString(locale(),{ maximumFractionDigits:1 }) }); })();
 
   const submit=(override)=>{
     const typed=amountOf(amount);

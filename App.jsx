@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="93 (2026-11-15)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="94 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -2408,6 +2408,12 @@ export function incomePerHour(transactions, hours, now=new Date()) {
 }
 // Hours of work an amount represents, to one decimal; null when there is no hourly figure or the amount is not positive.
 export function hoursOfWork(amount, perHourQapik) { const c=Math.round((Number(amount)||0)*100); return perHourQapik>0 && c>0 ? Math.round(c/perHourQapik*10)/10 : null; }
+// Run 94: what the Add screen says. Under an hour it is whole minutes (at least 1), so a small cost never reads "about 0 hours".
+export function workTime(amount, perHourQapik) {
+  const c=Math.round((Number(amount)||0)*100); if (!(perHourQapik>0) || c<=0) return null;
+  const min=c/perHourQapik*60;
+  return min<59.5 ? { minutes:Math.max(1,Math.round(min)) } : { hours:Math.round(min/6)/10 };
+}
 export function cleanPrefs(raw) {
   const s=isPlainObject(raw) ? raw : {}, out={};
   const wh=cleanWorkHours(s.workHours); if (wh!==null) out.workHours=wh;

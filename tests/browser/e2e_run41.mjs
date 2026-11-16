@@ -56,6 +56,8 @@ section("R41-3. Hours of work");
   await p2.focus('[data-section="work-hours"] input'); await p2.type('[data-section="work-hours"] input', "160");
   await p2.evaluate(() => document.querySelector('[data-section="work-hours"] button').click()); await wait(300);
   ok(await p2.evaluate(() => localStorage.getItem("expense_ledger_v5__workhours")) === "160", "160 is saved");
+  const rate = await p2.evaluate(() => (document.querySelector('[data-section="work-rate"]') || {}).textContent || "");
+  ok(/10\.00/.test(rate), "Settings says what one hour is worth (10.00)", rate);
   await openAdd(p2);
   await p2.type(".amount-input", "95"); await wait(600);
   const line = await p2.evaluate(() => (document.querySelector('[data-section="work-line"]') || {}).textContent || "");

@@ -32,7 +32,7 @@ section("R87-P1. Attach: shown, downscaled, kept apart from the ledger data, sur
   const page = await openPage(browser, { seed: seed([tx({ id: 1790000870001, merchant: "Bravo", amount: 12 })]) }); await settle(page);
   await openRow(page, "Bravo");
   const note = await page.evaluate(() => document.querySelector('[data-section="photo-note"]')?.innerText || "");
-  ok(/on this phone only/.test(note) && /not in backups/.test(note), "the entry view says in plain words: on this phone only, not in backups", note);
+  ok(/only on this phone/.test(note) && /Backups do not include it/.test(note), "the entry view says in plain words: on this phone only, not in backups", note);
   await give(page, "png"); await wait(900);
   ok(await page.evaluate(() => !!document.querySelector('[data-section="photo-img"]')), "the photo shows on the entry");
   const rec = await idb(page, "get", 1790000870001);
