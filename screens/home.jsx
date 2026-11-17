@@ -249,8 +249,8 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
   const loose=useMemo(()=>{ try { return unassignedSpend(readAccounts(),accountTxns||transactions); } catch { return { known:false, count:0, sum:0 }; } },[accountTxns,transactions]);
   const loanDue     =useMemo(()=>{ try { return loanDueInMonth(readDebts()); } catch { return { count:0, sum:0 }; } },[transactions]);
   // Run 100: the same "until your next income" figure as one line under Safe to Spend, once this month's income is recorded
-  const untilNext   =useMemo(()=>{ if (!safeToSpend?.enabled || !safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ afterIncome:true }); },[transactions,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
-  const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled || safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts); },[transactions,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
+  const untilNext   =useMemo(()=>{ if (!safeToSpend?.enabled || !safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ afterIncome:true, cashTx:accountTxns }); },[transactions,accountTxns,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
+  const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled || safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ cashTx:accountTxns }); },[transactions,accountTxns,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curIn>0;   // Run 35b: any money in (a refund or savings withdrawal is spendable too); the Income figure itself is earnings only
 

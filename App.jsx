@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="101 (2026-11-17)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="102 (2026-11-17)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -3915,7 +3915,10 @@ export function calcUntilPay(transactions, bills=[], held=null, debtData=null, n
     const sc=loanSchedule(l), k=Array.isArray(l.payments)?l.payments.length:0; if (!sc) return;
     for (let i=k;i<sc.payments.length && sc.payments[i].date<pay;i++) { due+=sc.payments[i].payment; dueCount++; }
   });
-  const planned=tx.reduce((s,t)=>t.type==="expense" && t.date>todayStr && t.date<pay ? s+C(t.amount) : s,0);
+  // Run 102: what the accounts hold is all money, so entries dated ahead are taken off as money too (opts.cashTx: the raw entries).
+  // The list itself may be the spending view (loan payments as interest only, money lent left out); it still decides the income date.
+  const cash=opts&&Array.isArray(opts.cashTx) ? collapseSpreads(opts.cashTx) : tx;
+  const planned=cash.reduce((s,t)=>t && t.type==="expense" && t.date>todayStr && t.date<pay ? s+C(t.amount) : s,0);
   const heldC=Math.round(held*100), left=heldC-due-planned;
   return { show:true, payDate:pay, days, held:heldC/100, due:due/100, dueCount, planned:planned/100, left:left/100, perDay:left>0 ? Math.floor(left/days)/100 : 0 };
 }
