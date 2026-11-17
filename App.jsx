@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="100 (2026-11-17)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="101 (2026-11-17)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -3299,10 +3299,7 @@ function forecastCore(transactions, bills, now) {
   const spentSoFar=inMon.filter(t=>t.date<=todayStr).reduce(addAmt,0);
   const plannedLater=inMon.filter(t=>t.date>todayStr).reduce(addAmt,0);
   let commitments=0;
-  buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense").forEach(s=>{
-    const st=scheduleMonthStatus(s,transactions,mon,now);
-    commitments+=s.amount*(st.upcoming.length+st.overdue.length);
-  });
+  openCommitments(transactions,bills,mon,now).rows.forEach(r=>{ commitments+=r.s.amount*(r.upcoming.length+r.overdue.length); });
   const end=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);              // yesterday: today is only partly over
   const first=parseLocalDate(expenses.reduce((m,t)=>t.date<m?t.date:m,expenses[0].date));
   const winStart=new Date(end.getFullYear(),end.getMonth(),end.getDate()-(FORECAST_WINDOW-1));
@@ -3733,6 +3730,30 @@ export function scheduleMonthStatus(s, transactions, mon, now=new Date()) {
   return { expected, recorded, remaining, upcoming:remaining.filter(d=>d>=todayStr), overdue:remaining.filter(d=>d<todayStr) };
 }
 
+// Run 101: ONE list of scheduled payments in month `mon` that have no record yet, for every figure that needs it (Safe to Spend, the
+// month-end forecast, the run-out day, the until-income figure). Before it each figure collected them itself and only Safe to Spend knew
+// rule F1: a payment typed in ahead as an ordinary entry (dated after today, this month, linked to no bill, same category, same name,
+// same amount to the qapik) IS the bill's payment, so the bill's own date is not counted a second time. Each entry settles one date at
+// most; overdue dates are never settled this way; inferred schedules are left as they are (never optimistic).
+// opts.before (a date): only dates before that day are listed, and only entries dated before it can settle them.
+export function openCommitments(transactions, bills, mon, now=new Date(), opts={}) {
+  const todayStr=localDateStr(now), before=(opts&&opts.before)||"", inRange=(d)=>!before || d<before;
+  const knownIds=new Set((bills||[]).map(b=>b.id)), cents=(x)=>Math.round((Number(x)||0)*100), used=new Set();
+  const loose=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon) && t.date>todayStr && inRange(t.date) && !(t.billId && knownIds.has(t.billId)));
+  let matchedAhead=0;
+  const rows=buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense").map(s=>{
+    const st=scheduleMonthStatus(s,transactions,mon,now);
+    const upcoming=st.upcoming.filter(inRange).filter(()=>{
+      if (!s.billId) return true;
+      const hit=loose.find(t=>!used.has(t.id) && t.category===s.category && norm(t.merchant)===norm(s.merchant) && cents(t.amount)===cents(s.amount));
+      if (!hit) return true;
+      used.add(hit.id); matchedAhead++; return false;
+    });
+    return { s, upcoming, overdue:st.overdue.filter(inRange) };
+  });
+  return { rows, matchedAhead };
+}
+
 // Next date (today or later) with no payment recorded yet, or null.
 export function scheduleNextDue(s, transactions, now=new Date()) {
   const todayStr=localDateStr(now);
@@ -3804,24 +3825,12 @@ export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date
   // ahead; past-dated look-alikes stay unmatched until the user links them — the Run 12 rule). Such an entry settles an upcoming
   // date only when it is clearly the same payment: this month, linked to no bill, same category, same merchant as the bill's name,
   // same amount to the cent. Each entry settles at most one date. Anything less certain stays counted (never optimistic).
-  const knownIds=new Set((bills||[]).map(b=>b.id));
-  const looseExp=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon) && t.date>todayStr && !(t.billId && knownIds.has(t.billId)));
-  const usedLoose=new Set();
-  const cents=(x)=>Math.round((Number(x)||0)*100);
-  schedules.forEach(s=>{
-    const st=scheduleMonthStatus(s,transactions,mon,now);
-    const settle=(dates)=>{
-      if (!s.billId) return dates.length;   // inferred schedules already count their own recurring entries
-      let open=0;
-      dates.forEach(()=>{
-        const hit=looseExp.find(t=>!usedLoose.has(t.id) && t.category===s.category && norm(t.merchant)===norm(s.merchant) && cents(t.amount)===cents(s.amount));
-        if (hit) { usedLoose.add(hit.id); matchedAheadCount++; } else open++;
-      });
-      return open;
-    };
-    const up=settle(st.upcoming), od=st.overdue.length;
-    upcomingCommitments+=s.amount*up;  upcomingCount+=up;
-    unrecordedCommitments+=s.amount*od; unrecordedCount+=od;
+  const open=openCommitments(transactions,bills,mon,now);
+  matchedAheadCount=open.matchedAhead;
+  open.rows.forEach(r=>{
+    const up=r.upcoming.length, od=r.overdue.length;
+    upcomingCommitments+=r.s.amount*up;  upcomingCount+=up;
+    unrecordedCommitments+=r.s.amount*od; unrecordedCount+=od;
   });
   const futureCommitments=upcomingCommitments+unrecordedCommitments;
   const recurringMonthly=schedules.reduce((sum,s)=>sum+scheduleMonthly(s),0);
@@ -3898,14 +3907,10 @@ export function calcUntilPay(transactions, bills=[], held=null, debtData=null, n
   if (!(days>=1) || days>45) return none;
   const C=(x)=>Math.round((Number(x)||0)*100), endMon=pay.slice(0,7);
   let due=0, dueCount=0;
-  sch.forEach(s=>{
-    if (s.type!=="expense") return;
-    for (let i=0;i<3;i++) {
-      const m=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i)); if (m>endMon) break;
-      const n=scheduleMonthStatus(s,tx,m,now).remaining.filter(d=>d<pay).length;
-      due+=C(s.amount)*n; dueCount+=n;
-    }
-  });
+  for (let i=0;i<3;i++) {
+    const m=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i)); if (m>endMon) break;
+    openCommitments(tx,bills||[],m,now,{ before:pay }).rows.forEach(r=>{ const n=r.upcoming.length+r.overdue.length; due+=C(r.s.amount)*n; dueCount+=n; });
+  }
   (debtData && Array.isArray(debtData.loans) ? debtData.loans : []).forEach(l=>{
     const sc=loanSchedule(l), k=Array.isArray(l.payments)?l.payments.length:0; if (!sc) return;
     for (let i=k;i<sc.payments.length && sc.payments[i].date<pay;i++) { due+=sc.payments[i].payment; dueCount++; }
