@@ -62,9 +62,11 @@ section("R105-T2. Azerbaijani and Russian labels, a time that is not on a 5-minu
 section("R105-A. Screen audit fixes: last month's spending sits with Spent; a one-entry day shows no repeated total");
 {
   const { tx, daysAgo, tab } = await import("./lib.mjs");
+  // Run 107: the 1st of last month is written from the local date; toISOString() gave the 30th of the month before between 00:00 and 04:00 in Baku
+
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [
     tx({ amount: 30, date: daysAgo(0) }), tx({ amount: 12, date: daysAgo(0) }), tx({ amount: 7, date: daysAgo(1) }), tx({ type: "income", category: "salary", amount: 900, date: daysAgo(1) }),
-    tx({ amount: 61, date: (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10); })() }) ] }) });
+    tx({ amount: 61, date: (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; })() }) ] }) });
   await settle(page); await tab(page, "Ledger"); await settle(page);
   const heads = await page.evaluate(() => [...document.querySelectorAll(".txn-group")].slice(0, 2).map((g) => (g.querySelector(".txn-date-total") || {}).textContent || ""));
   ok(/42[.,]00/.test(heads[0]) && heads[1] === "", "today (30 + 12) shows its total 42.00; yesterday (one 7.00 entry, plus income) shows none", heads);

@@ -76,4 +76,22 @@ section("SEC-5. A hostile or damaged backup file");
   ok(H.IMPORT_MAX_BYTES === undefined ? /IMPORT_MAX_BYTES=50\*1024\*1024/.test(SRC) : H.IMPORT_MAX_BYTES === 52428800, "the import size limit is 50 MB");
   ok(/if \(!file\) return;\s*\n[^\n]*\n\s*if \(file\.size>IMPORT_MAX_BYTES\)[^\n]*return; \}\s*\n\s*const reader=new FileReader\(\);/.test(SRC), "the size is checked before the file is read");
 }
+section("SEC-6. Built-in names as shop, subcategory and budget key (reviewer sweep)");
+{
+  reset(); H.setLang("en");
+  // October so far: constructor 40 + 30 = 70, Bravo 20, toString 5, no shop 5; month 100.00; top three = 95% (at least 60%: insight shown)
+  const tx = [T({ id: 21, amount: 40, merchant: "constructor", date: "2026-10-02" }), T({ id: 22, amount: 30, merchant: "constructor", date: "2026-10-03" }),
+    T({ id: 23, amount: 20, merchant: "Bravo", date: "2026-10-04" }), T({ id: 24, amount: 5, merchant: "toString", date: "2026-10-05" }), T({ id: 25, amount: 5, date: "2026-10-06" })];
+  const ins = H.calcPatterns(tx, "₼", new Date(2026, 9, 20)).insights.find((x) => x.id === "merchant");
+  ok(ins && /constructor, Bravo, toString/.test(ins.text) && /95/.test(ins.text) && !/function|native code|NaN/.test(ins.text), "the shop insight names constructor, Bravo, toString at 95%", ins);
+  // A shop's usual subcategory typed as "constructor" (twice) beats "lunch" (once)
+  const pr = H.calcMerchantProfile("Bravo", [T({ id: 31, amount: 5, merchant: "Bravo", subcategory: "constructor", date: "2026-10-02" }),
+    T({ id: 32, amount: 5, merchant: "Bravo", subcategory: "constructor", date: "2026-10-03" }), T({ id: 33, amount: 5, merchant: "Bravo", subcategory: "lunch", date: "2026-10-04" })]);
+  ok(pr && pr.usualSub === "constructor", "the usual subcategory is \"constructor\" (2 of 3)", pr && pr.usualSub);
+  // Nothing remembered for a shop called "constructor": no suggestion, not a built-in object
+  ok(H.merchantSuggest("constructor", H.buildMerchantMemory([]), "expense") === null, "no suggestion is invented for \"constructor\"");
+  // Budgets from a backup: only the real category is kept; the two built-in names are counted as unusable
+  const v = H.validateSettings(JSON.parse('{"budgets":{"__proto__":{"x":1},"constructor":50,"food":100}}'));
+  ok(v.settings.budgets && Object.keys(v.settings.budgets).join() === "food" && v.settings.budgets.food === 100 && ({}).x === undefined, "budgets keep food 100.00 only", v);
+}
 finish("security");

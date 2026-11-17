@@ -19,4 +19,5 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: node node_modules/vite/bin/vite.js build
       - run: node tests/run-logic.mjs
-      - run: npm audit --omit=dev --audit-level=critical
+      # --omit=optional: the only critical (tar) comes with canvas, an optional install-time helper of pdfjs that the site never ships
+      - run: npm audit --omit=dev --omit=optional --audit-level=critical

@@ -15,7 +15,7 @@ Status words: VERIFIED · IMPLEMENTED BUT UNVERIFIED · NEEDS WORK · BLOCKED ·
 | Repository | github.com/Cavid1937/Expense-ledger2 |
 | Working copy | worktree `Expense-ledger2-fixes`, branch `fix/financial-correctness-2026-10-26` |
 | Start of this run | `4a481fc` (Run 106, local, not pushed) |
-| End of this run | `87ef99b` (4 new local commits: `3a3774d`, `7e4b116`, `b127d84`, `87ef99b`) |
+| End of this run | see PHASE_CHECKPOINT.md entry 0002c for the final commit (Run 107 commits start at `3a3774d`) |
 | Live site | release 105 at `cf4a596` on `origin/main` (Vercel, expense-ledger2.vercel.app) |
 | Other worktrees (untouched) | main checkout `6fb8cd1` (protected baseline); `Expense-ledger2-capacitor` at `8cc8827` (Android shell) |
 | Stack | React 18.3.1, Vite 5.4.21, pdfjs-dist 3.11.174, Node 24.22.1, npm 11.19.1 |
@@ -37,14 +37,14 @@ phone; nothing is uploaded for reading. The Android app is the same web code ins
 |---|---|---|---|
 | R1 | Baseline recorded | VERIFIED | §1 above; `git log`, worktree list |
 | R2 | Requirement matrix | VERIFIED | this table |
-| R3 | Research from official sources | IMPLEMENTED BUT UNVERIFIED | §3; sources listed, see note there on what was re-checked |
+| R3 | Research from official sources | IMPLEMENTED BUT UNVERIFIED | §3; the Google Identity Services CSP list was re-fetched on 18 Nov and matches; the other sources were applied from known guidance, not re-fetched |
 | R4 | Threat model | VERIFIED | §4 |
 | R5a | XSS / unsafe HTML sinks | VERIFIED | §5 F3; `security.test.mjs` SEC-2; `e2e_run107_security` R107-B1 |
 | R5b | Content Security Policy, report-only first, no `unsafe-eval` | IMPLEMENTED BUT UNVERIFIED (live) / VERIFIED (local, enforced) | `vercel.json`; `tests/pwa/csp-check.mjs` 14/14 with the policy enforced. Live report-only phase not started (needs push). |
 | R5c | Other security headers | VERIFIED locally | `vercel.json`; csp-check CSP-1 |
 | R5d | Storage audit (what is kept where) | VERIFIED | `docs/DATA_FLOWS.md` |
 | R5e | Service worker audit | VERIFIED | same-origin only, network-first pages, no ledger data cached; offline-check 17/17, csp-check offline reopen |
-| R5f | HTTPS | VERIFIED | Vercel serves HTTPS with HSTS on its domains; all hard-coded hosts are https |
+| R5f | HTTPS | VERIFIED | live HEAD request 18 Nov: `Strict-Transport-Security: max-age=63072000; includeSubDomains; preload`; all hard-coded hosts are https. The live site sends no other security headers yet (before-state). |
 | R5g | Sign-out must NOT wipe the ledger; no `Clear-Site-Data: "storage"` | VERIFIED | `e2e_run81_account` R81-B7 (sign-out forgets the session only, phone + cloud copy stay); csp-check asserts no Clear-Site-Data |
 | R6a | Supabase inventory | VERIFIED | §5 F6 |
 | R6b | RLS two-user test | VERIFIED (17 Nov, production, rollback-only) | results quoted in `docs/security/supabase_rls_check.sql` |
@@ -56,7 +56,7 @@ phone; nothing is uploaded for reading. The Android app is the same web code ins
 | R10 | Import/export hardening: size limits, CSV formula injection, untrusted strings | VERIFIED | F2 (50 MB limit, new), CSV guard (existing, now tested), hostile strings tests |
 | R11 | Dependency audit, compatible fixes only | DEFERRED WITH REASON | §5 F7: remaining advisories need major upgrades; the PDF.js one is mitigated and now guarded by a test |
 | R12 | Secret scan | VERIFIED | §5 F8: 435 commits, dist/, Android worktree: no secrets |
-| R13 | Local CI config only | IMPLEMENTED BUT UNVERIFIED | `.github/workflows/check.yml`, `.github/dependabot.yml`; act only after a push. Steps proven locally on a clean copy. |
+| R13 | Local CI config only | IMPLEMENTED BUT UNVERIFIED | `.github/workflows/check.yml`, `.github/dependabot.yml`; act only after a push. Each step was run on Windows on a clean copy; the workflow itself has not run on GitHub's Linux machines. |
 | R14 | Privacy data-flow inventory, no new telemetry, logs redacted | VERIFIED | `docs/DATA_FLOWS.md`; nothing new added; crash and feedback text already redacted |
 | R15 | Incident playbook | VERIFIED (document) | `docs/INCIDENT_PLAYBOOK.md` |
 | R16 | Tests with exact commands and counts | VERIFIED | §6 |
@@ -73,7 +73,7 @@ no new tracking (screen tracking NOT APPROVED, nothing added); az/en/ru first-ru
 
 These were used as the yardstick. They are named so each finding can be checked against them. Honest note: in this run the
 facts below were applied from the documents' published guidance as known to Claude (knowledge to mid-2026); the pages were not
-re-downloaded tonight. Before the CSP is switched from report-only to enforced, re-read the two Google pages.
+re-downloaded tonight, except the Google Identity Services setup page (fetched 18 Nov 2026): it lists exactly the four `gsi` entries used in `vercel.json`, and says COOP changes are only needed when FedCM is off (`same-origin-allow-popups`); the app sets no COOP, which leaves popups working.
 
 - OWASP ASVS 5.0.0 (2025): V1 encoding/sanitisation, V3 web front-end (CSP, headers), V5 file handling (size limits), V14 data protection.
 - OWASP Top 10:2025: A01 broken access control (RLS), A03 supply chain, A05 injection (XSS, CSV formulas).
@@ -123,6 +123,10 @@ Impact: wrong category and broken "what changed" figures for anyone whose data c
 restored or hand-edited file). Priority: High (financial correctness). Fix (`3a3774d`): the lookup has no prototype; an unknown
 saved id is never kept if it is a built-in object name; merchant maps in `calcWhatChanged` and Analytics are prototype-free; the
 icon lookup reads own properties only. Verification: SEC-1 (all 6 names), R107-B1 in the real app.
+Second sweep (by pattern, after a review): the Insights shop-concentration maps in `calcPatterns` had the same flaw — a shop named
+`"constructor"` printed the built-in function's source text in the insight sentence. Fixed with the category totals there and the
+category/subcategory counts in `calcMerchantProfile`. SEC-6 fails on the earlier commit (1 check) and passes now; budgets read from a
+backup were checked and were already safe (`budgetKey` refuses built-in names).
 
 **F2 — Confirmed gap, fixed. No size limit before an import file is read.**
 Evidence: `importFile` read any picked file whole into memory (`readAsArrayBuffer`) with no check; PDFs were limited only after
@@ -156,7 +160,7 @@ API; fix in `docs/security/supabase_grants_hygiene.UNAPPLIED.sql`. Advisor: leak
 app passes `isEvalSupported:false`; a test now fails if that is removed (SEC-4). Fixing it properly means PDF.js 4.x/5.x, a major
 upgrade that changes the worker setup and needs the statement tests re-proved. vite/esbuild advisories affect only the local dev
 server. tar / @mapbox/node-pre-gyp / canvas come with an optional install-time dependency of pdfjs and are not shipped. Lockfile
-now tracked (`87ef99b`, droppable): `npm ci` + build + logic tests proven from a clean copy.
+now tracked (`87ef99b`, droppable): `npm ci` + build + logic tests proven from a clean copy (first with `--ignore-scripts`, then again without it, as Vercel runs it). The only critical advisory, `tar`, arrives through `canvas`, an optional install-time helper of pdfjs that is not installed here and never shipped; the CI audit step therefore uses `--omit=optional` (exit 0 locally) — `--omit=dev` alone exits 1.
 
 **F8 — Secret scan: clean.** `git grep` over all 435 commits for `sb_secret_`, `service_role`, `GOCSPX-`, private keys, JWTs, GitHub,
 AWS, Google API and Anthropic key shapes, keystore passwords: the only hit is a test that checks the code has none. `dist/` and the
@@ -171,15 +175,18 @@ relies on the phone's own protection and the optional app lock. Changing that is
 
 | Command | Result |
 |---|---|
-| `node tests/run-logic.mjs` | 144 files, 0 with problems; 2865 passed, 0 failed, 0 missing |
-| same, on a clean `git archive` copy after `npm ci` | 144 files, 2859 passed (before SEC-5 was added) |
-| `node tests/logic/security.test.mjs` (new) | 33/33 |
+| `node tests/run-logic.mjs` (final) | 144 files, 0 with problems; 2869 passed, 0 failed, 0 missing |
+| same, on a clean `git archive` copy after `npm ci` | 144 files, 2859 passed (before SEC-5/SEC-6 were added) |
+| `node tests/logic/security.test.mjs` (new) | 37/37 |
 | `node tests/pwa/csp-check.mjs` (new) | 14/14 |
 | `node tests/browser/e2e_run107_security.mjs` (new) | 6/6 |
 | `npm ci` + `vite build` on a clean copy with the lockfile | exit 0, exit 0 |
 | `node tests/az-audit.mjs i18n.js App.jsx <dir>` | 1 finding, the known `acct.err.noaccount` |
-| `node tests/run-browser.mjs` | see PHASE_CHECKPOINT 0002c (run at the end of this run) |
-| `node tests/pwa/offline-check.mjs` | see PHASE_CHECKPOINT 0002c |
+| `node tests/run-browser.mjs` (on `30b2872` + uncommitted CI/doc edits) | 176 files, 1 with problems; 2876 passed, 1 failed |
+| the one failure, `e2e_run105_time` R105-A | test bug, not the app: the seed wrote "1st of last month" with `toISOString()` (UTC), which is the 30th of the month before between 00:00 and 04:00 in Baku; fixed to the local date; 24/24 at 01:2x |
+| after the SEC-6 fix: e2e_run107_security, e2e_run105_time, e2e_run20_patterns and 14 Analytics/Insights files | all passed |
+| `node tests/pwa/offline-check.mjs` (final code) | 17/17 |
+| `node tests/pwa/csp-check.mjs` (final code) | 14/14 |
 
 Before the fix, SEC-1 failed 2 checks and SEC-2 failed 1 (recorded in the session); after the fix all pass.
 
@@ -198,7 +205,7 @@ Before the fix, SEC-1 failed 2 checks and SEC-2 failed 1 (recorded in the sessio
 
 ## 8. Owner actions (nothing here was done by Claude)
 
-1. Approve pushing `4a481fc..87ef99b` (Runs 106 + 107) — or say which commits to drop (the lockfile commit is optional).
+1. Approve pushing Runs 106 + 107 (from `cf4a596` to the final commit in PHASE_CHECKPOINT 0002c) — or say which commits to drop (the lockfile commit is optional). Know that the push also: switches Vercel to `npm ci` with the tracked lockfile; starts the GitHub Actions check on every push (free minutes); lets Dependabot open up to 3 update pull requests a week (nothing merges by itself).
 2. Optional: run `docs/security/supabase_grants_hygiene.UNAPPLIED.sql` in the Supabase SQL editor; then re-run `supabase_rls_check.sql`.
 3. Optional: Supabase > Authentication > turn on leaked-password protection.
 4. After the push, one real Google sign-in + Drive backup on the phone with the report-only CSP live (Claude can then read the console).
