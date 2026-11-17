@@ -2062,6 +2062,8 @@ export const MESSAGES = {
   "until.plain":   { en: "What your accounts hold now, after the payments due before {date}.", az: "Hesablarınızda indi olan pul, {date} tarixinə qədər ödənməli olanlar çıxılandan sonra.", ru: "То, что сейчас на ваших счетах, за вычетом платежей до {date}." },
   "until.plainOver": { en: "Your accounts hold less than the payments due before {date}.", az: "Hesablarınızdakı pul {date} tarixinə qədər ödənməli olanlardan azdır.", ru: "На счетах меньше, чем нужно на платежи до {date}." },
   "until.days":    { en: { one: "{n} day until income on {date}", other: "{n} days until income on {date}" }, az: "Gəlirə {n} gün qalıb ({date})", ru: "Дней до дохода: {n} ({date})" },
+  "until.line":    { en: "Until your next income on {date}: {amount} in your accounts after the payments due ({perDay} a day).", az: "Növbəti gəlirə qədər ({date}): ödənişlərdən sonra hesablarınızda {amount} qalır (gündə {perDay}).", ru: "До следующего дохода ({date}): на счетах после платежей остаётся {amount} ({perDay} в день)." },
+  "until.lineOver": { en: "The payments due before your next income on {date} are {amount} more than your accounts hold.", az: "Növbəti gəlirə ({date}) qədər olan ödənişlər hesablarınızdakı puldan {amount} çoxdur.", ru: "Платежи до следующего дохода ({date}) на {amount} больше, чем есть на счетах." },
   "until.held":    { en: "In your accounts now", az: "Hesablarınızda indi", ru: "Сейчас на счетах" },
   "until.due":     { en: "Payments due before then", az: "O vaxta qədər ödənişlər", ru: "Платежи до этого дня" },
   "until.planned": { en: "Entries dated ahead", az: "İrəli tarixli qeydlər", ru: "Записи с будущей датой" },

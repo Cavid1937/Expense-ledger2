@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="99 (2026-11-16)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="100 (2026-11-17)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -3865,11 +3865,12 @@ export function whatIfSpend(amount, kind, left, days) {
 // recorded still count, loan payments from the Debts page count, and the per-day figure is rounded down. If an income bill was due
 // already (today or earlier) and nothing is recorded, the app cannot know whether the money came, so it shows nothing.
 // All sums in whole qapik. `held` is money (accountsHeld), `debtData` is the Debts store (loan payments are whole qapik).
-export function calcUntilPay(transactions, bills=[], held=null, debtData=null, now=new Date()) {
+export function calcUntilPay(transactions, bills=[], held=null, debtData=null, now=new Date(), opts={}) {
   const none={ show:false };
   if (typeof held!=="number" || !Number.isFinite(held)) return none;
   const tx=collapseSpreads(Array.isArray(transactions)?transactions:[]), todayStr=localDateStr(now), mon=localMonthStr(now);
-  if (tx.some(t=>t.type==="income" && t.date.startsWith(mon) && t.date<=todayStr)) return none;
+  // Run 100: opts.afterIncome is for the line under Safe to Spend: the same figure, also after this month's income is recorded
+  if (!(opts&&opts.afterIncome) && tx.some(t=>t.type==="income" && t.date.startsWith(mon) && t.date<=todayStr)) return none;
   const sch=buildSchedules(tx,bills||[]).filter(s=>s.isActive);
   let pay="";
   tx.forEach(t=>{ if (t.type==="income" && t.date>todayStr && (!pay || t.date<pay)) pay=t.date; });

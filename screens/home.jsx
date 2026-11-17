@@ -246,6 +246,8 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
   const held        =accountsHeld(accountTxns||transactions);
   // Run 98: spending with no account moves no balance; the "until" card names how much, so its figure is not read as more certain than it is.
   const loose=useMemo(()=>{ try { return unassignedSpend(readAccounts(),accountTxns||transactions); } catch { return { known:false, count:0, sum:0 }; } },[accountTxns,transactions]);
+  // Run 100: the same "until your next income" figure as one line under Safe to Spend, once this month's income is recorded
+  const untilNext   =useMemo(()=>{ if (!safeToSpend?.enabled || !safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ afterIncome:true }); },[transactions,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
   const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled || safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts); },[transactions,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curIn>0;   // Run 35b: any money in (a refund or savings withdrawal is spendable too); the Income figure itself is earnings only
@@ -266,7 +268,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
       {/* Run 75: last month's summary, in the first week of a month */}
       <MonthReportCard transactions={transactions} budgets={budgets} goals={goals} currency={currency} showToast={showToast}/>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
-      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={held} untilPay={untilPay} loose={loose}/>
+      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={held} untilPay={untilPay} untilNext={untilNext} loose={loose}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount" data-section="hero-spent"><RollingMoney v={curExp} currency={currency}/></div>
@@ -425,7 +427,7 @@ export function WhatIf({ kind, left, days, currency }) {
     </div>
   );
 }
-export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null, untilPay=null, loose=null }) {
+export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null, untilPay=null, untilNext=null, loose=null }) {
   // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
   // summary and upcoming bills out of the first screen.
   const [open,setOpen]=useState(false);
@@ -447,6 +449,9 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
               {tn("safe.daysLeft",safeInfo.daysRemaining,{month:monthShort(now)})}
             </div>
           )}
+          {untilNext&&untilNext.show&&<div className="list-sub" data-section="safe-untilline" style={{marginTop:4,lineHeight:1.45}}>{untilNext.left>=0
+            ?t("until.line",{ date:fmtDate(untilNext.payDate), amount:fmt(untilNext.left,currency), perDay:fmt(untilNext.perDay,currency) })
+            :t("until.lineOver",{ date:fmtDate(untilNext.payDate), amount:fmt(-untilNext.left,currency) })}</div>}
           {runOut&&runOut.show&&<div className="list-sub" data-section="safe-runout" style={{marginTop:4,color:"var(--warn)",fontWeight:600}}>{t("safe.runOut",{ day:runOut.day, month:t("monGen."+Number(now.slice(5,7))), daily:fmt(runOut.usualDaily,currency) })}</div>}
           {safeInfo.daysRemaining>0&&(()=>{ const t0=new Date(), dim=new Date(t0.getFullYear(),t0.getMonth()+1,0).getDate(), left=Math.min(safeInfo.daysRemaining,dim), gone=dim-left; return (   /* Run 27d: the month as a row of day-ticks: days gone are filled, today is taller, days ahead are faint */
             <div className="runway" aria-hidden="true">{Array.from({length:dim},(_,i)=><i key={i} className={i<gone?"on":i===gone?"now":""}/>)}</div>
