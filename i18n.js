@@ -1053,6 +1053,8 @@ export const MESSAGES = {
   "inbox.label":        { en: "Notifications: {n}", az: "Bildirişlər: {n}", ru: "Уведомления: {n}" },
   "inbox.empty":        { en: "No notifications", az: "Bildiriş yoxdur", ru: "Уведомлений нет" },
   "inbox.later":        { en: "Later", az: "Sonra", ru: "Позже" },
+  "inbox.more":         { en: "Read all", az: "Hamısını oxu", ru: "Читать полностью" },
+  "inbox.less":         { en: "Show less", az: "Qısalt", ru: "Свернуть" },
   "inbox.gotIt":        { en: "Got it", az: "Aydındır", ru: "Понятно" },
   "banner.confirmThanks": { en: { one: "Thanks — the next reminder is in {n} day", other: "Thanks — the next reminder is in {n} days" }, az: "Təşəkkürlər — növbəti xatırlatma {n} gündən sonra", ru: { one: "Спасибо — следующее напоминание через {n} день", few: "Спасибо — следующее напоминание через {n} дня", many: "Спасибо — следующее напоминание через {n} дней", other: "Спасибо — следующее напоминание через {n} дня" } },
   // ── Restore-backup dialog

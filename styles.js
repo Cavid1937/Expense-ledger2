@@ -1214,17 +1214,33 @@ iframe[src*="accounts.google.com"]{color-scheme:light}
 @keyframes bellNod{0%{transform:rotate(0)}18%{transform:rotate(14deg)}40%{transform:rotate(-10deg)}62%{transform:rotate(5deg)}100%{transform:rotate(0)}}
 .inbox-pop{position:absolute;top:calc(100% - 2px);right:12px;left:12px;max-height:min(70vh,520px);overflow:auto;background:var(--bg-card);border:1px solid var(--rule);border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,0.22),0 2px 8px rgba(0,0,0,0.08);padding:12px;opacity:0;transform:translateY(-6px) scale(0.97);transform-origin:top right;transition:opacity 220ms cubic-bezier(0.22,1,0.36,1),transform 220ms cubic-bezier(0.22,1,0.36,1);z-index:70}
 .inbox-pop.in{opacity:1;transform:none}
-.inbox-title{font-size:13px;font-weight:700;color:var(--ink-3);padding:2px 4px 8px}
+.inbox-title{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--ink-3);padding:2px 4px 10px}
+.inbox-title-n{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--bg-inset);color:var(--ink-2);font-size:11.5px;line-height:20px;text-align:center;font-variant-numeric:tabular-nums}
 .inbox-none{font-size:14px;color:var(--ink-3);padding:6px 4px 8px}
-.inbox-item{padding:12px;border-radius:14px;background:var(--bg-inset)}
+.inbox-pop{padding-bottom:0}
+.inbox-pop::after{content:"";display:block;position:sticky;bottom:0;height:22px;margin:0 -12px;background:linear-gradient(to bottom,transparent,var(--bg-card) 80%);pointer-events:none}
+.inbox-item{display:grid;grid-template-columns:30px 1fr;gap:10px;align-items:start;padding:12px;border-radius:14px;background:var(--bg-inset);border:1px solid transparent;max-height:600px;overflow:hidden}
 .inbox-item+.inbox-item{margin-top:8px}
-.inbox-text{font-size:14px;line-height:1.45;color:var(--ink)}
+.inbox-item.k-tip{background:transparent;border-color:var(--rule)}
+.inbox-pop.in .inbox-item{animation:inboxItemIn 320ms cubic-bezier(.22,1,.36,1) both;animation-delay:calc(min(var(--i,0),6) * 40ms + 40ms)}
+@keyframes inboxItemIn{from{opacity:0;transform:translateY(-6px)}}
+.inbox-item.leaving{transition:opacity 200ms ease-out,transform 240ms cubic-bezier(.32,.72,0,1),max-height 240ms cubic-bezier(.32,.72,0,1),padding 240ms,margin 240ms;opacity:0;transform:translateX(24px);max-height:0;padding-top:0;padding-bottom:0;margin-top:0}
+.inbox-ico{width:30px;height:30px;border-radius:10px;display:grid;place-items:center;background:var(--bg-card);color:var(--ink-2)}
+.inbox-ico.k-warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 13%,var(--bg-card))}
+.inbox-ico.k-money{color:var(--accent-text);background:color-mix(in srgb,var(--accent-fill) 13%,var(--bg-card))}
+.inbox-ico.k-tip{background:var(--bg-inset)}
+.inbox-body{min-width:0}
+.inbox-text{font-size:14px;line-height:1.45;color:var(--ink);padding-top:5px}
+.inbox-text.clamp{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.inbox-text:not(.clamp){animation:inboxTextIn 220ms ease-out}
+@keyframes inboxTextIn{from{opacity:.55}}
+.inbox-more{background:none;border:0;padding:6px 0 0;min-height:32px;font:inherit;font-size:13px;font-weight:600;color:var(--accent-text);cursor:pointer}
 .inbox-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .inbox-btn{min-height:36px;padding:6px 14px;border-radius:999px;border:1px solid var(--rule-2);background:transparent;color:var(--ink-2);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform 80ms,background 120ms}
 .inbox-btn:active{transform:scale(0.96)}
 .inbox-btn.primary{background:var(--accent-fill);border-color:var(--accent-fill);color:var(--on-accent)}
-@media (prefers-reduced-motion:reduce){.inbox-pop{transition:none}.inbox-bell.nod svg{animation:none}}
-[data-fx="off"] .inbox-pop{transition:none}[data-fx="off"] .inbox-bell.nod svg{animation:none}
+@media (prefers-reduced-motion:reduce){.inbox-pop{transition:none}.inbox-bell.nod svg{animation:none}.inbox-pop.in .inbox-item,.inbox-text{animation:none}.inbox-item.leaving{transition:none}}
+[data-fx="off"] .inbox-pop{transition:none}[data-fx="off"] .inbox-bell.nod svg{animation:none}[data-fx="off"] .inbox-pop.in .inbox-item,[data-fx="off"] .inbox-text{animation:none}[data-fx="off"] .inbox-item.leaving{transition:none}
 /* Run 85 motion (owner's list): the + turns into x while the add sheet is open; a saved entry draws a small tick; a message that is replaced slides back and fades under the new one. */
 .fab-add svg{transition:transform 260ms cubic-bezier(0.22,1,0.36,1)}
 .fab-add.fab-open{pointer-events:none}.fab-add.fab-open svg{transform:rotate(45deg)}

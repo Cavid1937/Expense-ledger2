@@ -26,7 +26,7 @@ await page.close();
 section("E2-A. Analytics per-day tile");
 const flat = []; for (let i = 1; i <= d; i++) flat.push(tx({ merchant: "Flat", amount: 10, date: ymd(new Date(y, m, i)) }));
 page = await openPage(browser, { seed: baseSeed({ transactions: [...flat, tx({ type: "income", category: "salary", amount: 2000, date: TODAY })] }) });
-await tab(page, "Monthly");
+await tab(page, "Monthly"); await wait(600);   // Run 106: hidden Analytics sections fill in just after the first paint
 let txt = await bodyText(page);
 // The app compares weekends with weekdays, so it needs both kinds of day this month (on a Sunday the 1st there are no weekdays yet).
 const soFar = Array.from({ length: d }, (_, i) => new Date(y, m, i + 1).getDay());
@@ -38,7 +38,7 @@ await page.close();
 const split = []; for (let i = 1; i <= d; i++) { const g = new Date(y, m, i).getDay(); split.push(tx({ merchant: "S", amount: (g === 0 || g === 6) ? 30 : 10, date: ymd(new Date(y, m, i)) })); }
 split.push(tx({ merchant: "Planned", amount: 5000, date: LATER }));
 page = await openPage(browser, { seed: baseSeed({ transactions: split }) });
-await tab(page, "Monthly"); txt = await bodyText(page);
+await tab(page, "Monthly"); await wait(600); txt = await bodyText(page);
 if (hasWeekend) ok(/30\.00 ₼\s*Per weekend day \(higher\)/i.test(txt), "weekends 30/day vs weekdays 10/day → '30.00 ₼ Per weekend day (higher)'; the 5,000 planned later is ignored", txt.match(/.{0,40}Per weekend.{0,20}/i)?.[0]);
 else ok(/Per day: too early to compare/i.test(txt) && !/Per weekend day/i.test(txt), "no weekend day yet this month → 'too early to compare'; the 5,000 planned later does not create a weekend figure");
 ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
