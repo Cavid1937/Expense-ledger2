@@ -33,3 +33,7 @@ Tick every line before a feature is called done. A line that does not apply says
 ## Proof
 - [ ] A browser test drives the real flow (open, choose, undo / cancel, reload) and checks storage, not only the screen.
 - [ ] A screenshot at 390 px (and 320 px for long az/ru words) is looked at before reporting.
+
+## Automatic guard (Run 106)
+
+	ests/browser/e2e_run106_motion.mjs presses every opener on the five tabs (`aria-expanded="false"` or `data-section` ending in `-open`) and fails if one changes the page with no running animation. Give every new unfolding control `aria-expanded` so the guard sees it; use `Collapse` for the panel and `revealFocus` (ref callback) instead of `autoFocus`.

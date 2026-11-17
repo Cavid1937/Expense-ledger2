@@ -8,6 +8,7 @@ import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, unassignedEntries
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse, useRolling } from "./motion.jsx";
+import { revealFocus } from "../App.jsx";
 import { readFirstChoices, writeFirstChoices } from "./setup.jsx";
 
 // Run 83: one quiet reminder on Home for something the person said at the start (a bank statement to bring in, a loan to add) and chose
@@ -414,11 +415,14 @@ export function accountsHeld(transactions) {
 export function WhatIf({ kind, left, days, currency }) {
   const [on,setOn]=useState(false), [txt,setTxt]=useState("");
   const amt=formMoney(txt,{positive:true}), r=amt ? whatIfSpend(amt,kind,left,days) : { ok:false };
-  if (!on) return <button type="button" className="whatif-toggle" data-section="whatif-open" data-kind={kind} onClick={()=>setOn(true)}>{t("whatif.open")}</button>;
-  return (
+  // Run 106 (owner: "What if I buy something? is instant"): it now unfolds like every other panel, and the keyboard rises after the motion
+  const close=()=>{ setOn(false); setTxt(""); };
+  return (<>
+    <button type="button" className={"whatif-toggle"+(on?" on":"")} data-section="whatif-open" data-kind={kind} aria-expanded={on} aria-controls={"whatif-box-"+kind} onClick={()=>(on?close():setOn(true))}>{t("whatif.open")}<svg className="whatif-chev" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg></button>
+    <Collapse open={on} id={"whatif-box-"+kind}>
     <div data-section="whatif" data-kind={kind} role="group" aria-label={t("whatif.open")} style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
       <label className="field-lbl" htmlFor={"whatif-"+kind}>{t("whatif.label")}</label>
-      <input id={"whatif-"+kind} className="field-input" data-section="whatif-amount" autoFocus inputMode="decimal" autoComplete="off" placeholder="0.00" value={txt} onChange={e=>setTxt(e.target.value)}/>
+      <input id={"whatif-"+kind} ref={revealFocus} className="field-input" data-section="whatif-amount" inputMode="decimal" autoComplete="off" placeholder="0.00" value={txt} onChange={e=>setTxt(e.target.value)}/>
       <div data-section="whatif-result" role="status" aria-live="polite" style={{marginTop:8,minHeight:20}}>
         {r.ok&&(<>
           <div className="safe-row">
@@ -429,9 +433,10 @@ export function WhatIf({ kind, left, days, currency }) {
         </>)}
       </div>
       <div className="safe-note">{t("whatif.note")}</div>
-      <button type="button" className="btn btn-sm" data-section="whatif-close" style={{marginTop:8}} onClick={()=>{ setOn(false); setTxt(""); }}>{t("common.close")}</button>
+      <button type="button" className="btn btn-sm" data-section="whatif-close" style={{marginTop:8}} onClick={close}>{t("common.close")}</button>
     </div>
-  );
+    </Collapse>
+  </>);
 }
 // Run 103 (owner decision D1): reasons "Until your next income" can name when it cannot be worked out (calcUntilPay `reason`)
 const UNTIL_WHY=["accounts","noDate","overdue","dueToday","far"];

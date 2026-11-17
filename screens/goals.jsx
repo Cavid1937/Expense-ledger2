@@ -176,7 +176,8 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
         )}
         <div className="section-title">{t("budgets.notSet")}</div>
         <div className="card list-card" data-section="bg-unbudgeted">
-          {(unbAll||unbudgeted.length<=UNB_SHOW?unbudgeted:unbudgeted.filter((cat,i)=>i<UNB_SHOW||cat.id===editBudget)).map(cat=>(
+          {/* Run 106: the rest of the list unfolds instead of appearing at once */}
+          {(()=>{ const row=(cat)=>(
             <div key={cat.id} className="bud-row">
               <div className="bud-top">
                 <span className="cat-dot" style={{background:cat.color+"26"}}><CatIcon catId={cat.id} size={16}/></span>
@@ -184,8 +185,9 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
                 {editBtn(cat,0)}
               </div>
               {editRow(cat,0)}
-            </div>
-          ))}
+            </div>);
+            const rest=unbudgeted.slice(UNB_SHOW);
+            return (<>{unbudgeted.slice(0,UNB_SHOW).map(row)}{rest.length>0&&<Collapse open={unbAll||rest.some(c=>c.id===editBudget)}>{rest.map(row)}</Collapse>}</>); })()}
           {unbudgeted.length>UNB_SHOW&&(<button className="list-row" data-section="bg-unb-toggle" aria-expanded={unbAll} onClick={()=>setUnbAll(v=>!v)} style={{justifyContent:"center",color:"var(--accent-text)",fontWeight:600,fontSize:13,minHeight:48}}>{unbAll?t("budgets.showFewer"):t("budgets.showAll",{n:unbudgeted.length})}</button>)}
         </div>
         <TemplatesSection templates={templates} currency={currency} onAddTemplate={onAddTemplate} onDeleteTemplate={onDeleteTemplate} onUpdateTemplate={onUpdateTemplate} showToast={showToast}/>

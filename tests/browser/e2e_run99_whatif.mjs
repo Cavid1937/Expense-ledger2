@@ -25,7 +25,7 @@ section("R99-QB1. On Safe to Spend");
   ok(/530\.00/.test(r.result || "") && /more than what is left/.test(r.result || ""), "2,000 is 530.00 more than what is left", r.result);
   await type(page, "abc"); r = await look(page, "safe");
   ok((r.result || "").trim() === "", "letters: no answer is shown", r.result);
-  await page.evaluate(() => document.querySelector('[data-section="whatif-close"]').click()); await wait(200); r = await look(page, "safe");
+  await page.evaluate(() => document.querySelector('[data-section="whatif-close"]').click()); await wait(650); r = await look(page, "safe");
   const after = await state(page);
   ok(r.box === null && r.open && JSON.stringify(after.transactions) === JSON.stringify(before.transactions) && JSON.stringify(after.safeToSpend) === JSON.stringify(before.safeToSpend), "closed; the saved entries and settings are exactly as before");
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
