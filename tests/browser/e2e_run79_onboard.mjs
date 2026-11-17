@@ -27,6 +27,10 @@ ok(!(await has(page, ".tabbar")), "the app itself is not shown yet");
 // Run 88: the line now stays 4.2 s (owner: it changed "a little fast"), so watch for about 5 s; read only the arriving line, not the one fading out
 const tags = new Set(); for (let i = 0; i < 6; i++) { tags.add(await page.evaluate(() => document.querySelector(".ob-tag .ob-tag-in").innerText)); await wait(1000); }
 ok(tags.size >= 2, "before a language is chosen, the line under the name changes language", [...tags]);
+// Run 100: ticking a language (before Continue) already puts the line in that language, and it stops changing
+await page.evaluate(() => document.querySelector('input[name="ui-language"][value="ru"]').click()); await wait(900);
+const ticked = new Set(); for (let i = 0; i < 3; i++) { ticked.add(await page.evaluate(() => document.querySelector(".ob-tag .ob-tag-in").innerText)); await wait(2400); }
+ok(ticked.size === 1 && [...ticked][0] === "Знайте, куда уходят деньги.", "Russian ticked: the line under the name is Russian and stays", [...ticked]);
 await pickLang(page, "az");
 ok(await has(page, '[data-ob="google"]') && await has(page, '[data-ob="guest"]'), "after the language: create an account with Google, or as a guest");
 ok((await page.evaluate(() => document.querySelector('[data-ob="google"]').innerText)).includes("Google ilə hesab yarat") && (await page.evaluate(() => document.querySelector(".ob-tag").innerText)) === "Pulunuzun hara getdiyini bilin.", "everything is now in the chosen language");

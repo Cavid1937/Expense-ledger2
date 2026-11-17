@@ -4,14 +4,16 @@ import { launch, openPage, settle, ok, section, finish, baseSeed, tx, ymd, daysA
 const browser = await launch();
 const ahead = (n) => { const d = new Date(); return ymd(new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)); };
 const accs = (openDate) => new Function(`try{if(!sessionStorage.getItem("__a")){sessionStorage.setItem("__a","1");localStorage.setItem("expense_ledger_v5__accounts",JSON.stringify({version:1,accounts:[{id:"a_card01",name:"My card",kind:"card",opening:{amount:200,date:"${openDate}"},hidden:false},{id:"a_cash01",name:"Pocket",kind:"cash",opening:{amount:50,date:"${openDate}"},hidden:false}],transfers:[]}));}}catch(e){}`);
-const form = (page) => page.evaluate(() => ({ card: (document.querySelector('[data-acc-pick="a_card01"]') || {}).ariaChecked, cash: (document.querySelector('[data-acc-pick="a_cash01"]') || {}).ariaChecked, line: (document.querySelector('[data-section="add-more-toggle"]') || {}).textContent || "" }));
+const form = (page) => page.evaluate(() => ({ card: (document.querySelector('[data-acc-pick="a_card01"]') || {}).ariaChecked, cash: (document.querySelector('[data-acc-pick="a_cash01"]') || {}).ariaChecked, line: (document.querySelector('[data-section="add-more-toggle"]') || {}).textContent || "",
+  // Run 100: the chips are in the main form: outside the folded details, drawn (they have a size), and above the "More details" toggle
+  inView: (() => { const c = document.querySelector('[data-acc-pick="a_card01"]'), t = document.querySelector('[data-section="add-more-toggle"]'); return !!c && !!t && !document.querySelector('[data-section="add-more"] [data-acc-pick]') && c.getBoundingClientRect().height > 0 && c.getBoundingClientRect().top < t.getBoundingClientRect().top; })() }));
 section("R98-B1. Add form: same account as last time, shown on the details line");
 {
   const seed = baseSeed({ language: "en", transactions: [tx({ merchant: "A", amount: 5, account: "a_cash01" }), tx({ merchant: "B", amount: 6, account: "a_card01" })] });
   const page = await openPage(browser, { seed, pre: accs("") }); await settle(page); await openAdd(page); await wait(300);
   const r = await form(page);
   ok(r.card === "true" && r.cash === "false", "the account of the expense recorded last (My card) is chosen", r);
-  ok(/My card/.test(r.line), "and it is named on the 'More details' line while the details are closed", r.line);
+  ok(r.inView === true, "and the account chips are in view in the main form while the details are closed (Run 100: no longer under 'More details')", r);
   await page.evaluate(() => document.querySelector('[data-acc-pick="a_card01"]').click()); await wait(150);
   const off = await form(page);
   ok(off.card === "false" && !/My card/.test(off.line), "one tap takes it off again", off);

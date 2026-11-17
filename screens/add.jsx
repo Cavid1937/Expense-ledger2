@@ -166,8 +166,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const [reimbAmt, setReimbAmt] = useState(cleanReimb(prefill?.reimb) ? String(cleanReimb(prefill.reimb).amt) : "");
   const [reimbWho, setReimbWho] = useState(cleanReimb(prefill?.reimb)?.who || "");
   const accData=useMemo(()=>readAccounts(),[]);   // Run 24: optional account (card, cash...) the entry belongs to
-  // Run 98: a new entry made from scratch starts on the account used last time for this kind of entry ("same as last time"); it is named on
-  // the "More details" line, so it is never chosen unseen. Editing, templates and offered entries keep exactly what they carry.
+  // Run 98: a new entry made from scratch starts on the account used last time for this kind of entry ("same as last time"); since Run 100 the
+  // account chips are in the main form, so it is never chosen unseen. Editing, templates and offered entries keep exactly what they carry.
   const [account, setAccount] = useState(()=>accId(prefill?.account) || (!prefill && !editId ? lastAccountFor(accData,transactions,"expense") : ""));
   // Switching to income (or back) follows the account used last for that kind, until the person picks one themself.
   const accTouched=useRef(false);
@@ -229,7 +229,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const catHits=searchCats(pickList,catQ,mySubs);
   const displayCats=catHits.map(h=>h.cat);
   const selectedCat=CAT(catId);
-  const moreSummary=[merchant.trim(), note.trim(), account?((accData.accounts.find(a=>a.id===account)||{}).name||""):"", wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
+  const moreSummary=[merchant.trim(), note.trim(), !accData.accounts.length&&wallet?walletName(wallet):"", date&&date!==today()&&isValidDateStr(date)?fmtDate(date):"", recur?t("freqCap."+freq):""].filter(Boolean).join(" · ");
 
   // Run 83: the keyboard used to rise while the sheet was still sliding up (owner: "a little bit instant"). It now waits until the
   // slide (400 ms, styles.js .add-overlay) has almost landed, so the sheet arrives first and the keys follow. Reduced motion: at once.
@@ -476,6 +476,20 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
           )}
         </div>
 
+        {/* Run 100: with accounts, "Paid from" is in the main form, not under "More details". An entry with no account moves no balance,
+            so every balance-based figure drifts; the choice has to be in view (the first entry has no "same as last time" to fall back on). */}
+        {accData.accounts.length>0 && (
+          <div className="field" role="radiogroup" aria-labelledby="txn-acc-lbl" data-section="add-account">
+            <div className="field-lbl" id="txn-acc-lbl">{t(type==="income"?"wallet.labelIn":"acc.paidFrom")} {optional}</div>
+            <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
+              {accData.accounts.filter(a=>!a.hidden||a.id===account).map(a=>(
+                <button key={a.id} type="button" role="radio" aria-checked={account===a.id} data-acc-pick={a.id} className={`sub-chip${account===a.id?" sel":""}`} onClick={()=>{ accTouched.current=true; setAccount(account===a.id?"":a.id); }}>{a.name}</button>
+              ))}
+              {wallet&&<button type="button" role="radio" aria-checked="true" className="sub-chip sel" data-section="add-old-wallet" title={t("wallet.label")} onClick={()=>setWallet("")}>{walletName(wallet)} ×</button>}
+            </div>
+          </div>
+        )}
+
         {/* Run 17: the form shows what most entries need; the rest sits under one toggle (open when editing). */}
         <button type="button" className="more-toggle" data-section="add-more-toggle" aria-expanded={more} aria-controls="add-more-body" onClick={()=>setMore(m=>!m)}>
           <span className="more-toggle-main">{t(more?"add.lessDetails":"add.moreDetails")}</span>
@@ -495,17 +509,7 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
 
         {/* Run 38 (owner: why offer cash / card / wallet when I added my own accounts?): with accounts, "Paid from" lists them (one tap);
             the plain cash / card / mobile choice is offered only to people without accounts. An entry's old payment tag is kept and shown. */}
-        {accData.accounts.length>0 ? (
-          <div className="field" role="radiogroup" aria-labelledby="txn-acc-lbl" data-section="add-account">
-            <div className="field-lbl" id="txn-acc-lbl">{t(type==="income"?"wallet.labelIn":"acc.paidFrom")} {optional}</div>
-            <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>
-              {accData.accounts.filter(a=>!a.hidden||a.id===account).map(a=>(
-                <button key={a.id} type="button" role="radio" aria-checked={account===a.id} data-acc-pick={a.id} className={`sub-chip${account===a.id?" sel":""}`} onClick={()=>{ accTouched.current=true; setAccount(account===a.id?"":a.id); }}>{a.name}</button>
-              ))}
-              {wallet&&<button type="button" role="radio" aria-checked="true" className="sub-chip sel" data-section="add-old-wallet" title={t("wallet.label")} onClick={()=>setWallet("")}>{walletName(wallet)} ×</button>}
-            </div>
-          </div>
-        ) : (
+        {accData.accounts.length===0 && (
           <div className="field" role="radiogroup" aria-labelledby="txn-wal-lbl" data-section="add-wallet">
             <div className="field-lbl" id="txn-wal-lbl">{t(type==="income"?"wallet.labelIn":"wallet.label")} {optional}</div>
             <div className="sub-strip" style={{flexWrap:"wrap",overflowX:"visible"}}>

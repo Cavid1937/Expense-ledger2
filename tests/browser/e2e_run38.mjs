@@ -89,7 +89,9 @@ section("R38-6. Add form: details ease open, in a calm order; accounts replace c
   ok(await page.evaluate(() => document.querySelector('[data-section="add-more"]').classList.contains("keep-collapse") && !document.querySelector('[data-section="add-more"]').classList.contains("is-open")), "details start folded");
   await page.evaluate(() => document.querySelector('[data-section="add-more-toggle"]').click()); await wait(400);
   const order = await page.evaluate(() => [...document.querySelectorAll('[data-section="add-more"] .keep-collapse-in > .field, [data-section="add-more"] .keep-collapse-in > [data-section]')].map((e) => e.getAttribute("data-section") || (e.querySelector("#txn-date") ? "date" : e.querySelector("#txn-note") ? "note" : e.querySelector("#txn-merchant") ? "merchant" : e.querySelector("#txn-rec-lbl") ? "repeat" : "?")));
-  ok(order[0] === "date" && order[1] === "add-account" && order.indexOf("note") > order.indexOf("merchant") && order[order.length - 1] === "add-trip", "order: date, paid from, who, note, repeats, trip", order);
+  // Run 100: "paid from" moved out of the details into the main form, just above the toggle
+  const accAbove = await page.evaluate(() => { const a = document.querySelector('[data-section="add-account"]'), t = document.querySelector('[data-section="add-more-toggle"]'); return !!a && a.getBoundingClientRect().top < t.getBoundingClientRect().top; });
+  ok(order[0] === "date" && !order.includes("add-account") && accAbove && order.indexOf("note") > order.indexOf("merchant") && order[order.length - 1] === "add-trip", "order: paid from (main form), then in the details: date, who, note, repeats, trip", order);
   ok(!(await page.$('[data-section="add-wallet"]')) && !!(await page.$('[data-acc-pick="a_card01"]')), "with accounts there are no cash / card / mobile chips; the accounts are one tap");
   await page.evaluate(() => document.querySelector('[data-acc-pick="a_card01"]').click()); await wait(100);
   ok(await page.evaluate(() => document.querySelector('[data-acc-pick="a_card01"]').getAttribute("aria-checked")) === "true", "tapping an account chooses it");

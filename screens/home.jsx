@@ -412,7 +412,7 @@ export function WhatIf({ kind, left, days, currency }) {
   return (
     <div data-section="whatif" data-kind={kind} role="group" aria-label={t("whatif.open")} style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
       <label className="field-lbl" htmlFor={"whatif-"+kind}>{t("whatif.label")}</label>
-      <input id={"whatif-"+kind} className="field-input" data-section="whatif-amount" inputMode="decimal" autoComplete="off" placeholder="0.00" value={txt} onChange={e=>setTxt(e.target.value)}/>
+      <input id={"whatif-"+kind} className="field-input" data-section="whatif-amount" autoFocus inputMode="decimal" autoComplete="off" placeholder="0.00" value={txt} onChange={e=>setTxt(e.target.value)}/>
       <div data-section="whatif-result" role="status" aria-live="polite" style={{marginTop:8,minHeight:20}}>
         {r.ok&&(<>
           <div className="safe-row">

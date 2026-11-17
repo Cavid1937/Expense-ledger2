@@ -38,7 +38,7 @@ function Brand({ lang }) {
   );
 }
 
-function LanguagePage({ onChoose }) {
+function LanguagePage({ onChoose, onPick }) {
   const [sel, setSel] = useState(null);
   const inEach = (key) => LANGS.map(l => <span key={l} lang={l} className="lang-line">{tIn(l, key)}</span>);
   return (
@@ -47,7 +47,7 @@ function LanguagePage({ onChoose }) {
         <legend className="lang-title">{sel ? <span key={sel} lang={sel} className="lang-swap">{tIn(sel, "lang.title")}</span> : inEach("lang.title")}</legend>
         {LANGS.map(l => (
           <label key={l} className={`lang-opt${sel === l ? " sel" : ""}`} lang={l}>
-            <input type="radio" name="ui-language" value={l} checked={sel === l} onChange={() => setSel(l)} />
+            <input type="radio" name="ui-language" value={l} checked={sel === l} onChange={() => { setSel(l); if (onPick) onPick(l); }} />
             <span className="lang-name">{LANG_NAMES[l]}</span>
             <span className="lang-mark-sel" aria-hidden="true" />
           </label>
@@ -89,15 +89,17 @@ function AccountPage({ onGoogle, onGuest, busy, error }) {
 // step: "lang" (rendered on its own, before the app) · "account" · "setup" (drawn over the app, so its sheets and messages work).
 export function Onboarding({ step, lang, onLanguage, onGoogle, onGuest, busy, error, currency, onSetupSave, onSetupSkip, onSetupStatement, onBackToAccount, onOpenDebts }) {
   const [leaving, setLeaving] = useState(false);
+  // Run 100: the line under the name follows the language as soon as it is ticked (it kept changing language until Continue)
+  const [picked, setPicked] = useState(null);
   // Android Back in the questions goes to the previous page of the scene, never out of the app halfway through
   useBackStep(step === "setup" && !leaving, () => onBackToAccount && onBackToAccount());
   const out = (fn) => { if (motionOff()) { fn(); return; } setLeaving(true); setTimeout(fn, 420); };
   return (
     <div className={`ob-screen lang-screen ob-${step}${leaving ? " ob-leaving" : ""}`} lang={lang || undefined} data-section="onboarding" role={step === "lang" ? undefined : "dialog"} aria-modal={step === "lang" ? undefined : "true"} aria-label={step === "lang" ? undefined : "Expense Ledger"}>
-      <Brand lang={lang} />
+      <Brand lang={lang || picked} />
       <div className="ob-panel">
         <div key={step} className={`ob-slide${step === "lang" ? "" : " in-next"}`}>
-          {step === "lang" && <LanguagePage onChoose={onLanguage} />}
+          {step === "lang" && <LanguagePage onChoose={onLanguage} onPick={setPicked} />}
           {step === "account" && <AccountPage onGoogle={onGoogle} onGuest={onGuest} busy={busy} error={error} />}
           {step === "setup" && <SetupSteps currency={currency} onOpenDebts={onOpenDebts} onStatement={onSetupStatement}
             onSkip={() => out(onSetupSkip)}

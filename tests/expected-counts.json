@@ -142,7 +142,7 @@
     "e2e_run78_nativefeel.mjs": 8,
     "e2e_run78_softmotion.mjs": 12,
     "e2e_run79_backswipe.mjs": 16,
-    "e2e_run79_onboard.mjs": 28,
+    "e2e_run79_onboard.mjs": 29,
     "e2e_run80_settings.mjs": 27,
     "e2e_run83_tips.mjs": 12,
     "e2e_run85_bell.mjs": 13,
