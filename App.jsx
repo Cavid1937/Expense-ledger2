@@ -163,7 +163,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="106 (2026-11-17)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="107 (2026-11-18)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -2215,6 +2215,7 @@ function parseCsvImport(raw, _bank=false) {
 // Run 40 (8 Nov 2026), owner: a backup picked from Google Drive on the website was refused with "not valid JSON or CSV".
 // The app's own files always parse, so the website was handed something else. Instead of one vague sentence, say what
 // the file actually is, so the person knows what to do. Nothing is ever partly imported from a broken file.
+export const IMPORT_MAX_BYTES=50*1024*1024;   // Run 107: a phone's whole ledger is a few MB; PDF statements have their own 30 MB limit
 export function badFileReason(raw) {
   const s=String(raw==null?"":raw).replace(/^﻿/,"");
   const head=s.trimStart().slice(0,400);
@@ -5936,6 +5937,8 @@ function AppInner() {
 
   const importFile=useCallback((file)=>{
     if (!file) return;
+    // Run 107: the whole file is read into memory, so a huge pick (a video, a disk image) is refused before reading instead of freezing the app
+    if (file.size>IMPORT_MAX_BYTES) { setImportPending({ error:t("import.tooBig"), filename:file.name }); return; }
     const reader=new FileReader();
     reader.onerror=()=>setImportPending({ error:t("import.readFailed"), filename:file.name });
     reader.onload=async e=>{

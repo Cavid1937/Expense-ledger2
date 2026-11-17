@@ -1,0 +1,11 @@
+# Run 107: weekly check for security updates of the app's npm packages. Dependabot only proposes pull requests; nothing merges by itself.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 3
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]

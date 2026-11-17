@@ -59,4 +59,21 @@ section("SEC-4. The PDF reader keeps the guard against the PDF.js font bug (GHSA
   ok(/isEvalSupported:\s*false/.test(pdf), "getDocument is called with isEvalSupported: false");
   ok(/PDF_MAX_BYTES\s*=\s*30\s*\*\s*1024\s*\*\s*1024/.test(pdf) && /PDF_MAX_PAGES\s*=\s*400/.test(pdf), "PDF size and page limits are in place");
 }
+section("SEC-5. A hostile or damaged backup file");
+{
+  reset(); H.setLang("en");
+  // Cut off half-way (an unfinished download): refused as a whole, with the "incomplete" reason, nothing partly read
+  const cut = H.planImport('{"version":2,"transactions":[{"id":1,"type":"expense","amount":5,', "backup.json");
+  ok(cut.ok === false && cut.error === H.t("import.bad.cut"), "a backup that breaks off is refused as incomplete", cut);
+  // JSON.parse turns "__proto__" into an ordinary key; nothing may reach every object, and the saved entry must not carry it
+  const evil = '{"__proto__":{"polluted":1},"constructor":{"prototype":{"polluted2":1}},"currency":"₼","transactions":[{"id":1,"type":"expense","amount":5,"category":"food","merchant":"<b>x</b>","date":"2026-10-05","__proto__":{"isAdmin":true}}]}';
+  const p = H.planImport(evil, "backup.json");
+  const e = p.ok ? p.transactions[0] : null;
+  ok(p.ok && p.transactions.length === 1 && e.amount === 5 && e.merchant === "<b>x</b>", "the one real entry is read (5.00, its text kept as text)", p);
+  ok(({}).polluted === undefined && ({}).polluted2 === undefined && ({}).isAdmin === undefined && e && e.isAdmin === undefined, "nothing reached every object or the entry", e);
+  ok(e && !Object.prototype.hasOwnProperty.call(e, "__proto__") && Object.getPrototypeOf(e) === Object.prototype, "the entry is a plain object without a smuggled prototype");
+  // A backup over 50 MB is refused before it is read (checked in the source: file pickers do not exist in the logic tests)
+  ok(H.IMPORT_MAX_BYTES === undefined ? /IMPORT_MAX_BYTES=50\*1024\*1024/.test(SRC) : H.IMPORT_MAX_BYTES === 52428800, "the import size limit is 50 MB");
+  ok(/if \(!file\) return;\s*\n[^\n]*\n\s*if \(file\.size>IMPORT_MAX_BYTES\)[^\n]*return; \}\s*\n\s*const reader=new FileReader\(\);/.test(SRC), "the size is checked before the file is read");
+}
 finish("security");

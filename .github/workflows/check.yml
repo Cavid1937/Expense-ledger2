@@ -1,0 +1,22 @@
+# Run 107: on every push and pull request, install exactly what package-lock.json lists, build the site, run the money/logic tests and
+# fail on a critical known vulnerability in a package the site ships. Read-only: it deploys nothing and has no secrets.
+name: check
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci --no-audit --no-fund
+      - run: node node_modules/vite/bin/vite.js build
+      - run: node tests/run-logic.mjs
+      - run: npm audit --omit=dev --audit-level=critical
