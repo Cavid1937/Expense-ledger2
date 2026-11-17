@@ -974,7 +974,17 @@ html,body,.app{transition:background-color 200ms ease-out}
 .pick-month .icon-btn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--rule);border-radius:50%;background:transparent;color:var(--ink);cursor:pointer}
 .pick-month-name{font-weight:700;font-size:16px;text-align:center;flex:1}
 .pick-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-.pick-tgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}.pick-tlabel{font:600 13px var(--font);color:var(--ink-3);margin:14px 2px 6px}
+.pick-tgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.wheel-now{font:600 40px/1.1 var(--font);text-align:center;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin:10px 0 6px}
+.wheel-pair{position:relative;display:flex;align-items:center;justify-content:center;gap:4px;margin-top:4px}
+.wheel-band{position:absolute;left:12%;right:12%;top:50%;height:40px;transform:translateY(-50%);border-radius:12px;background:var(--bg-warm);pointer-events:none}
+.wheel-col{position:relative;width:84px}
+.wheel{position:relative;overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none;-webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);border-radius:12px;outline-offset:2px}
+.wheel::-webkit-scrollbar{display:none}
+.wheel:focus-visible{outline:2px solid var(--ink)}
+.wheel-row{height:40px;line-height:40px;text-align:center;scroll-snap-align:center;font:500 22px/40px var(--font);font-variant-numeric:tabular-nums;color:var(--ink-2);cursor:pointer;will-change:transform,opacity;user-select:none}
+.wheel-row.on{color:var(--ink);font-weight:600}
+.wheel-colon{font:600 22px var(--font);color:var(--ink-3);position:relative}.pick-tlabel{font:600 13px var(--font);color:var(--ink-3);margin:14px 2px 6px}
 .pick-dow{font-size:11px;font-weight:700;color:var(--ink-3);text-align:center;padding:4px 0}
 .pick-day{min-height:42px;border:0;border-radius:10px;background:transparent;color:var(--ink);font:600 14px var(--font);font-variant-numeric:tabular-nums;cursor:pointer}
 .pick-day.today{box-shadow:inset 0 0 0 1.5px var(--rule-2)}

@@ -84,17 +84,58 @@ export function PickSelect({ children, value, onChange, id, name, disabled, clas
   );
 }
 
-// Run 90 (owner, 15 Nov: "the time selection must be like the calendar"): drop-in for <input type="time">, value "HH:MM".
-// First the hour, then the minute (every 5 minutes); choosing the minute saves and closes. The real input stays hidden and holds the value.
+// Run 105 (owner, 17 Nov: "the time picker in reminders should be improved, must be alive and better"): two scroll wheels, hours 00-23 and
+// minutes 00-59. Each wheel snaps to a row, the rows curve away like a drum, the big time on top follows the finger, and every new row gives
+// one short tick on the phone. Keyboard: arrows, Page Up/Down (5 at a time), Home/End; screen readers hear a spin button per wheel.
+// Nothing is saved until "Save"; closing the sheet keeps the old time.
+const WH_ROW = 40, WH_PAD = 2;
+function Wheel({ count, value, onPick, label, wheelKey }) {
+  const ref = useRef(null);
+  const st = useRef({ idx: value, raf: 0, quiet: true });
+  const paint = () => {
+    const el = ref.current; if (!el) return;
+    const mid = el.scrollTop + el.clientHeight / 2, still = reducedMotion();
+    for (const c of el.children) {
+      const d = (c.offsetTop + WH_ROW / 2 - mid) / WH_ROW, a = Math.min(Math.abs(d), 3);
+      c.style.opacity = String(Math.max(0.18, 1 - a * 0.32));
+      c.style.transform = still ? "" : `perspective(320px) rotateX(${Math.max(-60, Math.min(60, -d * 20))}deg) scale(${1 - a * 0.05})`;
+    }
+  };
+  useEffect(() => { const el = ref.current; if (!el) return; el.scrollTop = value * WH_ROW; paint(); requestAnimationFrame(() => { st.current.quiet = false; }); return () => cancelAnimationFrame(st.current.raf); }, []);
+  const onScroll = () => {
+    const s = st.current; cancelAnimationFrame(s.raf);
+    s.raf = requestAnimationFrame(() => {
+      paint(); const el = ref.current; if (!el) return;
+      const i = Math.max(0, Math.min(count - 1, Math.round(el.scrollTop / WH_ROW)));
+      if (i !== s.idx) { s.idx = i; if (!s.quiet) tick(); onPick(i); }
+      if (i === s.target) s.target = null;
+    });
+  };
+  // Quick repeated key presses add up from where the wheel is heading, not from where it is mid-glide.
+  const go = (i) => { const el = ref.current; if (!el) return; i = Math.max(0, Math.min(count - 1, i)); st.current.target = i; el.scrollTo({ top: i * WH_ROW, behavior: reducedMotion() ? "auto" : "smooth" }); };
+  const onKey = (e) => {
+    const k = { ArrowUp: -1, ArrowDown: 1, PageUp: -5, PageDown: 5 }[e.key];
+    if (k) { e.preventDefault(); go((st.current.target ?? st.current.idx) + k); } else if (e.key === "Home") { e.preventDefault(); go(0); } else if (e.key === "End") { e.preventDefault(); go(count - 1); }
+  };
+  const txt = String(value).padStart(2, "0");
+  return (
+    <div className="wheel-col">
+      <div ref={ref} className="wheel" tabIndex={0} role="spinbutton" aria-label={label} aria-valuemin={0} aria-valuemax={count - 1} aria-valuenow={value} aria-valuetext={txt} data-wheel={wheelKey} onScroll={onScroll} onKeyDown={onKey}
+        style={{ height: WH_ROW * (WH_PAD * 2 + 1), paddingBlock: WH_ROW * WH_PAD }}>
+        {Array.from({ length: count }, (_, i) => <div key={i} className={`wheel-row${i === value ? " on" : ""}`} aria-hidden="true" data-v={i} onClick={() => go(i)}>{String(i).padStart(2, "0")}</div>)}
+      </div>
+    </div>
+  );
+}
 export function PickTime({ value, onChange, id, name, disabled, className, style, ...rest }) {
   const [open, setOpen] = useState(false);
   const label = useLabelText(id) || (rest["aria-labelledby"] && typeof document !== "undefined" ? (document.getElementById(rest["aria-labelledby"])?.textContent || "").trim() : "");
   const ok = /^\d{2}:\d{2}$/.test(value || "");
-  const [hh, setHh] = useState(ok ? value.slice(0, 2) : "09");
-  useEffect(() => { if (open) setHh(/^\d{2}:\d{2}$/.test(value || "") ? value.slice(0, 2) : "09"); }, [open]);
-  const curM = ok ? value.slice(3) : "";
-  const pickM = (mm, close) => { const v = hh + ":" + mm; if (v !== value) { tick(); fire(onChange, v, name, id); } close(PICK_SHOW_MS); };
-  const H = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0")), M = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
+  const start = () => (/^\d{2}:\d{2}$/.test(value || "") ? [Math.min(23, Number(value.slice(0, 2))), Math.min(59, Number(value.slice(3)))] : [9, 0]);
+  const [hm, setHm] = useState(start);
+  useEffect(() => { if (open) setHm(start()); }, [open]);
+  const shown = String(hm[0]).padStart(2, "0") + ":" + String(hm[1]).padStart(2, "0");
+  const save = (close) => { if (shown !== value) fire(onChange, shown, name, id); close(); };
   return (
     <span className="pick-wrap" style={style && style.width ? { width: style.width } : undefined}>
       <input {...rest} type="time" id={id} name={name} value={value} onChange={onChange} disabled={disabled} className={`${className || ""} pick-native`} tabIndex={-1} aria-hidden="true" />
@@ -104,14 +145,14 @@ export function PickTime({ value, onChange, id, name, disabled, className, style
       {open && (
         <PickSheet title={label || t("pick.time")} onClose={() => setOpen(false)} section="pick-time-sheet">
           {(close) => (<>
-          <div className="pick-tlabel">{t("pick.hour")}</div>
-          <div className="pick-tgrid" role="group" aria-label={t("pick.hour")}>
-            {H.map((h) => <button key={h} type="button" className={`pick-day${h === hh ? " on" : ""}`} aria-pressed={h === hh} data-hour={h} onClick={() => { if (h !== hh) tick(); setHh(h); }}>{h}</button>)}
+          <div className="wheel-now" aria-live="polite" data-section="time-now">{shown}</div>
+          <div className="wheel-pair">
+            <div className="wheel-band" aria-hidden="true" />
+            <Wheel count={24} value={hm[0]} label={t("pick.hour")} wheelKey="hour" onPick={(h) => setHm((x) => [h, x[1]])} />
+            <div className="wheel-colon" aria-hidden="true">:</div>
+            <Wheel count={60} value={hm[1]} label={t("pick.minute")} wheelKey="minute" onPick={(m) => setHm((x) => [x[0], m])} />
           </div>
-          <div className="pick-tlabel">{t("pick.minute")}</div>
-          <div className="pick-tgrid" role="group" aria-label={t("pick.minute")}>
-            {M.map((mm) => <button key={mm} type="button" className={`pick-day${ok && hh === value.slice(0, 2) && mm === curM ? " on" : ""}`} data-minute={mm} onClick={() => pickM(mm, close)}>:{mm}</button>)}
-          </div>
+          <button type="button" className="btn btn-primary btn-full" data-action="time-save" style={{ marginTop: 14 }} onClick={() => save(close)}>{t("common.save")}</button>
           </>)}
         </PickSheet>
       )}
