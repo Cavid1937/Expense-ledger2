@@ -74,5 +74,15 @@ section("R105-A. Screen audit fixes: last month's spending sits with Spent; a on
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
+section("R105-E. Opening the encrypted backup form brings both passphrase boxes above the tab bar");
+{
+  const { openData } = await import("./lib.mjs");
+  const page = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await openData(page);
+  await page.evaluate(() => document.querySelector('[data-section="enc-toggle"]').click()); await wait(1200);
+  const hits = await page.evaluate(() => [...document.querySelectorAll('[data-section="enc-backup"] input')].map((i) => { const r = i.getBoundingClientRect(); const e = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return e === i; }));
+  ok(hits.length === 2 && hits.every(Boolean), "a tap on either passphrase box reaches the box, not the tab bar", hits);
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
 await browser.close();
 finish("e2e_run105_time");

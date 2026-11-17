@@ -1,5 +1,5 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate, PickTime } from "./pickers.jsx";
@@ -979,11 +979,14 @@ function EncryptedBackup({ onExportEncrypted }) {
   };
   // Run 37: optional, so it starts folded behind one button; the everyday "Save" and "Send or share" come first.
   const [open,setOpen]=useState(false);
+  // Run 105: opened near the bottom of the page, the second passphrase box sat under the tab bar (a tap hit the tab bar); glide it into view.
+  // The form mounts only once opened, so reveal it from its ref callback.
+  const formRef=useCallback((f)=>{ if (f) revealFocus(f); },[]);
   return (
     <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid var(--rule)"}}>
     <button type="button" className="btn btn-ghost btn-full" data-section="enc-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{marginTop:0}}><Icon name="backup" size={16}/>{t("io2.encToggle")}<Icon name={open?"chevUp":"chevDown"} size={12}/></button>
     <Collapse open={open} id="enc-form">
-    <form onSubmit={go} data-section="enc-backup" style={{marginTop:10}}>
+    <form ref={formRef} onSubmit={go} data-section="enc-backup" style={{marginTop:10}}>
       <div className="list-title">{t("enc.title")}</div>
       <div className="list-sub" style={{lineHeight:1.5,marginBottom:8}}>{t("enc.sub")}</div>
       <input className="field-input" type="password" autoComplete="new-password" aria-label={t("enc.pass")} placeholder={t("enc.pass")} value={p1} onChange={e=>setP1(e.target.value)} style={{marginBottom:8}}/>
