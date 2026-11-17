@@ -62,8 +62,8 @@ Classes:
 6. `APP_RELEASE` is now "104 (2026-11-17)". There is one new text, `loan.paidViaBillToast`, in en, az and ru.
 
 ## D. Rejected or deferred
-- Account ask after setup: waiting for your decision (risk explained in the register above).
-- Per-screen tracking: needs your approval.
+- Account ask after setup: decided later the same day (see "Owner decisions" below).
+- Per-screen tracking: not approved (see below).
 - Paywall: no paid plan exists yet.
 - Motion blur and sound: rejected (reasons above).
 - `react-native-keyboard-controller`: not applicable, because the app is not React Native. I used the web equivalent.
@@ -91,10 +91,46 @@ Screenshots are in the scratchpad folder `shots104`:
 ## G. Remaining work
 - **Real phone check (Poco F6, Chrome)**: does the keyboard now push sheets up, and do the tab bar and + button hide? Headless Chrome has no real keyboard, so this is IMPLEMENTED BUT UNVERIFIED.
 - az/ru wording of `loan.paidViaBillToast` needs a native reader.
-- Your decisions:
-  - publish release 104;
-  - account ask after setup;
-  - per-screen tracking.
+- Your decision: publish release 104 (with 104b). The other two decisions are recorded below.
+
+## Owner decisions (17 Nov, after the first report) and Run 104b
+1. **Account after setup: CONDITIONALLY APPROVED.** The required order is welcome and language → light preferences → account and Drive restore → restore and verify → a fresh ledger only if the person chooses not to restore → the app.
+   - **Finding:** the app already used this order (language → account/guest → quick questions). The quick questions are what create a fresh ledger: they add accounts, bills and goals, so they must stay after the restore decision.
+   - **Deviation, explained:** there is no separate "preferences" step. Language is the only preference that creates no records. Asking for theme or similar before a restore would block the backup's own setting, because restore only fills in values the phone still has at their defaults. Language is the safest equivalent.
+   - **CONFIRMED DEFECT fixed (commit 6880bc9).** Signing in to an account that already held records closed the first-launch scene *before* the person confirmed the import preview. Pressing Cancel, or closing the app, left an empty app with no questions; the way back was hidden in Settings.
+     - New step "restore". The scene now ends only when the preview is confirmed.
+     - The restore page offers "Check my records" (reads the account again) or "Start fresh on this phone".
+     - Starting fresh keeps saving to the account paused, so the new empty ledger can never overwrite the saved records. The choice is made later in Settings, as before.
+     - Errors are shown on the page.
+   - **Google Drive restore** is back on the first-launch page as a third choice. It uses the normal import preview, and Drive backup switches on only after the person confirms.
+   - The account stays optional; "Continue as guest" is unchanged.
+   - Phones that already have records never see the scene.
+2. **Per-screen tracking: NOT APPROVED.** Nothing was added. Two points:
+   - **Fact you should know:** the app already has an opt-in "Help improve the app" switch, built in earlier runs. It is off by default. When the person turns it on, it counts how often each *tab* is opened and sends those counts with the other anonymous figures, after showing a preview. This run did not change it, and the new pages add no counting.
+   - **Privacy-preserving alternative, documented only:** occasionally ask a one-question in-app survey ("Was setup clear? yes/no"), stored on the phone and sent only through the existing opt-in preview. Not built.
+3. **Paywall, motion blur and sound: rejected, confirmed.** None was built. Feedback stays vibration-only.
+
+**Other video improvements:** I checked every remaining idea. What is left is copy wording (videos 1 and 6), which goes through the plain-story review with you. I did not invent extra work.
+
+### Run 104b tests (built from the final code)
+- `e2e_run104_restore` (new), 33/33. It covers:
+  - a new person with an empty account;
+  - a returning person: preview → cancel → choice page, with account and phone untouched;
+  - a reload during the preview → back to the restore page → confirm → exactly the 2 saved entries, no duplicates, account resumes at version 4, still 2 after another reload;
+  - "Start fresh": after 6 seconds in the app, nothing was saved to the account;
+  - failed account read, on the first page and on the restore page;
+  - a damaged account copy;
+  - Drive restore: exactly 2 entries, Drive backup on, no account created;
+  - no Drive backup, and a cancelled Drive preview;
+  - a phone with records: no scene;
+  - the new pages in az and ru.
+- Older tests still pass: `e2e_run79_onboard` 29, `e2e_run81_account` 38, `e2e_run74_drive` 12, `e2e_run29_restored` 19, `e2e_lang` 57, `e2e_run104_video` 16, `e2e_run50setup` 12, `e2e_run17_setup` 8.
+- `run-logic` 2832 passed; `vite build` OK; offline check 17/17.
+- Screenshots: `shots104/ob-account-{az,en,ru}-360.png` and `ob-restore-{az,en,ru}-360.png`, no sideways scroll.
+- **Limits:**
+  - The full browser suite was not run again after 104b; only the related files listed above were.
+  - Google, Drive and the server were simulated. A real Google sign-in and a real Drive restore on a phone have not been tried.
+  - At 360×760 the Drive choice sits below the fold, so the person scrolls to reach it.
 
 ## Status
 | Item | Status |
@@ -103,5 +139,7 @@ Screenshots are in the scratchpad folder `shots104`:
 | Loan no-double-entry | VERIFIED |
 | Notice motion | VERIFIED (browser) |
 | Keyboard handling | IMPLEMENTED BUT UNVERIFIED (on a phone) |
-| Account ask order | DEFERRED WITH REASON (owner decision) |
-| Per-screen tracking | BLOCKED (approval) |
+| Restore before fresh ledger (onboarding) | VERIFIED (browser, simulated Google/Drive/server); real-device sign-in UNVERIFIED |
+| First-launch Drive restore | VERIFIED (simulated) |
+| Per-screen tracking | DEFERRED WITH REASON (owner: not approved) |
+| Paywall, motion blur, sound | DEFERRED WITH REASON (rejected) |
