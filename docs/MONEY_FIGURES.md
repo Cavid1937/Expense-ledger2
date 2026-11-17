@@ -43,6 +43,30 @@ Words used the same way everywhere:
 - Says nothing when no shown account has an opening date: the app cannot know.
 - It is **never taken out of any figure**. The money may have come from somewhere the person does not track (cash in a pocket). The app shows the amount and says the figure above may be too high by up to that much.
 
+- Run 99: the same amount is shown under the account balances on Home (`unassignedEntries` gives the list; `unassignedSpend` adds that same list up, so the list and the amount cannot disagree).
+
+## 4a. Putting an entry on an account (Run 99)
+
+- Code: `assignAccount` (App.jsx), used by the "Choose accounts" sheet on Home.
+- Changes only the account of entries that have none (or whose account no longer exists). Amount, date, id and every other field stay as they were. An entry that already has an account is never moved.
+- Refuses an account that does not exist. The person chooses; the app never guesses. One Undo puts everything back.
+- Effect: that account's balance (1) goes down by the entry's amount, and the amount in (4) goes down by the same.
+- Hand example: card opens at 200, income 2,000 on the card, 20 spent on the card: 2,180. Two entries with no account, 12.50 and 7.50. Both put on the card: 2,180 - 12.50 - 7.50 = 2,160.
+
+## 4b. "What if I buy something?" (Run 99)
+
+- Code: `whatIfSpend` (App.jsx). A question about a figure already on the card. Nothing is saved and no figure changes.
+- On Safe to Spend: left after = figure - amount; per day = left after / days left in the month (same division as that card).
+- On "Until your next income": left after = figure - amount; per day = left after / days to the income, rounded down to the qapik (same as that card).
+- If the amount is more than what is left it says by how much, and gives no per-day figure.
+- No answer for: zero, a negative amount, text that is not a number, 1,000,000,000 or more.
+- Hand example: 170 left, 3 days, buy 20: 150 left; 150 / 3 = 50.00 a day instead of 56.66 (170 / 3 = 56.666, rounded down).
+- It inherits every limit of the figure it starts from.
+
+## 4c. Home-screen widget (Run 99)
+
+- Code: `widgetSnapshot` (App.jsx). Shows the first three accounts that are not hidden. Before Run 99 a hidden account could appear there.
+
 ## 5. Bank statement checks (Run 98)
 
 - Code: `statementNeedsOk` (App.jsx); the checks themselves are in statement.js.

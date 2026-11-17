@@ -406,7 +406,7 @@ export function accountsHeld(transactions) {
 export function WhatIf({ kind, left, days, currency }) {
   const [on,setOn]=useState(false), [txt,setTxt]=useState("");
   const amt=formMoney(txt,{positive:true}), r=amt ? whatIfSpend(amt,kind,left,days) : { ok:false };
-  if (!on) return <button type="button" className="safe-toggle" data-section="whatif-open" data-kind={kind} onClick={()=>setOn(true)}>{t("whatif.open")}</button>;
+  if (!on) return <button type="button" className="whatif-toggle" data-section="whatif-open" data-kind={kind} onClick={()=>setOn(true)}>{t("whatif.open")}</button>;
   return (
     <div data-section="whatif" data-kind={kind} role="group" aria-label={t("whatif.open")} style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
       <label className="field-lbl" htmlFor={"whatif-"+kind}>{t("whatif.label")}</label>
