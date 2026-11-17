@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 // Run 75: monthly summary
 import { MonthReportCard } from "./report.jsx";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, unassignedEntries, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, loanDueInMonth, whatIfSpend, formMoney, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, unassignedEntries, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, debtsOrNull, whatIfSpend, formMoney, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse, useRolling } from "./motion.jsx";
@@ -205,7 +205,7 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount, onAs
       </div>
       {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</div>}
       {owedCredit>0&&<div className="list-sub" data-section="home-credit-owed" style={{margin:"4px 2px 0"}}>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</div>}
-      {np&&<div className="list-sub" data-section="home-netpos" style={{margin:"4px 2px 0"}}>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</div>}
+      {np&&<div className="list-sub" data-section="home-netpos" style={{margin:"4px 2px 0"}}>{t("acc.net",{ amount:(np.net<0?"−":"")+fmt(Math.abs(np.net)/100,currency) })}</div>}
       {loose.known&&loose.list.length>0&&(
         <div className="list-sub" data-section="home-loose" role="note" style={{margin:"6px 2px 0",lineHeight:1.45,color:"var(--warn)"}}>
           {tn("acc.loose",loose.list.length,{ amount:fmt(looseSum,currency), date:fmtDate(loose.since) })}
@@ -241,17 +241,19 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
   const budgetTotal =Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
   const spentToDate =calcSpentToDate(transactions,now);
   const paceInfo    =calcSpendingPace(spentToDate,now,budgetTotal);
-  const safeInfo   =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills);
+  // Run 103 (owner decision D9): loan instalments from the Debts page, and the principal of loan payments, are part of the figures
+  const debts       =useMemo(()=>debtsOrNull(),[transactions,accountTxns]);
+  const safeInfo   =calcSafeToSpend(transactions,safeToSpend,goals,new Date(),bills,{ debtData:debts, cashTx:accountTxns||transactions });
   const runOut      =useMemo(()=>safeInfo.feasible&&safeToSpend?.enabled ? calcRunOutDay(transactions,bills,safeInfo.remaining,safeInfo.daysRemaining) : { show:false },[transactions,bills,safeInfo.feasible,safeInfo.remaining,safeInfo.daysRemaining,safeToSpend?.enabled]);   // Run 43
   // Run 97: before this month's income arrives, Safe to Spend has nothing to count; show what the accounts cover until the income instead.
   const held        =accountsHeld(accountTxns||transactions);
   // Run 98: spending with no account moves no balance; the "until" card names how much, so its figure is not read as more certain than it is.
   const loose=useMemo(()=>{ try { return unassignedSpend(readAccounts(),accountTxns||transactions); } catch { return { known:false, count:0, sum:0 }; } },[accountTxns,transactions]);
   // Run 102: entries dated ahead are taken off the "until" figure as money; one paid from a hidden account is left out, as that account's money is
-  const cashTx      =useMemo(()=>{ const all=accountTxns||transactions; let hid; try { hid=new Set(readAccounts().accounts.filter(a=>a.hidden).map(a=>a.id)); } catch { return all; } return hid.size ? all.filter(x=>!(x && x.account && hid.has(x.account))) : all; },[accountTxns,transactions]);  const loanDue     =useMemo(()=>{ try { return loanDueInMonth(readDebts()); } catch { return { count:0, sum:0 }; } },[transactions]);
-  // Run 100: the same "until your next income" figure as one line under Safe to Spend, once this month's income is recorded
-  const untilNext   =useMemo(()=>{ if (!safeToSpend?.enabled || !safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ afterIncome:true, cashTx }); },[transactions,cashTx,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
-  const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled || safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ cashTx }); },[transactions,cashTx,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
+  const cashTx      =useMemo(()=>{ const all=accountTxns||transactions; let hid; try { hid=new Set(readAccounts().accounts.filter(a=>a.hidden).map(a=>a.id)); } catch { return all; } return hid.size ? all.filter(x=>!(x && x.account && hid.has(x.account))) : all; },[accountTxns,transactions]);
+  // Run 103 (owner decision D1): "Until your next income" is the main figure whenever it can be worked out (before or after this
+  // month's income); Safe to Spend stays below it as the calendar-month figure. When it cannot be worked out, `reason` says why.
+  const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled) return { show:false }; return calcUntilPay(transactions,bills,held,debts,new Date(),{ afterIncome:true, cashTx }); },[transactions,cashTx,bills,held,debts,safeToSpend?.enabled]);
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curIn>0;   // Run 35b: any money in (a refund or savings withdrawal is spendable too); the Income figure itself is earnings only
 
@@ -271,7 +273,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
       {/* Run 75: last month's summary, in the first week of a month */}
       <MonthReportCard transactions={transactions} budgets={budgets} goals={goals} currency={currency} showToast={showToast}/>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
-      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={held} untilPay={untilPay} untilNext={untilNext} loose={loose} loanDue={loanDue}/>
+      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={held} untilPay={untilPay} loose={loose}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount" data-section="hero-spent"><RollingMoney v={curExp} currency={currency}/></div>
@@ -364,7 +366,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
       {onFirstGo&&<FirstNudge onGo={onFirstGo}/>}
       {/* Smart Helper — deterministic advice cards */}
       <div className="section-enter section-enter-2" data-section="home-coach">
-        <SmartHelper transactions={transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
+        <SmartHelper transactions={transactions} rawTransactions={accountTxns||transactions} bills={bills} budgets={budgets} goals={goals} safeToSpend={safeToSpend} currency={currency}/>
       </div>
       {setup&&!setup.hidden&&(()=>{
         // Run 17: first-run checklist. Each step ticks itself from what the person has actually done; nothing is stored except "hidden".
@@ -430,36 +432,41 @@ export function WhatIf({ kind, left, days, currency }) {
     </div>
   );
 }
-export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null, untilPay=null, untilNext=null, loose=null, loanDue=null }) {
+// Run 103 (owner decision D1): reasons "Until your next income" can name when it cannot be worked out (calcUntilPay `reason`)
+const UNTIL_WHY=["accounts","noDate","overdue","dueToday","far"];
+export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null, untilPay=null, loose=null }) {
   // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
   // summary and upcoming bills out of the first screen.
   const [open,setOpen]=useState(false);
+  // Run 103 (D1): the pay-cycle figure leads whenever it can be worked out; Safe to Spend follows as the calendar-month figure
+  const until=!!(safeToSpend?.enabled && untilPay && untilPay.show);
+  // Video review, 17 Nov ("every question has to change something"): whoever answered "No income now" in the first questions is not told to add their next income
+  const noIncome=untilPay && untilPay.reason==="noDate" && (readFirstChoices()||{}).income==="none";
+  const why=!until && !noIncome && safeToSpend?.enabled && untilPay && UNTIL_WHY.includes(untilPay.reason) ? untilPay.reason : "";
   return (
     <>
+      {until&&<UntilPayCard untilPay={untilPay} loose={loose} currency={currency}/>}
       {safeToSpend?.enabled&&safeInfo.feasible&&(
-        <div className="safe-card section-enter section-enter-2" data-section="home-safe">
+        <div className={"safe-card section-enter section-enter-2"+(until?" safe-secondary":"")} data-section="home-safe">
           <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
-            <Icon name="safe" size={12} color="var(--ink-3)"/>{t("safe.title")}
+            <Icon name="safe" size={12} color="var(--ink-3)"/>{t(until?"safe.titleMonth":"safe.title")}
           </div>
           <div className="safe-amount" style={{color:safeInfo.remaining>=0?"var(--ink)":"var(--neg)"}}>
             <MoneyText v={fmt(safeInfo.remaining,currency)}/>
           </div>
           {/* Run 54: one plain sentence saying what this number is, for someone who has never met the term */}
-          <div className="list-sub" data-section="safe-plain" style={{marginTop:2,marginBottom:4,lineHeight:1.45}}>{t(safeInfo.remaining>=0?"safe.plain":"safe.plainOver")}</div>
+          <div className="list-sub" data-section="safe-plain" style={{marginTop:2,marginBottom:4,lineHeight:1.45}}>{t(until?"safe.monthNote":safeInfo.remaining>=0?"safe.plain":"safe.plainOver")}</div>
           {safeInfo.daysRemaining>0&&(
             <div className="safe-daily">
               {safeInfo.remaining>0?t("safe.perDay",{amount:fmt(safeInfo.dailyAllowance,currency)}):""}
               {tn("safe.daysLeft",safeInfo.daysRemaining,{month:monthShort(now)})}
             </div>
           )}
-          {untilNext&&untilNext.show&&<div className="list-sub" data-section="safe-untilline" style={{marginTop:4,lineHeight:1.45}}>{untilNext.left>=0
-            ?t("until.line",{ date:fmtDate(untilNext.payDate), amount:fmt(untilNext.left,currency), perDay:fmt(untilNext.perDay,currency) })
-            :t("until.lineOver",{ date:fmtDate(untilNext.payDate), amount:fmt(-untilNext.left,currency) })}</div>}
           {runOut&&runOut.show&&<div className="list-sub" data-section="safe-runout" style={{marginTop:4,color:"var(--warn)",fontWeight:600}}>{t("safe.runOut",{ day:runOut.day, month:t("monGen."+Number(now.slice(5,7))), daily:fmt(runOut.usualDaily,currency) })}</div>}
-          {safeInfo.daysRemaining>0&&(()=>{ const t0=new Date(), dim=new Date(t0.getFullYear(),t0.getMonth()+1,0).getDate(), left=Math.min(safeInfo.daysRemaining,dim), gone=dim-left; return (   /* Run 27d: the month as a row of day-ticks: days gone are filled, today is taller, days ahead are faint */
+          {!until&&safeInfo.daysRemaining>0&&(()=>{ const t0=new Date(), dim=new Date(t0.getFullYear(),t0.getMonth()+1,0).getDate(), left=Math.min(safeInfo.daysRemaining,dim), gone=dim-left; return (   /* Run 27d: the month as a row of day-ticks: days gone are filled, today is taller, days ahead are faint */
             <div className="runway" aria-hidden="true">{Array.from({length:dim},(_,i)=><i key={i} className={i<gone?"on":i===gone?"now":""}/>)}</div>
           ); })()}
-          {safeInfo.daysRemaining>0&&<WhatIf kind="safe" left={safeInfo.remaining} days={safeInfo.daysRemaining} currency={currency}/>}
+          {!until&&safeInfo.daysRemaining>0&&<WhatIf kind="safe" left={safeInfo.remaining} days={safeInfo.daysRemaining} currency={currency}/>}
           <button className="safe-toggle" aria-expanded={open} aria-controls="safe-breakdown" onClick={()=>setOpen(o=>!o)}>
             {t(open?"safe.hideHow":"safe.showHow")}<span className={"fold-chev r90"+(open?" open":"")}><Icon name="chevRight" size={14}/></span>
           </button>
@@ -506,6 +513,19 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
                 {safeInfo.futureCommitments>0?`−${fmt(safeInfo.futureCommitments,currency)}`:t("safe.noneThisMonth")}
               </span>
             </div>
+            {/* Run 103 (owner decision D9): loan instalments from the Debts page, in full; and the principal of loan payments made this month */}
+            {safeInfo.loanDue>0&&(
+              <div className="safe-row safe-loan-due" data-section="safe-loan-due">
+                <span className="safe-lbl">{t("safe.loanDue")}{safeInfo.loanDueCount>0?` (${safeInfo.loanDueCount})`:""}</span>
+                <span className="safe-val" style={{color:"var(--warn)"}}>−{fmt(safeInfo.loanDue,currency)}</span>
+              </div>
+            )}
+            {safeInfo.loanPrincipalPaid>0&&(
+              <div className="safe-row safe-loan-paid" data-section="safe-loan-paid">
+                <span className="safe-lbl">{t("safe.loanPrincipalPaid")}</span>
+                <span className="safe-val" style={{color:"var(--ink-3)"}}>−{fmt(safeInfo.loanPrincipalPaid,currency)}</span>
+              </div>
+            )}
             <div className="safe-row" style={{borderBottom:"none",paddingTop:8,marginTop:2,borderTop:"3px double var(--rule-2)"}}>
               <span className="safe-lbl" style={{fontWeight:700,color:"var(--ink)"}}>{t("safe.discretionary")}</span>
               <span className="safe-val" style={{color:safeInfo.remaining>=0?"var(--pos)":"var(--neg)",fontSize:13}}>
@@ -526,22 +546,35 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
           </Collapse>
           {/* Always visible, open or not: without recurring bills the number is optimistic, and the user must not have to tap to learn that. */}
           {/* Run 31: the caveats share ONE quiet block (two stacked boxes competed with the number). The balance paragraph keeps its own hook. */}
-          {(()=>{ const noRec=safeInfo.scheduleCount===0, lowHeld=held!==null&&safeInfo.remaining>0&&held<safeInfo.remaining, loans=!!(loanDue&&loanDue.sum>0); if (!noRec&&!lowHeld&&!loans) return null; return (
+          {(()=>{ const noRec=safeInfo.scheduleCount===0, lowHeld=held!==null&&safeInfo.remaining>0&&held<safeInfo.remaining; if (!noRec&&!lowHeld) return null; return (
             <div className="safe-note safe-caveat" role="note" data-section="home-safe-notes">
-              {/* Run 100: loan payments from the Debts page are not in this figure; say how much is still due (shown, never subtracted) */}
-              {loans&&<div data-section="home-safe-loans" style={{marginBottom:noRec||lowHeld?6:0}}>{t("safe.noteLoans",{ amount:fmt(loanDue.sum,currency) })}</div>}
               {noRec&&<div>{t("safe.noteNoRecurring")}</div>}
               {/* The figure is a month-flow plan, not a bank balance: when the accounts hold less than it, say so (always visible). */}
               {lowHeld&&<div data-section="home-safe-held" style={noRec?{marginTop:6}:undefined}>{t("safe.noteBalance",{ held:fmt(held,currency) })}</div>}
             </div>); })()}
+          {why&&<div className="safe-note until-why" role="note" data-section="until-why">{t("until.why."+why)}</div>}
         </div>
       )}
-
       {/* Safe to Spend is on but no income has arrived yet this month: say so instead of showing nothing. */}
-      {/* Run 97: no income yet this month, but the accounts and the next income date are known: what the money covers until then.
-          A separate figure with its own name; Safe to Spend itself is unchanged and starts when the income is recorded. */}
-      {safeToSpend?.enabled&&!safeInfo.feasible&&untilPay&&untilPay.show&&(
-        <div className="safe-card section-enter section-enter-2" data-section="home-untilpay">
+      {safeToSpend?.enabled&&!safeInfo.feasible&&(
+        <div className={"safe-card section-enter section-enter-2"+(until?" safe-secondary":"")} role="status" data-section="home-safe">
+          <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
+            <Icon name="safe" size={12} color="var(--ink-3)"/>{t(until?"safe.titleMonth":"safe.title")}
+          </div>
+          <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.5}}>
+            {t("safe.waiting")}{safeInfo.expectedInc>0?" "+t("safe.waitingExpected",{ amount:fmt(safeInfo.expectedInc,currency) }):""}
+          </div>
+          {why&&<div className="safe-note until-why" role="note" data-section="until-why">{t("until.why."+why)}</div>}
+        </div>
+      )}
+    </>
+  );
+}
+// Run 97: what the visible accounts cover until the next income. Run 103 (owner decision D1): the main Home figure whenever it can be
+// worked out, before or after this month's income; Safe to Spend is shown below it as the calendar-month figure.
+function UntilPayCard({ untilPay, loose, currency }) {
+  return (
+        <div className="safe-card section-enter section-enter-2 until-main" data-section="home-untilpay">
           <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
             <Icon name="safe" size={12} color="var(--ink-3)"/>{t("until.title")}
           </div>
@@ -578,20 +611,9 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
               </div>
               <div className="list-sub" style={{lineHeight:1.45}}>{t("until.looseNote")}</div>
             </div>
-          )}          <div className="safe-note">{t("until.note")}</div>
+          )}
+          <div className="safe-note">{t("until.note")}</div>
         </div>
-      )}
-      {safeToSpend?.enabled&&!safeInfo.feasible&&!(untilPay&&untilPay.show)&&(
-        <div className="safe-card section-enter section-enter-2" role="status" data-section="home-safe">
-          <div className="label-sm" style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}>
-            <Icon name="safe" size={12} color="var(--ink-3)"/>{t("safe.title")}
-          </div>
-          <div style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.5}}>
-            {t("safe.waiting")}{safeInfo.expectedInc>0?" "+t("safe.waitingExpected",{ amount:fmt(safeInfo.expectedInc,currency) }):""}
-          </div>
-        </div>
-      )}
-    </>
   );
 }
 

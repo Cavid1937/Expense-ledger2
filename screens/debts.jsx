@@ -1,9 +1,9 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { useState } from "react";
+import { useState, useMemo } from "react";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
-import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, saveTextFile } from "../App.jsx";
+import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, saveTextFile, buildSchedules, loanBill } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { TipHead } from "./tip.jsx";
 import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";   // Run 38: forms, edits and the Debts / Loans switch ease in and out
@@ -14,8 +14,10 @@ import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";   // Run 38:
 // (category Finance, merchant = the lender) and remembers its id; deleting the payment record removes that entry too.
 export const LOAN_KIND_KEY={ cash:"loan.kind.cash", card:"loan.kind.card", taksit:"loan.kind.taksit", other:"loan.kind.other" };
 export const LOAN_RT_KEY={ annuity:"loan.rt.annuity", equal:"loan.rt.equal", flat:"loan.rt.flat", none:"loan.rt.none" };
-export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=null, onPutEntries=()=>{}, showToast, showSnackbar, initialSeg="debts" }) {
+export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=null, onPutEntries=()=>{}, showToast, showSnackbar, initialSeg="debts", transactions=[], bills=[] }) {
   const [data,setData]=useState(()=>readDebts());
+  const schedules=useMemo(()=>buildSchedules(transactions,bills),[transactions,bills]);
+  const billOpts=schedules.filter(s=>s.billId && s.isActive && s.type==="expense");
   const [seg,setSeg]=useState(initialSeg==="loans"?"loans":"debts");
   const [showDebt,setShowDebt]=useState(false), [showLoan,setShowLoan]=useState(false);
   const [dForm,setDForm]=useState({ dir:"owe", name:"", amt:"", due:"" }), [dMsg,setDMsg]=useState("");
@@ -128,10 +130,20 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
     const text=(intr[l.id]!==undefined ? intr[l.id] : (row.interest/100).toFixed(2)).trim();
     const iv=text==="" ? null : formMoney(text);
     if (text!=="" && (iv===null || Math.round(iv*100)>row.payment)) { showToast(t("loan.interestInvalid")); return; }
-    const txnId=onAddEntry({ type:"expense", amount:row.payment/100, loan:{ interest:iv },  category:"finance", subcategory:"", merchant:l.lender, note:t("loan.entryNote"), date, recurring:false, recurFreq:null, isActive:true });
+    // Run 103: when a recurring payment stands for this loan, the entry is linked to it, so that bill counts as paid too (no double count).
+    const via=loanBill(l,schedules);
+    // ... and when that payment's entry for this month is already recorded (and no earlier loan payment used it), no second entry is
+    // added: the loan payment only points at it (billTxn), so removing the loan payment later leaves that entry alone.
+    const used=new Set(l.payments.flatMap(p=>[p.txnId,p.billTxn]).filter(x=>x!==undefined).map(String));
+    const had=via&&via.billId ? transactions.find(x=>x && x.type==="expense" && x.billId===via.billId && typeof x.date==="string" && x.date.slice(0,7)===date.slice(0,7) && !used.has(String(x.id))) : null;
+    if (had) { if (save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:[...x.payments,{ id:uid("p"), date, amount:row.payment, billTxn:had.id }]}:x) })) showToast(t("loan.paidViaBillToast",{ name:via.merchant })); return; }
+    const txnId=onAddEntry({ type:"expense", amount:row.payment/100, loan:{ interest:iv },  category:"finance", subcategory:"", merchant:l.lender, note:t("loan.entryNote"), date, recurring:false, recurFreq:null, isActive:true, ...(via&&via.billId?{ billId:via.billId }:{}) });
     save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:[...x.payments,{ id:uid("p"), date, amount:row.payment, txnId }]}:x) });
     showToast(t("loan.paidToast"));
   };
+  // Run 103 (D9): an explicit link to a recurring payment; "" goes back to matching by name and amount.
+  const setLoanBill=(l,billId)=>{ const next=data.loans.map(x=>{ if (x.id!==l.id) return x; const { billId:_old, ...rest }=x; return billId ? { ...rest, billId } : rest; });
+    if (save({ ...data, loans:next })) showToast(t("acc.edited")); };
   const delLoanPayment=(l,p)=>{
     askConfirm(t("loan.confirmDeletePay")).then(yes=>{ if (!yes) return;
       const index=l.payments.findIndex(y=>y.id===p.id);
@@ -312,6 +324,16 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
               </div>
               {implied!==null&&<div className="list-sub" style={{marginTop:8}}>{t("loan.flatReal",{pct:fmtPct(Math.round(implied*10)/10)})}</div>}
               <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t("loan.estimate")}</div>
+              {!done&&billOpts.length>0&&(
+                <div className="field" style={{marginTop:10,marginBottom:0}} data-section="loan-bill">
+                  <label className="field-lbl" htmlFor={"loan-bill-"+l.id}>{t("loan.billLink")}</label>
+                  <PickSelect id={"loan-bill-"+l.id} className="field-input" value={l.billId&&billOpts.some(s=>s.billId===l.billId)?l.billId:""} onChange={e=>setLoanBill(l,e.target.value)}>
+                    <option value="">{t("loan.billAuto")}</option>
+                    {billOpts.map(s=><option key={s.billId} value={s.billId}>{s.merchant} · {fmt(s.amount,currency)}</option>)}
+                  </PickSelect>
+                </div>
+              )}
+              {!done&&(()=>{ const b=loanBill(l,schedules); return b ? <div className="list-sub loan-via-bill" role="note" data-section="loan-via-bill" style={{marginTop:6,lineHeight:1.5}}>{t("loan.viaBill",{ name:b.merchant })}</div> : null; })()}
               {!done&&(
                 <div className="field" style={{marginTop:10,marginBottom:0}}>
                   <TipHead id={"loan-int-"+l.id} text={t("loan.interestHint")} className="tip-field"><label className="field-lbl" htmlFor={"loan-int-"+l.id}>{t("loan.interestPart")}</label></TipHead>

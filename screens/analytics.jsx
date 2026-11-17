@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Collapse, Swap, useLeave } from "./motion.jsx";
 import { locale, t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, KEY, isEarnedCat, refundsNetted, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
+import { CAT, CatIcon, Icon, KEY, isEarnedCat, refundsNetted, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, debtsOrNull, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
 import { accountsMap, readAccounts } from "../App.jsx";
 // Run 70: category colours drawn darker on light themes
 import { catInk } from "../App.jsx";
@@ -207,7 +207,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
   const catSpend    = calcCategorySpend(transactions, selectedMon);
   const budgetItems = calcBudgetStatus(budgets || {}, catSpend, selectedMon, new Date(), budgetCarried(transactions, budgets || {}, readBudgetCarry(), selectedMon));   // Run 59: same limits as Budgets
   const budgetTotal = Object.values(budgets||{}).reduce((s,v)=>s+(v||0),0);
-  const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date()),[transactions,bills]);   // Run 17
+  const forecast    = useMemo(()=>calcMonthEndForecast(transactions,bills,new Date(),debtsOrNull()),[transactions,bills]);   // Run 17
   const debtCash    = useMemo(()=>debtCashFlow(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 18
   const loanCash    = useMemo(()=>loanCashOut(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 17
   const refundLow   = useMemo(()=>refundsNetted(rawTransactions||[],selectedMon),[rawTransactions,selectedMon]);   // Run 36
@@ -383,6 +383,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
               ? <div style={{fontSize:12,color:"var(--ink-2)",fontWeight:600}}>{t("an.forecastRange",{low:fmt(forecast.low,currency),high:fmt(forecast.high,currency)})}</div>
               : <div className="list-sub">{t("an.forecastSingle")}</div>}
             <div className="list-sub" style={{marginTop:6,lineHeight:1.5}}>{t("an.forecastHow",{daily:fmt(forecast.usualDaily,currency)})}</div>
+            {forecast.loanPrincipal>0&&<div className="list-sub forecast-loan" data-section="forecast-loan" style={{marginTop:6,lineHeight:1.5}}>{t("an.forecastLoan",{amount:fmt(forecast.loanPrincipal,currency)})}</div>}
           </>):<div className="list-sub">{t("an.forecastNeed")}</div>}
         </div>
       )}
@@ -734,11 +735,11 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
   );
 }
 
-export function SmartHelper({ transactions, bills=[], budgets, goals, safeToSpend, currency }) {
+export function SmartHelper({ transactions, rawTransactions=null, bills=[], budgets, goals, safeToSpend, currency }) {
   const lc = locale();
   const cards = useMemo(
-    () => calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills),
-    [transactions, bills, budgets, goals, safeToSpend, currency, lc]   // card text follows the interface language
+    () => calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills, { debtData:debtsOrNull(), cashTx:rawTransactions||undefined }),   // Run 103: same Safe to Spend as Home
+    [transactions, rawTransactions, bills, budgets, goals, safeToSpend, currency, lc]   // card text follows the interface language
   );
 
   if (cards.length === 0) return null;

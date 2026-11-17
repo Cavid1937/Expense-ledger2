@@ -28,7 +28,8 @@ section("R97-B2. Accounts set up, income not in yet: the card shows what is left
   ok(/170/.test(r.amount || ""), "200 held - 30 dated ahead = 170", r.amount);
   ok(/56[.,]66/.test(r.daily || "") && /3 days/.test(r.daily || ""), "56.66 a day for 3 days (rounded down)", r.daily);
   ok(/200/.test(r.card) && /30/.test(r.card) && !/\{[a-z]+\}/i.test(r.card), "the rows show what is held and what is set aside; nothing left unfilled", r.card);
-  ok(r.waiting === null, "the earlier 'waiting' card is not shown beside it", r.waiting);
+  // Run 103 (owner decision D1): the month card stays, below and labelled as the month figure (before: it was hidden here)
+  ok(r.waiting !== null && /Safe to Spend this month/.test(r.waiting) && await page.evaluate(() => !!(document.querySelector('[data-section="home-untilpay"]').compareDocumentPosition(document.querySelector('[data-section="home-safe"]')) & 4)), "the month card is below it, named 'Safe to Spend this month'", r.waiting);
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }

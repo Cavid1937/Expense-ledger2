@@ -485,6 +485,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
               {accData.accounts.filter(a=>!a.hidden||a.id===account).map(a=>(
                 <button key={a.id} type="button" role="radio" aria-checked={account===a.id} data-acc-pick={a.id} className={`sub-chip${account===a.id?" sel":""}`} onClick={()=>{ accTouched.current=true; setAccount(account===a.id?"":a.id); }}>{a.name}</button>
               ))}
+              {/* Run 103 (D10): "no account" is a choice of its own, not only "tap the selected account again" */}
+              {!wallet&&<button type="button" role="radio" aria-checked={!account} data-acc-pick="" data-section="add-no-account" className={`sub-chip${!account?" sel":""}`} onClick={()=>{ accTouched.current=true; setAccount(""); }}>{t("acc.noAccountChip")}</button>}
               {wallet&&<button type="button" role="radio" aria-checked="true" className="sub-chip sel" data-section="add-old-wallet" title={t("wallet.label")} onClick={()=>setWallet("")}>{walletName(wallet)} ×</button>}
             </div>
           </div>

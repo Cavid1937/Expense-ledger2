@@ -162,7 +162,7 @@ export function cleanMoneyText(raw, opts) {
 let confirmHost=null;
 // Run 53: the version a person sees in Settings ("Version 53 (12 Nov 2026)"): the number of the work run and its day. Raise it with every
 // run that changes the app. The build code next to it is made by the build tool and only tells two builds apart.
-export const APP_RELEASE="102 (2026-11-17)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
+export const APP_RELEASE="104 (2026-11-17)";   // a year-first date: it cannot be mistaken for an amount (the privacy-mode test caught "12.11")
 // Run 51: the same "Undo" bar for any screen, without passing it down through every page. offerUndo() gives false when the bar is not
 // there (the screen then shows its plain message, as before).
 let undoHost=null;
@@ -1352,7 +1352,9 @@ function cleanPayments(list, withTxn) {
   list.forEach(p=>{
     if (!isPlainObject(p) || typeof p.id!=="string" || !p.id.trim() || p.id.length>64 || seen.has(p.id) || typeof p.date!=="string" || !isValidDateStr(p.date) || !isQapik(p.amount)) return;
     seen.add(p.id);
-    out.push({ id:p.id, date:p.date, amount:p.amount, ...(withTxn && (typeof p.txnId==="number"||typeof p.txnId==="string") && String(p.txnId).length<=64 ? { txnId:p.txnId } : {}) });
+    const ref=(v)=>(typeof v==="number"||typeof v==="string") && String(v).length<=64;
+    // billTxn (Run 103): the recurring payment's entry this payment was counted through; only a reference, never removed with the payment
+    out.push({ id:p.id, date:p.date, amount:p.amount, ...(withTxn && ref(p.txnId) ? { txnId:p.txnId } : {}), ...(withTxn && ref(p.billTxn) ? { billTxn:p.billTxn } : {}) });
   });
   return out;
 }
@@ -1372,11 +1374,15 @@ export function cleanDebtData(raw) {
     if (out.loans.length>=MAX_LOANS || !isPlainObject(l) || typeof l.id!=="string" || !l.id.trim() || l.id.length>64 || ids.has("l:"+l.id)) return;
     const lender=cleanText(l.lender,60); if (!lender) return;
     const c={ id:l.id, lender, kind:LOAN_KINDS.includes(l.kind)?l.kind:"other", principal:l.principal, ratePct:l.rateType==="none"?0:l.ratePct, rateType:l.rateType, months:l.months, firstPayment:l.firstPayment, bankPayment:isQapik(l.bankPayment)?l.bankPayment:null, payments:cleanPayments(l.payments,true) };
+    // Run 103: the recurring payment this loan is also set up as (owner decision D9: counted once). Kept only as a short id.
+    if (typeof l.billId==="string" && /^[A-Za-z0-9_.:-]{1,64}$/.test(l.billId)) c.billId=l.billId;
     if (loanSchedule(c)===null) return;
     ids.add("l:"+l.id); out.loans.push(c);
   });
   return out;
 }
+// Run 103: for screens and the widget that pass the Debts data to a money figure; null when it cannot be read (the figure then has no loans)
+export function debtsOrNull() { try { return readDebts(); } catch { return null; } }
 export function readDebts() { try { const r=localStorage.getItem(DEBTS_KEY); return cleanDebtData(r ? JSON.parse(r) : null); } catch { return { debts:[], loans:[] }; } }
 // Run 18: unreadable or corrupt debts data is NEVER treated as an empty list that a later save may overwrite.
 //  corrupt / unreadable: the stored value stays exactly as it is, one safe copy is kept, every write is refused (an empty write too).
@@ -1667,6 +1673,15 @@ export function readFxOff() { try { return localStorage.getItem(FX_KEY)==="off";
 export function writeFxOff(off) { try { if (off) localStorage.setItem(FX_KEY,"off"); else localStorage.removeItem(FX_KEY); return true; } catch { return false; } }
 export function applyFx(off) { if (typeof document==="undefined" || !document.documentElement) return; if (off) document.documentElement.setAttribute("data-fx","off"); else document.documentElement.removeAttribute("data-fx"); }
 if (typeof document!=="undefined") applyFx(readFxOff());
+// Video review, 17 Nov (the phone keyboard covering the box being typed in): index.html asks the browser to shrink the page above the
+// keyboard (interactive-widget=resizes-content), so sheets and forms end above it. While typing, html[data-kb] hides the tab bar and the
+// add button, which would otherwise ride on top of the keyboard. "Open" means a text box has the focus and the page lost over a fifth of its height.
+export function keyboardOpen(h, tallest, el) { return !!el && /^(INPUT|TEXTAREA)$/.test(el.tagName||"") && !/^(checkbox|radio|button|submit|range|file|color)$/i.test(el.type||"") && tallest>0 && h<tallest*0.8; }
+if (typeof window!=="undefined" && typeof document!=="undefined" && window.addEventListener) {
+  let wide=window.innerWidth, tallest=window.innerHeight;
+  const check=()=>{ if (window.innerWidth!==wide) { wide=window.innerWidth; tallest=window.innerHeight; } tallest=Math.max(tallest,window.innerHeight); if (keyboardOpen(window.innerHeight,tallest,document.activeElement)) document.documentElement.setAttribute("data-kb","1"); else document.documentElement.removeAttribute("data-kb"); };
+  window.addEventListener("resize",check); document.addEventListener("focusin",check); document.addEventListener("focusout",()=>setTimeout(check,0));
+}
 const PRIVACY_KEY=`${KEY}__privacy`;
 function readPrivacy() { try { return localStorage.getItem(PRIVACY_KEY)==="1"; } catch { return false; } }
 function writePrivacy(on) { try { if (on) localStorage.setItem(PRIVACY_KEY,"1"); else localStorage.removeItem(PRIVACY_KEY); return true; } catch { return false; } }
@@ -3291,7 +3306,7 @@ export function calcSpendingPace(spent, mon=curMon(), budgetTotal=0, now=new Dat
 // the daily totals x sqrt(days left). `rangeShown` is true only when the same method, run on up to 3 earlier months as of their 10th
 // day, put the real total inside the range in at least 2/3 of them (and at least 2 months could be tested).
 const FORECAST_WINDOW=28, FORECAST_MIN_HISTORY=7, FORECAST_BIG=5;
-function forecastCore(transactions, bills, now) {
+function forecastCore(transactions, bills, now, debtData=null) {
   const mon=localMonthStr(now), todayStr=localDateStr(now), p=monthProgress(mon,now);
   const cents=(x)=>Math.round(x*100)/100;
   const expenses=transactions.filter(t=>t.type==="expense");
@@ -3300,7 +3315,11 @@ function forecastCore(transactions, bills, now) {
   const spentSoFar=inMon.filter(t=>t.date<=todayStr).reduce(addAmt,0);
   const plannedLater=inMon.filter(t=>t.date>todayStr).reduce(addAmt,0);
   let commitments=0;
-  openCommitments(transactions,bills,mon,now).rows.forEach(r=>{ commitments+=r.s.amount*(r.upcoming.length+r.overdue.length); });
+  const open=openCommitments(transactions,bills,mon,now,{ debtData });
+  open.rows.forEach(r=>{ commitments+=r.s.amount*(r.upcoming.length+r.overdue.length); });
+  // Run 103 (D9): a spending figure, so only the interest of loan instalments still due is added; the principal is returned apart
+  const loanInterestC=open.loans.reduce((s,r)=>s+r.interest,0), loanPrincipalC=open.loans.reduce((s,r)=>s+r.principal,0);
+  commitments+=loanInterestC/100;
   const end=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);              // yesterday: today is only partly over
   const first=parseLocalDate(expenses.reduce((m,t)=>t.date<m?t.date:m,expenses[0].date));
   const winStart=new Date(end.getFullYear(),end.getMonth(),end.getDate()-(FORECAST_WINDOW-1));
@@ -3308,7 +3327,7 @@ function forecastCore(transactions, bills, now) {
   const days=daysBetween(start,end)+1;
   if (days<FORECAST_MIN_HISTORY) return { available:false, reason:"history" };
   const s0=localDateStr(start), e0=localDateStr(end);
-  const usual=expenses.filter(t=>t.date>=s0 && t.date<=e0 && !t.recurring && !t.billId);
+  const usual=expenses.filter(t=>t.date>=s0 && t.date<=e0 && !t.recurring && !t.billId && !t.loan);
   const sorted=usual.map(t=>t.amount).sort((a,b)=>a-b);
   const median=sorted.length ? (sorted.length%2 ? sorted[(sorted.length-1)/2] : (sorted[sorted.length/2-1]+sorted[sorted.length/2])/2) : 0;
   const kept=median>0 ? usual.filter(t=>t.amount<=FORECAST_BIG*median) : usual;
@@ -3318,16 +3337,18 @@ function forecastCore(transactions, bills, now) {
   const sd=Math.sqrt(perDay.reduce((s,v)=>s+(v-mean)*(v-mean),0)/days);
   const base=spentSoFar+plannedLater+commitments, point=base+mean*p.daysLeft, half=sd*Math.sqrt(p.daysLeft);
   return { available:true, spentSoFar:cents(spentSoFar), plannedLater:cents(plannedLater), commitments:cents(commitments), usualDaily:cents(mean), daysLeft:p.daysLeft,
-    point:cents(point), low:cents(Math.max(base,point-half)), high:cents(point+half) };
+    point:cents(point), low:cents(Math.max(base,point-half)), high:cents(point+half), loanPrincipal:loanPrincipalC/100 };
 }
-export function calcMonthEndForecast(transactions, bills=[], now=new Date()) {
-  const f=forecastCore(transactions,bills,now);
+export function calcMonthEndForecast(transactions, bills=[], now=new Date(), debtData=null) {
+  const f=forecastCore(transactions,bills,now,debtData);
   if (!f.available) return { ...f, rangeShown:false, backtest:{ months:0, hits:0 } };
   let months=0, hits=0;
   for (let k=1;k<=3;k++) {
     const m=new Date(now.getFullYear(),now.getMonth()-k,1), asOf=new Date(m.getFullYear(),m.getMonth(),10,12,0,0), mon=localMonthStr(m);
     const known=transactions.filter(t=>t.date<=localDateStr(asOf));
-    const b=forecastCore(known,bills,asOf); if (!b.available) continue;
+    // Run 103: the loans as they stood then (only payments recorded up to that day)
+    const asOfS=localDateStr(asOf), debtThen=debtData && Array.isArray(debtData.loans) ? { loans:debtData.loans.map(l=>({ ...l, payments:(Array.isArray(l.payments)?l.payments:[]).filter(p=>p && typeof p.date==="string" && p.date<=asOfS) })) } : null;
+    const b=forecastCore(known,bills,asOf,debtThen); if (!b.available) continue;
     const actual=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon)).reduce(addAmt,0);
     months++; if (actual>=b.low-0.005 && actual<=b.high+0.005) hits++;
   }
@@ -3737,12 +3758,41 @@ export function scheduleMonthStatus(s, transactions, mon, now=new Date()) {
 // same amount to the qapik) IS the bill's payment, so the bill's own date is not counted a second time. Each entry settles one date at
 // most; overdue dates are never settled this way; inferred schedules are left as they are (never optimistic).
 // opts.before (a date): only dates before that day are listed, and only entries dated before it can settle them.
+// Run 103 (owner decision D9): the rows of one Debts-page loan still to pay, from the current month on (docs/MONEY_FIGURES.md, 12).
+// Rows dated before the current month are left out: the Debts page has no "already paid" step, so an old loan would otherwise count
+// every past month at once. Recorded payments settle rows in order, one row each: the payments after the first f (f = first row of
+// this month or later), or, if more, the payments dated this month or later. A short payment leaves the rest due (interest first).
+// Whole qapik. `full` = no payment recorded for that row.
+export function loanOpenRows(loan, now=new Date()) {
+  const sc=loanSchedule(loan); if (!sc) return [];
+  const monStart=localMonthStr(now)+"-01", pays=Array.isArray(loan.payments)?loan.payments:[];
+  const f=sc.payments.findIndex(r=>r.date>=monStart); if (f<0) return [];
+  const after=pays.slice(f), thisMon=pays.filter(p=>p && typeof p.date==="string" && p.date>=monStart);
+  const use=after.length>=thisMon.length ? after : thisMon, out=[];
+  for (let i=f;i<sc.payments.length;i++) {
+    const row=sc.payments[i], p=use[i-f], paid=p ? Math.max(0,Math.round(Number(p.amount)||0)) : 0, due=row.payment-paid;
+    if (due<=0) continue;
+    const interest=Math.max(0,row.interest-paid);
+    out.push({ n:row.n, date:row.date, due, interest, principal:due-interest, full:!p });
+  }
+  return out;
+}
+// Run 103: the recurring payment that already stands for this loan, or null. Explicit link first (loan.billId, an active expense
+// bill); otherwise the lender's name and the instalment amount to the qapik (the instalment of this month or the next one to come).
+export function loanBill(loan, schedules, now=new Date()) {
+  const act=(Array.isArray(schedules)?schedules:[]).filter(s=>s && s.isActive && s.type==="expense");
+  if (loan && typeof loan.billId==="string" && loan.billId) { const s=act.find(x=>x.billId===loan.billId); if (s) return s; }
+  const sc=loanSchedule(loan); if (!sc) return null;
+  const monStart=localMonthStr(now)+"-01", row=sc.payments.find(r=>r.date>=monStart); if (!row) return null;
+  return act.find(s=>norm(s.merchant)===norm(loan.lender) && Math.round((Number(s.amount)||0)*100)===row.payment) || null;
+}
 export function openCommitments(transactions, bills, mon, now=new Date(), opts={}) {
   const todayStr=localDateStr(now), before=(opts&&opts.before)||"", inRange=(d)=>!before || d<before;
   const knownIds=new Set((bills||[]).map(b=>b.id)), cents=(x)=>Math.round((Number(x)||0)*100), used=new Set();
   const loose=transactions.filter(t=>t.type==="expense" && t.date.startsWith(mon) && t.date>todayStr && inRange(t.date) && !(t.billId && knownIds.has(t.billId)));
   let matchedAhead=0;
-  const rows=buildSchedules(transactions,bills).filter(s=>s.isActive && s.type==="expense").map(s=>{
+  const schedules=buildSchedules(transactions,bills);
+  const rows=schedules.filter(s=>s.isActive && s.type==="expense").map(s=>{
     const st=scheduleMonthStatus(s,transactions,mon,now);
     const upcoming=st.upcoming.filter(inRange).filter(()=>{
       if (!s.billId) return true;
@@ -3752,7 +3802,21 @@ export function openCommitments(transactions, bills, mon, now=new Date(), opts={
     });
     return { s, upcoming, overdue:st.overdue.filter(inRange) };
   });
-  return { rows, matchedAhead };
+  // Run 103 (D9): loan instalments still due in this month (and before opts.before). A loan a recurring payment already stands for
+  // is skipped (listed in loanSkipped). An ordinary entry typed in ahead with the lender's name and the instalment amount settles it.
+  const loans=[], loanSkipped=[], debt=opts&&opts.debtData;
+  (debt && Array.isArray(debt.loans) ? debt.loans : []).forEach(l=>{
+    const open=loanOpenRows(l,now).filter(r=>r.date.startsWith(mon) && inRange(r.date)); if (!open.length) return;
+    const dup=loanBill(l,schedules,now); if (dup) { loanSkipped.push({ loanId:l.id, billKey:dup.key }); return; }
+    open.forEach(r=>{
+      if (r.full && r.date>todayStr) {
+        const hit=loose.find(t=>!used.has(t.id) && !t.loan && norm(t.merchant)===norm(l.lender) && cents(t.amount)===r.due);
+        if (hit) { used.add(hit.id); matchedAhead++; return; }
+      }
+      loans.push({ loanId:l.id, lender:l.lender, ...r });
+    });
+  });
+  return { rows, matchedAhead, loans, loanSkipped };
 }
 
 // Next date (today or later) with no payment recorded yet, or null.
@@ -3807,7 +3871,10 @@ export function billPaymentsLeft(s, transactions, now=new Date()) {
 // "Commitments still to come" = every expected payment of an active schedule this month that has no matching recorded payment:
 // both upcoming ones and earlier ones that were never recorded (counted so the figure is never optimistic).
 // Recurring monthly estimates (recurringMonthly) are informational and are NOT part of this month's subtraction.
-export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bills=[]) {
+// Run 103 (D9, docs/MONEY_FIGURES.md 12): opts.debtData = the Debts store: loan instalments still due this month come off in full.
+// opts.cashTx = the raw entries: the principal of loan payments recorded this month comes off too (the list given is the spending
+// view, which keeps only their interest). Worked out as raw minus view, so a caller that passes raw entries as the list adds nothing.
+export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date(), bills=[], opts={}) {
   transactions=collapseSpreads(transactions);   // Run 41: Safe to Spend is about cash, so a spread cost counts whole on its real date
   const { savingsTarget=0 }=safeConfig||{};
   const mon=localMonthStr(now), todayStr=localDateStr(now);
@@ -3826,8 +3893,12 @@ export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date
   // ahead; past-dated look-alikes stay unmatched until the user links them — the Run 12 rule). Such an entry settles an upcoming
   // date only when it is clearly the same payment: this month, linked to no bill, same category, same merchant as the bill's name,
   // same amount to the cent. Each entry settles at most one date. Anything less certain stays counted (never optimistic).
-  const open=openCommitments(transactions,bills,mon,now);
+  const open=openCommitments(transactions,bills,mon,now,{ debtData:opts&&opts.debtData });
   matchedAheadCount=open.matchedAhead;
+  const loanDueC=open.loans.reduce((s,r)=>s+r.due,0), loanDueCount=open.loans.length;
+  const loanSumC=(list)=>list.reduce((s,t)=>t && t.type==="expense" && t.loan && String(t.date).startsWith(mon) ? s+Math.round((Number(t.amount)||0)*100) : s,0);
+  const loanPrincipalPaid=opts&&Array.isArray(opts.cashTx) ? Math.max(0,loanSumC(collapseSpreads(opts.cashTx))-loanSumC(transactions))/100 : 0;
+  const loanDue=loanDueC/100;
   open.rows.forEach(r=>{
     const up=r.upcoming.length, od=r.overdue.length;
     upcomingCommitments+=r.s.amount*up;  upcomingCount+=up;
@@ -3844,12 +3915,13 @@ export function calcSafeToSpend(transactions, safeConfig, goals=[], now=new Date
 
   const cents2=(x)=>Math.round(x*100)/100;   // Run 22 audit: no floating-point crumbs (5e-17 instead of 0)
   const disposable=cents2(curInc-effectiveSavingsTarget);
-  const remaining=cents2(disposable-curExp-futureCommitments);
+  const remaining=cents2(disposable-curExp-futureCommitments-loanDue-loanPrincipalPaid);
   const dailyAllowance=p.daysRemaining>0 ? remaining/p.daysRemaining : 0;
 
   return {
     curInc, expectedInc, curExp, laterExp, savingsTarget, effectiveSavingsTarget, goalContributions, goalContributionActive,
     futureCommitments, upcomingCommitments, unrecordedCommitments, upcomingCount, unrecordedCount, matchedAheadCount,
+    loanDue, loanDueCount, loanPrincipalPaid, loanSkipped:open.loanSkipped.length,
     scheduleCount:schedules.length, recurringMonthly,
     disposable, remaining, daysLeft:p.daysLeft, daysRemaining:p.daysRemaining, dailyAllowance,
     feasible:curInc>0,
@@ -3887,35 +3959,35 @@ export function loanDueInMonth(debtData, now=new Date()) {
 // already (today or earlier) and nothing is recorded, the app cannot know whether the money came, so it shows nothing.
 // All sums in whole qapik. `held` is money (accountsHeld), `debtData` is the Debts store (loan payments are whole qapik).
 export function calcUntilPay(transactions, bills=[], held=null, debtData=null, now=new Date(), opts={}) {
-  const none={ show:false };
-  if (typeof held!=="number" || !Number.isFinite(held)) return none;
+  // Run 103 (owner decision D1): `reason` says what is missing, so Home can explain why the figure is not shown (never guessed)
+  const none=(reason)=>({ show:false, reason });
+  if (typeof held!=="number" || !Number.isFinite(held)) return none("accounts");
   const tx=collapseSpreads(Array.isArray(transactions)?transactions:[]), todayStr=localDateStr(now), mon=localMonthStr(now);
   // Run 100: opts.afterIncome is for the line under Safe to Spend: the same figure, also after this month's income is recorded
-  if (!(opts&&opts.afterIncome) && tx.some(t=>t.type==="income" && t.date.startsWith(mon) && t.date<=todayStr)) return none;
+  if (!(opts&&opts.afterIncome) && tx.some(t=>t.type==="income" && t.date.startsWith(mon) && t.date<=todayStr)) return none("recorded");
   const sch=buildSchedules(tx,bills||[]).filter(s=>s.isActive);
   let pay="";
   tx.forEach(t=>{ if (t.type==="income" && t.date>todayStr && (!pay || t.date<pay)) pay=t.date; });
   for (const s of sch) {
     if (s.type!=="income") continue;
-    if (scheduleMonthStatus(s,tx,mon,now).overdue.length) return none;
+    if (scheduleMonthStatus(s,tx,mon,now).overdue.length) return none("overdue");
     const d=scheduleNextDue(s,tx,now); if (!d) continue;
     const ds=localDateStr(d);
-    if (ds<=todayStr) return none;
+    if (ds<=todayStr) return none("dueToday");
     if (!pay || ds<pay) pay=ds;
   }
-  if (!pay) return none;
+  if (!pay) return none("noDate");
   const days=daysBetween(parseLocalDate(todayStr),parseLocalDate(pay));
-  if (!(days>=1) || days>45) return none;
+  if (!(days>=1) || days>45) return none("far");
   const C=(x)=>Math.round((Number(x)||0)*100), endMon=pay.slice(0,7);
   let due=0, dueCount=0;
   for (let i=0;i<3;i++) {
     const m=localMonthStr(addMonths(new Date(now.getFullYear(),now.getMonth(),1),i)); if (m>endMon) break;
-    openCommitments(tx,bills||[],m,now,{ before:pay }).rows.forEach(r=>{ const n=r.upcoming.length+r.overdue.length; due+=C(r.s.amount)*n; dueCount+=n; });
+    // Run 103 (D9): loan instalments come from the same list, one month at a time, so each is counted once (docs/MONEY_FIGURES.md 12)
+    const o=openCommitments(tx,bills||[],m,now,{ before:pay, debtData });
+    o.rows.forEach(r=>{ const n=r.upcoming.length+r.overdue.length; due+=C(r.s.amount)*n; dueCount+=n; });
+    o.loans.forEach(r=>{ due+=r.due; dueCount++; });
   }
-  (debtData && Array.isArray(debtData.loans) ? debtData.loans : []).forEach(l=>{
-    const sc=loanSchedule(l), k=Array.isArray(l.payments)?l.payments.length:0; if (!sc) return;
-    for (let i=k;i<sc.payments.length && sc.payments[i].date<pay;i++) { due+=sc.payments[i].payment; dueCount++; }
-  });
   // Run 102: what the accounts hold is all money, so entries dated ahead are taken off as money too (opts.cashTx: the raw entries).
   // The list itself may be the spending view (loan payments as interest only, money lent left out); it still decides the income date.
   const cash=opts&&Array.isArray(opts.cashTx) ? collapseSpreads(opts.cashTx) : tx;
@@ -4288,7 +4360,7 @@ export function widgetSnapshot(state, spendTxns, opts={}, now=new Date()) {
   const ms=calcMonthSummary(tx,mon,localMonthStr(new Date(now.getFullYear(),now.getMonth()-1,1)),now);
   const p=monthProgress(mon,now);
   const safeOn=!!(s.safeToSpend&&s.safeToSpend.enabled);
-  const info=safeOn ? calcSafeToSpend(tx,s.safeToSpend,s.goals||[],now,s.bills||[]) : null;
+  const info=safeOn ? calcSafeToSpend(tx,s.safeToSpend,s.goals||[],now,s.bills||[],{ debtData:debtsOrNull(), cashTx:s.transactions }) : null;   // Run 103: same figure as Home
   const usable=info&&info.feasible;
   const safePct=usable&&info.disposable>0 ? Math.max(0,Math.min(100,Math.round(((info.disposable-Math.max(0,info.remaining))/info.disposable)*100))) : 0;
   const schedules=buildSchedules(s.transactions||[],s.bills||[]).filter(x=>x.isActive&&x.type==="expense").map(x=>({ x, due:scheduleNextDue(x,s.transactions||[],now) })).filter(o=>o.due).sort((a,b)=>a.due-b.due);
@@ -4319,7 +4391,7 @@ export function widgetLine(state, spendTxns, prefs, now=new Date()) {
   try {
     if (!prefs || !prefs.showSafe || !state || !state.safeToSpend || !state.safeToSpend.enabled) return { label:"", amount:"" };
     if (maskText("x")!=="x") return { label:"", amount:"" };
-    const info=calcSafeToSpend(spendTxns,state.safeToSpend,state.goals||[],now,state.bills||[]);
+    const info=calcSafeToSpend(spendTxns,state.safeToSpend,state.goals||[],now,state.bills||[],{ debtData:debtsOrNull(), cashTx:state.transactions });
     if (!info || !info.feasible) return { label:"", amount:"" };
     return { label:t("safe.title"), amount:(info.remaining<0?"−":"")+fmt(Math.abs(info.remaining),state.currency) };
   } catch { return { label:"", amount:"" }; }
@@ -6112,7 +6184,7 @@ function AppInner() {
             onRecordPayment={x=>openAdd({ type:x.type, amount:x.amount, category:x.category, subcategory:x.subcategory, merchant:x.merchant, note:x.note, recurring:true, recurFreq:x.freq, billId:x.billId||undefined })}/>}
           {tab==="accounts"  && <div data-section="accounts-page"><MyAccounts state={state} currency={currency} showToast={showToast} accTools={accTools}/></div>}
           {tab==="gifts"     && <GiftsPage transactions={transactions} currency={currency} showToast={showToast} onView={txn=>setViewTxn(txn)} onAdd={k=>openAdd(k==="received"?{type:"income",category:"giftin"}:{type:"expense",category:"gifts"})}/>}
-          {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} onTakeEntries={takeEntries} onPutEntries={putEntries} showToast={showToast} showSnackbar={showSnackbar}/>}
+          {tab==="debts"     && <DebtsPage key={debtsStart} initialSeg={debtsStart} currency={currency} onAddEntry={addLoanEntry} onRemoveEntry={removeLoanEntry} onTakeEntries={takeEntries} onPutEntries={putEntries} showToast={showToast} showSnackbar={showSnackbar} transactions={transactions} bills={bills}/>}
           {tab==="io"        && <ImportExportPage notices={{ on:noticesOn, set:(v)=>{ if (writeNoticesPref(v)) setNoticesOn(v); } }} drive={{ pref:drivePref, busy:driveBusy, onConnect:driveConnect, onBackup:()=>driveBackupNow({ interactive:true }), onRestore:driveRestore, onDisconnect:driveDisconnect }} state={state} onDeleteMany={deleteMany} onImportText={importText} onExportCSV={exportCSV} onExportJSON={exportJSON} onImportFile={importFile}
             onShareBackup={shareBackup} onExportEncrypted={exportEncrypted} protection={protection} onProtect={()=>askProtection(true)}
             onInstall={installEvt?()=>{ installEvt.prompt(); installEvt.userChoice?.finally?.(()=>setInstallEvt(null)); }:null}
@@ -6340,7 +6412,7 @@ export let freshTxnId=null;   // id of the entry saved a moment ago; its row pla
 // SMART HELPER — deterministic advice cards based on real data
 // Not AI. Not guessing. Every card has a clear data source and impact.
 // ─────────────────────────────────────────────────────────────────────────────
-export function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills=[]) {
+export function calcHelperCards(transactions, budgets, goals, safeToSpend, currency, bills=[], safeOpts={}) {
   const cards = [];
   const mon = curMon();
   const { curExp, curInc } = calcMonthSummary(transactions, mon);
@@ -6349,7 +6421,7 @@ export function calcHelperCards(transactions, budgets, goals, safeToSpend, curre
   const spentToDate = calcSpentToDate(transactions, mon);
   const paceInfo = calcSpendingPace(spentToDate, mon, budgetTotal);
   const budgetItems = calcBudgetStatus(budgets||{}, catSpend, mon, new Date(), budgetCarried(transactions, budgets||{}, readBudgetCarry(), mon));   // Run 59: same limits as Budgets
-  const safeInfo = calcSafeToSpend(transactions, safeToSpend, goals, new Date(), bills);
+  const safeInfo = calcSafeToSpend(transactions, safeToSpend, goals, new Date(), bills, safeOpts);   // Run 103: same figure as Home (loans)
 
   // 1. Spending pace — only fire when compared against a real budget (onTrack===false)
   if (paceInfo.onTrack === false && paceInfo.daysRemaining > 0 && spentToDate > 0) {

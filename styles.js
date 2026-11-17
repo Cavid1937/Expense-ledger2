@@ -524,6 +524,9 @@ html.theme-fading body,html.theme-fading .card,html.theme-fading .tabbar,html.th
 .safe-card{padding:16px;margin-bottom:14px;background:var(--bg-card)}
 .safe-amount{font-size:clamp(30px,10vw,38px);font-weight:700;letter-spacing:-1px}
 .safe-card .label-sm{font-size:14px;font-weight:600;color:var(--accent-text)}
+/* Run 103 (owner decision D1): Safe to Spend under "Until your next income" is the calendar-month figure, so it is the smaller one */
+.safe-card.safe-secondary .safe-amount{font-size:clamp(22px,7vw,26px)}
+.safe-card.safe-secondary .label-sm{font-size:13px}
 .safe-row{font-size:12.5px;padding:6px 0}
 /* Run 55: actions on an entry's detail sheet look like buttons (the faint outline-only style read as plain text on the dark theme) */
 .btn.detail-action{display:flex;align-items:center;justify-content:center;gap:6px;padding:11px 12px;font-size:13px;font-weight:600;min-height:44px;margin-top:0;white-space:normal;text-align:center;line-height:1.3;background:var(--bg-warm);border:1px solid var(--rule-2);color:var(--ink);border-radius:12px}
@@ -1207,9 +1210,20 @@ iframe[src*="accounts.google.com"]{color-scheme:light}
 .toast{top:auto;bottom:calc(72px + env(safe-area-inset-bottom,0px) + 8px);display:flex;align-items:center;gap:10px;text-align:left;padding:11px 16px;font-size:13px;font-weight:600;border:1px solid var(--rule-2);background:var(--bg-warm);color:var(--ink);box-shadow:0 8px 24px rgba(0,0,0,0.16),0 2px 6px rgba(0,0,0,0.08);max-width:min(calc(100vw - 24px),420px)}
 .toast.over-snack{bottom:calc(72px + env(safe-area-inset-bottom,0px) + 16px + var(--snack-h,56px))}
 .toast-dot{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--accent-text)}
-@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes toastIn{0%{opacity:0;transform:translateX(-50%) translateY(16px)}70%{opacity:1;transform:translateX(-50%) translateY(-3px)}100%{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(10px)}}
-@media (prefers-reduced-motion:reduce){.toast{animation:none}}[data-fx="off"] .toast{animation:none}
+/* Video review, 17 Nov (owner: motion felt "dry"): the notice rises, passes its place by 3px and settles; its dot lands a moment later */
+.toast-dot{animation:toastDot 360ms cubic-bezier(0.34,1.56,0.64,1) 120ms both}
+@keyframes toastDot{from{transform:scale(0)}to{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.toast,.toast-dot{animation:none}}[data-fx="off"] .toast,[data-fx="off"] .toast-dot{animation:none}
+/* the same settle for "Entry recorded" and the other bottom notices; with motion off they only fade in */
+@keyframes snackIn{0%{opacity:0;transform:translateX(-50%) translateY(24px)}70%{opacity:1;transform:translateX(-50%) translateY(-3px)}100%{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes snackPlain{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.snackbar:not(.snack-ghost){animation-name:snackPlain,snackOut}}[data-fx="off"] .snackbar:not(.snack-ghost){animation-name:snackPlain,snackOut}
+/* Video review, 17 Nov (keyboard covering the box being typed in): sheets fit the space above the keyboard (dvh follows it with
+   interactive-widget=resizes-content), and while typing the tab bar and the add button step away instead of riding on the keyboard */
+.sheet{max-height:92dvh}
+html[data-kb="1"] .tabbar,html[data-kb="1"] .fab-add{display:none}
 /* Run 91 (owner: tablets, especially iPad). On a wide screen the app is a wider column (600px instead of a phone's 430px), centred, with the
    tab bar, the add button, New entry and the bottom sheets lined up with it. Phones are unchanged. */
 @media (min-width:700px){

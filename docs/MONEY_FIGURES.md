@@ -24,7 +24,7 @@ Words used the same way everywhere:
 - Shows a figure only when income is recorded this month.
 - Per day: the figure divided by the days left in the calendar month.
 - Known weakness (open owner decision): it follows the calendar month, not the pay cycle. It does not use account balances.
-- Known gap (Run 100, open owner decision): loan payments from the Debts page that are still due this month are **not** taken out, unless the person also set the loan up as a recurring payment. The card names the amount (`loanDueInMonth`: unpaid plan payments dated this month or earlier) and says it is not taken out. Subtracting it would count it twice for people who have both.
+- Run 100 to 102: loan payments from the Debts page were named on the card but not taken out. Run 103 (owner decision D9): they are taken out, in full, without counting twice. See 12.
 - Run 100: when accounts and a next income date are known, the card also shows figure 3 as one line ("Until your next income on ..."). The two figures are different on purpose and both are named.
 
 ## 3. Until your next income (Run 97)
@@ -38,7 +38,7 @@ Words used the same way everywhere:
 - Not double counted: a scheduled payment that already has its linked entry is counted once (as the entry).
 - Run 101: a bill payment typed in ahead as an ordinary entry (same category, same name, same amount) is also counted once, as the entry, but only when it is dated before the income. Before Run 101 it was counted twice, so this figure was too low by that amount. It is the same rule Safe to Spend has used since Run 22 (F1).
 - Run 102: entries dated ahead are taken off as money, the same way the accounts count them: a loan payment in full (not only its interest), money lent or paid back to a person, and the whole of a cost someone will pay back later. Before Run 102 they were taken from the spending view, so such an entry dated ahead made this figure too high by the missing part. The next income date is still found as before; a refund dated ahead is never taken as the income. An entry dated ahead paid from a hidden account is not taken off, because that account's money is not counted either; an entry with no account still is (the cautious side). Test: tests/logic/run102cash.test.mjs, tests/browser/e2e_run102_cash.mjs.
-- Possible double count: a loan that is on the Debts page AND set up as a recurring payment is taken out twice here (never optimistic).
+- Run 100 to 102: a loan that was on the Debts page AND set up as a recurring payment was taken out twice here. Run 103: counted once (see 12). Run 103 also stops counting loan plan rows dated before the current month (see 12, rule 1).
 - Can be wrong when: spending was saved with no account (see 4); a hidden account holds money; the income comes late.
 
 ## 4. Spending with no account (Run 98)
@@ -136,6 +136,58 @@ Words used the same way everywhere:
 - States: no date, overdue, complete, invalid (no target).
 - Goals reduce Safe to Spend (2) only through the monthly amounts of goals that still need money.
 
+## 12. Loan instalments in the money figures (Run 103, owner decision D9, 17 November 2026)
+
+Written before the code was changed, as the owner asked. Code: `loanOpenRows` and `openCommitments` (App.jsx).
+
+Owner rule: a loan instalment is money out in full. Its principal is not spending; its interest (and fees) is spending.
+
+**Which instalments are still to pay** (one loan, one period):
+
+1. Rows of the loan plan (figure 9) dated before the current month are left out. The app cannot know whether they were paid; the Debts page has no "already paid" step for an old loan, so counting them would take out up to years of payments at once. Bills follow the same rule (only this month's dates).
+2. f = the first plan row dated in the current month or later. k = payments recorded on the Debts page.
+3. Payments that belong to rows f and later: the recorded payments after the first f, if there are any; otherwise the payments dated in the current month or later (someone who added an old loan and pays this month's instalment). The larger count of the two is used.
+4. Those payments settle rows f, f+1, ... in order, one row each. A payment smaller than its row leaves the difference due (interest is settled first, so the difference is principal first). A larger payment does not settle the next row (never optimistic).
+5. Every row still due and dated in the period counts in full. Overdue rows of the current month count too.
+
+**Not counted twice:**
+
+- A loan linked to a recurring payment (the choice "Is this loan also a recurring payment?" on the loan card, stored as `loan.billId`) is counted only through that recurring payment. Choosing "No, or find it by name and amount" removes the link.
+- Without a link, a loan is also left out when an active recurring payment has the lender's name (ignoring case and spaces) and the same amount as the instalment to the qapik. The recurring payment already counts it. When such a loan is marked paid, its entry is linked to that recurring payment (`billId`), so the recurring payment shows as paid too. Limit: this works for recurring payments set up as bills; an older recurring entry that was never turned into a bill is matched by name and amount but its paid state is not linked.
+- An ordinary entry typed in ahead (dated after today, in the period, linked to no bill and no loan) with the lender's name and the instalment amount to the qapik IS that instalment. It is counted once, as the entry. One entry settles one row or one bill date, never both.
+- A loan payment already recorded is counted once: its interest in spending, its principal as money out (below), and the row is settled.
+
+**Figures:**
+
+- Safe to Spend (2): remaining = income received - reserve - spending recorded this month - unpaid bill dates this month - **instalments still due this month (in full)** - **principal of loan payments recorded this month**. The last item is new: the spending list holds only the interest of a loan payment, so without it marking an instalment paid would raise Safe to Spend by its principal. Worked out as (loan payments this month in the raw entries) - (the same payments in the spending list).
+- Until your next income (3): instalments still due before the income date, in full (as before, but now with rule 1 and the duplicate rules). Recorded payments are already in the account balances.
+- Month-end forecast (6): a spending figure, so only the **interest** of instalments still due this month is added to the fixed part. The principal is returned as a separate amount ("also leaving your accounts, not spending") and shown under the forecast. Loan payment entries are left out of the usual daily pace (they are scheduled). The check of earlier months counts only the Debts-page payments recorded up to that month's 10th. Owner may overturn this split; the owner's sentence also said "forecasts", which this keeps for the money figures and the separate principal line.
+- Run-out day (7): follows Safe to Spend, so it now includes instalments.
+
+**Hand-worked cases** (flat-rate loan of 1,200.00 at 12% for 12 months: instalment 112.00 = 12.00 interest + 100.00 principal; first payment 20 October 2026, one payment recorded on 20 October; today 17 November 2026; income recorded 1,000.00; spending recorded 200.00; no reserve, no bills):
+
+- A. Before paying November's instalment: Safe to Spend = 1,000 - 200 - 112 = **688.00**.
+- B. After "Mark paid" on 17 November (entry 112.00, interest 12.00): spending 212; principal paid 100; instalment settled. 1,000 - 212 - 100 - 0 = **688.00**. Paying does not change the figure.
+- C. Old loan, never recorded: same loan for 24 months (instalment 62.00 = 12.00 + 50.00), first payment 20 November 2025, no payments recorded. Only November 2026's 62.00 counts, not the 12 earlier ones. After "Mark paid" today: k = 1, one payment dated this month, so November is settled: the figure does not change.
+- D. Partial: November's row has a recorded payment of 80.00 against 112.00: 32.00 is still due.
+- E. Duplicate: a recurring payment "Kapital Bank" 112.00 on the 20th and the loan from "Kapital Bank" with instalment 112.00: 112.00 is taken out once. 688.00.
+- F. Typed ahead: an ordinary entry "Kapital Bank" 112.00 dated 20 November (no loan, no bill): spending 312 includes it; the instalment is settled by it. 1,000 - 312 = **688.00**.
+- G. Due on payday: until-income on 17 November with the next salary on 20 November does not count an instalment on the 20th (it belongs to the next pay cycle); one on the 19th counts. Safe to Spend counts both (calendar month).
+- H. Month boundary: on 28 November with salary on 5 December, an instalment on 1 December counts in until-income and not in November's Safe to Spend.
+- I. Until-income: accounts 900.00, salary 25 November, instalment 112.00 on the 20th: 900 - 112 = 788.00 over 8 days = 98.50 a day.
+- J. Forecast for case A: 12.00 interest is added to the fixed part; 100.00 is shown as principal leaving the accounts.
+
+Tests: tests/logic/run103loans.test.mjs (39 checks), tests/browser/e2e_run103_loans.mjs (14 checks), tests/browser/e2e_run100_cycle.mjs (14 checks).
+
+Not changed (outside D9): money lent to or repaid by a person (Debts page, "debts") is still left out of Safe to Spend.
+
+## 13. Which figure Home shows first (Run 103, owner decision D1, 17 November 2026)
+
+- "Until your next income" (3) is the main Home figure whenever it can be worked out, before or after this month's income.
+- Safe to Spend (2) then follows as the second card, named "Safe to Spend this month", with the line "Calendar-month figure, for monthly budgeting." The two are never added or mixed.
+- When (3) cannot be worked out, Safe to Spend stays the main figure and one note says what is missing (`calcUntilPay` gives the reason): no account with a balance; no next income date (a recurring income or an income entry dated ahead); the expected income is overdue; the income is due today; the next income is more than 45 days away. The app never guesses an income date.
+- Before this month's income arrives and (3) can be worked out, the "waiting" month card still shows below it, also as the second card.
+- "What if I buy something?" sits on the main card only.
 ## Not written up here yet
 
 "Left over since you started" and the month summary. Their code has its own comments; they should be added here in the same form.
@@ -146,4 +198,4 @@ Until Run 100, figures 2, 3, 6 and 7 each collected scheduled payments by themse
 
 Run 101: figures 2, 3 and 6 now take unpaid scheduled payments from one place, `openCommitments` (App.jsx). Figure 7 uses figures 2 and 6, so it follows. Test: tests/logic/run101due.test.mjs.
 
-Still separate: loan payments from the Debts page are collected only by figure 3 (and named, not subtracted, on figure 2). Owner decision D9.
+Still separate until Run 103: loan payments from the Debts page were collected only by figure 3 (and named, not subtracted, on figure 2). Run 103 (owner decision D9): `openCommitments` also returns the loan instalments still due (see 12), so figures 2, 3, 6 and 7 use one list.
