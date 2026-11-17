@@ -1090,9 +1090,10 @@ function DriveCard({ drive }) {
   const { pref={}, busy="", onConnect, onBackup, onRestore, onDisconnect }=drive;
   return (
     <div className="card" data-section="io-drive" style={{marginTop:12}}>
-      <div className="list-title" style={{display:"flex",alignItems:"center",gap:8}}><Icon name="upload" size={16}/>{t("drive.title")}</div>
+      <div className="list-title">{t("drive.title")}</div>
       <div className="list-sub" style={{lineHeight:1.55,marginTop:4}}>{t("drive.sub")}</div>
       {!pref.on ? (<>
+        {/* what Google can and cannot see stays in plain view before connecting (it is the consent notice, not a tip) */}
         <div className="list-sub" style={{lineHeight:1.55,marginTop:8}}>{t("drive.what")}</div>
         <button type="button" className="btn btn-primary" data-section="drive-connect" disabled={!!busy} style={{marginTop:12,width:"100%"}} onClick={onConnect}>{busy?t("drive.working"):t("drive.connect")}</button>
         <button type="button" className="btn btn-ghost" data-section="drive-restore" disabled={!!busy} style={{marginTop:8,width:"100%"}} onClick={onRestore}>{t("drive.restore")}</button>
@@ -1143,9 +1144,11 @@ export function ImportExportPage({ notices, drive, state, onExportCSV, onExportJ
 
       <div className="section-title">{t("io2.moveTitle")}</div>
       <div className="card" data-section="io-backup-card">
-        <div className="list-sub" style={{lineHeight:1.55}}>{t("io2.moveSub")}</div>
+        {/* Run 105 (owner: "repolish and if needed redesign the import/export section"): the card leads with what it is and how fresh the copy
+            is; the long explanation (what the file holds, where it goes) sits behind the info tip, as on the spreadsheet card. */}
+        <TipHead id="io-backup" text={t("io2.moveSub")+" "+t(saveToPhone?"io2.whereApp":canShareFiles?"io2.whereShare":"io2.whereWeb")}><div className="list-title">{t("io2.fileTitle")}</div></TipHead>
         {/* one status line; a confirmed backup gets a small tick in front of it (not a separate badge) */}
-        <div data-section="io-last" style={{marginTop:10,display:"flex",alignItems:"flex-start",gap:8}}>
+        <div data-section="io-last" style={{marginTop:6,display:"flex",alignItems:"flex-start",gap:8}}>
           {confirmed&&<span aria-hidden="true" style={{color:"var(--pos)",flexShrink:0,marginTop:2}}><Icon name="check" size={14}/></span>}
           {lastBackup
             ? <div className="list-sub" style={{lineHeight:1.5}}>{t(confirmed?"io2.lastConfirmed":"io2.last",{date:fmtLongDate(lastBackup),n:transactions.length})}</div>
@@ -1154,7 +1157,6 @@ export function ImportExportPage({ notices, drive, state, onExportCSV, onExportJ
         <button className="btn btn-primary btn-full" data-section="io-save" onClick={onExportJSON} style={{marginTop:12}}><Icon name={saveToPhone?"download":"backup"} size={16}/>{t(saveToPhone?"io2.saveDownloads":"io.createBackup")}</button>
         {saveToPhone&&<button className="btn btn-ghost btn-full" data-section="io-save-choose" onClick={()=>onExportJSON({ pick:true })} style={{marginTop:8}}><Icon name="list" size={16}/>{t("io2.saveChoose")}</button>}
         {canShareFiles&&onShareBackup&&<button className="btn btn-ghost btn-full io-share" onClick={onShareBackup} style={{marginTop:8}}><Icon name="upload" size={16}/>{t("io2.share")}</button>}
-        <div className="list-sub" style={{marginTop:8,lineHeight:1.5}}>{t(saveToPhone?"io2.whereApp":canShareFiles?"io2.whereShare":"io2.whereWeb")}</div>
         {/* Run 37b (owner could not find the saved files): opens the phone's own Downloads screen */}
         {nativeDownloadsHook()&&<button className="btn btn-ghost btn-full" data-section="io-show-downloads" style={{marginTop:8}} onClick={()=>{ Promise.resolve(nativeDownloadsHook()()).catch(()=>{}); }}><Icon name="list" size={16}/>{t("io2.showDownloads")}</button>}
         {onExportEncrypted&&<EncryptedBackup onExportEncrypted={onExportEncrypted}/>}
