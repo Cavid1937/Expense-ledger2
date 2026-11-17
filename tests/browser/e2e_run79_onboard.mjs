@@ -102,7 +102,7 @@ page = await fresh({ pre: eval(fakeAccount({ data: old, version: 4, device: "And
 await click(page, '[data-ob="google"]'); await wait(1200);
 const a7 = await page.evaluate(() => window.__acct);
 ok(a7.posts === 0 && a7.patches === 0 && a7.row.version === 4, "nothing was written to the account", { posts: a7.posts, patches: a7.patches });
-ok(!(await has(page, '[data-section="onboarding"]')) && await has(page, ".sheet-overlay"), "the scene closed and the import preview is open (nothing restored yet)");
+ok(!(await has(page, '[data-section="onboarding"]')) && await has(page, ".sheet-overlay"), "the scene steps aside and the import preview is open (nothing restored yet; Run 104: it ends only on confirm)");
 ok((await acctKey(page)).paused === "restore", "saving to the account waits until the person decides");
 const btn = await page.evaluate(() => { const b = [...document.querySelectorAll(".sheet-overlay button")].find((x) => /^(Add|Merge|Import|Replace)/i.test(x.innerText.trim())); if (b) { const t = b.innerText.trim(); b.click(); return t; } return null; });
 await wait(600);

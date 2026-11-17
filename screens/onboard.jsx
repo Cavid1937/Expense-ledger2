@@ -14,8 +14,12 @@ import { SetupSteps } from "./setup.jsx";
 
 // written out in full: App.jsx and this file load each other, so App's KEY is not defined yet when this line runs
 export const OB_KEY = "expense_ledger_v5__onboard";
-export function readOnboard() { try { const v = localStorage.getItem(OB_KEY); return v === "account" || v === "setup" ? v : "done"; } catch { return "done"; } }
-export function writeOnboard(v) { try { localStorage.setItem(OB_KEY, v === "account" || v === "setup" ? v : "done"); return true; } catch { return false; } }
+// Run 104 (owner, 17 Nov: "data restoration takes priority over initializing a new ledger"): "restore" = the account already holds records and
+// the person has not confirmed them yet. The scene stays open until the import preview is confirmed, so a cancel or a reload never leaves an
+// empty app without the quick questions.
+const OB_STEPS = ["account", "restore", "setup"];
+export function readOnboard() { try { const v = localStorage.getItem(OB_KEY); return OB_STEPS.includes(v) ? v : "done"; } catch { return "done"; } }
+export function writeOnboard(v) { try { localStorage.setItem(OB_KEY, OB_STEPS.includes(v) ? v : "done"); return true; } catch { return false; } }
 
 const GOOGLE_G = '<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
 
@@ -61,7 +65,24 @@ function LanguagePage({ onChoose, onPick }) {
   );
 }
 
-function AccountPage({ onGoogle, onGuest, busy, error }) {
+const DRIVE_IC = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15.5a3.5 3.5 0 0 1 1.6-6.6A5.5 5.5 0 0 1 16.3 7.6 4 4 0 0 1 19.5 15.5"/><path d="M12 11v9M8.5 16.5 12 20l3.5-3.5"/></svg>';
+
+// The account holds records from before: they are checked in the normal import preview before anything comes to this phone.
+function RestorePage({ onReview, onFresh, busy, error }) {
+  return (
+    <div className="ob-page ob-account" data-section="ob-restore">
+      <h2 className="setup-q">{t("ob.restore.title")}</h2>
+      <p className="setup-sub">{t("ob.restore.sub")}</p>
+      <button type="button" className="btn btn-primary btn-full" data-ob="restore-review" disabled={!!busy} aria-busy={!!busy} onClick={onReview}>{busy ? t("ob.busy") : t("ob.restore.review")}</button>
+      <button type="button" className="ob-choice ob-guest" data-ob="restore-fresh" disabled={!!busy} onClick={onFresh} style={{ marginTop: 10 }}>
+        <span className="ob-choice-txt"><span className="ob-choice-name">{t("ob.restore.fresh")}</span><span className="ob-choice-sub">{t("ob.restore.freshSub")}</span></span>
+      </button>
+      {error && <div className="setup-err ob-err" role="alert" data-section="ob-error">{error}</div>}
+    </div>
+  );
+}
+
+function AccountPage({ onGoogle, onGuest, onDrive, busy, error }) {
   // Run 82: on the website Google's own button has to be shown and tapped (the app's button only reveals it)
   const gRef = useRef(null);
   const [gShown, setGShown] = useState(false);
@@ -81,13 +102,17 @@ function AccountPage({ onGoogle, onGuest, busy, error }) {
         <span className="ob-choice-ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5" /><path d="M10.5 18.5h3" /></svg></span>
         <span className="ob-choice-txt"><span className="ob-choice-name">{t("ob.guest")}</span><span className="ob-choice-sub">{t("ob.guestSub")}</span></span>
       </button>
-      {error && <div className="setup-err ob-err" role="alert" data-section="ob-error">{error}</div>}
+      {onDrive && <button type="button" className="ob-choice ob-guest" data-ob="drive" disabled={!!busy} onClick={onDrive}>
+        <span className="ob-choice-ic" dangerouslySetInnerHTML={{ __html: DRIVE_IC }} />
+        <span className="ob-choice-txt"><span className="ob-choice-name">{t("ob.drive")}</span><span className="ob-choice-sub">{t("ob.driveSub")}</span></span>
+      </button>}
+      {error &&<div className="setup-err ob-err" role="alert" data-section="ob-error">{error}</div>}
     </div>
   );
 }
 
 // step: "lang" (rendered on its own, before the app) · "account" · "setup" (drawn over the app, so its sheets and messages work).
-export function Onboarding({ step, lang, onLanguage, onGoogle, onGuest, busy, error, currency, onSetupSave, onSetupSkip, onSetupStatement, onBackToAccount, onOpenDebts }) {
+export function Onboarding({ step, lang, onLanguage, onGoogle, onGuest, onDrive, onReview, onFresh, busy, error, currency, onSetupSave, onSetupSkip, onSetupStatement, onBackToAccount, onOpenDebts }) {
   const [leaving, setLeaving] = useState(false);
   // Run 100: the line under the name follows the language as soon as it is ticked (it kept changing language until Continue)
   const [picked, setPicked] = useState(null);
@@ -100,7 +125,8 @@ export function Onboarding({ step, lang, onLanguage, onGoogle, onGuest, busy, er
       <div className="ob-panel">
         <div key={step} className={`ob-slide${step === "lang" ? "" : " in-next"}`}>
           {step === "lang" && <LanguagePage onChoose={onLanguage} onPick={setPicked} />}
-          {step === "account" && <AccountPage onGoogle={onGoogle} onGuest={onGuest} busy={busy} error={error} />}
+          {step === "account" && <AccountPage onGoogle={onGoogle} onGuest={onGuest} onDrive={onDrive} busy={busy} error={error} />}
+          {step === "restore" && <RestorePage onReview={onReview} onFresh={onFresh} busy={busy} error={error} />}
           {step === "setup" && <SetupSteps currency={currency} onOpenDebts={onOpenDebts} onStatement={onSetupStatement}
             onSkip={() => out(onSetupSkip)}
             onSave={(plan, extra) => out(() => onSetupSave(plan, extra))} />}

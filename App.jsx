@@ -5635,7 +5635,8 @@ function AppInner() {
       const s=await signInWithGoogleIdToken(idToken,rawNonce,acctRef.current);
       putAcct({ ...s, version:0, paused:"", lastHash:"", syncedAt:"", lastError:"" });
       const got=await loadLedger(s);
-      if (got) { obTo("done"); acctOffer(got); return true; }
+      // Run 104: the scene stays on "restore" until the preview is confirmed (commitImport); a cancel or a reload comes back to that page
+      if (got) { obTo("restore"); acctOffer(got); return true; }
       const now=new Date().toISOString(), text=backupTextRef.current(now);
       const v=await saveLedger(s,text,0,acctDevice());
       patchAcct({ version:v, lastHash:backupFingerprint(text), syncedAt:now });
@@ -5667,6 +5668,38 @@ function AppInner() {
       if (r!=="cancelled") setObErr(t("acct.err."+r));
       return false;
     }
+  };
+  // Run 104: "Check my records" on the restore page (again after a cancel or a reload). An account emptied meanwhile gets this phone's copy.
+  const obReview=async ()=>{
+    if (obBusy) return;
+    setObBusy(true); setObErr("");
+    try {
+      const s=await acctFresh(), got=await loadLedger(s);
+      if (got) { acctOffer(got); return; }
+      const now=new Date().toISOString(), text=backupTextRef.current(now);
+      const v=await saveLedger(s,text,0,acctDevice());
+      patchAcct({ version:v, paused:"", lastHash:backupFingerprint(text), syncedAt:now, lastError:"" });
+      obTo("setup");
+    } catch (e) { const r=acctReason(e); if (r!=="cancelled") setObErr(t("acct.err."+r)); }
+    finally { setObBusy(false); }
+  };
+  // Run 104: "Start fresh on this phone". The account's copy is left as it is: saving to the account stays paused ("restore") until the
+  // person chooses in Settings, so the new, empty ledger can never overwrite the saved records.
+  const obFresh=()=>{ setObErr(""); obTo("setup"); };
+  // Run 104 (owner: "Google Drive restore option"): a Drive backup on the first launch, through the normal import preview (fromDrive switches
+  // Drive backup on once confirmed). Errors stay on the page; nothing changes on this phone until the preview is confirmed.
+  const obDrive=async ()=>{
+    if (obBusy) return;
+    setObBusy(true); setObErr("");
+    try {
+      const tok=await driveToken({ interactive:true }), got=await driveLoad(tok);
+      if (!got) { setObErr(t("drive.none")); return; }
+      const name=t("drive.fileName"), plan=planImportWithCats(got.text,name);
+      if (!plan.ok) { setImportPending({ error:plan.error, filename:name }); return; }
+      setSkipDup(true); setSkipSim(true);
+      setImportPending({ ...plan, filename:name, fromDrive:true, ...mergeCounts(stateRef.current.transactions, plan) });
+    } catch (e) { const r=(e&&e.reason)||"server"; if (r!=="cancelled") setObErr(t("drive.err."+(["auth","offline","space"].includes(r)?r:"server"))); }
+    finally { setObBusy(false); }
   };
   const driveDisconnect=useCallback(async ()=>{ await driveSignOut(); const p={ ...cleanDrivePref(null) }; writeDrive(p); setDrivePref(p); showToast(t("drive.disconnected")); },[showToast]);
   // Run 81: the account (account.js). This phone's ledger stays the working copy; the account keeps one mirror of it on the app's server.
@@ -6047,6 +6080,8 @@ function AppInner() {
     if (plan.fromDrive) { const p={ ...readDrive(), on:true, fails:0, lastError:"" }; if (writeDrive(p)) setDrivePref(p); }
     // Run 81: the account's copy was confirmed; saving resumes on top of that version (the result, merged or replaced, is saved next)
     if (plan.fromAccount && acctRef.current) putAcct({ ...acctRef.current, version:plan.fromAccount, paused:"", lastHash:"", lastError:"" });
+    // Run 104: a restore confirmed on the first launch ends the scene (the restored records already hold this person's set-up)
+    if ((plan.fromAccount || plan.fromDrive) && readOnboard()!=="done") { writeOnboard("done"); setOb("done"); }
     const delta=next.transactions.length-before.transactions.length;
     showSnackbar(settingsOnly ? t("import.settingsApplied") : mode==="replace" ? tn("import.replaced",plan.transactions.length) : tn("import.added",delta), ()=>{
       // Undo only if nothing has changed since; otherwise it would erase newer work.
@@ -6347,8 +6382,9 @@ function AppInner() {
           </div>
         )}
         {showSetupQ&&<SetupSheet currency={currency} onClose={()=>setShowSetupQ(false)} onOpenDebts={()=>{ setDebtsStart("debts"); switchTab("debts"); }} onStatement={()=>switchTab("io")} onSave={applySetupPlan}/>}
-        {ob!=="done"&&<Onboarding step={ob} lang={state.language} currency={currency} busy={obBusy} error={obErr}
-          onGoogle={obGoogle} onGuest={()=>{ setObErr(""); obTo("setup"); }} onBackToAccount={()=>obTo("account")}
+        {ob!=="done"&&!(importPending&&(ob==="account"||ob==="restore"))&&<Onboarding step={ob==="restore"&&!acct?"account":ob} lang={state.language} currency={currency} busy={obBusy} error={obErr}
+          onGoogle={obGoogle} onGuest={()=>{ setObErr(""); obTo("setup"); }} onBackToAccount={()=>obTo(acct&&acct.paused==="restore"?"restore":"account")}
+          onDrive={obDrive} onReview={obReview} onFresh={obFresh}
           onOpenDebts={()=>{}}
           onSetupSkip={()=>obTo("done")}
           onSetupStatement={()=>{ obTo("done"); switchTab("io"); }}

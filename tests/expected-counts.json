@@ -208,6 +208,7 @@
     "e2e_run100_cycle.mjs": 14,
     "e2e_run103_loans.mjs": 20,
     "e2e_run104_video.mjs": 16,
+    "e2e_run104_restore.mjs": 33,
     "e2e_run101_privacy.mjs": 5,
     "e2e_run102_cash.mjs": 5,
     "e2e_run67_map.mjs": 11,
