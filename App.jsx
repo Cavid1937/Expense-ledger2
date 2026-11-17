@@ -1153,7 +1153,8 @@ export function assignAccount(transactions, ids, accountData, accountId) {
   const want=new Set((ids||[]).map(String)), changed=[];
   const list=(transactions||[]).map(x=>{ if (!x || !want.has(String(x.id)) || (accId(x.account) in have)) return x; changed.push(x.id); return { ...x, account:id }; });
   return { list, changed };
-}// Run 98: "same as last time" for the Add form. The account of the entry of this kind that was recorded last, when that account is still
+}
+// Run 98: "same as last time" for the Add form. The account of the entry of this kind that was recorded last, when that account is still
 // here and shown; "" when that entry had no account (so someone who pays cash from a pocket is not given a card by default).
 export function lastAccountFor(data, transactions, type) {
   const d=cleanAccountData(data);

@@ -247,10 +247,11 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
   const held        =accountsHeld(accountTxns||transactions);
   // Run 98: spending with no account moves no balance; the "until" card names how much, so its figure is not read as more certain than it is.
   const loose=useMemo(()=>{ try { return unassignedSpend(readAccounts(),accountTxns||transactions); } catch { return { known:false, count:0, sum:0 }; } },[accountTxns,transactions]);
-  const loanDue     =useMemo(()=>{ try { return loanDueInMonth(readDebts()); } catch { return { count:0, sum:0 }; } },[transactions]);
+  // Run 102: entries dated ahead are taken off the "until" figure as money; one paid from a hidden account is left out, as that account's money is
+  const cashTx      =useMemo(()=>{ const all=accountTxns||transactions; let hid; try { hid=new Set(readAccounts().accounts.filter(a=>a.hidden).map(a=>a.id)); } catch { return all; } return hid.size ? all.filter(x=>!(x && x.account && hid.has(x.account))) : all; },[accountTxns,transactions]);  const loanDue     =useMemo(()=>{ try { return loanDueInMonth(readDebts()); } catch { return { count:0, sum:0 }; } },[transactions]);
   // Run 100: the same "until your next income" figure as one line under Safe to Spend, once this month's income is recorded
-  const untilNext   =useMemo(()=>{ if (!safeToSpend?.enabled || !safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ afterIncome:true, cashTx:accountTxns }); },[transactions,accountTxns,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
-  const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled || safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ cashTx:accountTxns }); },[transactions,accountTxns,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
+  const untilNext   =useMemo(()=>{ if (!safeToSpend?.enabled || !safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ afterIncome:true, cashTx }); },[transactions,cashTx,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
+  const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled || safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ cashTx }); },[transactions,cashTx,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
   const wc          =calcWhatChanged(transactions,now,prv);
   const hasIncome   =curIn>0;   // Run 35b: any money in (a refund or savings withdrawal is spendable too); the Income figure itself is earnings only
 

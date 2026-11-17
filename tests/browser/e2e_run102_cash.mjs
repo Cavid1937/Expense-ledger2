@@ -23,4 +23,22 @@ section("R102-B1. Money lent and dated ahead is taken off the until-income figur
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
+section("R102-B2. An entry dated ahead on a hidden account is not taken off (its money is not counted either)");
+{
+  // Same data plus a hidden savings account with an entry of 25 dated tomorrow paid from it. The card counts only shown accounts
+  // (200), so taking 25 off for a payment from the hidden account would make the figure too low.
+  const acc2 = `try{if(!sessionStorage.getItem("__a")){sessionStorage.setItem("__a","1");localStorage.setItem("expense_ledger_v5__accounts",JSON.stringify({version:1,accounts:[{id:"a_card01",name:"My card",kind:"card",opening:{amount:200,date:""},hidden:false},{id:"a_sav01",name:"Savings",kind:"savings",opening:{amount:500,date:""},hidden:true}],transfers:[]}));}}catch(e){}`;
+  const s = baseSeed({ language: "en", transactions: [
+    tx({ type: "income", category: "salary", amount: 2000, merchant: "Employer", date: daysAgo(40) }),
+    tx({ type: "income", category: "salary", amount: 2000, merchant: "Employer", date: ahead(3) }),
+    tx({ amount: 30, merchant: "Planned", date: ahead(1) }),
+    tx({ amount: 50, category: "other", merchant: "Lent to Sam", date: ahead(1), debtLink: { debtId: "d_sam", paymentId: "p_sam1" } }),
+    tx({ amount: 25, merchant: "From savings", date: ahead(1), account: "a_sav01" }),
+  ] });
+  const page = await openPage(browser, { seed: s, pre: new Function(acc2) }); await settle(page);
+  const r = await read(page);
+  ok(r.card !== null && /120/.test(r.amount || "") && !/95/.test(r.amount || ""), "still 120: the 25 from the hidden account is left out (was 95)", r.amount);
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
 await finish("e2e_run102_cash", browser);
