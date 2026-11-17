@@ -404,6 +404,15 @@ Layouts are in `handoff/BANK_FORMATS.md` and `handoff/NEXT_WORK_PLAN.md`.
   - "where does the money go" is the local pitch.
 - **What it does not tell us:** whether people pay, how its syncing and privacy work, or whether the app is good. A video ad is marketing, not user evidence.
 - **Meaning for us:** a family mode needs shared data between phones, which means a server, accounts, permissions and conflict rules. That is a big step away from local-first and from "no account needed". It is not built and needs an owner decision. A paid plan is under discussion only.
+- **Deep research (17 Nov):** `reports/Büdcəm family package research.md`.
+  - Büdcəm is about 4 weeks old, with 22 App Store ratings. Family is $2.99/month for the owner plus 4 members, with phone/SMS login, joined by invite link. Data goes to its servers, and to Gemini and Anthropic.
+  - Cashera Family costs 7.99 ₼/month. Azerbaijani banks offer only child cards.
+  - Safety research says shared money tools are used for control. So: a private space for each person, free exit with your own data, no hidden watching, no "head of family" control.
+  - Recommendation, nothing built yet:
+    - a one-person household ledger, with "for whom / paid by" and a shared-or-personal tag;
+    - a read-only family summary sent through the share sheet;
+    - live sharing later only with end-to-end encryption, never a server that can read the data.
+  - Validate first with 8–12 household interviews.
 
 **Earlier notes.**
 - A Cashera-inspired list (13 Nov) is in `handoff/OWNER_QUEUE_2026-11-13.md`.
