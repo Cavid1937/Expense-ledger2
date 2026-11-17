@@ -21,6 +21,19 @@ const M = [
   ["loan annuity: interest rounded down", "const interest=Math.round(bal*r);", "const interest=Math.floor(bal*r);"],
   ["loan annuity: last payment no longer absorbs leftover cents", "if (i===n || A-interest>=bal)", "if (A-interest>=bal)"],
   ["loan equal-principal: instalment rounded up", "const pr=Math.round(P/n);", "const pr=Math.ceil(P/n);"],
+  // Run 100: the figures added in Runs 97-100
+  ["until income: loan payments not taken out", "{ due+=sc.payments[i].payment; dueCount++; }", "{ dueCount++; }"],
+  ["until income: per day rounded up", "perDay:left>0 ? Math.floor(left/days)/100 : 0", "perDay:left>0 ? Math.ceil(left/days)/100 : 0"],
+  ["until income: entries dated ahead not taken out", "left=heldC-due-planned;", "left=heldC-due;"],
+  ["until income: a bill due ON the income day is taken out", ".remaining.filter(d=>d<pay).length", ".remaining.filter(d=>d<=pay).length"],
+  ["until income: the after-income option is ignored", "if (!(opts&&opts.afterIncome) && tx.some(", "if (tx.some("],
+  ["what-if: per day until income not rounded down", '(kind==="until" ? Math.floor(c/d)/100 : c/100/d)', "(c/100/d)"],
+  ["no-account spending: entries before the opening date counted", "&& x.date>=since && x.date<=todayStr) };", "&& x.date<=todayStr) };"],
+  ["no-account spending: income counted too", 'filter(x=>x && x.type==="expense" && !(accId(x.account) in ids)', "filter(x=>x && !(accId(x.account) in ids)"],
+  ["assign account: an entry that has an account is moved too", "|| (accId(x.account) in have)) return x; changed.push", ") return x; changed.push"],
+  ["assign account: an unknown account is accepted", "if (!id || !have[id]) return { list:transactions||[], changed:[] };", "if (!id) return { list:transactions||[], changed:[] };"],
+  ["loans due this month: later months counted", "&& sc.payments[i].date<=end;i++) { sum+=", ";i++) { sum+="],
+  ["widget: hidden accounts shown", "acc.accounts.filter(a=>!a.hidden).slice(0,3)", "acc.accounts.slice(0,3)"],
 ];
 const files = [...fs.readdirSync(root).filter((f) => /\.(js|jsx|mjs|json)$/.test(f))];
 const results = [];

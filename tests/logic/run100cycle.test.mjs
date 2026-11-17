@@ -37,6 +37,15 @@ section("R100-C2. A small income earlier this month no longer hides the figure")
   ok(r.show && r.payDate === "2026-11-25" && r.days === 9 && r.due === 60 && r.left === 340 && r.perDay === 37.77, "400 - 60 = 340 over 9 days: 37.77 a day", r);
 }
 
+section("R100-C2b. A payment due ON the income day is paid from that income, so it is not taken out (mutation check found no test for this)");
+{
+  const NOW = new Date(2026, 10, 16, 12);
+  const sameDay = bill({ id: "sd", name: "Phone", amount: 60, anchorDate: "2026-10-25" });
+  const r = calcUntilPay([pay(1, "2026-10-25"), paid(2, "sd", 60, "2026-10-25")], [salary, sameDay], 400, null, NOW);
+  // phone 60 is due 25 Nov, the income day: not before it -> nothing due; 400 over 9 days: 40000 / 9 = 4444.4 -> 44.44
+  ok(r.show && r.due === 0 && r.dueCount === 0 && r.left === 400 && r.perDay === 44.44, "due on the 25th with income on the 25th: 400 left, 44.44 a day", r);
+}
+
 section("R100-C3. Still silent when the app cannot know");
 {
   const NOW = new Date(2026, 10, 26, 12);
