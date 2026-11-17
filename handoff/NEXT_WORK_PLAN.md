@@ -520,3 +520,24 @@ Next, in order (reason in brackets):
 9. Finish docs/MONEY_FIGURES.md for forecast, run-out day, net position, loans, budgets, goals.
 10. az/ru native-reader review of Runs 96-98 texts. [BLOCKED: needs a person]
 Deferred with reason: open-banking link (registration, cost), AI advisor (server, privacy), health score (no valid basis), household sync (server), voice entry (dropped by owner), more coach rules (no demand shown).
+## 2026-11-17 - WORK PLAN ADDENDUM after Run 99. The 14 November order above is superseded; earlier text is kept as history.
+Done in Run 99 (local, not published): repair sheet for entries with no account, widget hides hidden accounts, "What if I buy something?", lock-screen wording, money-figure docs extended. Was item 4 of the Run 98 backlog; item 5 of the older list.
+Next, in order:
+1. OWNER: D1 pay-cycle Safe to Spend (hand example in reports\Run 99 report 2026-11-16.md section 17); D3 publish 97-99.
+2. One shared "money position" calculation (tests first; no visible number changes).
+3. Finish docs/MONEY_FIGURES.md: forecast, run-out day, net position, loans, budgets, goals.
+4. Reconcile an account ("the bank says X today" -> one visible entry).
+5. "What changed since last month" on one screen.
+6. First-run path to the first figure.
+7. BLOCKED: phone week (device), az/ru native read (a person), Google Play (owner payment).
+8. Research left open: official Labour Code pay-frequency article; Central Bank open-banking page.
+Rule learned: a new control never reuses a class that tests use to find another control; the full suite runs before a run is called finished.
+## 2026-11-17 (later) - after Run 100. Supersedes the list above where they differ.
+Done in Run 100 (local): until-income line beside Safe to Spend; "Paid from" in the main Add form; loan payments named on the Safe card; 12 mutation checks; money-figure docs cover 11 figures.
+Next, in order:
+1. OWNER: D1, D3 (publish 97-100), D9 (subtract loan payments from Safe to Spend, forecast, run-out), D10.
+2. One shared collector of "payments still due" for the four figures (tests first, no visible change).
+3. Reconcile wording: "Balance today" in account edit already moves the opening amount silently; consider showing it as a visible correction entry.
+4. "What changed since last month" on one screen.
+5. BLOCKED: phone week, az/ru native read, Google Play.
+Rule learned: no test or source file is touched while the full browser suite runs.

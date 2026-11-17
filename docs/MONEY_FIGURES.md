@@ -102,9 +102,40 @@ Words used the same way everywhere:
 - Shows nothing when there are no debts and no loans.
 - Hidden accounts are left out.
 
+## 9. Loan plan (written up in Run 100; code unchanged)
+
+- Code: `loanSchedule` (App.jsx). All amounts in whole qapik.
+- Four kinds. Monthly rate r = yearly rate / 12.
+  - Equal payments (annuity): payment = P x r / (1 - (1 + r)^-n), rounded; or the bank's own payment if the person typed it. Each month: interest = balance x r, rounded; the rest lowers the balance. The last payment takes whatever is left.
+  - Equal principal: principal part = P / n, rounded; interest on the falling balance; the last part takes what is left.
+  - Flat: total interest = P x rate x n / 12; spread evenly; the last payment takes the rounding.
+  - No interest: P / n rounded down; the last payment takes the rest.
+- Refused (no plan shown): a payment that never lowers the balance; invalid amounts, months or dates.
+- Dates: the same day each month, shortened to the month's last day when needed.
+- Estimate: a bank can round differently or charge fees the person did not enter.
+- Spending rule (owner, 30 October): a loan payment is money out in full; only its interest counts as spending; an unknown split counts nothing as spending.
+
+## 10. Budget left and carry-over (written up in Run 100; code unchanged)
+
+- Code: `calcBudgetStatus`, `budgetCarried` (App.jsx).
+- Limit this month = the budget + what was carried in (if carrying is on for that budget). Percent = spent / limit, capped at 100. "Over" when spent is above the limit. Warning from 80%.
+- "Ahead of pace": only in the current month, when the percent used is more than 10 points above the share of the month that has passed.
+- Carry-over: off unless switched on per budget. Month by month from the month it was switched on: carried = the unused part, never more than one month's limit, never negative (overspending is not carried).
+- A planning figure only. No money is created or moved.
+- Limit: the current budget amount is used for every past month (budget history is not kept).
+
+## 11. Goal progress (written up in Run 100; code unchanged)
+
+- Code: `calcGoalProgress`, `goalRequiredMonthly`, `goalScenario` (App.jsx). Whole qapik.
+- Percent = saved / target, capped at 100. Complete when saved is at least the target.
+- With a monthly amount: months needed = remaining / monthly amount, rounded up; one payment on the 1st of each month.
+- With a date: needed per month = remaining / months until the date, rounded **up** to the qapik (never short at the end).
+- States: no date, overdue, complete, invalid (no target).
+- Goals reduce Safe to Spend (2) only through the monthly amounts of goals that still need money.
+
 ## Not written up here yet
 
-Loan plans (schedule and interest), budget remaining and rollover, goal progress, "left over since you started". Their code has its own comments; they should be added here in the same form.
+"Left over since you started" and the month summary. Their code has its own comments; they should be added here in the same form.
 
 ## Known structural weakness
 
