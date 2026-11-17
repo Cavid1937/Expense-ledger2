@@ -36,6 +36,7 @@ Words used the same way everywhere:
 - Shows nothing when: no accounts; no income date known; a recurring income is overdue and unrecorded or due today; income is already recorded this month.
 - Run 100: with the option `afterIncome` the same sum is worked out after this month's income is recorded (for the line on the Safe to Spend card). Hand example: 26 Nov, salary recorded on the 25th, accounts 1,540, rent 150 due 7 Dec and internet 20 due 15 Dec, next salary 25 Dec: 1,540 - 170 = 1,370 over 29 days = 47.24 a day. Safe to Spend on the same day says 510 for 5 days.
 - Not double counted: a scheduled payment that already has its linked entry is counted once (as the entry).
+- Run 101: a bill payment typed in ahead as an ordinary entry (same category, same name, same amount) is also counted once, as the entry, but only when it is dated before the income. Before Run 101 it was counted twice, so this figure was too low by that amount. It is the same rule Safe to Spend has used since Run 22 (F1).
 - Possible double count: a loan that is on the Debts page AND set up as a recurring payment is taken out twice here (never optimistic).
 - Can be wrong when: spending was saved with no account (see 4); a hidden account holds money; the income comes late.
 
@@ -81,6 +82,7 @@ Words used the same way everywhere:
 
 - Code: `forecastCore`, `calcMonthEndForecast` (App.jsx).
 - Fixed part: spent so far this month + expense entries dated later this month + scheduled payments still to come or overdue this month.
+- Run 101: a bill payment typed in ahead as an ordinary entry (same category, name and amount) is counted once, as the entry. Before Run 101 it was counted twice, so the forecast was too high by that amount. The check of earlier months (the range) uses the same rule, so whether the range is shown can change.
 - Usual part: average daily spending over up to 28 days ending yesterday, leaving out recurring and bill entries and any purchase far above the median. Multiplied by the days left.
 - Range: plus or minus the daily spread times the square root of the days left; never below the fixed part.
 - The range is shown only if at least 2 of the last 3 months can be checked, and in at least two thirds of them the range made on the 10th contained what was really spent.
@@ -139,4 +141,8 @@ Words used the same way everywhere:
 
 ## Known structural weakness
 
-Figures 2, 3, 6 and 7 each collect scheduled payments by themselves. They agree today (tests), but a change to one can leave the others behind. Planned: one shared "money position" calculation, with tests written first.
+Until Run 100, figures 2, 3, 6 and 7 each collected scheduled payments by themselves, and they did not agree: only figure 2 knew that a payment typed in ahead is the bill's payment.
+
+Run 101: figures 2, 3 and 6 now take unpaid scheduled payments from one place, `openCommitments` (App.jsx). Figure 7 uses figures 2 and 6, so it follows. Test: tests/logic/run101due.test.mjs.
+
+Still separate: loan payments from the Debts page are collected only by figure 3 (and named, not subtracted, on figure 2). Owner decision D9.

@@ -141,7 +141,8 @@ export function AccountSheet({ id, transactions, currency, onClose, onManage, on
 // an entry paid with money that is not tracked here is simply left as it is. Every change can be undone from the bar that follows.
 export function LooseSheet({ loose, accounts, currency, onAssign, onClose }) {
   const rows=loose.list.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,100);
-  const words=(x)=>[x.merchant||x.note,x.subcategory,catName(x.category)].filter(Boolean).join(", ");
+  // Run 101: privacy mode hides the shop name and note here too, as it does in the list of entries
+  const words=(x)=>[maskText(x.merchant||x.note),x.subcategory,catName(x.category)].filter(Boolean).join(", ");
   return (
     <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1} aria-label={t("loose.title")} data-section="loose-sheet">
