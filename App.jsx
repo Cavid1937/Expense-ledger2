@@ -450,7 +450,8 @@ const CATEGORY_MAP = {
 // matched any part of a word ("Payment" → Salary via "pay", "x" → whatever alias contained an x).
 const catKey = (s) => String(s).toLowerCase().trim().replace(/\s+/g," ").replace(/ and /g," & ").replace(/\s*&\s*/g," & ");
 const CATEGORY_LOOKUP = (() => {
-  const m={}; Object.entries(CATEGORY_MAP).forEach(([k,v])=>{ m[catKey(k)]=v; });
+  // Run 107: no prototype, so text such as "constructor" or "__proto__" finds nothing instead of a built-in object
+  const m=Object.create(null); Object.entries(CATEGORY_MAP).forEach(([k,v])=>{ m[catKey(k)]=v; });
   CATEGORIES.forEach(c=>{ m[catKey(c.name)]=c.id; m[c.id]=c.id; });
   return m;
 })();
@@ -460,7 +461,8 @@ function resolveCategory(raw, keepUnknownId=false) {
   if (known) return known;
   // Run 17: in the app's OWN saved data (never in imports) an id this version does not know is kept as it is, so an older copy of the app
   // never rewrites a later version's category to "Other". Only id-shaped text qualifies; it is shown as Other until the version knows it.
-  if (keepUnknownId && typeof raw==="string" && /^[a-z][a-z0-9_]{1,31}$/.test(raw)) return raw;
+  // Run 107: a built-in object name ("constructor", "toString"…) is never kept, so no per-category total can collide with one
+  if (keepUnknownId && typeof raw==="string" && /^[a-z][a-z0-9_]{1,31}$/.test(raw) && !(raw in Object.prototype)) return raw;
   return "other";
 }
 
@@ -3519,7 +3521,7 @@ export function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=n
   const cats=[...new Set([...Object.keys(catSpendMon),...Object.keys(catSpendPrv)])];
   const catChanges=cats.map(catId=>{
     const cur=catSpendMon[catId]||0,prev=catSpendPrv[catId]||0,diff=cur-prev;
-    const merchantMon={},merchantPrv={};
+    const merchantMon=Object.create(null),merchantPrv=Object.create(null);
     transactions.filter(t=>t.type==="expense"&&t.category===catId&&t.merchant&&doneMon(t)).forEach(t=>{merchantMon[t.merchant]=(merchantMon[t.merchant]||0)+t.amount;});
     transactions.filter(t=>t.type==="expense"&&t.category===catId&&t.merchant&&donePrv(t)).forEach(t=>{merchantPrv[t.merchant]=(merchantPrv[t.merchant]||0)+t.amount;});
     const allM=[...new Set([...Object.keys(merchantMon),...Object.keys(merchantPrv)])];
@@ -3534,7 +3536,7 @@ export function calcWhatChanged(transactions, mon=curMon(), prv=prevMon(), now=n
     return { catId, cur, prev, diff, merchantDiffs };
   }).filter(c=>Math.abs(c.diff)>0.01).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
 
-  const merchantMon={},merchantPrv={};
+  const merchantMon=Object.create(null),merchantPrv=Object.create(null);
   transactions.filter(t=>t.type==="expense"&&t.merchant&&doneMon(t)).forEach(t=>{merchantMon[t.merchant]=(merchantMon[t.merchant]||0)+t.amount;});
   transactions.filter(t=>t.type==="expense"&&t.merchant&&donePrv(t)).forEach(t=>{merchantPrv[t.merchant]=(merchantPrv[t.merchant]||0)+t.amount;});
   const allM=[...new Set([...Object.keys(merchantMon),...Object.keys(merchantPrv)])];
@@ -4768,7 +4770,7 @@ const SUBPAGE_PARENT = { recurring:"more", io:"more", debts:"more", gifts:"more"
 export function Icon({ name, size=16, color="currentColor", style={} }) {
   return (
     <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:size,height:size,flexShrink:0,color,...style}}
-      dangerouslySetInnerHTML={{__html:ICONS[name]||ICONS.other}} aria-hidden="true"/>
+      dangerouslySetInnerHTML={{__html:Object.prototype.hasOwnProperty.call(ICONS,name) ? ICONS[name] : ICONS.other}} aria-hidden="true"/>
   );
 }
 // Run 70: category colours are light pastels made for dark screens. On a light theme the stylesheet sets --cat-shade (styles.js), and every

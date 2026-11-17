@@ -258,7 +258,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
       : c.id==="loanOverdue" ? t("coach.loanOverdue",{lender:maskText(c.lender),amount:amt(c.amount),date:fmtDate(c.date)})
       : t("coach.owedLate",{name:maskText(c.name),amount:amt(c.amount),date:fmtDate(c.date)});
   };
-  const merchantTotals = {};
+  const merchantTotals = Object.create(null);
   expenses.filter(t => done(t) && t.merchant).forEach(t => { merchantTotals[t.merchant] = (merchantTotals[t.merchant]||0) + t.amount; });
   const topMerchants = Object.entries(merchantTotals).sort((a,b)=>b[1]-a[1]).slice(0,8);
   const monTxns = transactions.filter(t => t.date.startsWith(selectedMon));
