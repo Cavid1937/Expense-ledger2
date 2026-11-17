@@ -24,6 +24,8 @@ Words used the same way everywhere:
 - Shows a figure only when income is recorded this month.
 - Per day: the figure divided by the days left in the calendar month.
 - Known weakness (open owner decision): it follows the calendar month, not the pay cycle. It does not use account balances.
+- Known gap (Run 100, open owner decision): loan payments from the Debts page that are still due this month are **not** taken out, unless the person also set the loan up as a recurring payment. The card names the amount (`loanDueInMonth`: unpaid plan payments dated this month or earlier) and says it is not taken out. Subtracting it would count it twice for people who have both.
+- Run 100: when accounts and a next income date are known, the card also shows figure 3 as one line ("Until your next income on ..."). The two figures are different on purpose and both are named.
 
 ## 3. Until your next income (Run 97)
 
@@ -32,7 +34,9 @@ Words used the same way everywhere:
 - Sum: what the shown accounts hold today - scheduled payments and loan payments due before that date (overdue unrecorded ones included) - expense entries dated ahead before that date.
 - Per day: the result divided by the days from today up to the day before the income, rounded down to the qapik.
 - Shows nothing when: no accounts; no income date known; a recurring income is overdue and unrecorded or due today; income is already recorded this month.
+- Run 100: with the option `afterIncome` the same sum is worked out after this month's income is recorded (for the line on the Safe to Spend card). Hand example: 26 Nov, salary recorded on the 25th, accounts 1,540, rent 150 due 7 Dec and internet 20 due 15 Dec, next salary 25 Dec: 1,540 - 170 = 1,370 over 29 days = 47.24 a day. Safe to Spend on the same day says 510 for 5 days.
 - Not double counted: a scheduled payment that already has its linked entry is counted once (as the entry).
+- Possible double count: a loan that is on the Debts page AND set up as a recurring payment is taken out twice here (never optimistic).
 - Can be wrong when: spending was saved with no account (see 4); a hidden account holds money; the income comes late.
 
 ## 4. Spending with no account (Run 98)
@@ -73,6 +77,35 @@ Words used the same way everywhere:
 - A statement needs the person's tick before it can be added when: rows do not add up with the bank's own running balance, or the rows' totals differ from the bank's summary.
 - No tick is asked for when the file has nothing to check against. Nothing failed in that case; the sheet says the rows could not be checked.
 
+## 6. Month-end forecast (written up in Run 99; code unchanged)
+
+- Code: `forecastCore`, `calcMonthEndForecast` (App.jsx).
+- Fixed part: spent so far this month + expense entries dated later this month + scheduled payments still to come or overdue this month.
+- Usual part: average daily spending over up to 28 days ending yesterday, leaving out recurring and bill entries and any purchase far above the median. Multiplied by the days left.
+- Range: plus or minus the daily spread times the square root of the days left; never below the fixed part.
+- The range is shown only if at least 2 of the last 3 months can be checked, and in at least two thirds of them the range made on the 10th contained what was really spent.
+- Shows nothing with too few days of history.
+- Estimate. One unusual week moves it.
+
+## 7. Run-out day (written up in Run 99; code unchanged)
+
+- Code: `calcRunOutDay` (App.jsx).
+- Sum: Safe to Spend left / usual daily spending (the same usual part as 6) = days the money covers. Day = today + those days, rounded down.
+- Shown only when: Safe to Spend is above zero, it is the 5th or later, the cover is at least 2 days shorter than the days left, and the day falls in this month.
+- It inherits the limits of Safe to Spend (2) and of the forecast (6).
+
+## 8. Net position (written up in Run 99; code unchanged)
+
+- Code: `netPosition`, `loanRemainingCents` (App.jsx).
+- Sum: balances of the shown accounts (1) + what people owe you - what you owe - what is left on loans.
+- Loan balances come from the repayment plan after the payments recorded so far. They are estimates: an extra payment or the bank's own rounding can move them.
+- Shows nothing when there are no debts and no loans.
+- Hidden accounts are left out.
+
 ## Not written up here yet
 
-Month-end forecast, run-out day, net position, loan plans, budget remaining, goal progress, "left over since you started". Their code has its own comments; they should be added here in the same form.
+Loan plans (schedule and interest), budget remaining and rollover, goal progress, "left over since you started". Their code has its own comments; they should be added here in the same form.
+
+## Known structural weakness
+
+Figures 2, 3, 6 and 7 each collect scheduled payments by themselves. They agree today (tests), but a change to one can leave the others behind. Planned: one shared "money position" calculation, with tests written first.

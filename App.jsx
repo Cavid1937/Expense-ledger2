@@ -3856,6 +3856,17 @@ export function whatIfSpend(amount, kind, left, days) {
   const after=l-a, per=(c)=>c>0 && d>0 ? (kind==="until" ? Math.floor(c/d)/100 : c/100/d) : 0;
   return { ok:true, kind, amount:a/100, before:l/100, after:after/100, covers:after>=0, short:after<0 ? -after/100 : 0, perDayBefore:per(l), perDayAfter:per(after), days:d>0 ? d : 0 };
 }
+// Run 100: loan payments from the Debts page that are still unpaid and dated this month or earlier. Safe to Spend does not take them
+// out (it only knows recurring payments), so the card says so in plain words. Shown, never subtracted: someone may also have set the
+// same loan up as a recurring payment, and subtracting would count it twice. Payments are whole qapik in the Debts store.
+export function loanDueInMonth(debtData, now=new Date()) {
+  const end=localMonthStr(now)+"-31"; let sum=0, count=0;
+  (debtData && Array.isArray(debtData.loans) ? debtData.loans : []).forEach(l=>{
+    const sc=loanSchedule(l), k=Array.isArray(l.payments)?l.payments.length:0; if (!sc) return;
+    for (let i=k;i<sc.payments.length && sc.payments[i].date<=end;i++) { sum+=sc.payments[i].payment; count++; }
+  });
+  return { count, sum:sum/100 };
+}
 // Run 97 (product research, 16 Nov): the days BEFORE this month's income arrives. Safe to Spend is built on this month's income, so
 // from the 1st until pay day it could only say "waiting", which is when money is tightest. This is a separate, clearly named figure
 // and changes nothing in Safe to Spend:

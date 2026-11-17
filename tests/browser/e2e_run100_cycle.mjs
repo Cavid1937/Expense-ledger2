@@ -35,4 +35,14 @@ for (const [l, re] of [["az", /Növbəti gəlirə qədər/], ["ru", /До сле
   ok(rows.b >= rows.a - 1, `${l}: "What if" and "How is this calculated?" are on separate rows`, rows);
   await page.close();
 }
+section("R100-B4. A loan payment still due this month is named on the card, and not taken out");
+{
+  // 1,200.00 over 12 months without interest, first payment today: 100.00 due this month, not paid
+  const loan = `try{localStorage.setItem("expense_ledger_v5__debts",JSON.stringify({version:1,debts:[],loans:[{id:"l1",lender:"Bank",principal:120000,months:12,rateType:"none",ratePct:0,firstPayment:"${ymd(new Date())}",bankPayment:null,payments:[]}]}));}catch(e){}`;
+  const page = await openPage(browser, { seed: seed("en"), pre: new Function(loan) }); await settle(page);
+  const r = await page.evaluate(() => { const q = (s) => { const e = document.querySelector(s); return e ? e.textContent : null; }; return { note: q('[data-section="home-safe-loans"]'), amount: q('[data-section="home-safe"] .safe-amount') }; });
+  ok(r.note !== null && /100\.00/.test(r.note) && /not taken out/.test(r.note) && !/\{[a-z]+\}/i.test(r.note), "the note names 100.00 and says it is not taken out", r.note);
+  ok(/1,470\.00/.test(r.amount || ""), "Safe to Spend is still 1,470.00", r.amount);
+  await page.close();
+}
 await finish("e2e_run100_cycle", browser);

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 // Run 75: monthly summary
 import { MonthReportCard } from "./report.jsx";
 import { t, tn } from "../i18n.js";
-import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, unassignedEntries, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, whatIfSpend, formMoney, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
+import { CAT, CatIcon, Icon, accountBalances, unassignedSpend, unassignedEntries, creditOwed, netPosition, readDebts, buildSchedules, calcCategorySpend, calcMonthSummary, calcSafeToSpend, calcUntilPay, loanDueInMonth, whatIfSpend, formMoney, calcRunOutDay, calcSpendingPace, calcSpentToDate, calcWhatChanged, reimbOwedMap, reimbOwedTotal, catName, curMon, daysBetween, fmt, fmtDate, fmtPct, fmtShort, localDateStr, maskText, monthName, monthShort, prevMon, readAccounts, scheduleNextDue, surplusLabel, today } from "../App.jsx";
 import { TxnRow } from "./ledger.jsx";
 import { SmartHelper, SpendDonut } from "./analytics.jsx";
 import { Collapse, useRolling } from "./motion.jsx";
@@ -246,6 +246,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
   const held        =accountsHeld(accountTxns||transactions);
   // Run 98: spending with no account moves no balance; the "until" card names how much, so its figure is not read as more certain than it is.
   const loose=useMemo(()=>{ try { return unassignedSpend(readAccounts(),accountTxns||transactions); } catch { return { known:false, count:0, sum:0 }; } },[accountTxns,transactions]);
+  const loanDue     =useMemo(()=>{ try { return loanDueInMonth(readDebts()); } catch { return { count:0, sum:0 }; } },[transactions]);
   // Run 100: the same "until your next income" figure as one line under Safe to Spend, once this month's income is recorded
   const untilNext   =useMemo(()=>{ if (!safeToSpend?.enabled || !safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts,new Date(),{ afterIncome:true }); },[transactions,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
   const untilPay    =useMemo(()=>{ if (!safeToSpend?.enabled || safeInfo.feasible) return { show:false }; let debts=null; try { debts=readDebts(); } catch { debts=null; } return calcUntilPay(transactions,bills,held,debts); },[transactions,bills,held,safeInfo.feasible,safeToSpend?.enabled]);
@@ -268,7 +269,7 @@ export function HomePage({ showToast, transactions, accountTxns, latest=[], bill
       {/* Run 75: last month's summary, in the first week of a month */}
       <MonthReportCard transactions={transactions} budgets={budgets} goals={goals} currency={currency} showToast={showToast}/>
       {/* LEVEL 1 (redesign order): Safe to Spend first, then this month's position, then what is due soon. */}
-      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={held} untilPay={untilPay} untilNext={untilNext} loose={loose}/>
+      <SafeToSpendCard safeToSpend={safeToSpend} safeInfo={safeInfo} runOut={runOut} currency={currency} now={now} held={held} untilPay={untilPay} untilNext={untilNext} loose={loose} loanDue={loanDue}/>
       <div className={`hero card${safeToSpend?.enabled?" quiet":""}`} data-section="home-month">
         <div className="card-head"><span className="card-title">{t("home.thisMonth")}</span><span className="hero-eyebrow">{monthName(now)}</span></div>
         <div className="hero-amount" data-section="hero-spent"><RollingMoney v={curExp} currency={currency}/></div>
@@ -427,7 +428,7 @@ export function WhatIf({ kind, left, days, currency }) {
     </div>
   );
 }
-export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null, untilPay=null, untilNext=null, loose=null }) {
+export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, now, held=null, untilPay=null, untilNext=null, loose=null, loanDue=null }) {
   // Run 9: the number first; the explanation (what was deducted and why) opens on tap — it is long and pushed the month
   // summary and upcoming bills out of the first screen.
   const [open,setOpen]=useState(false);
@@ -523,8 +524,10 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
           </Collapse>
           {/* Always visible, open or not: without recurring bills the number is optimistic, and the user must not have to tap to learn that. */}
           {/* Run 31: the caveats share ONE quiet block (two stacked boxes competed with the number). The balance paragraph keeps its own hook. */}
-          {(()=>{ const noRec=safeInfo.scheduleCount===0, lowHeld=held!==null&&safeInfo.remaining>0&&held<safeInfo.remaining; if (!noRec&&!lowHeld) return null; return (
+          {(()=>{ const noRec=safeInfo.scheduleCount===0, lowHeld=held!==null&&safeInfo.remaining>0&&held<safeInfo.remaining, loans=!!(loanDue&&loanDue.sum>0); if (!noRec&&!lowHeld&&!loans) return null; return (
             <div className="safe-note safe-caveat" role="note" data-section="home-safe-notes">
+              {/* Run 100: loan payments from the Debts page are not in this figure; say how much is still due (shown, never subtracted) */}
+              {loans&&<div data-section="home-safe-loans" style={{marginBottom:noRec||lowHeld?6:0}}>{t("safe.noteLoans",{ amount:fmt(loanDue.sum,currency) })}</div>}
               {noRec&&<div>{t("safe.noteNoRecurring")}</div>}
               {/* The figure is a month-flow plan, not a bank balance: when the accounts hold less than it, say so (always visible). */}
               {lowHeld&&<div data-section="home-safe-held" style={noRec?{marginTop:6}:undefined}>{t("safe.noteBalance",{ held:fmt(held,currency) })}</div>}

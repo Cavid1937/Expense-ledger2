@@ -48,4 +48,19 @@ section("R100-C3. Still silent when the app cannot know");
   const o = calcUntilPay([pay(1, "2026-10-25"), pay(2, "2026-11-25"), paid(3, "rent", 150, "2026-11-07")], [salary, rent], 100, null, NOW, { afterIncome: true });
   ok(o.show && o.left === -50 && o.perDay === 0, "100 held, 150 due: 50.00 short, no per-day figure", o);
 }
+
+section("R100-L1. Loan payments still due this month (shown on the Safe to Spend card, never subtracted)");
+{
+  const NOW = new Date(2026, 10, 16, 12);
+  const loan = (id, principal, months, firstPayment, paid = 0) => ({ id, lender: "Bank", principal, months, rateType: "none", ratePct: 0, firstPayment, bankPayment: null, payments: Array.from({ length: paid }, (_, i) => ({ id: id + "p" + i, date: "2026-11-01", amount: principal / months })) });
+  // 1,200.00 over 12 months = 100.00 due 8 Nov (overdue, unpaid); 600.00 over 6 = 100.00 due 28 Nov; a loan starting 5 Dec is not this month
+  const a = H.loanDueInMonth({ debts: [], loans: [loan("l1", 120000, 12, "2026-11-08"), loan("l2", 60000, 6, "2026-11-28"), loan("l3", 60000, 6, "2026-12-05")] }, NOW);
+  ok(a.count === 2 && a.sum === 200, "two payments of 100.00 are still due in November: 200.00", a);
+  // started 8 Sep, nothing paid: Sep + Oct + Nov = 300.00 still due; with the first two paid: 100.00
+  ok(H.loanDueInMonth({ loans: [loan("l1", 120000, 12, "2026-09-08")] }, NOW).sum === 300 && H.loanDueInMonth({ loans: [loan("l1", 120000, 12, "2026-09-08", 2)] }, NOW).sum === 100, "unpaid earlier months count too: 300.00; after two payments: 100.00");
+  ok(H.loanDueInMonth({ loans: [loan("l1", 120000, 12, "2026-11-08", 1)] }, NOW).sum === 0 && H.loanDueInMonth(null, NOW).sum === 0 && H.loanDueInMonth({ loans: [{ id: "bad" }] }, NOW).count === 0, "paid this month, no loans, or a broken loan: nothing");
+  // Safe to Spend itself does not change when a loan exists: 1,200 income, nothing spent -> 1,200
+  const s = calcSafeToSpend([T({ id: 1, type: "income", category: "salary", amount: 1200, date: "2026-11-10" })], { enabled: true, savingsTarget: 0 }, [], NOW, []);
+  ok(s.remaining === 1200, "Safe to Spend is the same with or without a loan (its rule is unchanged)", s.remaining);
+}
 finish("run100cycle");
