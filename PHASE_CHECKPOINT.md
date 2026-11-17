@@ -1,3 +1,12 @@
+## 0002b - 2026-11-17 - RUN 106 (owner order: reminders to the bell, laggy Select, account card, Claude feel, bell polish, FPS, icons). LOCAL COMMITS 02450d6, e6bb4c7, eb2672e, 1a44187, 67210d1 + release commit. Live was 105 (cf4a596).
+- Perf: Entries draws 30 rows then the rest of the page at 260 ms; Select slot uses transform; Analytics panels mount after 300 ms; cached number formatter. CPU x6: Select on 196 ms, off ~70 ms; Analytics opening still ~440 ms (MonthlyView body JS, NEEDS WORK).
+- Bell: Drive failing 3+ days, storage over 80%, and "entries in no account" now remind from the bell (Home line made quiet with a "Choose accounts" link). Panel: warnings first, kind icons, long texts fold to 3 lines, Later slides away.
+- Settings: when signed in and syncing, the account card moves to the end (above the version line); hook-order bug fixed.
+- Motion: What if? box and Goals "show all unbudgeted" now unfold with motion; new guard test e2e_run106_motion presses every opener on all 5 tabs and fails if nothing moves.
+- Category icons: 3 directions mock-up sent to owner (A today, B sticker, C duotone). NOTHING BUILT; awaiting owner pick.
+- Tests: run-logic 143 files 2832 passed; full browser suite 175 files, 2860 passed, 0 failed; the one problem file e2e_run32_paging read the list before the 260 ms fill (test timing, behaviour as designed) -> wait added, re-run 11/11. offline-check 17/17. az audit: same single known finding (acct.err.noaccount).
+- Not verified: real phone FPS/feel; az/ru wording of new texts by a native reader. No APK built.
+- NEXT: owner picks icon style; Analytics opening speed.
 ## 0002a - 2026-11-17 - RELEASE 105 LIVE at cf4a596 (rollback c19ca21, release 102). Owner said 'Yes, publish'.
 - Pushed fast-forward c19ca21..cf4a596 to main: Runs 103, 104, 104b, 105 (pay-cycle card, loans counted once, restore-before-fresh onboarding, keyboard, bank notices via bell, calendar ranges, time wheels, Import/Export regroup, audit fixes, encrypted-backup fix).
 - Gate: full suite (app code identical to 9700e3c) exit 0, 173 files, 2845 passed, 0 failed, 0 standby; run-logic 143 files 2832 passed; offline-check (real vite build) 17/17; az audit 1 finding (acct.err.noaccount 'Ayarlar'), same as releases 96/102, wording item not a blocker.
