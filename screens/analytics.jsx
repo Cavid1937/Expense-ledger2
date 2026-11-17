@@ -1,5 +1,5 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { Collapse, Swap, useLeave } from "./motion.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { CAT, CatIcon, Icon, KEY, isEarnedCat, refundsNetted, PATTERN_BASIS_KEY, PATTERN_TITLE_KEY, PRIVACY, activateKey, addAmt, calcBudgetStatus, calcCategorySpend, calcCoach, calcHelperCards, calcMonthEndForecast, calcMonthSummary, debtsOrNull, calcPatterns, calcTxnStats, calcWalletSpend, calcWeekdayWeekend, calcWhatChanged, catName, cumulativeByDay, curMon, debtCashFlow, donutSlices, fmt, fmtDate, fmtPct, fmtShort, happenedIn, loanCashOut, localMonthStr, maskText, median, monthName, monthShort, nMon, readDebts, surplusColor, surplusLabel, today, walletName } from "../App.jsx";
@@ -183,10 +183,13 @@ export function monthsBetween(from, to) {   // "YYYY-MM" inclusive, newest first
 // Run 34: Analytics was one very long page ("pure chaos"). It now has four sections under the month picker; every section stays mounted (only hidden), so nothing is lost when you switch.
 const AN_SEGS=["overview","spending","trends","insights"];
 const AN_SEG_KEY={ overview:"an.seg.overview", spending:"an.seg.spending", trends:"an.seg.trends", insights:"an.seg.insights" };
-function AnPanel({ id, seg, children }) { return <div className="an-panel" data-panel={id} hidden={seg!==id}>{children}</div>; }
+// Run 106: hidden sections fill in just after the first paint, so opening Analytics draws only the visible one first
+function AnPanel({ id, seg, all, children }) { return <div className="an-panel" data-panel={id} hidden={seg!==id}>{seg===id||all?children:null}</div>; }
 export function MonthlyView({ transactions, rawTransactions, currency, budgets, bills=[], onView }) {
   const [selectedMon, setSelectedMon] = useState(curMon());
   const [seg, setSeg] = useState("overview"), [dir, setDir] = useState(0);
+  const [allPanels, setAllPanels] = useState(false);
+  useEffect(()=>{ const id=setTimeout(()=>startTransition(()=>setAllPanels(true)),300); return ()=>clearTimeout(id); },[]);
   const [activeBar,  setActiveBar]  = useState(null), barKeep=useRef(null); if (activeBar!==null) barKeep.current=activeBar;
   const [calDay, setCalDay] = useState(null), calKeep=useRef(null); if (calDay) calKeep.current=calDay;
   const { isLeaving, leave }=useLeave();
@@ -299,7 +302,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         </div>
       </div>
       <Swap k={selectedMon} dir={dir}>
-      <AnPanel id="overview" seg={seg}>
+      <AnPanel id="overview" seg={seg} all={allPanels}>
       {/* Summary stats */}
       <div className="month-stats" data-section="an-summary" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
         <div className="month-stat">
@@ -355,7 +358,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
       ) : null; })()}
       </AnPanel>
 
-      <AnPanel id="spending" seg={seg}>
+      <AnPanel id="spending" seg={seg} all={allPanels}>
       {debtCash.n>0&&(
         <div className="list-sub" data-section="an-debtcash" style={{margin:"-4px 2px 14px",lineHeight:1.5}}>
           {t("an.debtCash",{out:fmt(debtCash.out,currency),inn:fmt(debtCash.in,currency)})}
@@ -374,7 +377,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
       )}
       </AnPanel>
 
-      <AnPanel id="insights" seg={seg}>
+      <AnPanel id="insights" seg={seg} all={allPanels}>
       {isCurrentMon&&(
         <div className="a-card" data-section="an-forecast">
           <div className="a-card-title">{t("an.forecast")}</div>
@@ -406,7 +409,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
       )}
       </AnPanel>
 
-      <AnPanel id="spending" seg={seg}>
+      <AnPanel id="spending" seg={seg} all={allPanels}>
       {/* What changed — same comparison window as the summary */}
       {(wc.totalDiff!==0||wc.catChanges.length>0)&&prevExp>0&&momDiff!==null&&(
         <div className="a-card" data-section="an-changes">
@@ -560,7 +563,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
       )}
 
       {/* Run 27d: the all-time overview sits with the other not-month-specific part (Trends), below the selected month, so the page starts with the month the picker shows */}
-      <AnPanel id="trends" seg={seg}>
+      <AnPanel id="trends" seg={seg} all={allPanels}>
         <NotSpentCard raw={rawTransactions||transactions} currency={currency}/>
         {transactions.length>0&&(()=>{
           // Run 65: the all-time surplus uses the same rule as the month (earned income and refunds in; money taken from savings is not income)
@@ -581,7 +584,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
 
       {/* Trends — recent months up to today; not affected by the month selected above */}
       {hasTrends&&(<>
-        <AnPanel id="trends" seg={seg}>
+        <AnPanel id="trends" seg={seg} all={allPanels}>
         <div className="trends-head" data-section="an-trends" style={{marginTop:22,marginBottom:10}}>
           <div className="label-sm">{t("month.trendsTitle")}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",lineHeight:1.5,marginTop:4}}>{t("month.trendsSub")}</div>
@@ -613,7 +616,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         </div>
         </AnPanel>
 
-        <AnPanel id="insights" seg={seg}>
+        <AnPanel id="insights" seg={seg} all={allPanels}>
         {patterns.length>0&&(
           <div className="a-card">
             <div className="a-card-title">{t("an.patterns")}</div>
@@ -635,7 +638,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         )}
         </AnPanel>
 
-        <AnPanel id="trends" seg={seg}>
+        <AnPanel id="trends" seg={seg} all={allPanels}>
         {Object.values(dayOfWeek).some(d=>d.count>0)&&(
           <div className="a-card">
             <div className="a-card-title">{t("an.byDay",{month:monthName(now)})}</div>
@@ -660,7 +663,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
         )}
         </AnPanel>
 
-        <AnPanel id="insights" seg={seg}>
+        <AnPanel id="insights" seg={seg} all={allPanels}>
         {anomalies.length>0&&(
           <div className="a-card">
             <div className="a-card-title">{t("an.unusual")}</div>
@@ -703,7 +706,7 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
 
         </AnPanel>
 
-        <AnPanel id="trends" seg={seg}>
+        <AnPanel id="trends" seg={seg} all={allPanels}>
         <div className="a-card" data-section="an-calendar">
           <div className="a-card-title">{t("an.calendar")}</div>
           <div style={{fontSize:11,color:"var(--ink-3)",marginBottom:10,lineHeight:1.5}}>{t("an.calendarHint")}</div>

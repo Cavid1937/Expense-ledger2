@@ -1,5 +1,5 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate, PickRange } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
@@ -12,8 +12,12 @@ import { ReceiptPhoto } from "./photo.jsx";
 
 // ─── Shared transaction components ───────────────────────────────────────────
 export const LEDGER_PAGE=150;   // Run 32: rows drawn at first and per "Show more" (a throttled phone froze for seconds drawing 300+ rows at once). Whole days only.
+const LEDGER_FIRST=30, FIRST_FILL_MS=260;
 export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onLongPress, compact, picked, onToggle }) {
-  const [cap,setCap]=useState(LEDGER_PAGE);
+  // Run 106 (owner: "increase FPS"): the first screenful is drawn at once, the rest of the first page just after, in the background,
+  // so opening Entries does not hold up the page's slide-in. "Show more" appears only once that first page is complete.
+  const [cap,setCap]=useState(LEDGER_FIRST);
+  useEffect(()=>{ const id=setTimeout(()=>startTransition(()=>setCap(c=>Math.max(c,LEDGER_PAGE))),FIRST_FILL_MS); return ()=>clearTimeout(id); },[]);
   const owed=useMemo(()=>reimbOwedMap(all||txns),[all,txns]);   // Run 43: what is still owed back, per entry (the full list, since a filter may hide the repayments)
   const groups=useMemo(()=>{
     const g={}; txns.forEach(t=>{ (g[t.date]=g[t.date]||[]).push(t); });
@@ -46,7 +50,7 @@ export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onL
         );
       })}
       </div>}
-      {left>0&&<button className="btn btn-ghost btn-full" data-section="tx-show-more" style={{marginTop:8}} onClick={()=>setCap(c=>c+LEDGER_PAGE)}>{t("ledger.showMore",{n:left})}</button>}
+      {left>0&&cap>=LEDGER_PAGE&&<button className="btn btn-ghost btn-full" data-section="tx-show-more" style={{marginTop:8}} onClick={()=>setCap(c=>c+LEDGER_PAGE)}>{t("ledger.showMore",{n:left})}</button>}
     </>
   );
 }
@@ -328,8 +332,10 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
                 <div className="empty-body">{t("ledger.noResultsBody")}</div>
               </div>
             ):(
+              <div className={!selMode&&barShow.mounted?"sel-unsel":undefined}>
               <GroupedTxns txns={list} all={transactions} currency={currency} onDelete={onDelete} onEdit={onEdit} onView={onView}
                 onLongPress={startSel} picked={listSel?picked:undefined} onToggle={toggle}/>
+              </div>
             )}
             </Swap>
           </div>

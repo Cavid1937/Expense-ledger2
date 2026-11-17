@@ -4232,9 +4232,13 @@ function statementPlan(res, filename, transactions) {
   return plan;
 }
 export function fmtPct(n) { return PRIVACY ? "••%" : `${n}%`; }
+// Run 106: one shared formatter; toLocaleString with options built a new one for every amount (the top script cost when lists redraw).
+// Same locale and options, so the text is identical. Made on first use (var, not const): code that runs while modules load must not hit it early.
+var MONEY_NF;
 export function fmt(n, sym="₼") {
   if (PRIVACY) return `${MASK} ${sym}`;
-  return `${Math.abs(n||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2})} ${sym}`;
+  if (!MONEY_NF) MONEY_NF=new Intl.NumberFormat("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2});
+  return `${MONEY_NF.format(Math.abs(n||0))} ${sym}`;
 }
 // The three small Home tiles. Exact below 10,000 (1,050.00 used to show as "1.1k", which reads as 1,100 — Run 7, V4);
 // above that the short form is marked "≈" so it is never taken for an exact figure.
