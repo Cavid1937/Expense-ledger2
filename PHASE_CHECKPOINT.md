@@ -1,4 +1,11 @@
-## 0001u - 2026-11-17 - RUN 102 (owner: "work for 4 hours autonomously"). LOCAL COMMITS 1f75d82 (101b review fix + docs), 9d3c8ec (102); NOT PUSHED. Live still release 96 (2626caf).
+## 0001v - 2026-11-17 - RELEASE 102 LIVE at c19ca21 (rollback 2626caf, release 96). Owner said "you will push them after the run".
+- Pushed fast-forward 2626caf..c19ca21 to main: Runs 97-102 (until-income card and line, no-account repair sheet, What if, Paid from in the main Add form, loan note, openCommitments, privacy fix, cash basis).
+- Gate: full suite on c19ca21 exit 0, 168 files, 0 with problems, 2717 passed, 0 failed, 0 standby; run-logic 142 files 2792 passed; npx vite build OK; offline-check 17/17; az audit 1 finding (acct.err.noaccount "Ayarlar"), the same one is in release 96: wording item, not a blocker.
+- Vercel production for c19ca21: success (deployment expense-ledger2-8go1h890r). Live bundle index-BjEkqhUh.js contains "102 (2026-11-17)".
+- Live smoke (throw-away browser profile, made-up data, only the live origin let through): e2e_run102_cash 5, e2e_run101_privacy 5, e2e_run97_untilpay 10, all passed, no JavaScript errors. Scripts: scratchpad live_*.mjs.
+- Rollback: Vercel instant rollback to the 2626caf deployment (expense-ledger2-a1rax6iao), or git revert of 2626caf..c19ca21 and push.
+- Not verified: real phone; az/ru wording of new strings by a native reader.
+- Still open: D1, D9, D10 (D3 answered: published).## 0001u - 2026-11-17 - RUN 102 (owner: "work for 4 hours autonomously"). LOCAL COMMITS 1f75d82 (101b review fix + docs), 9d3c8ec (102); NOT PUSHED. Live still release 96 (2626caf).
 - 102: CONFIRMED defect (my Run 97 design, found in the 101 review): "Until your next income" starts from account balances (all money) but took entries dated ahead from the spending view, so a loan payment counted only its interest, money lent was left out, a shared cost counted only the part not paid back. Fix: App.jsx calcUntilPay opts.cashTx (raw entries) for the dated-ahead sum only; the income date is still found from the spending view (a refund dated ahead never becomes "the next income"). screens/home.jsx passes accountTxns. APP_RELEASE 102.
 - Tests: run102cash 9 checks (4 fail on old code); e2e_run102_cash 3 (2 fail on old build page101b); run-logic exit 0, 142 files, 2792 passed; e2e_run97_untilpay 10, e2e_run100_cycle 10, e2e_run9 55; offline 17/17. Full suite on 9d3c8ec: exit 0, 168 files, 0 with problems, 2715 passed, 0 failed, 0 standby events
 - docs/MONEY_FIGURES.md figure 3 has a Run 102 note.
