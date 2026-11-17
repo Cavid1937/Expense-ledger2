@@ -11,6 +11,10 @@ keep their original paths, so old links still work.
 | [../PHASE_CHECKPOINT.md](../PHASE_CHECKPOINT.md) | Session-by-session log, newest first. The source of truth for "where are we". |
 | [../tests/README-TESTS.md](../tests/README-TESTS.md) | How the tests work, the exact commands and their expected exit codes. |
 | [AUDIT_FOLLOWUP_2026-11-15.md](AUDIT_FOLLOWUP_2026-11-15.md) | Production-readiness audit (corrected), repository layout plan, release gates. |
+| [SECURITY_REVIEW_2026-11-18.md](SECURITY_REVIEW_2026-11-18.md) | Security review (Run 107): requirement matrix, threat model, findings, release gates, owner actions. |
+| [DATA_FLOWS.md](DATA_FLOWS.md) | Everything that leaves the phone, and how to stop it. |
+| [INCIDENT_PLAYBOOK.md](INCIDENT_PLAYBOOK.md) | What to do when something goes wrong. |
+| [security/](security/) | Rollback-only RLS check and the UNAPPLIED database grants tidy-up. |
 
 ## Current reference (describes the app as it is now)
 
