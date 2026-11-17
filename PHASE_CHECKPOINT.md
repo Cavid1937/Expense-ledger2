@@ -1,3 +1,10 @@
+## 0002a - 2026-11-17 - RELEASE 105 LIVE at cf4a596 (rollback c19ca21, release 102). Owner said 'Yes, publish'.
+- Pushed fast-forward c19ca21..cf4a596 to main: Runs 103, 104, 104b, 105 (pay-cycle card, loans counted once, restore-before-fresh onboarding, keyboard, bank notices via bell, calendar ranges, time wheels, Import/Export regroup, audit fixes, encrypted-backup fix).
+- Gate: full suite (app code identical to 9700e3c) exit 0, 173 files, 2845 passed, 0 failed, 0 standby; run-logic 143 files 2832 passed; offline-check (real vite build) 17/17; az audit 1 finding (acct.err.noaccount 'Ayarlar'), same as releases 96/102, wording item not a blocker.
+- Vercel production for cf4a596: success (GitHub deployments API; expense-ledger2-ghvfsj9dd). Live bundle index-CgsOlZS_.js contains '105 (2026-11-17)'. Vercel MCP has no team access (403).
+- Live smoke (throw-away profile, made-up data, only the live origin let through): e2e_run105_review 30/30, e2e_run105_time 24/24 incl. R105-E encrypted backup, no JavaScript errors. Scripts: scratchpad live_e2e_run105_*.mjs.
+- Rollback: Vercel instant rollback to the c19ca21 deployment, or git revert c19ca21..cf4a596 and push.
+- Not verified: real phone (budget box, wheels, haptics, bank notices on Android, keyboard); az/ru wording by a native reader. No APK built.
 ## 0001z - 2026-11-17 - RUN 105 parts 2-5 + playbook + Büdcəm research. LOCAL COMMITS 001aa06, 615eb8d, 67b5f98, 9700e3c, 88e0b6e, 3d75389 (+ report commit); NOT PUSHED. Live still 102 (c19ca21).
 - 105: Import/Export regrouped (look only); reminder time = two snap wheels (screens/pickers.jsx); screen audit docs/RUN105_SCREEN_AUDIT.md (Analytics 'Monthly surplus' misleading figure fixed, one-entry day totals, budget toggle, info-sheet X); docs/CLAUDE_FEEL_CHECKLIST.md; APP_RELEASE 105.
 - CONFIRMED DEFECT found by full suite (e2e_run32_enc): shorter Import/Export page left the 2nd encrypted-backup passphrase box under the tab bar, so the backup could not be made. Bisect 799550a pass, a24b4ba pass, 001aa06 fail. Fix 9700e3c: screens/settings.jsx formRef callback -> revealFocus. New check R105-E (e2e_run105_time 24/24).
