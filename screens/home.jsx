@@ -206,10 +206,11 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount, onAs
       {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</div>}
       {owedCredit>0&&<div className="list-sub" data-section="home-credit-owed" style={{margin:"4px 2px 0"}}>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</div>}
       {np&&<div className="list-sub" data-section="home-netpos" style={{margin:"4px 2px 0"}}>{t("acc.net",{ amount:(np.net<0?"−":"")+fmt(Math.abs(np.net)/100,currency) })}</div>}
+      {/* Run 106: the full reminder now lives in the bell; here only a quiet line, since the total above leaves this money out */}
       {loose.known&&loose.list.length>0&&(
-        <div className="list-sub" data-section="home-loose" role="note" style={{margin:"6px 2px 0",lineHeight:1.45,color:"var(--warn)"}}>
-          {tn("acc.loose",loose.list.length,{ amount:fmt(looseSum,currency), date:fmtDate(loose.since) })}
-          {onAssign&&<> <button type="button" className="btn btn-sm" data-section="home-loose-fix" style={{marginLeft:4}} onClick={()=>setFix(true)}>{t("acc.looseFix")}</button></>}
+        <div className="list-sub" data-section="home-loose" role="note" title={tn("acc.loose",loose.list.length,{ amount:fmt(looseSum,currency), date:fmtDate(loose.since) })} style={{margin:"4px 2px 0",lineHeight:1.45}}>
+          {tn("acc.looseShort",loose.list.length,{ amount:fmt(looseSum,currency) })}
+          {onAssign&&<> · <button type="button" className="link-btn" data-section="home-loose-fix" onClick={()=>setFix(true)}>{t("acc.looseFix")}</button></>}
         </div>
       )}
       {/* drawn at the top of the page: inside this card it would sit behind the cards that follow */}

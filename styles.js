@@ -509,6 +509,7 @@ html.theme-fading body,html.theme-fading .card,html.theme-fading .tabbar,html.th
 .section-title{display:block;font-size:17px;font-weight:600;color:var(--ink);margin:18px 2px 10px}
 .list-title{display:block;font-size:15px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
 .list-sub{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px;overflow-wrap:anywhere}
+.link-btn{background:none;border:0;padding:6px 2px;margin:-6px 0;font:inherit;font-weight:600;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px;min-height:32px}
 .big-num{font-size:clamp(26px,8vw,32px);font-weight:700;letter-spacing:-0.5px;color:var(--ink);margin:4px 0 12px;font-variant-numeric:tabular-nums}
 .label-sm{font-size:12px;font-weight:600;letter-spacing:0.2px;text-transform:none;color:var(--ink-3)}
 /* This month (the "hero") is now a card */

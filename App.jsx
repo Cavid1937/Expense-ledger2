@@ -15,7 +15,7 @@ import { copyPhoto, deletePhoto, sweepPhotos } from "./screens/photo.jsx";
 import { AddEditOverlay, BillSheet } from "./screens/add.jsx";
 import { RecurringHub } from "./screens/recurring.jsx";
 import { ImportExportPage, ImportUnlock, InfoSheet, MorePage, MyAccounts } from "./screens/settings.jsx";
-import { AccountSheet } from "./screens/home.jsx";
+import { AccountSheet, LooseSheet } from "./screens/home.jsx";
 import { DebtsPage } from "./screens/debts.jsx";
 import { GiftsPage } from "./screens/gifts.jsx";
 import { ColumnMapper } from "./screens/mapcols.jsx";   // Run 67
@@ -5996,6 +5996,11 @@ function AppInner() {
   // Run 105 (owner: the review "should come as a notification and then user decides"): taken notices are written to their own store FIRST
   // (Android hands each over only once), then wait behind the bell. The review opens only when the person taps Review.
   const [bankQ,setBankQ]=useState(()=>readBankQueue());
+  const [looseHideN,setLooseHideN]=useState(0), [looseOpen,setLooseOpen]=useState(false);
+  // Run 106: reminders for the bell, worked out only when the entries change (not on every redraw)
+  const looseNow=useMemo(()=>{ try { const ad=readAccounts(); if (ad.accounts.some(a=>!a.hidden)) return unassignedEntries(ad,state.transactions||[]); } catch { /* no reminder rather than a wrong one */ } return { known:false, since:"", list:[] }; },[state.transactions]);
+  const storeUse=useMemo(()=>{ try { return storageUsage(); } catch { return null; } },[(state.transactions||[]).length]);
+  const [driveHideN,setDriveHideN]=useState(0), [storeHide,setStoreHide]=useState("");
   const [bqHideN,setBqHideN]=useState(0);   // "Later" in the bell hides the notice until more payments arrive
   // review: the queued notices (or, when they could not be stored, the ones just taken) as the usual plan, marked so the short sheet is used
   const reviewBankQ=(given)=>{
@@ -6203,6 +6208,14 @@ function AppInner() {
     const rows=readNoticeItems(bankQ).rows;
     if (rows.length) notices.unshift({ id:"bank-pay", text:bankQText(rows,currency), actions:[{ key:"review", label:t("bq.review"), primary:true, onClick:()=>reviewBankQ() }], onDismiss:()=>setBqHideN(bankQ.length) });
   }
+  // Run 106 (owner: "everything that's a reminder must go to notifications"): entries in no account now remind from the bell.
+  // "Later" hides it until more such entries appear; it clears itself once they are given an account.
+  if (drivePref.on && drivePref.fails>=3 && drivePref.fails>driveHideN) notices.push({ id:"drive-fail", text:t("drive.failing",{n:drivePref.fails}), actions:[{ key:"now", label:t("drive.backupNow"), primary:true, onClick:()=>driveBackupNow({ interactive:true }) }], onDismiss:()=>setDriveHideN(drivePref.fails) });
+  if (storeUse && storeUse.level!=="ok" && storeHide!==storeUse.level) notices.unshift({ id:"storage-low", text:t(storeUse.level==="full"?"io.storageFull":"io.storageWarn"), actions:[{ key:"open", label:t("explore.go"), primary:true, onClick:()=>switchTab("io") }], onDismiss:()=>setStoreHide(storeUse.level) });
+  if (looseNow.known && looseNow.list.length>looseHideN) {
+    const sum=looseNow.list.reduce((c,x)=>c+Math.round((Number(x.amount)||0)*100),0)/100;
+    notices.push({ id:"acc-loose", text:tn("acc.looseBell",looseNow.list.length,{ amount:fmt(sum,currency), date:fmtDate(looseNow.since) }), actions:[{ key:"fix", label:t("acc.looseFix"), primary:true, onClick:()=>setLooseOpen(true) }], onDismiss:()=>setLooseHideN(looseNow.list.length) });
+  }
   if (iosNote) notices.push({ id:"ios-note", text:t("banner.iosNote"), actions:[{ key:"ok", label:t("inbox.gotIt"), onClick:()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } } }] });
 
   return (
@@ -6322,6 +6335,7 @@ function AppInner() {
         )}
         <ConfirmHost/>
         {infoKind&&<InfoSheet kind={infoKind} onClose={()=>setInfoKind(null)}/>}
+        {looseOpen&&<LooseSheet loose={looseNow} accounts={readAccounts().accounts.filter(a=>!a.hidden)} currency={currency} onAssign={assignAccountMany} onClose={()=>setLooseOpen(false)}/>}
         {viewAcc&&<AccountSheet id={viewAcc} transactions={transactions} currency={currency} onClose={()=>setViewAcc(null)} onManage={()=>{ setViewAcc(null); switchTab("accounts"); }} onView={txn=>{ setViewAcc(null); setViewTxn(txn); }}/>}
         {showLock&&<LockSheet onClose={()=>setShowLock(false)} showToast={showToast}/>}
         
