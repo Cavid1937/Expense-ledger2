@@ -33,4 +33,20 @@ section("R106-B2. Storage over 80%: in the bell, and its button opens Data");
   await page.evaluate(() => { try { localStorage.removeItem("zz_test_filler"); } catch (e) {} });
   await page.close();
 }
+section("R106-A1. Signed in and working: the account card moves to the end of Settings; signed out it stays near the top");
+{
+  const where = (page) => page.evaluate(() => { const a = document.querySelector('[data-section="st-account"]'), p = document.querySelector('[data-section="st-profile"]'), v = document.querySelector('[data-section="app-version"]');
+    if (!a || !p || !v) return "missing"; return (a.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING) ? "top" : (a.compareDocumentPosition(v) & Node.DOCUMENT_POSITION_FOLLOWING) ? "bottom" : "other"; });
+  const goSettings = async (page) => { await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(700); };
+  const out = await openPage(browser, { seed: seed() }); await goSettings(out);
+  ok((await where(out)) === "top", "signed out: the sign-in offer is near the top", await where(out));
+  await out.close();
+  const session = { access: "A1", refresh: "R1", until: Date.now() + 3600000, userId: "11111111-2222-3333-4444-555555555555", email: "test@example.invalid", name: "Test Person", version: 3, syncedAt: "2026-11-16T09:00:00Z", lastHash: "", paused: "", lastError: "" };
+  const pre = new Function(`try{window.fetch=async()=>{throw new TypeError("Failed to fetch")};if(!sessionStorage.getItem("__s")){sessionStorage.setItem("__s","1");localStorage.setItem("expense_ledger_v5__account",${JSON.stringify(JSON.stringify(session))});}}catch(e){}`);
+  const inn = await openPage(browser, { seed: seed(), pre }); await goSettings(inn);
+  ok((await where(inn)) === "bottom", "signed in: the account card sits after the other settings, above the version line", await where(inn));
+  ok(inn.errors.length === 0, "no JavaScript errors", inn.errors[0]);
+  await inn.evaluate(() => { try { localStorage.removeItem("expense_ledger_v5__account"); } catch (e) {} });
+  await inn.close();
+}
 await finish("e2e_run106_bell", browser);

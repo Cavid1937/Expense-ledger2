@@ -752,11 +752,11 @@ function AccountCard({ account }) {
   const [ask,setAsk]=useState("");
   const [btnShown,setBtnShown]=useState(false);
   const gRef=useRef(null);
+  const [opening,setOpening]=useState(false);
   const sk=account&&account.s ? account.s.userId+"|"+account.s.lastError : "";
   useEffect(()=>{ setBtnShown(false); },[sk]);
   if (!account) return null;
   const { s, busy="", onStart, onSave, onSettle, onReview, onKeepPhone, onSignOut, onDelete }=account;
-  const [opening,setOpening]=useState(false);
   const start=async ()=>{ setOpening(true); try { const r=await onStart(gRef.current); if (r==="button") setBtnShown(true); } finally { setOpening(false); } };
   if (!s) return (
     <div className="card st-card" data-section="st-account">
@@ -806,6 +806,7 @@ function AccountCard({ account }) {
 }
 export function MorePage({ language, profileName="", onLanguageChange, onProfileName, onOpen, onInfo, onLock, version, state, onCatsChanged, onCurrencyChange, onSafeToSpendChange, showToast, accTools, scrollTo="", onScrolled, account }) {
   const [fbOpen,setFbOpen]=useState(false);
+  const acctQuiet=!!(account&&account.s&&!account.s.paused&&account.s.version&&account.s.lastError!=="auth");
   // Run 42: the pill answers the touch at once (cheap local state, painted first); the whole app switches language one frame later.
   const [picked, setPicked]=useState(null);
   useEffect(()=>{ if (picked && picked===language) setPicked(null); },[picked,language]);
@@ -845,7 +846,9 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       <RemindersSettings showToast={showToast} open={open} toggle={toggle}/>
       {/* Run 90 (design review 8): Money and Look come first; the account and the name follow, so Settings no longer opens like a sign-up form.
           The account card keeps its privacy text visible (owner's rule), now two sentences. */}
-      <AccountCard account={account}/>
+      {/* Run 106 (owner: once signed in, the account must sit somewhere less visible): signed in and working, it moves to the end of
+          Settings; signed out, or when it needs the person (paused, not saved, sign in again), it stays up here. */}
+      {!acctQuiet&&<AccountCard account={account}/>}
       {/* Run 17: this tab is Settings. Profile name (used in the Home greeting) and the interface language are set here. */}
       <div className="card st-card st-ident" data-section="st-profile" role="group" aria-label={t("st.profile")}>
         {/* Run 31: one identity card (it replaces three separate cards: name, brand and "stored on this device"). */}
@@ -876,6 +879,7 @@ export function MorePage({ language, profileName="", onLanguageChange, onProfile
       {/* Run 75: write to us / report a problem (free, add-only; see sendFeedback in App.jsx) */}
       <ListRow id="feedback" icon="edit" title={t("fb.row")} sub={t("fb.rowSub")} onClick={()=>setFbOpen(true)}/>{fbOpen&&<FeedbackSheet lang={language} showToast={showToast} onClose={()=>setFbOpen(false)}/>}
       </div>
+      {acctQuiet&&<AccountCard account={account}/>}
       {/* Run 53 (owner's video: the version read "SNjTvbhv"): a version a person can read and compare; the build code stays, small, for support */}
       <div className="list-sub app-version" data-section="app-version" style={{textAlign:"center",marginTop:4}}>{t("more.version",{v:APP_RELEASE})}{version&&<span data-section="app-build" style={{opacity:0.65}}> · {t("more.build",{v:version})}</span>}</div>
     </div>
