@@ -979,6 +979,31 @@ html,body,.app{transition:background-color 200ms ease-out}
 .pick-day{min-height:42px;border:0;border-radius:10px;background:transparent;color:var(--ink);font:600 14px var(--font);font-variant-numeric:tabular-nums;cursor:pointer}
 .pick-day.today{box-shadow:inset 0 0 0 1.5px var(--rule-2)}
 .pick-day.on{background:var(--accent-fill);color:var(--on-accent)}
+.pick-day.in-range{background:color-mix(in srgb,var(--accent-fill) 16%,transparent);color:var(--ink)}
+/* Run 105: the bank-notice review. One grouped card with hairline rows (the Claude app's list look), quiet notes, big plain buttons. */
+.bq-sub{margin:4px 0 14px;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.bq-note{margin:10px 2px 0;font-size:12.5px;line-height:1.5;color:var(--warn)}
+.bq-note.quiet{color:var(--ink-3)}
+.bq-list{list-style:none;margin:0;padding:0;background:var(--bg-warm);border-radius:14px;max-height:46vh;overflow-y:auto;overscroll-behavior:contain}
+.bq-row{padding:12px 14px}
+.bq-row+.bq-row{border-top:1px solid var(--rule)}
+.bq-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.bq-what{min-width:0;font-size:15px;font-weight:600;color:var(--ink);overflow-wrap:anywhere}
+.bq-amt{flex-shrink:0;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--ink)}
+.bq-amt.in{color:var(--pos)}
+.bq-bottom{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.bq-when{font-size:12.5px;color:var(--ink-3)}
+.bq-bottom .bq-cat{min-height:32px;padding:4px 10px;border-radius:999px;border:1px solid var(--rule);background:var(--bg);font-size:12.5px;color:var(--ink-2)}
+.bq-dir{margin-left:auto;display:inline-flex;padding:2px;border-radius:999px;background:var(--bg);border:1px solid var(--rule)}
+.bq-dir button{min-height:30px;padding:0 12px;border:0;border-radius:999px;background:transparent;font:inherit;font-size:12.5px;color:var(--ink-3);transition:background-color .2s ease,color .2s ease}
+.bq-dir button.on{background:var(--ink);color:var(--bg)}
+.bq-acc{display:block;margin-top:14px;font-size:12.5px;color:var(--ink-2)}
+.bq-acc .field-input{margin-top:4px}
+.bq-check{display:flex;gap:8px;align-items:flex-start;margin:10px 2px 0;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+.bq-check input{margin-top:2px}
+.bq-acts{margin-top:16px;display:grid;gap:8px}
+.bq-acts .btn{margin:0}
+@media (prefers-reduced-motion:reduce){.bq-dir button{transition:none}}
 .pick-day:disabled{color:var(--ink-5);cursor:default}
 .pick-sheet{padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
 /* above the Add screen (100), below notices (200+) and the lock screen (1000) */

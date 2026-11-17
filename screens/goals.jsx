@@ -5,7 +5,7 @@ import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates, tidyPlan, applyTidy, undoTidy, TIDY_KEY, subName, readBudgetCarry, writeBudgetCarry, budgetCarried, readLeftoverGoal, writeLeftoverGoal, readRolloverSeen, goalAddMoney, goalSetTotal, goalHistory, daysBetween, parseLocalDate, today } from "../App.jsx";import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
-import { Collapse, EditSwap, useBackStep, useLeave } from "./motion.jsx";
+import { Collapse, EditSwap, MOTION_MS, motionOff, useBackStep, useLeave } from "./motion.jsx";
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
 export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, seg, onSeg, addSignal, tidyTools, onSetBudget, onAddGoal, onUpdateGoal, onDeleteGoal, onAddTemplate, onDeleteTemplate, onUpdateTemplate, onSafeToSpendChange, onRebalance }) {
@@ -81,13 +81,23 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
       <button className="btn btn-primary btn-full" style={{marginTop:0}} onClick={saveGoal}>{t("set.saveGoal")}</button>
     </div>
   );
-  const editRow=(cat,limit)=>(<Collapse open={editBudget===cat.id}>{editBudget===cat.id&&(
+  // Run 105 (owner: "category budget set opens good but closes instantly"): the box's contents were removed the moment Save or ✕ was pressed,
+  // and a newly budgeted category jumped lists at once. The last open box is kept drawn while it eases closed; the save lands after that.
+  const ebKeep=useRef(null); if (editBudget!==null) ebKeep.current=editBudget;
+  const ebShown=editBudget!==null?editBudget:ebKeep.current;
+  const saveBudget=(catId)=>{
+    const v=budgetVal.trim()===""?0:formMoney(budgetVal); if (v===null) { showToast(t("set.zeroOrMore")); return; }
+    setEditBudget(null);
+    const go=()=>{ onSetBudget(catId,v); if (v>0) showToast(t("set.budgetSaved")); };
+    if (motionOff()) go(); else setTimeout(go,MOTION_MS);
+  };
+  const editRow=(cat,limit)=>(<Collapse open={editBudget===cat.id}>{ebShown===cat.id&&(
     <div style={{display:"flex",gap:7,marginTop:9}}>
-      <input className="field-input" type="text" inputMode="decimal" autoComplete="off" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} ref={revealFocus} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
-      <button className="btn btn-sm btn-sm-primary" onClick={()=>{const v=budgetVal.trim()===""?0:formMoney(budgetVal); if(v===null){showToast(t("set.zeroOrMore"));return;} onSetBudget(cat.id,v);setEditBudget(null);if(v>0)showToast(t("set.budgetSaved"));}}>{t("common.save")}</button>
+      <input className="field-input" type="text" inputMode="decimal" autoComplete="off" enterKeyHint="done" placeholder={t("set.monthlyLimit")} aria-label={`${t("set.monthlyLimit")}: ${catName(cat.id)}`} value={budgetVal} onChange={e=>setBudgetVal(cleanMoneyText(e.target.value))} onKeyDown={e=>{ if (e.key==="Enter") { e.preventDefault(); saveBudget(cat.id); } }} ref={revealFocus} style={{flex:1,padding:"8px 10px",fontSize:13}}/>
+      <button className="btn btn-sm btn-sm-primary" onClick={()=>saveBudget(cat.id)}>{t("common.save")}</button>
       <button className="btn btn-sm" onClick={()=>setEditBudget(null)} aria-label={t("common.cancel")}>✕</button>
     </div>
-  )}{editBudget===cat.id&&limit>0&&(
+  )}{ebShown===cat.id&&limit>0&&(
     <label data-section="carry-toggle" style={{display:"flex",gap:10,alignItems:"flex-start",marginTop:10,lineHeight:1.45,fontSize:13}}>
       <input type="checkbox" checked={!!carry[cat.id]} onChange={e=>setCarryFor(cat.id,e.target.checked)} style={{marginTop:2,flexShrink:0}}/>
       <span><span style={{display:"block"}}>{t("carry.toggle")}</span><span className="list-sub" style={{display:"block"}}>{t("carry.help")}</span></span>

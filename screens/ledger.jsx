@@ -1,7 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 // Run 75: the app's own date and option pickers
-import { PickSelect, PickDate } from "./pickers.jsx";
+import { PickSelect, PickDate, PickRange } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { pickerCats, readCatPrefs, cleanReimb, reimbOwedMap, reimbStatus, rangeStats, rangePreset } from "../App.jsx";
 import { accountsMap, paidFromMatch, paidFromOptions, paidKindName, readAccounts } from "../App.jsx";
@@ -135,7 +135,6 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
   const [moreOpen,   setMoreOpen]   = useState(false);   // Run 31: trip / wallet / account filters sit behind one "More filters" chip
   const [dateFrom,   setDateFrom]   = useState("");
   const [dateTo,     setDateTo]     = useState("");
-  const [showDates,  setShowDates]  = useState(false);
   const [showCatSheet, setShowCatSheet] = useState(false);
 
   const preDate=useMemo(()=>{
@@ -220,9 +219,10 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
           {hasCatFilter?<><CatIcon catId={catFilter} size={12}/>{catName(catFilter)}</>:<><Icon name="filter" size={12}/>{t("ledger.category")}</>}
           <Icon name="chevDown" size={11}/>
         </button>
-        <button className={`chip${(showDates||hasDateFilter)?" on":""}`} aria-pressed={!!(showDates||hasDateFilter)} onClick={()=>setShowDates(s=>!s)}>
-          <Icon name="calendar" size={11}/> {t("ledger.date")}
-        </button>
+        <PickRange className={`chip${hasDateFilter?" on":""}`} active={!!hasDateFilter} section="tx-date-btn" from={dateFrom} to={dateTo}
+          presets={RANGE_KEYS.map(k=>({ key:k, label:t(RANGE_LABEL[k]), ...rangePreset(k) }))}
+          label={rangeKey ? t(RANGE_LABEL[rangeKey]) : dateFrom&&dateTo ? (dateFrom===dateTo ? fmtDate(dateFrom) : t("range.head",{ from:fmtDate(dateFrom), to:fmtDate(dateTo) })) : dateFrom ? t("range.since",{ date:fmtDate(dateFrom) }) : dateTo ? t("range.until",{ date:fmtDate(dateTo) }) : t("ledger.date")}
+          onChange={(f,tt)=>{ setDateFrom(f); setDateTo(tt); }}/>
         {hasMore&&(
           <button className={`chip${(moreOpen||moreActive>0)?" on":""}`} aria-pressed={moreOpen} aria-expanded={moreOpen} data-section="tx-more-toggle" onClick={()=>setMoreOpen(o=>!o)}>
             {t("ledger.more")}{moreActive>0?` · ${moreActive}`:""}<Icon name={moreOpen?"chevUp":"chevDown"} size={11}/>
@@ -259,18 +259,6 @@ export function LedgerPage({ transactions, currency, onDelete, onDeleteMany, onG
         <div className="filter-bar" role="group" aria-label={t("paid.filterLabel")} data-section="tx-paid-filter">
           {[{ value:"all" },...paidOpts].map(o=>(
             <button key={o.value} className={`chip${paidFilter===o.value?" on":""}`} aria-pressed={paidFilter===o.value} data-paid={o.value} onClick={()=>setPaidFilter(o.value)}>{o.value==="all"?t("paid.all"):o.value==="none"?t("wallet.none"):o.account?accountName(o.account):paidKindName(o.kind)}</button>
-          ))}
-        </div>
-      </Collapse>
-      <Collapse open={!!showDates} id="tx-dates">
-        <div className="date-inputs">
-          <label className="date-input-wrap"><span className="date-lbl">{t("ledger.from")}</span><PickDate lang={locale()} className="date-input" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/></label>
-          <label className="date-input-wrap"><span className="date-lbl">{t("ledger.to")}</span><PickDate lang={locale()} className="date-input" value={dateTo} onChange={e=>setDateTo(e.target.value)}/></label>
-        </div>
-        {/* Run 88: ready-made ranges, offered only here (the Entries date filter) */}
-        <div className="filter-bar" role="group" aria-label={t("range.quick")} data-section="tx-range-quick" style={{marginTop:8}}>
-          {RANGE_KEYS.map(k=>(
-            <button key={k} type="button" className={`chip${rangeKey===k?" on":""}`} aria-pressed={rangeKey===k} data-range={k} onClick={()=>{ const r=rangePreset(k); setDateFrom(r.from); setDateTo(r.to); }}>{t(RANGE_LABEL[k])}</button>
           ))}
         </div>
       </Collapse>

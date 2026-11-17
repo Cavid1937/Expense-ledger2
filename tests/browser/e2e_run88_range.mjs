@@ -12,13 +12,13 @@ section("R88-E1. A ready-made range and what happened in it");
 {
   const page = await openPage(browser, { seed }); await tab(page, "Transactions"); await wait(300);
   ok(!(await stats(page)), "no totals card before a range is chosen");
-  await page.evaluate(() => [...document.querySelectorAll(".chip")].find((b) => /Date/.test(b.innerText)).click()); await wait(450);
+  await page.evaluate(() => document.querySelector('[data-section="tx-date-btn"]').click()); await wait(450);
   ok(!!(await page.$('[data-section="tx-range-quick"] [data-range="d30"]')), "the date filter offers ready-made ranges");
   await page.evaluate(() => document.querySelector('[data-range="d30"]').click()); await wait(500);
   const s = await stats(page);
   ok(s && /Spent: 20\.00/.test(s.spent) && /0\.67 ₼ a day \(30 days\)/.test(s.spent), "last 30 days: spent 12 + 8 = 20.00 (the 100.00 from 40 days ago is outside), about 0.67 a day", s);
   ok(s && /Earned: 300\.00/.test(s.earned) && /50\.00/.test(s.other) && /Left over: 330\.00/.test(s.net), "earned 300.00, other money in 50.00 kept apart, left over 350 - 20 = 330.00", s);
-  ok((await page.evaluate(() => document.querySelector('[data-range="d30"]').getAttribute("aria-pressed"))) === "true", "the chosen range is marked");
+  ok(/Last 30 days/i.test(await page.evaluate(() => document.querySelector('[data-section="tx-date-btn"]').innerText)), "Run 105: the date button names the chosen range");
   await page.evaluate(() => [...document.querySelectorAll(".chip")].find((b) => b.innerText.trim() === "Expenses").click()); await wait(450);
   const e = await stats(page);
   ok(e && /20\.00/.test(e.spent) && !e.earned && !e.net, "Expenses chosen: only the spending is told", e);

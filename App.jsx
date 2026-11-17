@@ -25,6 +25,7 @@ import { BudgetsGoalsPage } from "./screens/goals.jsx";
 import { MonthlyView } from "./screens/analytics.jsx";
 import { Collapse, motionOff, runBackStep, backStepCount } from "./screens/motion.jsx";
 import { NoticeBell } from "./screens/inbox.jsx";
+import { BankNoticeSheet } from "./screens/banknotice.jsx";
 import { finishLaunch, startLaunch } from "./screens/launch.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4502,6 +4503,32 @@ export function monthReportText(r, currency, catLabel=(c)=>catName(c)) {
 export const NOTICES_KEY=KEY+"__notices";
 export function readNoticesPref() { try { return localStorage.getItem(NOTICES_KEY)==="1"; } catch { return false; } }
 export function writeNoticesPref(on) { try { if (on) localStorage.setItem(NOTICES_KEY,"1"); else localStorage.removeItem(NOTICES_KEY); return true; } catch { return false; } }
+// Run 105 (owner, 17 Nov: "instead of directly showing it, it should come as a notification and then the user decides"): bank notices taken from
+// the Android side wait here until the person opens them from the bell. Android hands each notice over only once, so they are written here
+// BEFORE anything else happens: a reload or a closed app never loses one. Raw { text, time } items, kept on this phone only, never in backups;
+// read again with readNoticeItems when reviewed (so the same twin and balance rules apply). Duplicates by text + time are dropped; at most 200.
+export const BANKQ_KEY=KEY+"__bankq";
+export function readBankQueue() { try { const v=JSON.parse(localStorage.getItem(BANKQ_KEY)||"[]"); return Array.isArray(v) ? v.filter(x=>x && typeof x.text==="string" && Number.isFinite(Number(x.time))).map(x=>({ text:x.text, time:Number(x.time) })) : []; } catch { return []; } }
+export function writeBankQueue(list) { try { if (!list.length) localStorage.removeItem(BANKQ_KEY); else localStorage.setItem(BANKQ_KEY,JSON.stringify(list.slice(-200))); return true; } catch { return false; } }
+export function addToBankQueue(items) {
+  const have=readBankQueue(), seen=new Set(have.map(x=>x.time+"|"+x.text));
+  const fresh=(Array.isArray(items)?items:[]).filter(x=>x && typeof x.text==="string" && Number.isFinite(Number(x.time))).map(x=>({ text:x.text, time:Number(x.time) })).filter(x=>{ const k=x.time+"|"+x.text; if (seen.has(k)) return false; seen.add(k); return true; });
+  return writeBankQueue([...have,...fresh]) ? { ok:true, added:fresh.length, list:readBankQueue() } : { ok:false, added:0, list:have };
+}
+// The account chosen in the last bank-notice review is offered again (notices come from the same card); one shown account is used as is.
+const BANKACC_KEY=KEY+"__bankacc";
+export function defaultNoticeAccount() {
+  const accs=readAccounts().accounts.filter(a=>!a.hidden);
+  let last=""; try { last=localStorage.getItem(BANKACC_KEY)||""; } catch { /* none remembered */ }
+  return accs.some(a=>a.id===last) ? last : accs.length===1 ? accs[0].id : "";
+}
+export function rememberNoticeAccount(id) { try { if (id) localStorage.setItem(BANKACC_KEY,id); else localStorage.removeItem(BANKACC_KEY); } catch { /* offered again by the one-account rule */ } }
+// The bell and snackbar line: one payment by name and amount, several by count.
+export function bankQText(rows, currency) {
+  if (!rows.length) return "";
+  if (rows.length>1) return tn("bq.bellMany",rows.length);
+  const r=rows[0]; return t("bq.bellOne",{ what:`${maskText(r.merchant||"")||"—"} · ${r.type==="income"?"+":"−"}${fmt(r.cents/100,currency)}` });
+}
 // Run 74: the Google Drive backup choice and last result (drive.js cleanDrivePref); a preference, never in the ledger or in backup files
 export const DRIVE_KEY=KEY+"__drive";
 export function readDrive() { try { return cleanDrivePref(JSON.parse(localStorage.getItem(DRIVE_KEY)||"null")); } catch { return cleanDrivePref(null); } }
@@ -5962,18 +5989,41 @@ function AppInner() {
   // and shown in the usual review (duplicates recognised, nothing added without the person's OK). Never while another review is open.
   const [noticesOn,setNoticesOn]=useState(()=>readNoticesPref());
   const [noticeMissed,setNoticeMissed]=useState(0);
-  const pendingRef=useRef(null); pendingRef.current=importPending;
+  // Run 105 (owner: the review "should come as a notification and then user decides"): taken notices are written to their own store FIRST
+  // (Android hands each over only once), then wait behind the bell. The review opens only when the person taps Review.
+  const [bankQ,setBankQ]=useState(()=>readBankQueue());
+  const [bqHideN,setBqHideN]=useState(0);   // "Later" in the bell hides the notice until more payments arrive
+  // review: the queued notices (or, when they could not be stored, the ones just taken) as the usual plan, marked so the short sheet is used
+  const reviewBankQ=(given)=>{
+    const items=Array.isArray(given) ? given : readBankQueue(); if (!items.length) return;
+    // the "Review" bar that announced them has done its job (left up, it would hold back the Undo bar of the add that follows)
+    if (snackKind.current==="bank-new") closeSnack();
+    const res=readNoticeItems(items); if (!res.rows.length) { writeBankQueue([]); setBankQ([]); return; }
+    const p0=statementPlan({ ...res, check:statementCheck(res.rows) }, t("st.notifAuto"), stateRef.current.transactions);
+    // every payment the person sees is one that will be added (cash withdrawals and pending ones too): nothing hidden behind a switch
+    const stOpts={ ...p0.stOpts, cash:true, pending:true, account:p0.stOpts.account||defaultNoticeAccount() }, p1={ ...p0, stOpts }, transactions=statementPick(p1,stOpts);
+    setSkipDup(true); setSkipSim(true);
+    setImportPending({ ...p1, transactions, fromNotices:true, bqItems:items, ...mergeCounts(stateRef.current.transactions,{ ...p1, transactions }) });
+  };
+  // the review's items leave the queue (newer notices that arrived meanwhile stay)
+  const dropFromBankQ=(items)=>{ const gone=new Set((items||[]).map(x=>x.time+"|"+x.text)); const rest=readBankQueue().filter(x=>!gone.has(x.time+"|"+x.text)); writeBankQueue(rest); setBankQ(rest); setBqHideN(0); };
+  const bqRef=useRef(null); bqRef.current={ review:reviewBankQ, showSnackbar };
   const pullNotices=useCallback(async ()=>{
     const n=typeof window!=="undefined" && window.LedgerNative && window.LedgerNative.notices;
-    if (!n || !readNoticesPref() || pendingRef.current) return;
+    if (!n || !readNoticesPref()) return;
     let items=[]; try { items=await n.take(); } catch { return; }
     // Run 96: the Android side counts bank notices the phone made it miss (found later in the shade); only then is the fix offered
     if (n.info) Promise.resolve(n.info()).then(i=>setNoticeMissed((i&&i.missed)||0)).catch(()=>{});
     if (!items.length) return;
-    const res=readNoticeItems(items);
+    const readable=items.filter(x=>x&&typeof x.text==="string"&&readNotification(x.text,new Date(Number(x.time)||Date.now())));
     // notices the reader could not understand teach it new formats, masked, only with "Help improve the app" on
     addLayouts(items.filter(x=>x&&typeof x.text==="string"&&!readNotification(x.text,new Date(Number(x.time)||Date.now()))).map(x=>maskNotice(x.text)).filter(x=>!/\d/.test(x)));
-    if (res.rows.length) openStatement({ ...res, check:statementCheck(res.rows) }, t("st.notifAuto"));
+    if (!readable.length) return;
+    const r=addToBankQueue(readable);
+    // the phone's storage refused them: open the review at once rather than lose payments Android will not hand over again
+    if (!r.ok) { bqRef.current.review(readable); return; }
+    setBankQ(r.list);
+    if (r.added>0) { const res=readNoticeItems(r.list); bqRef.current.showSnackbar(bankQText(res.rows,stateRef.current.currency), ()=>bqRef.current.review(), 6000, "bank-new", t("bq.review")); }
   },[]);
   useEffect(()=>{
     const n=typeof window!=="undefined" && window.LedgerNative && window.LedgerNative.notices; if (!n || !noticesOn) return;
@@ -5984,6 +6034,14 @@ function AppInner() {
   },[noticesOn,pullNotices]);
   useEffect(()=>{ if (!importPending && noticesOn) pullNotices(); },[importPending]);
   const setStOpt=(k,v)=>setImportPending(p=>{ if (!p || p.kind!=="statement") return p; const stOpts={ ...p.stOpts, [k]:v }, transactions=statementPick(p,stOpts); return { ...p, stOpts, transactions, ...mergeCounts(stateRef.current.transactions,{ ...p, transactions }) }; });
+  // Run 105: one payment in the bank-notice review changed by the person. Flipping Spent / Received moves it to that side's plain category
+  // (an expense category on money in would be wrong); a new category clears the old subcategory. Counts and duplicates are worked out again.
+  const setStRow=(id,patch)=>setImportPending(p=>{
+    if (!p || p.kind!=="statement") return p;
+    const stAll=p.stAll.map(e=>{ if (String(e.id)!==String(id)) return e; const n={ ...e, ...patch, subcategory:"" }; if (patch.type && patch.type!==e.type) n.category=patch.type==="income" ? "income" : "other"; return n; });
+    const q={ ...p, stAll }, transactions=statementPick(q,p.stOpts);
+    return { ...q, transactions, ...mergeCounts(stateRef.current.transactions,{ ...q, transactions }) };
+  });
 
   // Run 32: returns null when the file was opened (the normal review sheet then shows), otherwise the reason, so the sheet can say why.
   const unlockImport=useCallback(async (pass)=>{
@@ -6076,6 +6134,8 @@ function AppInner() {
     if (hasDebts && !writeDebts(mergeDebtData(readDebts(),plan.debtData))) { undoAux(); showToast(t("import.auxFailed"),6000); return; }
     setState(next);
     setImportPending(null);
+    // Run 105: the reviewed bank notices leave the queue once added (Undo puts them back, so they can be reviewed again)
+    if (plan.fromNotices) { dropFromBankQ(plan.bqItems); rememberNoticeAccount(accId(plan.stOpts&&plan.stOpts.account)); }
     // Run 79: a backup restored from Google Drive on the first launch switches Drive backup on (the next backup then holds the restored data)
     if (plan.fromDrive) { const p={ ...readDrive(), on:true, fails:0, lastError:"" }; if (writeDrive(p)) setDrivePref(p); }
     // Run 81: the account's copy was confirmed; saving resumes on top of that version (the result, merged or replaced, is saved next)
@@ -6088,6 +6148,7 @@ function AppInner() {
       if (stateRef.current!==next) { showToast(t("import.cantUndo")); return; }
       undoAux();
       setState(before);
+      if (plan.fromNotices) { const back=addToBankQueue(plan.bqItems); if (back.ok) setBankQ(back.list); }
     }, 8000, "import");
   },[importPending,skipDup,skipSim,showToast,showSnackbar]);
 
@@ -6132,6 +6193,11 @@ function AppInner() {
     const nn=window.LedgerNative&&window.LedgerNative.notices;
     const done=(open)=>{ setNoticeMissed(0); try { Promise.resolve(open&&nn.openPower ? nn.openPower() : nn.clearMissed&&nn.clearMissed()).catch(()=>{}); } catch { /* cleared here; asked again only after another miss */ } };
     notices.push({ id:"notices-missed", text:t("notices.missed"), actions:[{ key:"fix", label:t("notices.missedFix"), primary:true, onClick:()=>done(true) },{ key:"no", label:t("explore.later"), onClick:()=>done(false) }] });
+  }
+  // Run 105: bank payments waiting for the person's decision (newest summary first in the bell; nothing is added from here)
+  if (bankQ.length && bankQ.length>bqHideN) {
+    const rows=readNoticeItems(bankQ).rows;
+    if (rows.length) notices.unshift({ id:"bank-pay", text:bankQText(rows,currency), actions:[{ key:"review", label:t("bq.review"), primary:true, onClick:()=>reviewBankQ() }], onDismiss:()=>setBqHideN(bankQ.length) });
   }
   if (iosNote) notices.push({ id:"ios-note", text:t("banner.iosNote"), actions:[{ key:"ok", label:t("inbox.gotIt"), onClick:()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } } }] });
 
@@ -6255,7 +6321,13 @@ function AppInner() {
         {viewAcc&&<AccountSheet id={viewAcc} transactions={transactions} currency={currency} onClose={()=>setViewAcc(null)} onManage={()=>{ setViewAcc(null); switchTab("accounts"); }} onView={txn=>{ setViewAcc(null); setViewTxn(txn); }}/>}
         {showLock&&<LockSheet onClose={()=>setShowLock(false)} showToast={showToast}/>}
         
-        {importPending&&(
+        {importPending&&importPending.fromNotices&&(()=>{ let bal=[]; try { bal=mergeBalancePreview(state,importPending,readAccounts(),{ skipDuplicates:skipDup, skipSimilar:skipSim }); } catch { bal=[]; } return (
+          <BankNoticeSheet plan={importPending} currency={currency} accounts={readAccounts().accounts.filter(a=>!a.hidden)} balances={bal}
+            skipSim={skipSim} onSkipSim={setSkipSim} onRow={setStRow} onAccount={v=>setStOpt("account",v)}
+            onAdd={()=>commitImport("merge")}
+            onDiscard={()=>{ const items=importPending.bqItems; setImportPending(null); dropFromBankQ(items); showSnackbar(t("bq.discarded"),()=>{ const back=addToBankQueue(items); if (back.ok) setBankQ(back.list); },8000,"bank"); }}
+            onClose={()=>setImportPending(null)}/>); })()}
+        {importPending&&!importPending.fromNotices&&(
           <div className="sheet-overlay" onClick={e=>e.target===e.currentTarget&&setImportPending(null)}>
             <div className="sheet" role="dialog" aria-modal="true" tabIndex={-1}aria-label={t("import.dialogLabel")}>
               <div className="sheet-grip"><div className="sheet-handle"/></div>

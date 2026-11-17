@@ -21,7 +21,7 @@ function useLabelText(id) {
 // children may be a function: it receives close(delay) so a choice can be shown for a moment before the sheet goes.
 const reducedMotion = () => typeof window !== "undefined" && !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 const PICK_SHOW_MS = 140, PICK_FALL_MS = 210;
-function PickSheet({ title, onClose, children, section }) {
+export function PickSheet({ title, onClose, children, section }) {
   const [leaving, setLeaving] = useState(false);
   const state = useRef({ going: false, timers: [] });
   const doneRef = useRef(onClose); doneRef.current = onClose;
@@ -116,6 +116,63 @@ export function PickTime({ value, onChange, id, name, disabled, className, style
         </PickSheet>
       )}
     </span>
+  );
+}
+
+// Run 105 (owner, 17 Nov: "last 30/90/7 days must be inside the calendar, not outside as a suggestion; once selected there's no going back, why?").
+// One sheet for a date range. Ready-made ranges sit at the top; tapping one shows it at once. Tapping the chosen one again, or "All time", takes the
+// filter off: that is the way back. Below, the calendar marks a custom range: first tap = first day, second tap = last day (a tap before the first
+// day starts again), then "Show". Months slide like the single-date calendar. onChange(from, to); "" = no limit on that side.
+export function PickRange({ from, to, presets, onChange, label, active, className, section }) {
+  const [open, setOpen] = useState(false);
+  const today = localDateStr();
+  const [draft, setDraft] = useState({ from: from || "", to: to || "" });
+  const [view, setView] = useState(() => (from || today).slice(0, 7));
+  const [dir, setDir] = useState(0);
+  useEffect(() => { if (open) { setDraft({ from: from || "", to: to || "" }); setView((to || from || today).slice(0, 7)); setDir(0); } }, [open]);
+  const cur = presets.find((p) => p.from === (from || "") && p.to === (to || ""));
+  const apply = (f, tt, close) => { if (f !== (from || "") || tt !== (to || "")) { tick(); onChange(f, tt); } close(PICK_SHOW_MS); };
+  const tapDay = (d) => { tick(); setDraft((x) => (!x.from || x.to || d < x.from) ? { from: d, to: "" } : { from: x.from, to: d }); };
+  const [y, m] = view.split("-").map(Number);
+  const first = new Date(y, m - 1, 1), days = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
+  const cells = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => `${view}-${String(i + 1).padStart(2, "0")}`)];
+  while (cells.length < 42) cells.push(null);
+  const move = (k) => { const d = new Date(y, m - 1 + k, 1); setDir(k > 0 ? 1 : -1); setView(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); };
+  const slide = dir > 0 ? " in-next" : dir < 0 ? " in-prev" : "";
+  const DOW = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const lo = draft.from, hi = draft.to || draft.from;
+  return (
+    <>
+      <button type="button" className={className} aria-pressed={!!active} aria-haspopup="dialog" aria-expanded={open} data-section={section} onClick={() => setOpen(true)}>
+        <Icon name="calendar" size={11} /> {label}
+      </button>
+      {open && (
+        <PickSheet title={t("range.title")} onClose={() => setOpen(false)} section="pick-range-sheet">
+          {(close) => (<>
+          <div className="pick-quick" role="group" aria-label={t("range.quick")} data-section="tx-range-quick">
+            <button type="button" className={`chip${!from && !to ? " on" : ""}`} aria-pressed={!from && !to} data-range="all" onClick={() => apply("", "", close)}>{t("range.all")}</button>
+            {presets.map((p) => { const on = cur && cur.key === p.key; return (
+              <button key={p.key} type="button" className={`chip${on ? " on" : ""}`} aria-pressed={on} data-range={p.key} onClick={() => (on ? apply("", "", close) : apply(p.from, p.to, close))}>{p.label}</button>); })}
+          </div>
+          <div className="pick-tlabel" aria-live="polite" data-section="range-hint">{t(draft.from && !draft.to ? "range.hintEnd" : "range.hintStart")}</div>
+          <div className="pick-month">
+            <button type="button" className="icon-btn" aria-label={t("pick.prev")} onClick={() => move(-1)}><Icon name="chevLeft" size={18} /></button>
+            <div className="pick-month-name" aria-live="polite"><span key={view} className={`pick-month-label${slide}`}>{t("date.monthYear", { m: t("mon." + m), y })}</span></div>
+            <button type="button" className="icon-btn" aria-label={t("pick.next")} onClick={() => move(1)}><Icon name="chevRight" size={18} /></button>
+          </div>
+          <div className="pick-grid-clip">
+          <div key={view} className={`pick-grid${slide}`} role="grid">
+            {DOW.map((d) => <div key={d} className="pick-dow" aria-hidden="true">{t("wdShort." + d)}</div>)}
+            {cells.map((d, i) => { if (d === null) return <div key={"b" + i} className="pick-blank" />;
+              const edge = d === lo || d === hi, mid = lo && d > lo && d < hi;
+              return <button key={d} type="button" className={`pick-day${edge ? " on" : ""}${mid ? " in-range" : ""}${d === today ? " today" : ""}`} aria-pressed={edge || !!mid} aria-label={fmtLongDate(parseLocalDate(d))} data-date={d} onClick={() => tapDay(d)}>{Number(d.slice(8))}</button>; })}
+          </div>
+          </div>
+          <button type="button" className="btn btn-primary btn-full" data-action="range-show" disabled={!draft.from} style={{ marginTop: 12 }} onClick={() => apply(draft.from, draft.to || draft.from, close)}>{t("range.show")}</button>
+          </>)}
+        </PickSheet>
+      )}
+    </>
   );
 }
 

@@ -20,14 +20,17 @@ section("R75-NB1. Only in the Android app; off by default; asks Android for acce
   await page.close();
 }
 
-section("R75-NB2. With access: the payment is offered in the usual review, never added by itself");
+section("R75-NB2. With access: the payment waits behind the bell (Run 105), is reviewed only on request, never added by itself");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }), fresh: true, pre: SHELL(true, ITEMS) + `localStorage.setItem("expense_ledger_v5__notices","1");` });
-  await page.waitForSelector('[aria-label="Restore backup"]', { timeout: 8000 }); await wait(400);
-  const sh = await page.evaluate(() => document.querySelector('[aria-label="Restore backup"]').innerText);
-  ok(/Payments from bank notifications/.test(sh) && /1 entr(y|ies) ready/.test(sh) && /KAFE ARAZ/.test(sh) && !/4321|parcel/i.test(sh), "on opening the app: one payment (KAFE ARAZ) is offered; the parcel notice is ignored; no card digits", sh.slice(0, 300));
+  await page.waitForFunction(() => /bank-pay/.test((document.querySelector("[data-inbox-bell]") || { getAttribute: () => "" }).getAttribute("data-notices") || ""), { timeout: 8000 }); await wait(300);
+  ok(!(await page.$('[data-section="bank-notice-sheet"]')) && !(await page.$('[aria-label="Restore backup"]')), "Run 105: no review opens by itself; the payment waits in the bell");
+  await page.evaluate(() => document.querySelector("[data-inbox-bell]").click()); await wait(400);
+  await page.evaluate(() => document.querySelector('[data-notice="bank-pay"] [data-act="review"]').click()); await wait(500);
+  const sh = await page.evaluate(() => document.querySelector('[data-section="bank-notice-sheet"]').innerText);
+  ok(/Payment from your bank/.test(sh) && /KAFE ARAZ/.test(sh) && /4\.20/.test(sh) && !/4321|parcel|95\.80/i.test(sh), "Review: one payment (KAFE ARAZ 4.20); the parcel notice is ignored; no card digits or bank balance", sh.slice(0, 300));
   ok((await state(page)).transactions.length === 0, "nothing is added before the person confirms");
-  await page.evaluate(() => document.querySelector('[data-section="import-go"]').click()); await wait(700);
+  await page.evaluate(() => document.querySelector('[data-bq="add"]').click()); await wait(800);
   const e = (await state(page)).transactions[0];
   ok(e && e.amount === 4.2 && e.type === "expense" && /KAFE ARAZ/.test(e.merchant) && !JSON.stringify(e).includes("95.80"), "after confirming: 4.20 out at KAFE ARAZ, the bank balance is not stored", e);
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
