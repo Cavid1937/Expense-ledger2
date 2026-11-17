@@ -59,5 +59,20 @@ section("R105-T2. Azerbaijani and Russian labels, a time that is not on a 5-minu
     await page.close();
   }
 }
+section("R105-A. Screen audit fixes: last month's spending sits with Spent; a one-entry day shows no repeated total");
+{
+  const { tx, daysAgo, tab } = await import("./lib.mjs");
+  const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [
+    tx({ amount: 30, date: daysAgo(0) }), tx({ amount: 12, date: daysAgo(0) }), tx({ amount: 7, date: daysAgo(1) }), tx({ type: "income", category: "salary", amount: 900, date: daysAgo(1) }),
+    tx({ amount: 61, date: (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10); })() }) ] }) });
+  await settle(page); await tab(page, "Ledger"); await settle(page);
+  const heads = await page.evaluate(() => [...document.querySelectorAll(".txn-group")].slice(0, 2).map((g) => (g.querySelector(".txn-date-total") || {}).textContent || ""));
+  ok(/42[.,]00/.test(heads[0]) && heads[1] === "", "today (30 + 12) shows its total 42.00; yesterday (one 7.00 entry, plus income) shows none", heads);
+  await page.evaluate(() => document.querySelectorAll(".tab-btn")[2].click()); await wait(500); await settle(page);
+  const a = await page.evaluate(() => ({ net: (document.querySelector('[data-section="an-month-net"]') || {}).textContent || "", sum: (document.querySelector('[data-section="an-summary"]') || {}).textContent || "" }));
+  ok(!/last month: /.test(a.net) && /spent the same days last month: 61[.,]00/.test(a.sum), "'spent the same days last month: 61.00' is under Spent, not under Monthly surplus", a);
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
 await browser.close();
 finish("e2e_run105_time");

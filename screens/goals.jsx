@@ -328,7 +328,7 @@ export function BudgetHistory({ catId, limit, transactions, currency, now }) {
   if (!rows.length) return null;
   return (
     <div data-section="bud-history" style={{paddingLeft:44}}>
-      <button type="button" data-section="bud-history-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:12,padding:"4px 0",cursor:"pointer",minHeight:36}}>{t(open?"budget.histHide":"budget.histShow")}</button>
+      <button type="button" data-section="bud-history-toggle" aria-expanded={open} onClick={()=>setOpen(o=>!o)} style={{background:"none",border:"none",color:"var(--accent-text)",fontSize:13,fontWeight:600,padding:"4px 0",cursor:"pointer",minHeight:36,display:"inline-flex",alignItems:"center",gap:4}}>{t(open?"budget.histHide":"budget.histShow")}<Icon name="chevDown" size={14} style={{transition:"transform .2s",transform:open?"rotate(180deg)":"none"}}/></button>
       <Collapse open={open}>
         <div role="list" style={{fontSize:12.5}}>
           {rows.map(r=>(

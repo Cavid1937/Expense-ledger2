@@ -731,7 +731,7 @@ export function InfoSheet({ kind, onClose }) {
         <div className="sheet-grip"><div className="sheet-handle"/></div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:14}}>
           <div className="card-title" style={{fontSize:17}}>{t("info."+kind+".title")}</div>
-          <button data-closer="1" onClick={onClose} aria-label={t("common.close")} style={{background:"none",border:"1px solid var(--rule)",borderRadius:"50%",width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"var(--ink-3)",flexShrink:0}}><Icon name="close" size={13}/></button>
+          <button className="add-close" data-closer="1" onClick={onClose} aria-label={t("common.close")} style={{position:"relative",flexShrink:0}}><Icon name="close" size={13}/></button>
         </div>
         {Array.from({length:n},(_,i)=>i+1).map(i=>(
           <div key={i} style={{marginBottom:14}}>

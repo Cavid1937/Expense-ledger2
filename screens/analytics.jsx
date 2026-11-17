@@ -308,6 +308,8 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           {momDiff!==null&&<div className="month-cmp" style={{fontSize:11,color:momDiff<=0?"var(--pos)":"var(--neg)",fontWeight:600,marginTop:4}}>
             {momDiff<=0?"↓":"↑"} {cmpText(momDiff,cmpKind,currency)}
           </div>}
+          {/* Run 105 audit: last month's spending sat under "Monthly surplus" and read as last month's surplus; it belongs with Spent. */}
+          {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
         </div>
         <div className="month-stat">
           <div className="month-stat-val" style={{color:"var(--pos)"}}><MoneyText v={fmt(curInc,currency)}/></div>
@@ -324,7 +326,6 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
           {curSavOut>0&&<div className="list-sub" data-section="an-savings-out" style={{marginTop:4}}>{t("month.savingsOut",{amount:fmt(curSavOut,currency)})}</div>}
           {hasSpread&&<div className="list-sub" data-section="an-spread-note" style={{marginTop:4}}>{t("month.spreadNote")}</div>}
           {refundLow>0&&<div className="list-sub" data-section="an-refund-net" style={{marginTop:4}}>{t("month.refundNet",{amount:fmt(refundLow,currency)})}</div>}
-          {momDiff!==null&&prevExp>0&&<div style={{fontSize:11,color:"var(--ink-3)",marginTop:4}}>{cmpPrev(cmpKind,prevExp,currency)}</div>}
           {momDiff!==null&&cmpKind==="same"&&<div className="cmp-window" style={{fontSize:11,color:"var(--ink-3)",marginTop:2}}>{t("cmp.window",{d:cmpDays})}</div>}
         </div>
       </div>

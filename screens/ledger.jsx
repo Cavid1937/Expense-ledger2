@@ -30,7 +30,8 @@ export function GroupedTxns({ txns, all, currency, onDelete, onEdit, onView, onL
           instead of a separate card for every day; about twice as many entries fit on a phone screen. */}
       {visible.length>0&&<div className="txn-surface">
       {visible.map(([date,rows])=>{
-        const dayTotal=rows.filter(t=>t.type==="expense").reduce(addAmt,0);
+        // Run 105 audit: a day with one spending entry repeated its own amount as the day total; the total shows only when it adds something.
+        const spentRows=rows.filter(t=>t.type==="expense"), dayTotal=spentRows.length>1?spentRows.reduce(addAmt,0):0;
         return (
           <div key={date} className="txn-group">
             <div className="txn-date-hdr">
