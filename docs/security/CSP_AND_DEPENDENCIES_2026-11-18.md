@@ -97,6 +97,23 @@ the Google sign-in path are not yet checked). Enforcement **DEFERRED WITH REASON
 | #2 | @vitejs/plugin-react 4.7.0 → 6.3.0 | **Do not merge alone.** Its release notes are about Rolldown and Vite 8 parts, so treat it as belonging with #1. |
 | #3 | react-dom 18.3.1 → 19.3.1 | **Do not merge: it would break the app.** It raises only `react-dom`; `react` stays at 18, and the two must be the same version. A React 19 move needs both together, as a planned upgrade. |
 
+**Trial of #1 + #2 together (18 Nov 18:40, throw-away copy at b81daf6, nothing merged):** vite 8.3.8 + @vitejs/plugin-react 6.3.0.
+- The production build works and is fast (about 1 s). There is a warning about `eval` inside pdfjs 3's Node-only code path. pdfjs 4 (B1) removes that path.
+- **The CSP hash changes.** Vite 8 minifies the inline launch `<style>` in `index.html`, so its hash changes. The new guard (`csp-hashes`, run in
+  offline-check before every push) caught it at once: the push would have been blocked. With `--write`, the enforced csp-check passes. The
+  launch-CSS guard then still fails on purpose, because `launch.js`'s copy is no longer identical. Fix when upgrading: hash both copies, or
+  minify `LAUNCH_CSS` the same way.
+- **The test tooling would break.** `tests/browser/build.mjs` (the ~3,000-check browser suite) imports `esbuild` directly. Vite 5 brought
+  `esbuild` along; Vite 8 does not, so `esbuild` must be added as its own dev dependency first.
+- With the hashes rewritten: offline-check passed except for that launch guard; logic tests passed, 2938/0.
+- npm audit after the trial: the vite/esbuild findings (B2) are gone. pdfjs and tar remain until B1 is done. A `picomatch` (high, dev
+  tooling) finding remains and needs a look during the planned run.
+- **Test-coverage gap (found in passing).** The browser suite runs on an esbuild bundle of App.jsx, not on the Vite production build. The real
+  production build is exercised only by offline-check, csp-check, stalechunk-check and the live smoke tests. A bundler upgrade therefore
+  needs those, plus a live smoke test, to count as verified.
+- Recommendation is unchanged: do not merge the Dependabot PRs as they are. Do one planned run with pdfjs 4 first, then Vite 8 + plugin-react 6
+  + `esbuild` as a dev dependency + the launch-CSS hash fix, with the full suite, the build checks and an APK.
+
 After the dependabot.yml change is pushed, these three can be closed. Closing is the owner's action; nothing was dismissed.
 
 **Finding B4 (confirmed): Dependabot *alerts* are switched off for this repository.** The GitHub API answered "Dependabot alerts are disabled for this repository" (HTTP 403).

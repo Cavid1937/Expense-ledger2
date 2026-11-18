@@ -1,3 +1,12 @@
+## 0002j - 2026-11-18 18:45 Baku - VITE 8 TRIAL (Dependabot #1+#2), docs only. Live main = b81daf6 before this commit; rollback for the functional change stays 75fdc8d.
+- Trial ran in a throw-away worktree at b81daf6 (deleted): vite 8.3.8 + @vitejs/plugin-react 6.3.0. Nothing merged, no PR touched.
+- Build OK (~1 s). Vite 8 minifies index.html's launch <style>, so its CSP hash changes. The csp-hashes guard in offline-check caught it, which would have blocked the push. After `--write`: csp-check passes, logic 2938/0; only the LAUNCH_CSS-identity guard fails, as designed.
+- tests/browser/build.mjs imports esbuild directly; Vite 8 no longer brings esbuild, so add it as a devDependency when upgrading.
+- Coverage gap noted: the browser suite tests an esbuild bundle, not the Vite production build. Bundler upgrades need offline/csp/stalechunk + live smoke.
+- npm audit after the trial: vite/esbuild findings gone; pdfjs/tar remain (fixed by the pdfjs 4 upgrade); a picomatch (high, dev) finding to check then.
+- Recommendation (docs/security/CSP_AND_DEPENDENCIES_2026-11-18.md): do not merge PRs #1-#3. Run pdfjs 4 first, then Vite 8 as one planned run. Both wait for owner OK.
+- Next action: owner decisions (pdfjs 4 OK, Vite 8 run, Supabase S1/S2/S3/S6, Q1/Q4 wording, repo Dependabot alerts, -70,000 entry, real Google sign-in test).
+
 ## 0002i - 2026-11-18 17:55 Baku - CSP PREPARATION + APP-OPEN COUNT FIX LIVE (owner: "work until 20:00 autonomously"). Live main = eca09bf, rollback = 75fdc8d.
 - Correction to 0002g item 4/5: there were FOUR inline items, not two. They were the index.html launch <style>, the whole app stylesheet (`<style>{CSS}</style>` from styles.js), privacy.html's <style> and app-open.html's inline <script>.
 - eca09bf:
