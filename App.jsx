@@ -1708,7 +1708,7 @@ function writePrivacy(on) { try { if (on) localStorage.setItem(PRIVACY_KEY,"1");
 // encryption: the ledger stays readable in this browser's storage and the backup files are unchanged. The PIN is never stored;
 // only a salted PBKDF2-SHA-256 hash is, under its own key (expense_ledger_v5__lock), which a backup never contains and an import
 // never touches. Forgetting the PIN can be fixed on the lock screen (after a short wait) without deleting any record.
-const LOCK_KEY=`${KEY}__lock`;
+export const LOCK_KEY=`${KEY}__lock`;
 export const LOCK_TIMEOUTS=[0,1,5,15];            // minutes; 0 = lock whenever the app is left or reopened
 const LOCK_ITER=150000;
 export function validPin(p) { return typeof p==="string" && /^[0-9]{4,6}$/.test(p); }

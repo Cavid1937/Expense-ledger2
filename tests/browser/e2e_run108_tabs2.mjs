@@ -84,4 +84,30 @@ section("R108-W4. Category order: a category hidden in window A stays hidden whe
   ok(a.errors.length === 0 && b.errors.length === 0, "no JavaScript errors", a.errors[0] || b.errors[0]);
   await a.close(); await b.close();
 }
+section("R108-W5. App lock: a PIN changed in window A is the PIN in window B too (the old PIN no longer opens B)");
+{
+  const field = (p, sel, v) => p.$eval(sel, (el, v) => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true })); }, v);
+  const sheet = async (p) => { await p.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await p.waitForSelector(".more-page"); await wait(150); await p.evaluate(() => document.querySelector('.more-page [data-more="lock"]').click()); await p.waitForSelector('[data-section="lock-sheet"]'); await wait(250); };
+  const locked = (p) => p.evaluate(() => { const s = document.querySelector(".lock-screen"), tb = document.querySelector(".tabbar"); return !!s && (!tb || tb.getClientRects().length === 0); });
+  const enter = async (p, pin) => { await p.bringToFront(); await p.evaluate(() => document.querySelector(".lock-screen input")?.focus()); await p.keyboard.type(pin); await wait(120); await p.keyboard.press("Enter"); await wait(1500); };
+  const a = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(a);
+  await sheet(a); await field(a, "#lock-pin-a", "2468"); await field(a, "#lock-pin-b", "2468"); await click(a, '[data-section="lock-save"]'); await wait(800);
+  const b = await openPage(browser, { seed: null }).catch(() => null);
+  if (!b) { ok(false, "window B opens"); } else {
+    await b.waitForSelector(".lock-screen"); await wait(300);
+    await enter(b, "2468");
+    ok(!(await locked(b)), "window B opens with 2468");
+    await b.evaluate(() => window.dispatchEvent(new Event("ledger-lock-now"))); await wait(400);
+    await a.bringToFront();
+    await click(a, '[data-section="lock-change-go"]'); await wait(300);
+    await field(a, "#lock-pin-c", "2468"); await field(a, "#lock-pin-a", "1357"); await field(a, "#lock-pin-b", "1357"); await click(a, '[data-section="lock-change-save"]'); await wait(1500);
+    await enter(b, "2468");
+    ok(await locked(b), "after A changes the PIN to 1357, the old PIN 2468 no longer opens window B");
+    await enter(b, "1357");
+    ok(!(await locked(b)), "the new PIN 1357 opens window B");
+    ok(a.errors.length === 0 && b.errors.length === 0, "no JavaScript errors", a.errors[0] || b.errors[0]);
+    await b.evaluate(() => localStorage.removeItem("expense_ledger_v5__lock")); await b.close();
+  }
+  await a.close();
+}
 await finish("e2e_run108_tabs2", browser);

@@ -1,13 +1,15 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useEffect, useRef, useState } from "react";
 import { setLang, t } from "../i18n.js";
-import { Icon, LOCK_AFTER_KEY, LOCK_TIMEOUTS, bioAvailable, bioCheck, bioRegister, lockLang, lockShouldEngage, lockSupported, lockWaitMs, makeLockRecord, readLock, removeLock, validPin, verifyPin, writeLock } from "../App.jsx";
+import { Icon, LOCK_AFTER_KEY, LOCK_TIMEOUTS, bioAvailable, bioCheck, bioRegister, lockLang, lockShouldEngage, lockSupported, lockWaitMs, makeLockRecord, readLock, removeLock, validPin, verifyPin, writeLock, useOutsideChange, LOCK_KEY } from "../App.jsx";
 
 export function LockGate({ children }) {
   const [lock,setLock]=useState(()=>readLock());
   const [locked,setLocked]=useState(()=>readLock()!==null);
   const lockRef=useRef(lock), lockedRef=useRef(locked), seen=useRef({ hidden:0, active:Date.now() });
   lockRef.current=lock; lockedRef.current=locked;
+  // Run 108: a PIN changed or turned off in another window of the app applies here too (before, this window still opened with the old PIN)
+  useOutsideChange(LOCK_KEY,()=>{ const l=readLock(); setLock(l); if (!l) setLocked(false); });
   useEffect(()=>{
     const arm=()=>{ const l=lockRef.current; return !!(l&&l.ok)&&!lockedRef.current; };
     const onVis=()=>{
@@ -60,12 +62,16 @@ export function LockScreen({ lock, onUnlock, onRemoved }) {
   const forgotS=Math.max(0,10-Math.floor((now-forgotAt)/1000));
   const press=(d)=>{ if (busy) return; setMsg(""); setHint(""); setPin(p=>p.length<6?p+d:p); };
   const back=()=>{ if (!busy) { setMsg(""); setHint(""); setPin(p=>p.slice(0,-1)); } };
+  // Run 108: the record may have been changed in another window of the app since this screen appeared (a new PIN, or the wait after
+  // wrong tries); follow it, so the old PIN stops working and a wrong try never writes the old record back over the new one
+  useEffect(()=>{ if (lock&&lock.ok) setCur(lock.rec); },[lock]);
   const submit=async()=>{
     if (busy||waitS>0||!cur||!validPin(pin)) return;
     setBusy(true);
-    const good=await verifyPin(cur,pin);
-    if (good) { if (cur.fails||cur.until||!cur.len||cur.resetAt) writeLock({ ...cur, fails:0, until:0, resetAt:0, len:cur.len||pin.length }); onUnlock(); return; }
-    const fails=cur.fails+1, w=lockWaitMs(fails), next={ ...cur, fails, until:w?Date.now()+w:0 };
+    const fresh=readLock(), rec=fresh&&fresh.ok ? fresh.rec : cur;
+    const good=await verifyPin(rec,pin);
+    if (good) { if (rec.fails||rec.until||!rec.len||rec.resetAt) writeLock({ ...rec, fails:0, until:0, resetAt:0, len:rec.len||pin.length }); onUnlock(); return; }
+    const fails=rec.fails+1, w=lockWaitMs(fails), next={ ...rec, fails, until:w?Date.now()+w:0 };
     writeLock(next); setCur(next); setPin(""); setMsg(t("lock.wrong")); setHint(""); setShake(n=>n+1); setNow(Date.now()); setBusy(false);
   };
   const bio=async()=>{
@@ -137,6 +143,7 @@ export function LockScreen({ lock, onUnlock, onRemoved }) {
 }
 export function LockSheet({ onClose, showToast }) {
   const [lock,setLock]=useState(()=>readLock());
+  useOutsideChange(LOCK_KEY,()=>setLock(readLock()));
   const rec=lock&&lock.ok?lock.rec:null;
   const [a,setA]=useState(""), [b,setB]=useState(""), [c,setC]=useState(""), [err,setErr]=useState(""), [mode,setMode]=useState("main"), [bioOk,setBioOk]=useState(false);
   useEffect(()=>{ let alive=true; bioAvailable().then(v=>{ if (alive) setBioOk(v); }); return ()=>{ alive=false; }; },[]);
@@ -241,4 +248,4 @@ export function LockSheet({ onClose, showToast }) {
       </div>
     </div>
   );
-}
+}
