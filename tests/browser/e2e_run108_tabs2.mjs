@@ -110,4 +110,24 @@ section("R108-W5. App lock: a PIN changed in window A is the PIN in window B too
   }
   await a.close();
 }
+section("R108-W6. An entry deleted in window A while window B edits it: B says the change was not saved and does not bring it back");
+{
+  const a = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(a);
+  const b = await openPage(browser, { seed: null }); await settle(b);
+  const n0 = (await read(b, "expense_ledger_v5")).transactions.length;
+  await b.evaluate(() => document.querySelectorAll(".tab-btn")[1].click()); await wait(500);
+  await b.evaluate(() => document.querySelector(".txn-row")?.click()); await wait(600);
+  const opened = await b.evaluate(() => { const e = [...document.querySelectorAll(".sheet-overlay button")].find((x) => /^\s*edit\s*$/i.test(x.innerText) || /^edit$/i.test(x.getAttribute("aria-label") || "")); if (e) e.click(); return !!e; });
+  await wait(700);
+  ok(opened && n0 > 0 && (await b.$(".add-overlay")), "window B has an entry open for editing", { opened, n0 });
+  // window A deletes every entry (a write from A reaches B as a storage event, as between two real windows)
+  await a.evaluate(() => { const s = JSON.parse(localStorage.getItem("expense_ledger_v5")); s.transactions = []; localStorage.setItem("expense_ledger_v5", JSON.stringify(s)); });
+  await wait(700);
+  await b.evaluate(() => [...document.querySelectorAll(".add-overlay .btn-primary")].pop()?.click()); await wait(700);
+  const txt = await b.evaluate(() => document.body.innerText);
+  ok(/deleted in another window/.test(txt) && !/Entry updated/.test(txt), "B says the entry was deleted in another window, not 'Entry updated'");
+  ok((await read(b, "expense_ledger_v5")).transactions.length === 0, "the deleted entry is not brought back");
+  ok(a.errors.length === 0 && b.errors.length === 0, "no JavaScript errors", a.errors[0] || b.errors[0]);
+  await a.close(); await b.close();
+}
 await finish("e2e_run108_tabs2", browser);

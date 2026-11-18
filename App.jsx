@@ -5376,6 +5376,8 @@ function AppInner() {
   const updateTransaction=useCallback((id,txn)=>{
     countScreen("do-edit");
     if (debtLinked(id)) { showToast(t("debt.linkedLocked"),5000); return; }
+    // Run 108: the entry was deleted in another window while this one edited it; say so instead of "Entry updated"
+    if (!stateRef.current.transactions.some(x=>x.id===id)) { showToast(t("sync.editGone"),5000); return; }
     const { billChoice, wallet, trip, account, refundFor, fx, spread, reimb, reimbFor, ...data }=txn;
     const rf={ ...refundPart(data,refundFor), ...(cleanFx(fx)?{ fx:cleanFx(fx) }:{}), ...(data.type==="expense" && spreadMonths(spread) ? { spread:spreadMonths(spread) } : {}), ...(data.type==="expense" && cleanReimb(reimb) ? { reimb:cleanReimb(reimb) } : {}), ...(data.type==="income" && data.category==="refund" && reimbForRef(reimbFor)!==null ? { reimbFor:reimbForRef(reimbFor) } : {}) };   // Run 39: switching back to manat removes fx; Run 41: an empty spread removes it
     // Run 16: the wallet is replaced or removed with the rest of the edit (an empty wallet clears it; no empty text is stored). Run 22: same for the trip. Run 36: same for "refund of".
