@@ -69,4 +69,19 @@ section("R108-W3. My categories: a category added in window A is kept when windo
   ok(a.errors.length === 0 && b.errors.length === 0, "no JavaScript errors", a.errors[0] || b.errors[0]);
   await a.close(); await b.close();
 }
+section("R108-W4. Category order: a category hidden in window A stays hidden when window B hides another");
+{
+  const a = await openPage(browser, { seed: baseSeed({ language: "en" }) }); await settle(a);
+  const b = await openPage(browser, { seed: null }); await settle(b);
+  await openCategories(a); await openCategories(b);
+  const hide = (p, id) => p.evaluate((c) => document.querySelector(`[data-section="cat-order"] [data-catord="${c}"] [data-section="catord-toggle"]`).click(), id);
+  await hide(a, "transport"); await wait(500);
+  ok(((await read(a, "expense_ledger_v5__catprefs")) || {}).hidden?.join() === "transport", "window A hid Transport");
+  await wait(400);
+  await hide(b, "health"); await wait(500);
+  const h = (((await read(b, "expense_ledger_v5__catprefs")) || {}).hidden || []).slice().sort().join();
+  ok(h === "health,transport", "both stay hidden (before Run 108 B's save showed Transport again)", h);
+  ok(a.errors.length === 0 && b.errors.length === 0, "no JavaScript errors", a.errors[0] || b.errors[0]);
+  await a.close(); await b.close();
+}
 await finish("e2e_run108_tabs2", browser);

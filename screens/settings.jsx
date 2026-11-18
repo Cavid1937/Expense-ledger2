@@ -17,7 +17,7 @@ import { sendFeedback, readScreenCounts, SCREENS_KEY, readLayouts, LAYOUTS_KEY }
 // Run 70: theme preview cards
 import { themePreview } from "../App.jsx";
 // Run 108: lists kept on these pages follow changes made in another window of the app
-import { useOutsideChange, ACC_KEY, CCAT_KEY } from "../App.jsx";
+import { useOutsideChange, ACC_KEY, CCAT_KEY, CPREF_KEY } from "../App.jsx";
 // Run 71: the Gifts row is shown only when this preference key is "1" (off for everyone by default)
 const giftsShown=()=>{ try { return localStorage.getItem("expense_ledger_v5__show_gifts")==="1"; } catch { return false; } };
 // Run 69: the "Help improve the app" card above imports these
@@ -69,6 +69,8 @@ export function LanguageChooser({ onChoose }) {
 // Show / Hide switch. Hiding never touches entries or reports; "Other" and "Other income" always stay. Stored under its own key.
 export function CategoryOrder({ onChanged, showToast }) {
   const [prefs,setPrefs]=useState(()=>readCatPrefs());
+  // Run 108: the app open in two windows (see useOutsideChange)
+  useOutsideChange(CPREF_KEY,()=>setPrefs(readCatPrefs()));
   const [income,setIncome]=useState(false);
   const save=(next)=>{ if (!writeCatPrefs(next)) { showToast(t("mycat.saveFailed"),5000); return; } setPrefs(readCatPrefs()); onChanged(); };
   const list=orderedCats(income,prefs), hidden=new Set(prefs.hidden);
