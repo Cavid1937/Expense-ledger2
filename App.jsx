@@ -5561,6 +5561,21 @@ function AppInner() {
     document.addEventListener("visibilitychange",vis);
     return ()=>document.removeEventListener("visibilitychange",vis);
   },[state.language]);
+  // Run 108: the app came back on screen on a new day (left open overnight): redraw the page so every figure is today's.
+  // Not while a text field on the page is in use, so nothing half-typed is lost; the next check catches up.
+  useEffect(()=>{
+    let day=localDateStr(new Date());
+    const check=()=>{
+      if (document.visibilityState!=="visible") return;
+      const d=localDateStr(new Date());
+      if (d===day) return;
+      const a=document.activeElement, main=document.querySelector("main.page");
+      if (a && main && main.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+      day=d; setTabKey(k=>k+1);
+    };
+    document.addEventListener("visibilitychange",check); window.addEventListener("focus",check); window.addEventListener("pageshow",check);
+    return ()=>{ document.removeEventListener("visibilitychange",check); window.removeEventListener("focus",check); window.removeEventListener("pageshow",check); };
+  },[]);
   // Run 30 (Android app only): long-press shortcuts on the app icon ("Add expense" / "Add income") open the add form.
   useEffect(()=>{
     const nat=window.LedgerNative; if (!nat || typeof nat.onShortcut!=="function") return;

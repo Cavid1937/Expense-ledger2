@@ -451,6 +451,10 @@ Layouts are in `handoff/BANK_FORMATS.md` and `handoff/NEXT_WORK_PLAN.md`.
 | 17 Nov | A comparison figure sat under the wrong heading (misleading) | Each figure names itself and sits next to its subject |
 | 17 Nov | Regrouping a page hid a form field under the tab bar | Test that a tap reaches each field; scroll opened forms into view |
 | 17 Nov | "No income now" told people with no income to add income | Read every message from the point of view of the person in that situation |
+| 18 Nov | Two open tabs each saved their own copy and silently undid the other's entries | Listen for the other tab's saves; never write blindly over what is stored |
+| 18 Nov | The offline page was saved from a response already read, so offline opening stayed on an old release for weeks | Copy a response the moment it arrives; test that the offline copy changes after a release |
+| 18 Nov | Analytics froze 1.3 s on a long history: a filter or sort was rebuilt for every single entry | Build filters and sorted lists once per month or category; prove the speed-up gives identical figures (old-vs-new comparison) |
+| 18 Nov | Home kept yesterday's figures ("13 days left" instead of 12) when the app came back on screen the next morning (proven by e2e_run108_newday on 152be1a) | Anything cached with "now" inside must also depend on the day; the app now redraws the page when the day changes, but not while a text field is in use |
 
 ---
 
