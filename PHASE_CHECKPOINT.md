@@ -1,3 +1,28 @@
+## 0002f - 2026-11-18 - RUN 108 PART 2 (owner message mid-run: a bank advert became a -70,000 expense; account sync not automatic; notice icon; 17 test types). LOCAL ONLY, NOT PUSHED.
+- CONFIRMED DEFECT fixed (notify.js): any text with an amount and a currency was read as a payment, so "İndi kredit UBank-da!" with a 70 000 AZN offer became a 70,000 expense in category Other.
+  - A notice now needs proof: a card number (also "••1234"), the bank's balance, or a sign / payment word in a text with no offer words (-dək, up to, до, endirim, kampaniya, акция, %...).
+  - A payment's own cashback % is exempt.
+  - Tests: run108notices 23; run68paste and e2e_run68_paste now give the "unknown direction" sample a card number.
+- Same rule in the Android listener (capacitor repo, local commit): isPayment().
+  - Checked with javac + 19 samples (9 adverts refused, 10 payments kept).
+  - The "Payment found" notice now uses ic_stat_ledger instead of the launcher icon (the blank square).
+  - NO APK built, not run on a phone: IMPLEMENTED BUT UNVERIFIED.
+- CONFIRMED DEFECT fixed: figures below zero showed no minus sign. Examples: Safe to Spend overspend, a credit card in debt, until-pay, totals, net position, statement balances, split left.
+  - New fmtSigned; e2e_run108_signs 5.
+- Sync gaps fixed (App.jsx):
+  - The check for a newer account copy ran only when the app opened. It now also runs when the app comes back to the screen.
+  - While saving to the account is paused, the bell shows "acct-paused" with Review.
+  - A preview already on screen is never replaced. e2e_run108_sync 10. e2e_run81_account 38, e2e_run104_restore 33.
+- NOT built (needs owner decision):
+  - Automatic merging between devices: deleted entries are not recorded, so a merge would bring them back.
+  - Auto-apply of the account copy when this phone has not changed since the last sync: proposed.
+  - Auto-record bank notices without review: proposed only after a week of the strict reader on real notices; strong proof only; Undo.
+- docs/TEST_MAP_17_TYPES.md maps the owner's 17 test types to real files, with gaps: real phone, Firefox/Safari, timed large-ledger, people with screen readers.
+- Tests:
+  - run-logic 157 files 2932/0.
+  - offline-check 21, csp-check 14, stalechunk-check 4.
+  - 42 e2e files touching money figures, plus the notice, account and import files. e2e_import 53 and e2e_run51_integrity 30 pass when run with E2E_IMP_DIR/E2E_DL_DIR set; without them they fail standalone.
+- The owner's real -70,000 entry is still in his ledger: he deletes it (or approves).
 ## 0002e - 2026-11-18 - RUN 108 HARDENING (owner order 06:48 Baku: work 10 hours alone, make it release ready). INTERIM at 07:45. LOCAL COMMITS d42af30..152be1a, NOT PUSHED. Live still 107 (d955dfd).
 - d42af30 CONFIRMED DEFECT fixed: two open windows/tabs overwrote each other's entries. Now: storage listener, write only when different, failed save keeps entries; e2e_run108_tabs 14.
 - ca9e78e audit B1: Excel unzip stops at 64 MB unpacked (zip bomb refused, 8 MB sheet still opens; run52statement 54). Dependabot ignores major versions.
