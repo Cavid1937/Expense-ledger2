@@ -133,6 +133,7 @@
     "run108balprop.test.mjs": 1,
     "run108loanprop.test.mjs": 4,
     "run108spendprop.test.mjs": 1,
+    "run108accundo.test.mjs": 1,
     "run53currency.test.mjs": 28,
     "run57paidfrom.test.mjs": 30,
     "run58cats.test.mjs": 30,
