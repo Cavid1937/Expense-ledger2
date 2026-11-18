@@ -6020,7 +6020,12 @@ function AppInner() {
           const grid=await xlsxGrid(buf), res=readStatement(linesFromGrid(grid));
           if (needsMapping(res, grid)) { setImportPending({ mapping:true, grid, map:guessMap(grid), filename:name }); return; }
           openStatement(res, name);
-        } catch { setImportPending({ error:t(isPdf?"st.pdfFailed":"st.xlsxFailed"), filename:name }); }
+        } catch (err) {
+          // Run 108: the PDF reader is loaded from separate files of this release. A page left open across a new release cannot load them any
+          // more (the server has only the new files). That is not the PDF's fault: say a new version is ready and show the Update button.
+          if (isPdf && /dynamically imported module|module script failed/i.test(String(err && err.message))) { setUpdateReady(true); setImportPending({ error:t("update.ready"), filename:name }); return; }
+          setImportPending({ error:t(isPdf?"st.pdfFailed":"st.xlsxFailed"), filename:name });
+        }
         return;
       }
       const raw=new TextDecoder("utf-8").decode(buf);
