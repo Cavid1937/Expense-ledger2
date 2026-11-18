@@ -84,5 +84,25 @@ section("R108-T4. Bank payments review: Add, then a quick tap on Remove while th
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
+section("R108-T5. Loan 'Mark next payment as paid': a double tap marks one payment; a later tap still marks the next");
+{
+  const DKEY = "expense_ledger_v5__debts", TODAY = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+  const pre = new Function(`try{if(!sessionStorage.getItem("__l")){sessionStorage.setItem("__l","1");localStorage.setItem("${DKEY}",JSON.stringify({version:1,debts:[],loans:[{id:"l1",lender:"Bank",kind:"cash",principal:120000,months:12,rateType:"none",ratePct:0,firstPayment:"${TODAY}",bankPayment:null,payments:[]}]}));}}catch(e){}`);
+  const page = await openPage(browser, { seed: baseSeed({ language: "en" }), pre }); await settle(page);
+  await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await page.waitForSelector(".more-page"); await wait(150);
+  await page.evaluate(() => document.querySelector('.more-page [data-more="debts"]').click()); await page.waitForSelector('[data-section="debts-page"]'); await wait(250);
+  await page.evaluate(() => document.querySelectorAll('[data-section="debts-page"] .seg-btn')[1].click()); await wait(500);
+  await page.evaluate(() => document.querySelector(".loan-paid-btn").scrollIntoView({ block: "center", behavior: "instant" })); await wait(600);
+  const box = await page.evaluate(() => { const r = document.querySelector(".loan-paid-btn").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  const count = () => page.evaluate((k) => ({ pays: JSON.parse(localStorage.getItem(k)).loans[0].payments.length, entries: JSON.parse(localStorage.getItem("expense_ledger_v5")).transactions.filter((x) => x.loan).map((x) => x.amount) }), DKEY);
+  await page.mouse.click(box.x, box.y); await wait(60); await page.mouse.click(box.x, box.y); await wait(900);
+  const a = await count();
+  ok(a.pays === 1 && a.entries.length === 1 && a.entries[0] === 100, "two taps 60 ms apart: one payment marked, one entry of 100.00", a);
+  await page.mouse.click(box.x, box.y); await wait(800);
+  const b = await count();
+  ok(b.pays === 2 && b.entries.length === 2, "a separate tap later marks the next payment (catching up still works)", b);
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
 await browser.close();
 finish("e2e_run108_dbltap");

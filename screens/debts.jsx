@@ -1,5 +1,5 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
@@ -83,6 +83,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
   const undoBar=(msg,undo)=>showSnackbar(msg,()=>{ if (undo()) { setData(readDebts()); setHealth(debtsHealth()); } else showToast(t("import.cantUndo")); },8000,"delete");
   // Edit a debt's name, amount and due date. The amount can never drop below what has already been repaid.
   const [dEdit,setDEdit]=useState(null), [lEdit,setLEdit]=useState(null);
+  const markAt=useRef({});
   // Run 40: phone Back cancels an open form, edit or question first (newest first), the same as its Cancel button; nothing is saved.
   useBackStep(showDebt,()=>{ setShowDebt(false); setDMsg(""); });
   useBackStep(showLoan,()=>{ setShowLoan(false); setLMsg(""); });
@@ -124,12 +125,16 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
     setLForm({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }); setLMsg(""); setShowLoan(false);
   };
   const markPaid=(l,sched)=>{
+    // Run 108: the button stays on screen for the next payment, so a quick double tap marked two payments paid and added two entries.
+    // A second tap on the same loan within 0.6 s is ignored; marking several payments one after another still works.
+    const now=Date.now(); if (now-(markAt.current[l.id]||0)<600) return;
     const k=l.payments.length; if (k>=sched.payments.length) return;
     const row=sched.payments[k], date=today();
     // The interest part defaults to the schedule's estimate and can be edited; empty means "I do not know the split" (nothing is invented).
     const text=(intr[l.id]!==undefined ? intr[l.id] : (row.interest/100).toFixed(2)).trim();
     const iv=text==="" ? null : formMoney(text);
     if (text!=="" && (iv===null || Math.round(iv*100)>row.payment)) { showToast(t("loan.interestInvalid")); return; }
+    markAt.current[l.id]=now;
     // Run 103: when a recurring payment stands for this loan, the entry is linked to it, so that bill counts as paid too (no double count).
     const via=loanBill(l,schedules);
     // ... and when that payment's entry for this month is already recorded (and no earlier loan payment used it), no second entry is
