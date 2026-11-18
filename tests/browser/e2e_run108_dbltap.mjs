@@ -2,7 +2,7 @@
 // time (a quick double tap on a phone) saved the same entry twice. Now each opening of the form hands over its entries once. Checked for
 // taps at the same moment, 60 ms and 200 ms apart; the next opening still saves, and an edit tapped twice changes the entry once.
 // Synthetic data only.
-import { launch, openPage, wait, ok, section, finish, settle, baseSeed, tx } from "./lib.mjs";
+import { launch, openPage, wait, ok, section, finish, settle, baseSeed, tx, openGoals } from "./lib.mjs";
 const browser = await launch();
 const setField = (page, sel, v) => page.evaluate((s, val) => { const el = document.querySelector(s); Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), "value").set.call(el, val); el.dispatchEvent(new Event("input", { bubbles: true })); el.dispatchEvent(new Event("change", { bubbles: true })); }, sel, v);
 const stored = (page) => page.evaluate(() => { try { return JSON.parse(localStorage.getItem("expense_ledger_v5")).transactions; } catch { return null; } });
@@ -44,6 +44,24 @@ section("R108-T2. Editing an entry and tapping Save twice changes it once and ad
   if (open) { await setField(page, ".amount-input", "25"); await wait(100); await tapTwice(page, 60); await wait(700); }
   const list = await stored(page);
   ok(open && list && list.length === 1 && list[0].id === 77 && list[0].amount === 25, "one entry, now 25.00, same id", { open, list: list && list.map((x) => [x.id, x.amount]) });
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
+section("R108-T3. A real double tap on Save goal makes one goal and no false 'invalid' message (a closing form cannot be tapped)");
+{
+  const page = await openPage(browser, { seed: baseSeed({ language: "en" }) });
+  await settle(page);
+  await openGoals(page, "goals");
+  await (await page.$(".fab-add")).click(); await page.waitForSelector("#goal-name"); await wait(500);
+  await setField(page, "#goal-name", "Bike"); await setField(page, "#goal-target", "300"); await wait(150);
+  const box = await page.evaluate(() => { const b = document.querySelector('[data-section="goal-form"] .btn-primary'); b.scrollIntoView({ block: "center" }); const r = b.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  await wait(200);
+  await page.evaluate(() => { window.__toasts = []; new MutationObserver(() => { const t = document.querySelector(".toast"); if (t) window.__toasts.push(t.textContent); }).observe(document.body, { subtree: true, childList: true, characterData: true }); });
+  await page.mouse.click(box.x, box.y); await page.mouse.click(box.x, box.y); await wait(900);
+  const goals = await page.evaluate(() => (JSON.parse(localStorage.getItem("expense_ledger_v5")).goals || []).filter((g) => g.name === "Bike").length);
+  const toasts = await page.evaluate(() => window.__toasts);
+  ok(goals === 1, "one goal saved", goals);
+  ok(!toasts.some((s) => /required|invalid/i.test(s)), "no 'invalid' message after the second tap", toasts);
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }

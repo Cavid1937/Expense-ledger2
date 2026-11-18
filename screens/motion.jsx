@@ -37,8 +37,11 @@ export function Collapse({ open, children, id, className="", ms=MOTION_MS }) {
   const [settled,setSettled]=useState(!!open);
   useEffect(()=>{ if (!shown) { setSettled(false); return undefined; } if (motionOff()) { setSettled(true); return undefined; } const to=setTimeout(()=>setSettled(true),ms+80); return ()=>clearTimeout(to); },[shown,ms]);
   if (!mounted) return null;
+  // Run 108: while it slides shut its content can no longer be tapped or focused (inert), so a quick second tap on a form's Save button
+  // cannot act on a form that has already been saved and emptied (it showed "invalid" over the success message). It follows `open`, not
+  // `shown`: `shown` turns off one render later, and opening must not be inert or the first box could not take focus.
   return (
-    <div id={id} className={"collapse"+(shown?" is-open":"")+(settled?" is-settled":"")+(className?" "+className:"")} aria-hidden={shown?undefined:true}>
+    <div id={id} className={"collapse"+(shown?" is-open":"")+(settled?" is-settled":"")+(className?" "+className:"")} aria-hidden={shown?undefined:true} inert={open?undefined:""}>
       <div className="collapse-in">{children}</div>
     </div>
   );
