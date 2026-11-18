@@ -16,7 +16,9 @@ const OUT_WORDS = /\b(payment|purchase|ödəniş|odenis|alış|alis|оплата
 const CARD_MASK = /(\*{2,}|\.{2}|•{2,})\s?\d{4}\b/;
 const TX_WORDS = /payment|purchase|ödəniş|odenis|alış|alis|оплат|покупк|списан|transfer|withdrawal|nağdlaşdırma|снятие|mədaxil|medaxil|daxil olub|köçürmə|kocurme|зачислен|поступлен|пополнен|перевод|refund|geri qaytarma|возврат|received|card to card|kartdan karta/i;
 const PROMO = /(₼|AZN|USD|EUR|\$|€)\s*-?\s*(dək|dek|dən|den|dan|qədər|qeder)(?!\p{L})|\bup to\b|(^|\s)до\s*\d|endirim|kampaniya|aksiya|акци|скидк|təklif|teklif|\boffer|qazan|получите|оформите|kredit\s*(al|götür|əldə)|onlayn kredit|онлайн[- ]?кредит|\d\s*%/iu;
-const TITLE_ONLY =/^(payment|purchase|card to card|ödəniş|оплата|покупка|amount|məbləğ|сумма)\s*:?\s*$/i;
+// a payment's own cashback ("1% keşbek") is not an offer, so its "%" is set aside before the advert check
+const CASHBACK = /\d+([.,]\d+)?\s*%\s*(cashback|keşbek|kesbek|кэшбэк|кешбэк)|(cashback|keşbek|kesbek|кэшбэк|кешбэк)\s*:?\s*\d+([.,]\d+)?\s*%/giu;
+const TITLE_ONLY = /^(payment|purchase|card to card|ödəniş|оплата|покупка|amount|məbləğ|сумма)\s*:?\s*$/i;
 const clean = (s) => String(s || "").replace(/[​-‍️]/g, "").replace(/[☀-➿\u{1f300}-\u{1faff}]/gu, "").replace(/\s+/g, " ").trim();
 const cur = (s) => { const m = String(s).match(CURTAG); return !m ? "" : m[0] === "₼" ? "AZN" : m[0] === "$" ? "USD" : m[0] === "€" ? "EUR" : m[0]; };
 const pad = (n) => String(n).padStart(2, "0");
@@ -54,7 +56,7 @@ export function readNotification(text, now = new Date()) {
   // Run 108 (owner, 18 Nov: a bank ad "İndi kredit UBank-da! ... 70 000 AZN" became a 70,000 expense): an amount alone is not a payment.
   // Kept only with proof that money moved: a card number, the bank's balance, or a written sign / payment word in a text that is not an offer.
   const all = lines.join(" ");
-  const proof = CARD_MASK.test(all) || /\bPAN\b/.test(all) || balance !== null || ((amount.sign !== 0 || TX_WORDS.test(all)) && !PROMO.test(all));
+  const proof = CARD_MASK.test(all) || /\bPAN\b/.test(all) || balance !== null || ((amount.sign !== 0 || TX_WORDS.test(all)) && !PROMO.test(all.replace(CASHBACK, " ")));
   if (!proof) return null;
   const type =amount.sign < 0 ? "expense" : amount.sign > 0 ? "income" : inHint > 0 ? "income" : inHint < 0 ? "expense" : "";
   const merchant = clean(words[0] || "").slice(0, 80);

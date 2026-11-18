@@ -32,6 +32,11 @@ const real = [
 ];
 for (const [s, c] of real) { const r = readNotification(s, NOW); ok(r && r.cents === c, "read: " + JSON.stringify(s.split("\n")[0]), r); }
 
+section("R108-N2b. A payment's own cashback percent does not make it an advert");
+{ const r = readNotification("Ödəniş 7,40 AZN, OBA MARKET, 1% keşbek", NOW); ok(r && r.cents === 740, "payment word + 1% keşbek: still read", r); }
+{ const r = readNotification("Оплата 5,00 ₼ Bolt, кэшбэк 2%", NOW); ok(r && r.cents === 500, "Russian payment + кэшбэк 2%: still read", r); }
+ok(readNotification("Ödəniş et, 20% endirim qazan: 30 AZN", NOW) === null, "an offer with a percent and no cashback is still dropped");
+
 section("R108-N3. An amount with nothing else is not enough");
 ok(readNotification("70 000 AZN", NOW) === null, "a bare amount is not an entry");
 ok(readNotification("Sizin üçün 1 500 AZN", NOW) === null, "an amount with ordinary words is not an entry");
