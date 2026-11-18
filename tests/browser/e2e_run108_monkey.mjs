@@ -55,18 +55,34 @@ const check = (page) => page.evaluate((k, keys) => {
 for (const s of SEEDS) {
   const lang = LANGS[(s - 1) % 3];
   section(`R108-MK${s}. ${STEPS} random steps from seed ${s} (${lang})`);
-  const page = await openPage(browser, { seed: seed(lang), chooseLang: lang }); await settle(page);
+  // MONKEY_FULL=0.25: after the app has loaded, about that share of its saves fail as if the phone's storage were full (fixed sequence)
+  const full = Number(process.env.MONKEY_FULL || 0);
+  const pre = full ? new Function(`let x=${s}*2654435761>>>0;const real=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(window.__full&&String(k).startsWith("expense_ledger_v5")){x=(Math.imul(x,1103515245)+12345)>>>0;if(x/4294967296<${full}){window.__fails=(window.__fails||0)+1;throw new DOMException("full","QuotaExceededError");}}return real.call(this,k,v);};`) : undefined;
+  // MONKEY_FRESH=1: start as a brand-new install (no data), with the first-launch questions still open
+  const fresh = !!process.env.MONKEY_FRESH;
+  // MONKEY_BIG=3000: a heavy ledger, that many entries spread over three years (a long-time user)
+  const big = Number(process.env.MONKEY_BIG || 0), cats = ["food", "transport", "housing", "gifts", "health", "shopping"];
+  const data = seed(lang);
+  for (let i = 0; i < big; i++) data.transactions.push(tx({ merchant: "Shop " + (i % 97), amount: ((i * 7919) % 20000 + 5) / 100, category: cats[i % cats.length], date: daysAgo(i % 1095), ...(i % 23 === 0 ? { type: "income", category: "salary", amount: 900 + (i % 5) * 10 } : {}) }));
+  const page = await openPage(browser, fresh ? { seed: null, fresh: true, chooseLang: lang, onboard: false, pre } : { seed: data, chooseLang: lang, pre }); await settle(page);
+  if (full) await page.evaluate(() => { window.__full = true; });
   // spare history entries, so Back never walks out of the test page (on a phone it would close the app, which is not under test here)
   await page.evaluate(() => { window.open = () => null; try { navigator.share = undefined; } catch {} for (let i = 0; i < 400; i++) history.pushState(history.state, ""); });
-  const r = rng(s * 7919), log = []; let fail = null;
+  const r = rng(s * 7919), log = []; let fail = null, slow = { ms: 0, what: "" };
   for (let i = 0; i < STEPS && !fail; i++) {
+    const t0 = Date.now();
     let what; try { what = await step(page, r); } catch (e) { what = "step error: " + String(e).slice(0, 80); }
+    if (Date.now() - t0 > slow.ms) slow = { ms: Date.now() - t0, what };
     log.push(what); await wait(60 + Math.floor(r() * 240));
     let c; try { c = await check(page); } catch (e) { await wait(800); try { c = await check(page); } catch (e2) { fail = { i, why: "page unusable: " + String(e2).slice(0, 120) }; break; } }
     if (!page.url().includes("index.html")) { fail = { i, why: "left the app: " + page.url() }; break; }
     if (page.errors.length || c.crash || c.bad.length || !c.dataOk) fail = { i, err: page.errors[0], crash: c.crash, bad: c.bad, data: c.why };
   }
   if (process.env.MONKEY_LOG) console.log(log.join("\n"));
+  if (full) console.log(`  (seed ${s}: ${await page.evaluate(() => window.__fails || 0)} saves failed on purpose)`);
+  // the slowest single step (a tap and the redraw it causes); on a fast PC more than 3 s means the phone would freeze
+  console.log(`  (seed ${s}: slowest step ${slow.ms} ms: ${slow.what})`);
+  ok(slow.ms < 3000, `seed ${s}: no step took 3 s or more`, slow);
   ok(!fail, `seed ${s} (${lang}): ${STEPS} steps with no error, crash, NaN/undefined on screen or damaged data`, fail && { ...fail, last: log.slice(-8) });
   await page.close();
 }
