@@ -61,4 +61,18 @@ ok(eq(cleanPrefs({ budgetCarry: { food: "2026-09" }, leftoverGoal: true }), { bu
 const old = cleanPrefs({ theme: "nordic" });
 ok(!("budgetCarry" in old) && !("leftoverGoal" in old), "an older backup without them: carrying and the goal offer stay off");
 ok(eq(cleanPrefs({ leftoverGoal: "yes", budgetCarry: [] }), {}), "anything but a plain true / a proper map is ignored");
+section("R108. The faster month-by-month history gives exactly the same figures");
+{
+  // 3,000 varied entries over ~3 years (income, refunds, transfers, a bad date, one in the future); each history row is compared with
+  // notSpentMonth for that month, which still reads every entry (the way the history was worked out before Run 108)
+  const now = new Date(2026, 10, 18, 12), cats = ["food", "salary", "refund", "transfers", "transport"], big = [];
+  for (let i = 0; i < 3000; i++) {
+    const d = new Date(2023, 10, 20 + Math.floor(i * 1094 / 3000)), ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const c = cats[i % 5]; big.push(E(i === 7 ? "2026-02-30" : i === 8 ? "2027-01-05" : ds, Math.round((1 + (i * 53) % 400) * 100) / 100 + 0.01, { type: c === "salary" || c === "refund" ? "income" : "expense", category: c }));
+  }
+  const h = notSpentHistory(big, now);
+  const diff = h.months.filter((r) => !eq(r, notSpentMonth(big, r.mon, now))).map((r) => r.mon);
+  ok(h.months.length >= 35 && diff.length === 0 && eq(h.current, notSpentMonth(big, "2026-11", now)), `all ${h.months.length} finished months and this month match the one-month calculation to the qapik`, diff);
+  ok(Math.round(h.total * 100) === h.months.reduce((s, r) => s + Math.round(r.net * 100), 0), "the total is the sum of the rows");
+}
 finish("run59leftover");

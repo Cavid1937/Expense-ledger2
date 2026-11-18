@@ -3036,9 +3036,13 @@ export function notSpentHistory(transactions, now=new Date()) {
   for (const x of rows) { const d=x && String(x.date); if (d && isValidDateStr(d) && d<=todayS && (!first || d.slice(0,7)<first)) first=d.slice(0,7); }
   const months=[];
   if (first && first<cur) { let [y,m]=first.split("-").map(Number); while (true) { const ym=`${y}-${String(m).padStart(2,"0")}`; if (ym>=cur) break; months.push(ym); m++; if (m>12) { m=1; y++; } if (months.length>600) break; } }
-  const list=months.map(mon=>notSpentOf(rows,mon,now));
+  // Run 108 (speed): entries are sorted into their months once; before, every month re-read every entry (3 years x 6,000 entries froze
+  // Analytics for 1.3 s on a slow phone). Same result: notSpentOf only counts entries whose date starts with the month.
+  const byMon=new Map();
+  for (const x of rows) { const d=x && String(x.date); if (!d || !isValidDateStr(d)) continue; const k=d.slice(0,7); if (!byMon.has(k)) byMon.set(k,[]); byMon.get(k).push(x); }
+  const list=months.map(mon=>notSpentOf(byMon.get(mon)||[],mon,now));
   const totalC=list.reduce((s,r)=>s+Math.round(r.net*100),0);
-  return { months:list, total:totalC/100, current:notSpentOf(rows,cur,now), last:list.length ? list[list.length-1] : null };
+  return { months:list, total:totalC/100, current:notSpentOf(byMon.get(cur)||[],cur,now), last:list.length ? list[list.length-1] : null };
 }
 
 // ─── Run 50 (owner list #6): set money aside for a yearly bill ──────────────────────────────────────────────────────────
