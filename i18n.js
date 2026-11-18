@@ -1424,6 +1424,8 @@ export const MESSAGES = {
   "bq.after":          { en: "{name} after adding: {after}", az: "{name} əlavədən sonra: {after}", ru: "{name} после добавления: {after}" },
   "bq.add":            { en: { one: "Add payment", other: "Add {n} payments" }, az: { one: "Ödənişi əlavə et", other: "{n} ödənişi əlavə et" }, ru: { one: "Добавить платёж", few: "Добавить {n} платежа", many: "Добавить {n} платежей", other: "Добавить {n} платежа" } },
   "bq.allHere":        { en: "All of these are already in your entries.", az: "Bunların hamısı artıq qeydlərinizdədir.", ru: "Всё это уже есть в ваших записях." },
+  // Run 108 (M1): when only look-alikes are left, "already in your entries" would be a guess stated as fact
+  "bq.simOnly":        { en: "Nothing will be added: these only look like entries you already have. If they are new payments, untick the box above first.", az: "Heç nə əlavə olunmayacaq: bunlar yalnız artıq olan qeydlərinizə oxşayır. Yeni ödənişlərdirsə, əvvəlcə yuxarıdakı qutudan işarəni götürün.", ru: "Ничего не добавится: это только похоже на уже внесённые записи. Если это новые платежи, сначала снимите галочку выше." },
   "bq.clear":          { en: "Clear them", az: "Təmizlə", ru: "Убрать" },
   "bq.discard":        { en: "Not mine, remove", az: "Mənim deyil, sil", ru: "Не моё, удалить" },
   "bq.discarded":      { en: "Bank payments removed", az: "Bank ödənişləri silindi", ru: "Платежи банка удалены" },

@@ -2318,11 +2318,14 @@ function countSuspectedDuplicates(existing, incoming) { const fp=new Set(existin
 // Matching is one-to-one: an entry here can stand for only ONE entry of the file, so two real coffees at the same price on the same day
 // in the file, against one here, give one match and one new entry (nothing real is dropped, nothing is counted twice).
 function txnLooseKey(t) { return [t.date,t.type,Math.round(Number(t.amount)*100)].join("|"); }
-function planMerge(existing, incoming) {
+// Run 108 (M1, owner's phone): opts.ownIds = ids of entries made from earlier bank notices. In a notice review such an entry stands only
+// for its own notice (the same notice again keeps its id and lands in sameId), so a second metro ride of 0.90 that day is a new payment.
+function planMerge(existing, incoming, opts={}) {
   const ex=Array.isArray(existing)?existing:[], inc=Array.isArray(incoming)?incoming:[];
+  const own=opts.ownIds instanceof Set ? opts.ownIds : null;
   const byId=new Map(), byFp=new Map(), byLoose=new Map(), used=new Set();
   const push=(m,k,i)=>{ const l=m.get(k); if (l) l.push(i); else m.set(k,[i]); };
-  ex.forEach((t,i)=>{ byId.set(String(t.id),i); push(byFp,txnFingerprint(t),i); push(byLoose,txnLooseKey(t),i); });
+  ex.forEach((t,i)=>{ byId.set(String(t.id),i); if (own && own.has(String(t.id))) return; push(byFp,txnFingerprint(t),i); push(byLoose,txnLooseKey(t),i); });
   const take=(m,k)=>{ const l=m.get(k); if (!l) return -1; for (const i of l) if (!used.has(i)) { used.add(i); return i; } return -1; };
   const sameId=[], identical=[], similar=[], fresh=[], rest1=[], rest2=[];
   inc.forEach(t=>{ const i=byId.get(String(t.id)); if (i!==undefined) { used.add(i); sameId.push(t); } else rest1.push(t); });
@@ -2361,7 +2364,7 @@ function planAccountMerge(mine, file) {
 // What the import sheet shows before anything is applied: the four counts, up to three example pairs, and how many accounts of the file
 // are the same as an account here under another id. dupCount is kept (= identical) for the older parts of the sheet.
 function mergeCounts(existing, plan) {
-  const mp=planMerge(existing, plan.transactions||[]);
+  const mp=planMerge(existing, plan.transactions||[], noticeMergeOpts(plan));
   const ap=plan.accountData && plan.accountData.accounts.length ? planAccountMerge(readAccounts(),plan.accountData) : null;
   return { dupCount:mp.identical.length, mergeInfo:{ sameId:mp.sameId.length, identical:mp.identical.length, similar:mp.similar.length, fresh:mp.fresh.length, examples:mp.similar.slice(0,3), sameAccounts:ap?ap.renamed:0 } };
 }
@@ -2420,7 +2423,7 @@ function applyImport(state, plan, mode, { skipDuplicates=false, skipSimilar=fals
   // currency and Safe to Spend setting; otherwise a fresh phone silently lost them. A phone with its own data keeps its own, as before.
   const emptyHere=!state.transactions.length && !(state.bills||[]).length && !(state.goals||[]).length && !Object.keys(state.budgets||{}).length;
   // Run 51: one-to-one matching (planMerge). An id that is already here is never added; identical and similar entries follow the two choices.
-  const mp=planMerge(state.transactions, plan.transactions);
+  const mp=planMerge(state.transactions, plan.transactions, noticeMergeOpts(plan));
   const add=[...mp.fresh, ...(skipDuplicates ? [] : mp.identical), ...(skipSimilar ? [] : mp.similar.map(p=>p.file))];
   const next={ ...state, transactions:sortDesc([...add, ...state.transactions]) };
   const fresh=(prefix)=>`${prefix}${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
@@ -4560,6 +4563,14 @@ export function defaultNoticeAccount() {
   let last=""; try { last=localStorage.getItem(BANKACC_KEY)||""; } catch { /* none remembered */ }
   return accs.some(a=>a.id===last) ? last : accs.length===1 ? accs[0].id : "";
 }
+// Run 108 (M1): ids of entries added from bank notices (see planMerge). Lost or empty (new phone, restore) = the older, stricter check:
+// a look-alike is skipped by default, which can only leave a payment out for the person to add, never count one twice.
+export const NOTICE_IDS_KEY=KEY+"__noticeids";
+export function readNoticeIds() { try { const v=JSON.parse(localStorage.getItem(NOTICE_IDS_KEY)||"[]"); return new Set(Array.isArray(v) ? v.filter(x=>typeof x==="string") : []); } catch { return new Set(); } }
+export function rememberNoticeIds(ids) {
+  try { const have=[...readNoticeIds()], add=(ids||[]).map(String).filter(x=>x && !have.includes(x)); if (add.length) localStorage.setItem(NOTICE_IDS_KEY,JSON.stringify([...have,...add].slice(-2000))); } catch { /* falls back to the stricter check */ }
+}
+function noticeMergeOpts(plan) { return plan && plan.fromNotices ? { ownIds:readNoticeIds() } : {}; }
 export function rememberNoticeAccount(id) { try { if (id) localStorage.setItem(BANKACC_KEY,id); else localStorage.removeItem(BANKACC_KEY); } catch { /* offered again by the one-account rule */ } }
 // The bell and snackbar line: one payment by name and amount, several by count.
 export function bankQText(rows, currency) {
@@ -6115,7 +6126,7 @@ function AppInner() {
     // every payment the person sees is one that will be added (cash withdrawals and pending ones too): nothing hidden behind a switch
     const stOpts={ ...p0.stOpts, cash:true, pending:true, account:p0.stOpts.account||defaultNoticeAccount() }, p1={ ...p0, stOpts }, transactions=statementPick(p1,stOpts);
     setSkipDup(true); setSkipSim(true);
-    setImportPending({ ...p1, transactions, fromNotices:true, bqItems:items, ...mergeCounts(stateRef.current.transactions,{ ...p1, transactions }) });
+    setImportPending({ ...p1, transactions, fromNotices:true, bqItems:items, ...mergeCounts(stateRef.current.transactions,{ ...p1, transactions, fromNotices:true }) });
   };
   // the review's items leave the queue (newer notices that arrived meanwhile stay)
   const dropFromBankQ=(items)=>{ const gone=new Set((items||[]).map(x=>x.time+"|"+x.text)); const rest=readBankQueue().filter(x=>!gone.has(x.time+"|"+x.text)); writeBankQueue(rest); setBankQ(rest); setBqHideN(0); };
@@ -6247,7 +6258,7 @@ function AppInner() {
     setState(next);
     setImportPending(null);
     // Run 105: the reviewed bank notices leave the queue once added (Undo puts them back, so they can be reviewed again)
-    if (plan.fromNotices) { dropFromBankQ(plan.bqItems); rememberNoticeAccount(accId(plan.stOpts&&plan.stOpts.account)); }
+    if (plan.fromNotices) { dropFromBankQ(plan.bqItems); rememberNoticeAccount(accId(plan.stOpts&&plan.stOpts.account)); rememberNoticeIds(planUse.transactions.map(x=>x.id)); }
     // Run 79: a backup restored from Google Drive on the first launch switches Drive backup on (the next backup then holds the restored data)
     if (plan.fromDrive) { const p={ ...readDrive(), on:true, fails:0, lastError:"" }; if (writeDrive(p)) setDrivePref(p); }
     // Run 81: the account's copy was confirmed; saving resumes on top of that version (the result, merged or replaced, is saved next)

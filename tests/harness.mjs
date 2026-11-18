@@ -61,6 +61,8 @@ const names = ["migrateAndLoad","buildMerchantMemory","merchantSuggest","memKey"
   "exploreTip","EXPLORE_GAP_FIRST","EXPLORE_GAP_NEXT",
   // Run 91: anonymous daily count
   "readCountPref","writeCountPref","activeDayPlan","countablePlace","sendActiveDay","randomMonthId","COUNT_KEY",
+  // Run 108 (M1): entries made from bank notices
+  "readNoticeIds","rememberNoticeIds","NOTICE_IDS_KEY",
   // interface language (from i18n.js when present)
   "t","tn","tIn","setLang","getLang","MESSAGES","LANGS","LANG_NAMES","LOCALES","catName","subName","monthName","monthShort","fmtLongDate"];
 const have = names.filter((n) => new RegExp("(function\\s+" + n + "\\b|const\\s+" + n + "\\b)").test(body));

@@ -56,7 +56,9 @@ export function BankNoticeSheet({ plan, currency, accounts, balances, skipSim, o
         {mi.similar > 0 && <label className="bq-check" data-bq="sim-row"><input type="checkbox" data-bq="sim" checked={skipSim} onChange={(e) => onSkipSim(e.target.checked)} /><span>{tn("bq.sim", mi.similar)}</span></label>}
         {s.check && s.check.has && !s.check.ok && <p className="bq-note" data-bq="gap">{t("bq.gap")}</p>}
         {adding > 0 && balances.map((r) => <p key={r.id} className="bq-note quiet" data-bq-bal={r.id}>{t("bq.after", { name: maskText(r.name), after: (r.after < 0 ? "−" : "") + fmt(Math.abs(r.after), currency) })}</p>)}
-        {adding === 0 && <p className="bq-note quiet" data-bq="all-here">{t("bq.allHere")}</p>}
+        {adding === 0 && (skipSim && mi.similar > 0
+          ? <p className="bq-note" data-bq="sim-only">{t("bq.simOnly")}</p>
+          : <p className="bq-note quiet" data-bq="all-here">{t("bq.allHere")}</p>)}
         <div className="bq-acts">
           {adding > 0
             ? <button type="button" className="btn btn-primary btn-full" data-bq="add" onClick={() => end(close, onAdd)}>{tn("bq.add", adding)}</button>
