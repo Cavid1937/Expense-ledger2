@@ -1273,8 +1273,12 @@ export function loanSchedule(l) {
     for (let i=1;i<=n && bal>0;i++) { const interest=Math.round(bal*r), part=(i===n||pr>=bal) ? bal : pr; push(i,part+interest,interest,part); }
   } else if (l.rateType==="flat") {
     const I=Math.round(P*rate/100*n/12), total=P+I, pay=Math.round(total/n), ip=Math.round(I/n);
-    let paid=0, intPaid=0;
-    for (let i=1;i<=n;i++) { const last=i===n, payment=last ? total-paid : pay, interest=last ? I-intPaid : ip; paid+=payment; intPaid+=interest; push(i,payment,interest,payment-interest); }
+    let paid=0, intPaid=0; const plan=[];
+    for (let i=1;i<=n;i++) { const last=i===n, payment=last ? total-paid : pay, interest=last ? I-intPaid : ip; paid+=payment; intPaid+=interest; plan.push([payment,interest,payment-interest]); }
+    // Run 108: a few manat over many months made the rounded instalment overshoot (a negative last payment, a balance below zero). Then the
+    // loan and the interest are each spread over the months in whole qapik instead. Every plan that was valid before stays exactly the same.
+    let left=P; const bad=plan.some(([p,i,pr])=>p<0 || i<0 || pr<0 || (left-=pr)<0);
+    plan.forEach(([p,i,pr],k)=>{ const m=k+1; if (!bad) return push(m,p,i,pr); const a=Math.floor(P*m/n)-Math.floor(P*(m-1)/n), b=Math.floor(I*m/n)-Math.floor(I*(m-1)/n); push(m,a+b,b,a); });
   } else {
     const base=Math.floor(P/n);
     for (let i=1;i<=n;i++) { const payment=i===n ? bal : base; push(i,payment,0,payment); }
