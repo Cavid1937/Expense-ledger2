@@ -4874,10 +4874,11 @@ function useSheetGestures() {
     const onClickCapture=(e)=>{
       const ov=e.target && e.target.closest ? e.target.closest(".sheet-overlay") : null;
       if (!ov || ov.dataset.out==="1" || reduced()) return;
+      // Run 108: a sheet that is already sliding down takes no more taps (a quick second tap could still Delete, Duplicate or mark Repaid)
+      if (exiting.has(ov)) { e.stopPropagation(); e.preventDefault(); return; }
       const closer=e.target.closest("[data-closer]"), backdrop=e.target===ov;
       if (!backdrop && !closer) return;
       e.stopPropagation(); e.preventDefault();
-      if (exiting.has(ov)) return;
       exiting.add(ov); ov.classList.add("leaving");
       setTimeout(()=>{
         if (!document.contains(ov)) return;

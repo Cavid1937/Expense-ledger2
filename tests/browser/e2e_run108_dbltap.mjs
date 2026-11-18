@@ -104,5 +104,25 @@ section("R108-T5. Loan 'Mark next payment as paid': a double tap marks one payme
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
+section("R108-T6. An entry's sheet that is sliding down takes no more taps (Close, then Duplicate 60 ms later, does nothing more)");
+{
+  const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [tx({ id: 88, amount: 7, merchant: "Kiosk", category: "food" })] }) });
+  await settle(page);
+  await page.evaluate(() => document.querySelectorAll(".tab-btn")[1].click()); await wait(500);
+  await page.evaluate(() => document.querySelector(".txn-row")?.click()); await wait(600);
+  const opened = await page.evaluate(() => !![...document.querySelectorAll(".sheet-overlay button")].find((b) => /Duplicate/.test(b.innerText)));
+  await page.evaluate(async () => {
+    const ov = [...document.querySelectorAll(".sheet-overlay")].find((o) => /Duplicate/.test(o.innerText));
+    ov.querySelector('[data-closer="1"]').click(); await new Promise((r) => setTimeout(r, 60));
+    [...ov.querySelectorAll("button")].find((b) => /Duplicate/.test(b.innerText))?.click();
+  });
+  await wait(800);
+  const formOpen = !!(await page.$(".add-overlay .amount-input"));
+  const sheetGone = await page.evaluate(() => ![...document.querySelectorAll(".sheet-overlay")].some((o) => /Duplicate/.test(o.innerText)));
+  const list = await stored(page);
+  ok(opened && sheetGone && !formOpen && list && list.length === 1, "the sheet closes; no copy form opens; still one entry", { opened, sheetGone, formOpen, n: list && list.length });
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
 await browser.close();
 finish("e2e_run108_dbltap");
