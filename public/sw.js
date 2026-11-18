@@ -19,6 +19,24 @@ async function savePage(cache, res) {
   const assets = assetsOf(html);
   await Promise.all(assets.map(async (a) => { if (!(await cache.match(a, { ignoreVary: true }))) { const r = await fetch(a, { cache: "reload" }); if (!r.ok) throw new Error(a); await cache.put(a, r); } }));
   await cache.put("/", res);
+  await prune(cache, assets).catch(() => {});
+}
+
+// Run 108: once a new release is saved, files of older releases are removed (before, every release added ~3 MB that never went away).
+// Kept: every /assets/ file the page names, plus every file those name in turn (the PDF reader is loaded later by name from the app's
+// code), so nothing the current app can ask for is removed. Reads the app's code only when the store holds files the page does not name.
+async function prune(cache, roots) {
+  const all = new Map((await cache.keys()).map((r) => [new URL(r.url).pathname, r]).filter(([p]) => p.startsWith("/assets/")));
+  if ([...all.keys()].every((p) => roots.includes(p))) return;
+  const keep = new Set(), todo = [...roots];
+  while (todo.length) {
+    const p = todo.pop(); if (keep.has(p)) continue; keep.add(p);
+    if (!/\.(js|css)$/.test(p)) continue;
+    const hit = await cache.match(p, { ignoreVary: true }); if (!hit) continue;
+    const text = await hit.text();
+    for (const q of all.keys()) if (!keep.has(q) && text.includes(q.slice(q.lastIndexOf("/") + 1))) todo.push(q);
+  }
+  await Promise.all([...all].filter(([p]) => !keep.has(p)).map(([, r]) => cache.delete(r)));
 }
 
 self.addEventListener("install", (e) => {
@@ -45,7 +63,9 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(fetch(req).then((res) => {
       // Run 73: only the app's own start page is kept for offline use; other pages on the site (privacy.html, app-open.html) are never saved over it
       const p = new URL(req.url).pathname;
-      if (res.ok && (p === "/" || p === "/index.html")) e.waitUntil(caches.open(CACHE).then((c) => savePage(c, res.clone())).catch(() => {}));
+      // Run 108: the copy is made now, before the page reads the answer. Made later (as before), it always failed with "body already
+      // used", so the saved start page was only ever the one from the worker's install and offline could open an older release.
+      if (res.ok && (p === "/" || p === "/index.html")) { const copy = res.clone(); e.waitUntil(caches.open(CACHE).then((c) => savePage(c, copy)).catch(() => {})); }
       return res;
     }).catch(async () => (await caches.match("/", { ignoreVary: true })) || Response.error()));
     return;

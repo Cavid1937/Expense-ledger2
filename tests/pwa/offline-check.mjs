@@ -99,6 +99,10 @@ try {
     await Promise.all([p.waitForNavigation({ waitUntil: "load" }), p.evaluate(() => document.querySelector(".update-now").click())]); await p.waitForSelector(".tabbar");
     const now = await p.evaluate(() => ({ v: [...document.scripts].map((s) => s.src).find((s) => /index-/.test(s)), banner: !!document.querySelector(".update-banner") }));
     ok(/index-NEWRELEASE\.js$/.test(now.v) && !now.banner, "tapping Update loads the new version (and the notice is gone)", now);
+    // Run 108: the worker file itself did not change in this release, so only the online visit can save the new page for offline use
+    await wait(2000);
+    const saved = await p.evaluate(async () => { const c = await caches.open("ledger-shell-v3"); const h = await c.match("/", { ignoreVary: true }); return { page: h ? ((await h.text()).match(/index-[\w-]+\.js/) || [""])[0] : "", files: (await c.keys()).map((r) => new URL(r.url).pathname).filter((x) => x.startsWith("/assets/index-")) }; });
+    ok(saved.page === "index-NEWRELEASE.js" && saved.files.length === 1 && saved.files[0] === "/assets/index-NEWRELEASE.js", "the new release is what opens offline from now on, and the old release's code is removed (before Run 108 the start page saved at install stayed)", saved);
     srv.kill(); await ctx.close();
   }
 
@@ -125,6 +129,30 @@ try {
   const caches0 = await page.evaluate(async () => { const keys = await caches.keys(); const c = await caches.open(keys[0]); return { keys, n: (await c.keys()).map((r) => new URL(r.url).pathname) }; });
   ok(caches0.keys.length === 1 && caches0.n.every((p) => p === "/" || p.startsWith("/assets/") || /^\/(manifest\.webmanifest|icon-\d+\.png|icon-maskable-\d+\.png|apple-touch-icon\.png|icon\.svg|fonts\/[\w-]+\.woff2)$/.test(p)), "only the app's own files are cached: page, code, icons and fonts (no data, no other sites)", caches0);
   await page.setOfflineMode(false);
+  // Run 108: files of older releases are removed from the worker's store once a new release is saved; files the current app can
+  // still ask for (the PDF reader, loaded later by name) stay. A "new release" is simulated by removing the app's code from the store
+  // (so the next online visit saves it again) and adding two files of an invented older release.
+  section("PWA-4. Old releases' files are removed; the current app's files stay");
+  {
+    const prep = await page.evaluate(async () => {
+      const c = await caches.open("ledger-shell-v3");
+      const main = [...document.scripts].map((s) => new URL(s.src || location.href).pathname).find((p) => /\/assets\/index-/.test(p));
+      const code = await (await fetch(main)).text(); const lazy = (code.match(/pdfText-[\w-]+\.js/) || [""])[0];
+      if (lazy) await c.put("/assets/" + lazy, await fetch("/assets/" + lazy));
+      await c.put("/assets/index-OLDRELEASE.js", new Response("old code"));
+      await c.put("/assets/pdfText-OLDRELEASE.js", new Response("old reader"));
+      await c.delete(main);
+      return { main, lazy: lazy ? "/assets/" + lazy : "" };
+    });
+    await page.goto(URL0, { waitUntil: "load" }); await page.waitForSelector(".tabbar"); await wait(2500);
+    const have = await page.evaluate(async () => (await (await caches.open("ledger-shell-v3")).keys()).map((r) => new URL(r.url).pathname));
+    ok(!have.includes("/assets/index-OLDRELEASE.js") && !have.includes("/assets/pdfText-OLDRELEASE.js"), "the older release's files are removed", have);
+    ok(have.includes(prep.main) && !!prep.lazy && have.includes(prep.lazy) && have.includes("/"), "the current app's code, its PDF reader part and the page stay saved", { prep, have });
+    await page.setOfflineMode(true);
+    await page.reload({ waitUntil: "load" }).catch(() => {});
+    ok(await page.waitForSelector(".tabbar", { timeout: 8000 }).then(() => true).catch(() => false) && /Offlinecafe/.test(await page.evaluate(() => document.body.innerText).catch(() => "")), "…and the app still opens offline with its data");
+    await page.setOfflineMode(false);
+  }
   // Run 73: the site now has a public privacy page. Opening it online must not replace the app's saved start page, or the app would
   // open offline as the privacy text (the worker used to save every page it served as "/").
   section("PWA-3. Opening the privacy page does not replace the app kept for offline use");
