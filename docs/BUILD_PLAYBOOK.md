@@ -455,6 +455,7 @@ Layouts are in `handoff/BANK_FORMATS.md` and `handoff/NEXT_WORK_PLAN.md`.
 | 18 Nov | The offline page was saved from a response already read, so offline opening stayed on an old release for weeks | Copy a response the moment it arrives; test that the offline copy changes after a release |
 | 18 Nov | Analytics froze 1.3 s on a long history: a filter or sort was rebuilt for every single entry | Build filters and sorted lists once per month or category; prove the speed-up gives identical figures (old-vs-new comparison) |
 | 18 Nov | Home kept yesterday's figures ("13 days left" instead of 12) when the app came back on screen the next morning (proven by e2e_run108_newday on 152be1a) | Anything cached with "now" inside must also depend on the day; the app now redraws the page when the day changes, but not while a text field is in use |
+| 18 Nov | A flat-rate loan of a few manat over many months showed a negative last payment (the rounded instalment overshot); hand-picked loan tests never tried it | Run money rules on thousands of random inputs (property tests) and check the rules every result must keep, not only chosen examples; plant a fault to prove each test can fail |
 
 ---
 
