@@ -94,4 +94,12 @@ section("SEC-6. Built-in names as shop, subcategory and budget key (reviewer swe
   const v = H.validateSettings(JSON.parse('{"budgets":{"__proto__":{"x":1},"constructor":50,"food":100}}'));
   ok(v.settings.budgets && Object.keys(v.settings.budgets).join() === "food" && v.settings.budgets.food === 100 && ({}).x === undefined, "budgets keep food 100.00 only", v);
 }
+section("SEC-7. Run 108: the privacy texts say where receipt photos are kept (audit B6)");
+{
+  const fs = await import("fs"), url = await import("url"), path = await import("path");
+  const page = fs.readFileSync(path.join(path.dirname(url.fileURLToPath(import.meta.url)), "..", "..", "public", "privacy.html"), "utf8");
+  ok(/qəbz şəkilləri yalnız bu cihazda/i.test(page) && /Фото чеков[^<]*только на этом устройстве/.test(page) && /Receipt photos[^<]*only on this device/.test(page), "the public privacy page says, in az, ru and en, that receipt photos stay on this device");
+  const { MESSAGES } = await import("../../i18n.js"), m = MESSAGES["info.privacy.6.b"] || {};
+  ok(/photo/i.test(m.en) && /şəkil/i.test(m.az) && /фото/i.test(m.ru), "the privacy notice inside the app says it too, in all three languages", m);
+}
 finish("security");
