@@ -26,7 +26,8 @@ section("R68-B1. The bank's and the wallet's message about one payment become on
 section("R68-B2. When the direction cannot be proved, the review says so");
 {
   const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }) }); await openData(page);
-  await paste(page, "🛒 5.00 ₼\nShop A");
+  // Run 108: a bare amount is no longer read (bank adverts look like that), so this one carries a card number but no sign or balance
+  await paste(page, "🛒 5.00 ₼\nShop A\nCard **1234");
   const sh = await sheet(page);
   ok(/Bank notifications/.test(sh) && /money in|money out|minus/i.test((await page.evaluate(() => (document.querySelector('[data-st="sign"]') || {}).innerText || ""))), "an amount without a sign or balance is flagged in the review (not silently guessed)", sh.slice(0, 300));
   await page.close();

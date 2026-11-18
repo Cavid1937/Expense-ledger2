@@ -122,6 +122,7 @@
   "run98statement.test.mjs": 7,
   "run99loose.test.mjs": 11,
   "run99whatif.test.mjs": 12,
+  "run108notices.test.mjs": 20,
   "run100cycle.test.mjs": 15,
   "run101due.test.mjs": 16,
   "run102cash.test.mjs": 9,

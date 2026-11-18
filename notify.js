@@ -12,7 +12,11 @@ const LIMIT = /\b(limit|limiti|лимит)\b/i;
 const CARD = /(\*{2,}|\.{2})\s?\d{4}\b|\bPAN\b|\bcard\s*:|\bkart\s*:|карта\s*:/i;
 const IN_WORDS = /\b(transfer from|from|received|credit|daxil olub|mədaxil|medaxil|köçürmə alındı|зачисление|поступление|пополнение|refund|geri qaytarma|возврат)\b/i;
 const OUT_WORDS = /\b(payment|purchase|ödəniş|odenis|alış|alis|оплата|покупка|списание|transfer to|withdrawal|nağdlaşdırma|снятие)\b/i;
-const TITLE_ONLY = /^(payment|purchase|card to card|ödəniş|оплата|покупка|amount|məbləğ|сумма)\s*:?\s*$/i;
+// Run 108: what proves a notice is a real payment, and what marks an advert ("70 000 AZN-dək", "up to", "до 50 000", "endirim", "акция")
+const CARD_MASK = /(\*{2,}|\.{2}|•{2,})\s?\d{4}\b/;
+const TX_WORDS = /payment|purchase|ödəniş|odenis|alış|alis|оплат|покупк|списан|transfer|withdrawal|nağdlaşdırma|снятие|mədaxil|medaxil|daxil olub|köçürmə|kocurme|зачислен|поступлен|пополнен|перевод|refund|geri qaytarma|возврат|received|card to card|kartdan karta/i;
+const PROMO = /(₼|AZN|USD|EUR|\$|€)\s*-?\s*(dək|dek|dən|den|dan|qədər|qeder)(?!\p{L})|\bup to\b|(^|\s)до\s*\d|endirim|kampaniya|aksiya|акци|скидк|təklif|teklif|\boffer|qazan|получите|оформите|kredit\s*(al|götür|əldə)|onlayn kredit|онлайн[- ]?кредит|\d\s*%/iu;
+const TITLE_ONLY =/^(payment|purchase|card to card|ödəniş|оплата|покупка|amount|məbləğ|сумма)\s*:?\s*$/i;
 const clean = (s) => String(s || "").replace(/[​-‍️]/g, "").replace(/[☀-➿\u{1f300}-\u{1faff}]/gu, "").replace(/\s+/g, " ").trim();
 const cur = (s) => { const m = String(s).match(CURTAG); return !m ? "" : m[0] === "₼" ? "AZN" : m[0] === "$" ? "USD" : m[0] === "€" ? "EUR" : m[0]; };
 const pad = (n) => String(n).padStart(2, "0");
@@ -47,7 +51,12 @@ export function readNotification(text, now = new Date()) {
     if (w && !/^\d+$/.test(w)) words.push(w);
   }
   if (!amount) return null;
-  const type = amount.sign < 0 ? "expense" : amount.sign > 0 ? "income" : inHint > 0 ? "income" : inHint < 0 ? "expense" : "";
+  // Run 108 (owner, 18 Nov: a bank ad "İndi kredit UBank-da! ... 70 000 AZN" became a 70,000 expense): an amount alone is not a payment.
+  // Kept only with proof that money moved: a card number, the bank's balance, or a written sign / payment word in a text that is not an offer.
+  const all = lines.join(" ");
+  const proof = CARD_MASK.test(all) || /\bPAN\b/.test(all) || balance !== null || ((amount.sign !== 0 || TX_WORDS.test(all)) && !PROMO.test(all));
+  if (!proof) return null;
+  const type =amount.sign < 0 ? "expense" : amount.sign > 0 ? "income" : inHint > 0 ? "income" : inHint < 0 ? "expense" : "";
   const merchant = clean(words[0] || "").slice(0, 80);
   const d = now instanceof Date ? now : new Date();
   return { date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, posted: "", time: `${pad(d.getHours())}:${pad(d.getMinutes())}`, type, cents: amount.cents, desc: merchant, merchant,

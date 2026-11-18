@@ -22,7 +22,8 @@ ok(two.rows.length === 1 && two.rows[0].type === "expense" && two.rows[0].cents 
 const leoChain = readNotifications("🛒 2.29 ₼\nKafe 21\nBalans 73.26 ₼\n\n🛒 2.96 ₼\nBolt\nBalans 70.30 ₼\n\n💸 50.00 ₼\nAysel\nBalans 120.30 ₼", NOW);
 ok(eq(leoChain.rows.map((r) => [r.merchant, r.type, r.cents]), [["Kafe 21", "expense", 229], ["Bolt", "expense", 296], ["Aysel", "income", 5000]]), "balances 73.26 → 70.30 → 120.30: Bolt 2.96 out and Aysel 50.00 in are proved by the balance", leoChain.rows.map((r) => [r.merchant, r.type, r.cents]));
 ok(leoChain.problems.includes("sign"), "the oldest one (Kafe 21) has no balance before it, so its direction cannot be proved: the review says so instead of pretending");
-const unknown = readNotifications("🛒 5.00 ₼\nShop A", NOW);
+// Run 108: a bare amount is no longer an entry (adverts look like that), so this notice carries a card number but still no sign or balance
+const unknown = readNotifications("🛒 5.00 ₼\nShop A\nCard **1234", NOW);
 ok(unknown.rows.length === 1 && unknown.rows[0].type === "expense" && unknown.problems.includes("sign"), "with no sign and no balance: taken as money out and FLAGGED, so the review says it could not tell");
 ok(readNotifications("Your code is 4521.\n\n💳 Payment: -3.00 ₼\nPharmacy", NOW).problems.includes("rows:1"), "a message without money among them is left out and counted");
 finish("run68paste");
