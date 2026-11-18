@@ -82,6 +82,8 @@ The script below is ready to run the moment the phone shows `device` in `adb dev
 | D12 | Reminder notice | an existing reminder, or none if there is no safe way without changing the ledger | icon = ledger mark, teal, channel ok |
 | D13 | Real bank notice (ABB) | owner's choice only: a normal everyday payment the owner makes anyway. Never a test payment. | appears in review |
 
+Side finding L1 (low, seen on the phone 21:48): the floating + button covers "İdarə et" (Manage) in the Home Accounts header when the page is at the top. DEFERRED WITH REASON: the + floats over scrolling content by design and its place was approved by the owner; scrolling a little uncovers the button.
+
 Limits:
 - D9 to D11 prove the native reader and review on the phone. They do not prove that a real ABB notice reaches the reader; only D13 can.
 - The earlier ABB problem can be device-side: MIUI/HyperOS "Autostart" and battery saver can stop the reader. The app already detects a stopped
