@@ -35,7 +35,9 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
   const addDebt=()=>{
     const principal=toQ(dForm.amt,{positive:true}), name=dForm.name.trim();
     if (!name || principal===null || !isQapik(principal)) { setDMsg(t("debt.invalid")); return; }
-    if (save({ ...data, debts:[...data.debts,{ id:uid("d"), direction:dForm.dir, name, principal, dueDate:dForm.due, note:"", payments:[] }] })) showToast(t("debt.addedToast"));
+    // Run 108: a failed save keeps the form open with what was typed (before, it was emptied and the debt was lost)
+    if (!save({ ...data, debts:[...data.debts,{ id:uid("d"), direction:dForm.dir, name, principal, dueDate:dForm.due, note:"", payments:[] }] })) return;
+    showToast(t("debt.addedToast"));
     setDForm({ dir:"owe", name:"", amt:"", due:"" }); setDMsg(""); setShowDebt(false);
   };
   // Run 18 (owner decision "ask each time"): a repayment always reduces the debt; the user chooses whether it ALSO becomes a cash-flow entry
@@ -121,7 +123,9 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
     const rate=lForm.type==="none" ? 0 : Number(String(lForm.rate).replace(",","."));
     const loan={ id:uid("l"), lender:lForm.lender.trim(), kind:lForm.kind, principal, ratePct:rate, rateType:lForm.type, months, firstPayment:lForm.first, bankPayment:bank, payments:[] };
     if (!loan.lender || principal===null || (lForm.type!=="none" && lForm.rate.trim()==="") || (lForm.bank.trim()!=="" && bank===null) || loanSchedule(loan)===null) { setLMsg(t("loan.invalid")); return; }
-    if (save({ ...data, loans:[...data.loans,loan] })) showToast(t("loan.addedToast"));
+    // Run 108: a failed save keeps the form open with what was typed (before, it was emptied and the loan was lost)
+    if (!save({ ...data, loans:[...data.loans,loan] })) return;
+    showToast(t("loan.addedToast"));
     setLForm({ lender:"", kind:"cash", amt:"", type:"annuity", rate:"", months:"", first:"", bank:"" }); setLMsg(""); setShowLoan(false);
   };
   const markPaid=(l,sched)=>{
@@ -143,7 +147,9 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
     const had=via&&via.billId ? transactions.find(x=>x && x.type==="expense" && x.billId===via.billId && typeof x.date==="string" && x.date.slice(0,7)===date.slice(0,7) && !used.has(String(x.id))) : null;
     if (had) { if (save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:[...x.payments,{ id:uid("p"), date, amount:row.payment, billTxn:had.id }]}:x) })) showToast(t("loan.paidViaBillToast",{ name:via.merchant })); return; }
     const txnId=onAddEntry({ type:"expense", amount:row.payment/100, loan:{ interest:iv },  category:"finance", subcategory:"", merchant:l.lender, note:t("loan.entryNote"), date, recurring:false, recurFreq:null, isActive:true, ...(via&&via.billId?{ billId:via.billId }:{}) });
-    save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:[...x.payments,{ id:uid("p"), date, amount:row.payment, txnId }]}:x) });
+    // Run 108: when the loan cannot be saved (storage full, or the loans data is protected because it is damaged) the entry is taken back,
+    // as a repayment does. Before, the entry stayed while the payment was not recorded, so every further tap added one more entry.
+    if (!save({ ...data, loans:data.loans.map(x=>x.id===l.id?{...x,payments:[...x.payments,{ id:uid("p"), date, amount:row.payment, txnId }]}:x) })) { if (txnId!==undefined) onRemoveEntry(txnId); return; }
     showToast(t("loan.paidToast"));
   };
   // Run 103 (D9): an explicit link to a recurring payment; "" goes back to matching by name and amount.
