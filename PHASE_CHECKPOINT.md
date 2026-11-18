@@ -1,3 +1,13 @@
+## 0002h - 2026-11-18 16:55 Baku - RELEASE 108 LIVE + APK 108 (owner: "APK too", after the push question). Live main = abb7aba, rollback = d955dfd.
+- Push: fast-forward d955dfd..abb7aba (49 commits). Gate: main was an ancestor; the tested App.jsx/i18n.js were committed. Final full suite at d99688d was 183 files 2974/0. After that, targeted runs plus logic 2938/0 and offline 21/21 (lighter-verification rule).
+- Live check: the bundle /assets/index-CW6brY2q.js contains release "108 (2026-11-18)" and the Unicode word edges; the CSP report-only header is present.
+- Live smoke (throw-away profile, made-up data, only the live origin let through): e2e_run108_transfer 4, signs 5, sync 10, tabs 14, all passed, no JavaScript errors. Scripts: scratchpad live_e2e_run108_*.mjs.
+- APK 108: scratchpad build-apk-run108.ps1 (adds syncMerge.js). Web copy abb7aba, versionCode 108.
+  - sha256 7EA8E84D…C8C4C6, 6,429,934 bytes, debug-signed.
+  - Checked inside: release 108 string, payments_found_2 in dex.
+  - Capacitor commit 8a4c565 (not pushed; the capacitor repo is not covered by the push permission).
+  - Sent to the owner. NOT run on a phone: IMPLEMENTED BUT UNVERIFIED on device.
+- Rollback: Vercel instant rollback to the d955dfd deployment, or `git revert` (never force-push).
 ## 0002g - 2026-11-18 - RUN 108 PART 3 (owner: ABB transfer not recognised; all app notices should look the same; OWNER DECISIONS & SECURITY HARDENING document). LOCAL ONLY, NOT PUSHED.
 - ABB "💸 Transfer: -4.00₼ / Card / Balance" layout:
   - The current reader, the release-96 reader and the full app flow all read it correctly. So the miss is on the phone side and unconfirmed: the listener may have been off, or the transfer may have been filed under Transfers, which is not spending. No adb device was connected.
