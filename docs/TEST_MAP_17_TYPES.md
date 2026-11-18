@@ -32,3 +32,5 @@ Gaps worth closing next, most useful first:
 2. Firefox and Safari runs.
 3. A timed check with a large ledger.
 4. Automatic merging between devices, which needs records of deleted entries first. The owner must decide this.
+
+Added 18 Nov (Release 108 device pass): `node tests/android/native-parity.mjs` compiles the Android listener's payment rule from the capacitor checkout and compares it with notify.js on 37 notices. It is not part of run-logic or run-browser (it needs the capacitor folder and Android Studio's JDK), so run it by hand after any change to either rule.

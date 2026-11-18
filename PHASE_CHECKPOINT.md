@@ -1,3 +1,13 @@
+## 0002k - 2026-11-18 20:30 Baku - RELEASE 108 DEVICE-VERIFICATION ASSIGNMENT: phone BLOCKED, everything else done. LOCAL commit only (assignment forbids push). Live stays c4f7abf.
+- Full report: docs/RELEASE_108_DEVICE_VERIFICATION_2026-11-18.md (identity table, device script D0-D13, S6 facts, signing plan, statuses).
+- Identity: APK handoff/apk-20261118/ExpenseLedger-108.apk, SHA-256 7EA8E84D…C4C6, com.example.expenseledger.spike, versionCode 108, v2 debug cert 6ae866dd… (= this laptop's debug.keystore). classes9.dex holds the Run 108 listener rule (f7196dc) + notice look (50c814c). Web copy "108 (2026-11-18)" from abb7aba; live c4f7abf has the same app code (only public/ static pages + vercel.json differ). Rollback deployment 7883834853 (75fdc8d).
+- Phone: plugged in as MTP (USB\VID_18D1&PID_4EE1) with USB debugging OFF; adb empty 19:16-20:24. All device tests BLOCKED. D9-D11 (synthetic notices) need the owner's explicit OK because they write into the real app's queue.
+- New test tests/android/native-parity.mjs: native isPayment (exact source, javac) vs notify.js, 37/37. Not in the runners; noted in docs/TEST_MAP_17_TYPES.md.
+- Logic 157 files 2938/0; full browser 186 files 2993/0 (19:32-20:26) on c4f7abf.
+- New docs/security/supabase_report_flood_cap.UNAPPLIED.sql (S3, NEVER RUN); S1 file gained a probe test (not run). Supabase reads: 6 SELECTs only (columns, sizes, daily maxima: largest day 21 rows).
+- No release keystore exists (only ~/.android/debug.keystore); no signingConfigs in build.gradle.
+- Next action: owner turns on USB debugging on the Poco F6 and allows this computer; then run D0-D1 read-only.
+
 ## 0002j - 2026-11-18 18:45 Baku - VITE 8 TRIAL (Dependabot #1+#2), docs only. Live main = b81daf6 before this commit; rollback for the functional change stays 75fdc8d.
 - Trial ran in a throw-away worktree at b81daf6 (deleted): vite 8.3.8 + @vitejs/plugin-react 6.3.0. Nothing merged, no PR touched.
 - Build OK (~1 s). Vite 8 minifies index.html's launch <style>, so its CSP hash changes. The csp-hashes guard in offline-check caught it, which would have blocked the push. After `--write`: csp-check passes, logic 2938/0; only the LAUNCH_CSS-identity guard fails, as designed.

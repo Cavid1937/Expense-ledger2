@@ -15,6 +15,16 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUEN
 ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
 COMMIT;
 
+-- Test (run BEFORE and AFTER applying; it creates a probe table and rolls everything back, nothing stays):
+-- DO $$ BEGIN
+--   CREATE TABLE public._s1_probe (x int);
+--   RAISE EXCEPTION 'anon select=%, anon insert=%, authenticated delete=%',
+--     has_table_privilege('anon', 'public._s1_probe', 'SELECT'), has_table_privilege('anon', 'public._s1_probe', 'INSERT'),
+--     has_table_privilege('authenticated', 'public._s1_probe', 'DELETE');
+-- END $$;
+-- Before: "anon select=t, anon insert=t, authenticated delete=t" (the weakness). After: all three "f".
+-- Existing tables are not affected: run supabase_rls_check.sql before and after; its result must be identical.
+
 -- Rollback (restores today's defaults exactly):
 -- ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES    TO anon, authenticated;
 -- ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;
