@@ -5562,15 +5562,17 @@ function AppInner() {
     return ()=>document.removeEventListener("visibilitychange",vis);
   },[state.language]);
   // Run 108: the app came back on screen on a new day (left open overnight): redraw the page so every figure is today's.
-  // Not while a text field on the page is in use, so nothing half-typed is lost; the next check catches up.
+  // Not while a text field is in use or any sheet/dialog is open (sheets opened from a page close when it redraws), so nothing
+  // half-typed is lost; the next check catches up.
   useEffect(()=>{
     let day=localDateStr(new Date());
     const check=()=>{
       if (document.visibilityState!=="visible") return;
       const d=localDateStr(new Date());
       if (d===day) return;
-      const a=document.activeElement, main=document.querySelector("main.page");
-      if (a && main && main.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+      const a=document.activeElement;
+      if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+      if (document.querySelector('.sheet-overlay,[aria-modal="true"],.add-overlay')) return;
       day=d; setTabKey(k=>k+1);
     };
     document.addEventListener("visibilitychange",check); window.addEventListener("focus",check); window.addEventListener("pageshow",check);

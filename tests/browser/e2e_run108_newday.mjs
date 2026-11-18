@@ -2,7 +2,7 @@
 // figures must be today's, not yesterday's (Home's pay-cycle card and run-out day were kept from the day they were first worked out).
 // Checked without depending on any wording: after the clock moves on a day, the screen must read exactly like the app freshly opened on
 // that day. Synthetic data only.
-import { launch, openPage, wait, ok, section, finish, settle, tab, tx, baseSeed, ymd } from "./lib.mjs";
+import { launch, openPage, openSettings, wait, ok, section, finish, settle, tab, tx, baseSeed, ymd } from "./lib.mjs";
 const browser = await launch();
 const DAY = 86400000;
 // a clock the test can move forward, and a fixed "random" so the greeting is the same in both pages
@@ -42,6 +42,16 @@ const typing = await page.evaluate(() => ({ v: document.querySelector(".search-i
 ok(typing.v === "Baz" && /search-input/.test(typing.f || "") && typing.m === "kept", "while the search box is in use, the new day does not redraw the page or clear the typed text", typing);
 await page.evaluate(() => { document.activeElement.blur(); window.dispatchEvent(new Event("focus")); }); await wait(500);
 ok(await page.evaluate(() => document.querySelector("main.page")?.dataset.mark !== "kept"), "once the box is left, the next check redraws the page for the new day");
+section("R108-D4. A new day while a form sheet is open (keyboard closed): the sheet and its text stay");
+await openSettings(page); await wait(300);
+await page.evaluate(() => document.querySelector('.more-page [data-more="feedback"]').click()); await page.waitForSelector('[data-section="fb-sheet"]'); await wait(300);
+await page.type("#fb-msg", "half written");
+await page.evaluate((ms) => { document.activeElement.blur(); document.querySelector("main.page").dataset.mark = "kept"; window.__clockOff.v += ms; document.dispatchEvent(new Event("visibilitychange")); window.dispatchEvent(new Event("focus")); }, DAY); await wait(500);
+const sheet = await page.evaluate(() => ({ open: !!document.querySelector('[data-section="fb-sheet"]'), v: document.querySelector("#fb-msg")?.value, m: document.querySelector("main.page")?.dataset.mark }));
+ok(sheet.open && sheet.v === "half written" && sheet.m === "kept", "the open sheet and the half-written text are kept on the new day", sheet);
+await page.keyboard.press("Escape"); await wait(400);
+await page.evaluate(() => window.dispatchEvent(new Event("focus"))); await wait(500);
+ok(await page.evaluate(() => !document.querySelector('[data-section="fb-sheet"]') && document.querySelector("main.page")?.dataset.mark !== "kept"), "after the sheet is closed, the next check redraws the page for the new day");
 ok(page.errors.length === 0 && fresh.errors.length === 0, "no JavaScript errors", page.errors[0] || fresh.errors[0]);
 await browser.close();
 finish("e2e_run108_newday");
