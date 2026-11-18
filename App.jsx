@@ -4271,6 +4271,9 @@ export function fmt(n, sym="₼") {
   if (!MONEY_NF) MONEY_NF=new Intl.NumberFormat("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2});
   return `${MONEY_NF.format(Math.abs(n||0))} ${sym}`;
 }
+// Run 108: fmt never shows a sign, so a figure that can fall below zero (what is left to spend, a balance, a change) uses this one.
+// Before, an overspend read "Safe to Spend 395.06 ₼" with only the red colour saying it was minus (lost on a screen reader or to colour blindness).
+export function fmtSigned(n, sym="₼") { return (Math.round((Number(n)||0)*100)<0 ? "−" : "")+fmt(n,sym); }
 // The three small Home tiles. Exact below 10,000 (1,050.00 used to show as "1.1k", which reads as 1,100 — Run 7, V4);
 // above that the short form is marked "≈" so it is never taken for an exact figure.
 export function fmtShort(n, sym="₼") {
@@ -5937,17 +5940,25 @@ function AppInner() {
   },[]);
   // When the app opens: has another device saved a newer copy? If this phone has not changed since its last save, the newer copy is
   // offered in the import preview; if both changed, saving pauses and the account card asks which to keep.
+  // Run 108: checked again each time the app comes back to the screen (a website tab left open since yesterday never looked again)
+  const importOpenRef=useRef(false); importOpenRef.current=!!importPending;
   useEffect(()=>{
-    let gone=false;
-    (async ()=>{
-      const s0=acctRef.current; if (!s0 || s0.paused || !s0.version || (typeof navigator!=="undefined" && navigator.onLine===false)) return;
+    let gone=false, busy=false;
+    const check=async ()=>{
+      // an import preview already on screen (a file, a Drive backup) is never replaced by the account's copy
+      const s0=acctRef.current; if (busy || importOpenRef.current || !s0|| s0.paused || !s0.version || (typeof navigator!=="undefined" && navigator.onLine===false)) return;
+      busy=true;
       try {
         const s=await acctFresh(), got=await loadLedger(s);
-        if (gone || !got || got.version<=s.version) return;
+        if (gone || !got || got.version<=s.version || importOpenRef.current || !acctRef.current || acctRef.current.paused) return;
         if (s.lastHash===backupFingerprint(backupTextRef.current("x"))) acctOffer(got); else patchAcct({ paused:"conflict" });
       } catch (e) { if (!gone) patchAcct({ lastError:acctReason(e) }); }
-    })();
-    return ()=>{ gone=true; };
+      finally { busy=false; }
+    };
+    check();
+    const onShow=()=>{ if (document.visibilityState==="visible") check(); };
+    document.addEventListener("visibilitychange",onShow);
+    return ()=>{ gone=true; document.removeEventListener("visibilitychange",onShow); };
   },[]);
   // at most once a day, when the app opens or the data changes, only if connected and a sign-in is at hand without asking (the Android app;
   // on the website only while the sign-in from this visit is still valid). Never interrupts: failures are counted for the card's warning.
@@ -6308,6 +6319,9 @@ function AppInner() {
     const sum=looseNow.list.reduce((c,x)=>c+Math.round((Number(x.amount)||0)*100),0)/100;
     notices.push({ id:"acc-loose", text:tn("acc.looseBell",looseNow.list.length,{ amount:fmt(sum,currency), date:fmtDate(looseNow.since) }), actions:[{ key:"fix", label:t("acc.looseFix"), primary:true, onClick:()=>setLooseOpen(true) }], onDismiss:()=>setLooseHideN(looseNow.list.length) });
   }
+  // Run 108 (owner, 18 Nov: records made in the app never reached the website): while saving to the account is paused, the bell says so
+  // (before, only the account card deep in Settings did, so saving could stay paused for days unnoticed)
+  if (acct && acct.paused) notices.unshift({ id:"acct-paused", text:t(acct.paused==="conflict"?"acct.pausedConflict":"acct.pausedRestore"), actions:[{ key:"review", label:t("acct.review"), primary:true, onClick:()=>acctReview() }] });
   if (iosNote) notices.push({ id:"ios-note", text:t("banner.iosNote"), actions:[{ key:"ok", label:t("inbox.gotIt"), onClick:()=>{ setIosNote(false); try { localStorage.setItem(IOS_NOTE_KEY,"1"); } catch { /* shown again next time */ } } }] });
 
   return (
@@ -6490,9 +6504,9 @@ function AppInner() {
                           </PickSelect>
                         </label>)}
                       {/* Run 88: the bank's own start and end balance, and an account that starts there so the app ends where the bank does */}
-                      {s.balance&&<div data-st="balance" style={{marginTop:8}}>{t("st.balance",{ a:fmt(s.balance.opening/100,currency), b:fmt(s.balance.closing/100,currency) })}</div>}
-                      {s.balance&&!accId(o.account)&&<label style={row}><input type="checkbox" data-st="newacc" checked={!!o.newAcc} onChange={e=>setStOpt("newAcc",e.target.checked)} style={{marginTop:2}}/><span>{t("st.newAcc",{ bank:STATEMENT_BANKS[s.bank]||t("st.bankOther"), a:fmt(s.balance.opening/100,currency) })}</span></label>}
-                      {s.balance&&!accId(o.account)&&o.newAcc&&(()=>{ const end=importPending.transactions.reduce((c,x)=>c+(x.type==="income"?1:-1)*Math.round(Number(x.amount)*100),s.balance.opening); return <div data-st="balance-end" data-same={String(end===s.balance.closing)} style={{marginTop:6,color:end===s.balance.closing?"var(--ink-2)":"var(--warn)"}}>{end===s.balance.closing ? t("st.endSame",{ b:fmt(end/100,currency) }) : t("st.endDiff",{ c:fmt(end/100,currency), b:fmt(s.balance.closing/100,currency) })}</div>; })()}
+                      {s.balance&&<div data-st="balance" style={{marginTop:8}}>{t("st.balance",{ a:fmtSigned(s.balance.opening/100,currency), b:fmtSigned(s.balance.closing/100,currency) })}</div>}
+                      {s.balance&&!accId(o.account)&&<label style={row}><input type="checkbox" data-st="newacc" checked={!!o.newAcc} onChange={e=>setStOpt("newAcc",e.target.checked)} style={{marginTop:2}}/><span>{t("st.newAcc",{ bank:STATEMENT_BANKS[s.bank]||t("st.bankOther"), a:fmtSigned(s.balance.opening/100,currency) })}</span></label>}
+                      {s.balance&&!accId(o.account)&&o.newAcc&&(()=>{ const end=importPending.transactions.reduce((c,x)=>c+(x.type==="income"?1:-1)*Math.round(Number(x.amount)*100),s.balance.opening); return <div data-st="balance-end" data-same={String(end===s.balance.closing)} style={{marginTop:6,color:end===s.balance.closing?"var(--ink-2)":"var(--warn)"}}>{end===s.balance.closing ? t("st.endSame",{ b:fmtSigned(end/100,currency) }) : t("st.endDiff",{ c:fmtSigned(end/100,currency), b:fmtSigned(s.balance.closing/100,currency) })}</div>; })()}
                       {s.balance&&s.balance.moved>0&&<div data-st="dates" style={{marginTop:8,color:"var(--ink-3)"}}>{tn("st.dates",s.balance.moved)}</div>}
                       {s.nTransfer>0&&<label style={row}><input type="checkbox" data-st="transfers" checked={o.transfers} onChange={e=>setStOpt("transfers",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.transfers",s.nTransfer)}</span></label>}
                       {s.nCash>0&&<label style={row}><input type="checkbox" data-st="cash" checked={!!o.cash} onChange={e=>setStOpt("cash",e.target.checked)} style={{marginTop:2}}/><span>{tn("st.cash",s.nCash)}</span></label>}
@@ -6548,7 +6562,7 @@ function AppInner() {
                   {importPending.transactions.length>0&&(()=>{ let rows=[]; try { rows=mergeBalancePreview(state,importPending,readAccounts(),{ skipDuplicates:skipDup, skipSimilar:skipSim }); } catch { rows=[]; } return rows.length>0&&(
                     <div data-section="import-balances" style={{fontSize:12,color:"var(--ink-2)",lineHeight:1.55,marginBottom:12}}>
                       <div style={{fontWeight:600}}>{t("import.balTitle")}</div>
-                      {rows.map(r=><div key={r.id} data-bal={r.id} style={{overflowWrap:"anywhere"}}>{r.before===null ? t("import.balNew",{ name:maskText(r.name), after:fmt(r.after,currency) }) : t("import.balLine",{ name:maskText(r.name), before:(r.before<0?"−":"")+fmt(Math.abs(r.before),currency), after:(r.after<0?"−":"")+fmt(Math.abs(r.after),currency) })}</div>)}
+                      {rows.map(r=><div key={r.id} data-bal={r.id} style={{overflowWrap:"anywhere"}}>{r.before===null ? t("import.balNew",{ name:maskText(r.name), after:fmtSigned(r.after,currency) }) : t("import.balLine",{ name:maskText(r.name), before:(r.before<0?"−":"")+fmt(Math.abs(r.before),currency), after:(r.after<0?"−":"")+fmt(Math.abs(r.after),currency) })}</div>)}
                       <div style={{color:"var(--ink-3)",marginTop:2}}>{t("import.balNote")}</div>
                     </div>); })()}
                   {importPending.kind==="statement"&&statementNeedsOk(importPending.statement)&&importPending.transactions.length>0&&<label data-st="anyway-row" style={{display:"flex",gap:8,alignItems:"flex-start",marginBottom:10,fontSize:12,lineHeight:1.45,color:"var(--warn)"}}><input type="checkbox" data-st="anyway" checked={!!(importPending.stOpts&&importPending.stOpts.anyway)} onChange={e=>setStOpt("anyway",e.target.checked)} style={{marginTop:2}}/><span>{t("st.anyway")}</span></label>}

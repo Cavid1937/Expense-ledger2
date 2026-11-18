@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { memo, startTransition, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+// Run 108: money figures that can be below zero show their minus sign
+import { fmtSigned } from "../App.jsx";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate, PickRange } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
@@ -391,7 +393,7 @@ export function SplitPanel({ txn, currency, onSplit }) {
               <input className="field-input" style={{width:110}} inputMode="decimal" aria-label={t("split.partAmt",{ n:i+1 })} placeholder="0.00" value={p.amount} onChange={e=>set(i,"amount",e.target.value)}/>
             </div>
           ))}
-          <div className="list-sub" data-section="split-left" style={{marginBottom:8,fontWeight:600,color:left===0?"var(--pos)":"var(--ink-2)"}}>{t("split.left",{ amount:fmt(left/100,currency) })}</div>
+          <div className="list-sub" data-section="split-left" style={{marginBottom:8,fontWeight:600,color:left===0?"var(--pos)":"var(--ink-2)"}}>{t("split.left",{ amount:fmtSigned(left/100,currency) })}</div>
           <div style={{display:"flex",gap:8}}>
             {parts.length<SPLIT_MAX&&<button className="btn btn-ghost" style={{flex:1}} data-section="split-add" onClick={()=>setParts(ps=>[...ps,{ category:other, amount:"" }])}>{t("split.add")}</button>}
             <button className="btn btn-primary" style={{flex:1}} data-section="split-save" disabled={!check.ok} onClick={()=>onSplit(parsed)}>{t("split.save")}</button>

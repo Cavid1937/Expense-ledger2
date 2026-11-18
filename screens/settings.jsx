@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Run 108: money figures that can be below zero show their minus sign
+import { fmtSigned } from "../App.jsx";
 import { flushSync } from "react-dom";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate, PickTime } from "./pickers.jsx";
@@ -277,7 +279,7 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
         <div className="settings-row" data-account={a.id} style={{flexDirection:"column",alignItems:"stretch",gap:10,padding:"14px 0",...(a.hidden?{opacity:0.7}:null)}}>
           <div style={{minWidth:0}}>
             <div className="settings-row-title" style={{overflowWrap:"anywhere"}}>{a.name}{a.hidden?" · "+t("acc.hidden"):""}</div>
-            <div className="settings-row-sub">{kindName[a.kind]} · <strong data-balance={a.id}>{fmt(bal[a.id]||0,currency)}</strong></div>
+            <div className="settings-row-sub">{kindName[a.kind]} · <strong data-balance={a.id}>{fmtSigned(bal[a.id]||0,currency)}</strong></div>
           </div>
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             <button className="chip" onClick={()=>toggleHidden(a)}>{t(a.hidden?"acc.show":"acc.hide")}</button>
@@ -287,7 +289,7 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
           {removing&&removing.id===a.id&&(()=>{ const p=accountRemovalPlan(data,a.id,entriesNow()), others=data.accounts.filter(x=>x.id!==a.id), canMove=!!accTools; return (
             <div data-section="acc-remove-confirm" role="group" aria-label={t("acc.rm.title",{name:a.name})} style={{background:"var(--bg-warm)",borderRadius:8,padding:"12px 14px",fontSize:13,lineHeight:1.5,color:"var(--ink-2)"}}>
               <div style={{fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{t("acc.rm.title",{name:a.name})}</div>
-              {Math.round(p.balance*100)!==0&&<div data-rm="balance">{t("acc.rm.balance",{amount:fmt(p.balance,currency)})}</div>}
+              {Math.round(p.balance*100)!==0&&<div data-rm="balance">{t("acc.rm.balance",{amount:fmtSigned(p.balance,currency)})}</div>}
               {p.entries===0&&p.transfers===0&&<div data-rm="unused">{t("acc.rm.unused")}</div>}
               {p.entries>0&&canMove&&(<>
                 <div data-rm="entries" style={{marginTop:4}}>{tn("acc.rm.entries",p.entries)}</div>
@@ -310,7 +312,7 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
       {accTools&&shown.map(a=>{ const c=linkOffers[a.id]; return c&&!linkDismissed[a.id]&&(
         <div key={"link-"+a.id} className="card" data-section="acc-link" data-account={a.id} style={{background:"var(--bg-warm)",padding:"12px 14px",margin:"8px 0",fontSize:13,lineHeight:1.5,color:"var(--ink-2)"}}>
           <div style={{fontWeight:600,color:"var(--ink)",overflowWrap:"anywhere"}}>{tn("link.title",c.ids.length,{ kind:t("paid.short."+c.kind), name:a.name })}</div>
-          <div data-link="balance">{t("link.balance",{ name:a.name, before:fmt(c.balanceBefore,currency), after:fmt(c.balanceAfter,currency) })}</div>
+          <div data-link="balance">{t("link.balance",{ name:a.name, before:fmtSigned(c.balanceBefore,currency), after:fmtSigned(c.balanceAfter,currency) })}</div>
           {c.skippedBefore>0&&<div data-link="before" style={{color:"var(--ink-3)"}}>{tn("link.before",c.skippedBefore,{ name:a.name })}</div>}
           {!c.hasOpeningDate&&<div data-link="nodate" style={{color:"var(--warn)"}}>{t("link.noDate")}</div>}
           <div style={{display:"flex",gap:8,marginTop:10}}>
@@ -320,7 +322,7 @@ export function MyAccounts({ state, currency, showToast, accTools=null }) {
         </div>); })}
       {shown.length>1&&(<div className="list-sub" data-section="acc-total" style={{margin:"4px 2px 8px"}}><strong>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</strong><br/>{t("acc.totalNote")}</div>)}
       {owedCredit>0&&<div className="list-sub" data-section="acc-credit-owed" style={{margin:"4px 2px 8px"}}><strong>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</strong><br/>{t("acc.creditNote")}</div>}
-      {np&&(<div className="list-sub" data-section="acc-net" style={{margin:"4px 2px 8px"}}><strong>{t("acc.net",{ amount:fmt(np.net/100,currency) })}</strong><br/>{t("acc.netNote")}</div>)}
+      {np&&(<div className="list-sub" data-section="acc-net" style={{margin:"4px 2px 8px"}}><strong>{t("acc.net",{ amount:fmtSigned(np.net/100,currency) })}</strong><br/>{t("acc.netNote")}</div>)}
       {showLeftHint&&(
         <div className="card" data-section="acc-leftover-hint" style={{background:"var(--bg-warm)",padding:"12px 14px",margin:"8px 0",fontSize:13,lineHeight:1.5,color:"var(--ink-2)"}}>
           <div>{t("acc.leftoverHint")}</div>

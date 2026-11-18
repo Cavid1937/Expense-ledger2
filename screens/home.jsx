@@ -1,5 +1,7 @@
 // Run 27: moved out of App.jsx unchanged (App.jsx was ~6,400 lines). Imports are listed so each piece can be read on its own.
 import { useMemo, useState } from "react";
+// Run 108: money figures that can be below zero show their minus sign
+import { fmtSigned } from "../App.jsx";
 import { createPortal } from "react-dom";
 // Run 75: monthly summary
 import { MonthReportCard } from "./report.jsx";
@@ -114,8 +116,8 @@ export function AccountSheet({ id, transactions, currency, onClose, onManage, on
         <div className="sheet-grip"><div className="sheet-handle"/></div>
         <div className="sheet-title" style={{overflowWrap:"anywhere"}}>{a.name}</div>
         <div className="list-sub">{t("acc.kind."+(["cash","card","wallet","bank","credit"].includes(a.kind)?a.kind:"other"))}</div>
-        <div className="hero-amount" data-section="acc-sheet-balance" style={{margin:"10px 0 4px"}}><MoneyText v={fmt(bal,currency)}/></div>
-        <div className="list-sub" style={{lineHeight:1.5,marginBottom:12}}>{t("acc.sheetHow",{ opening:fmt(a.opening.amount||0,currency) })}</div>
+        <div className="hero-amount" data-section="acc-sheet-balance" style={{margin:"10px 0 4px"}}><MoneyText v={fmtSigned(bal,currency)}/></div>
+        <div className="list-sub" style={{lineHeight:1.5,marginBottom:12}}>{t("acc.sheetHow",{ opening:fmtSigned(a.opening.amount||0,currency) })}</div>
         <div className="section-title" style={{marginTop:6}}>{t("acc.sheetLatest")}</div>
         {mine.length ? mine.map(x=>(
           <button key={x.id} type="button" className="settings-row" data-acc-txn={String(x.id)} onClick={()=>onView(x)} style={{width:"100%",background:"none",border:"none",borderBottom:"1px solid var(--rule)",padding:"10px 0",textAlign:"left",cursor:"pointer"}}>
@@ -197,14 +199,14 @@ export function HomeAccounts({ transactions, currency, onManage, onAccount, onAs
       <div className="card-head" style={{padding:"0 2px",marginBottom:8}}><span className="card-title">{t("acc.homeTitle")}</span><button className="btn btn-sm" data-section="home-accounts-manage" onClick={onManage}>{t("acc.manage")}</button></div>
       <div className="acc-strip">
         {shown.map(a=>(
-          <button key={a.id} className="acc-card" data-acc-card={a.id} onClick={()=>(onAccount?onAccount(a.id):onManage())} aria-label={a.name+", "+kindName[a.kind]+", "+fmt(bal[a.id]||0,currency)}>
+          <button key={a.id} className="acc-card" data-acc-card={a.id} onClick={()=>(onAccount?onAccount(a.id):onManage())} aria-label={a.name+", "+kindName[a.kind]+", "+fmtSigned(bal[a.id]||0,currency)}>
             <span className="acc-ico" aria-hidden="true"><Icon name={kindIcon[a.kind]||"list"} size={16} color="var(--accent)"/></span>
             <span className="acc-name">{a.name}</span>
-            <span className="acc-bal"><MoneyText v={fmt(bal[a.id]||0,currency)}/></span>
+            <span className="acc-bal"><MoneyText v={fmtSigned(bal[a.id]||0,currency)}/></span>
           </button>
         ))}
       </div>
-      {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmt(totalCents/100,currency) })}</div>}
+      {shown.length>1&&<div className="list-sub" style={{margin:"8px 2px 0"}}>{t("acc.total",{ amount:fmtSigned(totalCents/100,currency) })}</div>}
       {owedCredit>0&&<div className="list-sub" data-section="home-credit-owed" style={{margin:"4px 2px 0"}}>{t("acc.creditOwed",{ amount:fmt(owedCredit,currency) })}</div>}
       {np&&<div className="list-sub" data-section="home-netpos" style={{margin:"4px 2px 0"}}>{t("acc.net",{ amount:(np.net<0?"−":"")+fmt(Math.abs(np.net)/100,currency) })}</div>}
       {/* Run 106: the full reminder now lives in the bell; here only a quiet line, since the total above leaves this money out */}
@@ -427,7 +429,7 @@ export function WhatIf({ kind, left, days, currency }) {
         {r.ok&&(<>
           <div className="safe-row">
             <span className="safe-lbl">{t(kind==="safe"?"whatif.leftSafe":"whatif.leftUntil")}</span>
-            <span className="safe-val" style={{color:r.covers?"var(--ink)":"var(--neg)"}}>{fmt(r.after,currency)}</span>
+            <span className="safe-val" style={{color:r.covers?"var(--ink)":"var(--neg)"}}>{fmtSigned(r.after,currency)}</span>
           </div>
           <div className="list-sub" style={{lineHeight:1.45}}>{r.covers ? (r.perDayAfter>0 ? t("whatif.perDay",{ a:fmt(r.perDayAfter,currency), b:fmt(r.perDayBefore,currency) }) : "") : t("whatif.short",{ amount:fmt(r.short,currency) })}</div>
         </>)}
@@ -458,7 +460,7 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
             <Icon name="safe" size={12} color="var(--ink-3)"/>{t(until?"safe.titleMonth":"safe.title")}
           </div>
           <div className="safe-amount" style={{color:safeInfo.remaining>=0?"var(--ink)":"var(--neg)"}}>
-            <MoneyText v={fmt(safeInfo.remaining,currency)}/>
+            <MoneyText v={fmtSigned(safeInfo.remaining,currency)}/>
           </div>
           {/* Run 54: one plain sentence saying what this number is, for someone who has never met the term */}
           <div className="list-sub" data-section="safe-plain" style={{marginTop:2,marginBottom:4,lineHeight:1.45}}>{t(until?"safe.monthNote":safeInfo.remaining>=0?"safe.plain":"safe.plainOver")}</div>
@@ -535,7 +537,7 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
             <div className="safe-row" style={{borderBottom:"none",paddingTop:8,marginTop:2,borderTop:"3px double var(--rule-2)"}}>
               <span className="safe-lbl" style={{fontWeight:700,color:"var(--ink)"}}>{t("safe.discretionary")}</span>
               <span className="safe-val" style={{color:safeInfo.remaining>=0?"var(--pos)":"var(--neg)",fontSize:13}}>
-                {safeInfo.remaining>=0?"+":""}{fmt(safeInfo.remaining,currency)}
+                {safeInfo.remaining>=0?"+":""}{fmtSigned(safeInfo.remaining,currency)}
               </span>
             </div>
             {/* Explain which is driving the deduction */}
@@ -556,7 +558,7 @@ export function SafeToSpendCard({ safeToSpend, safeInfo, runOut=null, currency, 
             <div className="safe-note safe-caveat" role="note" data-section="home-safe-notes">
               {noRec&&<div>{t("safe.noteNoRecurring")}</div>}
               {/* The figure is a month-flow plan, not a bank balance: when the accounts hold less than it, say so (always visible). */}
-              {lowHeld&&<div data-section="home-safe-held" style={noRec?{marginTop:6}:undefined}>{t("safe.noteBalance",{ held:fmt(held,currency) })}</div>}
+              {lowHeld&&<div data-section="home-safe-held" style={noRec?{marginTop:6}:undefined}>{t("safe.noteBalance",{ held:fmtSigned(held,currency) })}</div>}
             </div>); })()}
           {why&&<div className="safe-note until-why" role="note" data-section="until-why">{t("until.why."+why)}</div>}
         </div>
@@ -585,7 +587,7 @@ function UntilPayCard({ untilPay, loose, currency }) {
             <Icon name="safe" size={12} color="var(--ink-3)"/>{t("until.title")}
           </div>
           <div className="safe-amount" style={{color:untilPay.left>=0?"var(--ink)":"var(--neg)"}}>
-            <MoneyText v={fmt(untilPay.left,currency)}/>
+            <MoneyText v={fmtSigned(untilPay.left,currency)}/>
           </div>
           <div className="list-sub" data-section="until-plain" style={{marginTop:2,marginBottom:4,lineHeight:1.45}}>{t(untilPay.left>=0?"until.plain":"until.plainOver",{ date:fmtDate(untilPay.payDate) })}</div>
           <div className="safe-daily" data-section="until-daily">
@@ -595,7 +597,7 @@ function UntilPayCard({ untilPay, loose, currency }) {
           <div style={{marginTop:10,borderTop:"1px solid var(--rule)",paddingTop:8}}>
             <div className="safe-row">
               <span className="safe-lbl">{t("until.held")}</span>
-              <span className="safe-val">{fmt(untilPay.held,currency)}</span>
+              <span className="safe-val">{fmtSigned(untilPay.held,currency)}</span>
             </div>
             <div className="safe-row">
               <span className="safe-lbl" style={untilPay.due>0?undefined:{color:"var(--ink-4)"}}>{t("until.due")}{untilPay.dueCount>0?` (${untilPay.dueCount})`:""}</span>
