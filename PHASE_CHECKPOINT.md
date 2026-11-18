@@ -1,3 +1,12 @@
+## 0002d - 2026-11-18 - RELEASE 107 LIVE at d955dfd (rollback cf4a596, release 105). Owner said 'Yes, publish'. Includes Run 106 + Run 107.
+- Gate on d955dfd: full browser suite exit 0, 176 files, 0 with problems, 2877 passed, 0 failed; run-logic 144 files 2869 passed; offline-check 17/17; csp-check 14/14.
+- Pushed fast-forward cf4a596..d955dfd to main. Vercel production for d955dfd: success (GitHub deployments API; expense-ledger2-21q24yeh9). Live bundle index-C6TNulFD.js contains '107 (2026-11-18)'.
+- Live headers present: HSTS, nosniff, X-Frame-Options DENY, Referrer-Policy, Permissions-Policy, Content-Security-Policy-Report-Only (no enforced CSP). In-app browser: no securitypolicyviolation events while switching tabs.
+- Live smoke (throw-away profile, made-up data, only the live origin let through): e2e_run107_security 6/6, e2e_run105_time 24/24, e2e_run106_motion 7/7.
+- GitHub Actions check + Dependabot are now in the repo (first run result not checked yet).
+- Rollback: Vercel instant rollback to the cf4a596 deployment, or git revert cf4a596..d955dfd and push.
+- Not verified: real phone; Google sign-in and Drive backup under the CSP; az/ru wording of import.tooBig. No APK built.
+- NEXT: owner does one Google sign-in + Drive backup; after ~1 week with no CSP console errors, enforce CSP in a small release. Owner actions still open: grants SQL (optional), leaked-password toggle.
 ## 0002c - 2026-11-18 - RUN 107 SECURITY (owner order 17 Nov, autonomous overnight; two docx: security research + final execution prompt). LOCAL COMMITS 3a3774d, 7e4b116, b127d84, 87ef99b (lockfile, droppable), 30b2872, b4f9c1e; NOT PUSHED, NOT DEPLOYED. Live still 105 (cf4a596); Run 106 (4a481fc) also unpushed.
 - Full write-up: docs/SECURITY_REVIEW_2026-11-18.md (matrix R1-R19, threat model, findings F1-F9, release gates, owner actions); docs/DATA_FLOWS.md; docs/INCIDENT_PLAYBOOK.md; docs/security/ (rollback-only RLS check, UNAPPLIED grants SQL).
 - F1 CONFIRMED DEFECT fixed: built-in names ("constructor", "__proto__", "toString"...) in saved category/shop/subcategory text broke figures (category became a function, "what changed" sum became text, Insights printed function source). All lookup/count maps now Object.create(null); icon lookup own-property only. SEC-1/SEC-6 fail on the old code.
