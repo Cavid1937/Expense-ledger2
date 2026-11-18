@@ -1,3 +1,11 @@
+## 0002l - 2026-11-18 20:52 Baku - Poco F6 connected over USB debugging (adb REDACTED). Read-only only.
+- D0: POCO F6, HyperOS OS3.0.305.0, Android 16 / SDK 36.
+- D1: installed com.example.expenseledger.spike 108; the installed base.apk SHA-256 equals the handoff APK 108 exactly.
+- D2: not needed, nothing installed.
+- D8: listener allowed and bound.
+- Nothing on the phone was changed.
+- Next: D3-D7 (start/stop/back key; no data written) and D9-D11 (test notices into the real app queue) each need the owner's OK.
+
 ## 0002k - 2026-11-18 20:30 Baku - RELEASE 108 DEVICE-VERIFICATION ASSIGNMENT: phone BLOCKED, everything else done. LOCAL commit only (assignment forbids push). Live stays c4f7abf.
 - Full report: docs/RELEASE_108_DEVICE_VERIFICATION_2026-11-18.md (identity table, device script D0-D13, S6 facts, signing plan, statuses).
 - Identity: APK handoff/apk-20261118/ExpenseLedger-108.apk, SHA-256 7EA8E84D…C4C6, com.example.expenseledger.spike, versionCode 108, v2 debug cert 6ae866dd… (= this laptop's debug.keystore). classes9.dex holds the Run 108 listener rule (f7196dc) + notice look (50c814c). Web copy "108 (2026-11-18)" from abb7aba; live c4f7abf has the same app code (only public/ static pages + vercel.json differ). Rollback deployment 7883834853 (75fdc8d).
