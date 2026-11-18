@@ -129,6 +129,7 @@
     "run108fuzz.test.mjs": 6,
     "run108loadfuzz.test.mjs": 4,
     "run108csvprop.test.mjs": 3,
+    "run108billdates.test.mjs": 4,
     "run53currency.test.mjs": 28,
     "run57paidfrom.test.mjs": 30,
     "run58cats.test.mjs": 30,
