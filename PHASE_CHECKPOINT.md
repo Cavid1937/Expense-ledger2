@@ -22,6 +22,8 @@
   - `npm audit fix` fixes nothing. tar comes via pdfjs 3 → canvas → node-pre-gyp.
   - pdfjs-dist 4.10.38 was trialled in scratch: 2 import paths in pdfText.js. Statement e2e 37/37 + 9/9 and csp-check 21/21 pass. Audit goes from 5 findings (1 critical) to 2 dev-only.
   - It is a major bump: awaits owner OK (docs/security/CSP_AND_DEPENDENCIES_2026-11-18.md B1/B3).
+- 08153b4 (live): csp-hashes also requires launch.js's fallback LAUNCH_CSS to equal the hashed index.html copy (it does).
+- FULL BROWSER SUITE on 08153b4 (the live code; 17:38-18:32, nothing edited during the run): **186 files, 0 with problems, 2993 passed / 0 failed / 0 missing**. Log: scratchpad full_1738.log.
 ## 0002h - 2026-11-18 16:55 Baku - RELEASE 108 LIVE + APK 108 (owner: "APK too", after the push question). Live main = abb7aba, rollback = d955dfd.
 - Push: fast-forward d955dfd..abb7aba (49 commits). Gate: main was an ancestor; the tested App.jsx/i18n.js were committed. Final full suite at d99688d was 183 files 2974/0. After that, targeted runs plus logic 2938/0 and offline 21/21 (lighter-verification rule).
 - Live check: the bundle /assets/index-CW6brY2q.js contains release "108 (2026-11-18)" and the Unicode word edges; the CSP report-only header is present.
