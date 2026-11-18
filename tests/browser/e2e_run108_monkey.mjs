@@ -2,7 +2,7 @@
 // all over the app, from fixed random seeds (the same seed always takes the same walk, so any failure can be replayed). After every step:
 // no JavaScript error, no crash screen, no "NaN", "undefined", "Infinity" or "[object Object]" on screen, and the saved ledger still reads
 // as valid data with whole-cent amounts. Synthetic data only; downloads go to the test profile; the network is blocked by the test page.
-import { launch, openPage, wait, ok, section, finish, settle, baseSeed, tx, daysAgo, KEY } from "./lib.mjs";
+import { launch, openPage, openSettings, openCategories, wait, ok, section, finish, settle, baseSeed, tx, daysAgo, KEY } from "./lib.mjs";
 import { MESSAGES } from "../../i18n.js";
 const STEPS = Number(process.env.MONKEY_STEPS || 300), SEEDS = (process.env.MONKEY_SEEDS || "1,2,3").split(",").map(Number);
 const LANGS = ["en", "az", "ru"];   // seed 1 walks in English, 2 in Azerbaijani, 3 in Russian, and so on
@@ -11,6 +11,9 @@ const KEYS = Object.keys(MESSAGES).filter((k) => k.includes("."));
 const browser = await launch();
 const rng = (s) => () => { s |= 0; s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 const TEXTS = ["12.50", "0", "-3", "1,5", "36 753,80", "9999999999", "abc", "", "  ", "<b>x</b>", "=SUM(A1)", "12.345", "0.01", "1e5", "Kafe Nova", "Ресторан", "Çörək", "2026-02-30", "50", "7"];
+// side stores (each under "expense_ledger_v5__" + name) and the damaged values MONKEY_JUNK puts in them
+const SIDE = ["cats", "catprefs", "fxcache", "fxwarm", "subcats", "accounts", "opencounted", "fx", "coachmute", "patmute", "workhours", "rollover", "tidydismiss", "recsug", "budgetcarry", "leftovergoal", "iosnote", "install", "reminders", "widget", "notices", "bankq", "bankacc", "drive", "account", "learn", "screens", "layouts", "feedback", "count", "debts", "crashlog", "first_choices", "welcome", "show_gifts", "acchint", "linkdismiss", "reportseen", "onboard", "photos"];
+const JUNK = ["{", "null", "[]", "\"\"", "123", "true", "{\"a\":1}", "{\"version\":1,\"loans\":\"x\",\"debts\":{},\"accounts\":null,\"cats\":[{\"id\":5}],\"transfers\":[null],\"hidden\":7,\"order\":\"x\",\"items\":[{}]}", "[null,1,\"x\",{}]", "{\"version\":99,\"loans\":[{\"id\":1,\"payments\":null,\"principal\":\"x\"}],\"debts\":[{\"payments\":[{\"amount\":-5}]}],\"accounts\":[{\"id\":\"a\",\"opening\":null}],\"cats\":[null,{\"id\":\"u_x\",\"name\":\"\"}]}"];
 const seed = (language) => baseSeed({ language, transactions: [
   tx({ merchant: "Bravo", amount: 23.4, date: daysAgo(1) }), tx({ merchant: "Bus", amount: 0.6, category: "transport", date: daysAgo(2) }),
   tx({ type: "income", merchant: "Salary", amount: 1500, category: "salary", date: daysAgo(10) }), tx({ merchant: "Rent", amount: 400, category: "housing", date: daysAgo(20), recurring: true, recurFreq: "monthly" }),
@@ -57,7 +60,10 @@ for (const s of SEEDS) {
   section(`R108-MK${s}. ${STEPS} random steps from seed ${s} (${lang})`);
   // MONKEY_FULL=0.25: after the app has loaded, about that share of its saves fail as if the phone's storage were full (fixed sequence)
   const full = Number(process.env.MONKEY_FULL || 0);
-  const pre = full ? new Function(`let x=${s}*2654435761>>>0;const real=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(window.__full&&String(k).startsWith("expense_ledger_v5")){x=(Math.imul(x,1103515245)+12345)>>>0;if(x/4294967296<${full}){window.__fails=(window.__fails||0)+1;throw new DOMException("full","QuotaExceededError");}}return real.call(this,k,v);};`) : undefined;
+  // MONKEY_JUNK=1: every side store of the app starts with a damaged value (broken JSON, wrong types; a different kind per seed)
+  const junk = process.env.MONKEY_JUNK ? JUNK[s % JUNK.length] : null;
+  const junkPre = junk === null ? "" : `try{if(!sessionStorage.getItem("__j")){sessionStorage.setItem("__j","1");for(const k of ${JSON.stringify(SIDE)})localStorage.setItem("expense_ledger_v5__"+k,${JSON.stringify(junk)});}}catch(e){}`;
+  const pre = (full || junk !== null) ? new Function(junkPre + (full ?`let x=${s}*2654435761>>>0;const real=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(window.__full&&String(k).startsWith("expense_ledger_v5")){x=(Math.imul(x,1103515245)+12345)>>>0;if(x/4294967296<${full}){window.__fails=(window.__fails||0)+1;throw new DOMException("full","QuotaExceededError");}}return real.call(this,k,v);};` : "")) : undefined;
   // MONKEY_FRESH=1: start as a brand-new install (no data), with the first-launch questions still open
   const fresh = !!process.env.MONKEY_FRESH;
   // MONKEY_BIG=3000: a heavy ledger, that many entries spread over three years (a long-time user)
@@ -66,6 +72,27 @@ for (const s of SEEDS) {
   for (let i = 0; i < big; i++) data.transactions.push(tx({ merchant: "Shop " + (i % 97), amount: ((i * 7919) % 20000 + 5) / 100, category: cats[i % cats.length], date: daysAgo(i % 1095), ...(i % 23 === 0 ? { type: "income", category: "salary", amount: 900 + (i % 5) * 10 } : {}) }));
   const page = await openPage(browser, fresh ? { seed: null, fresh: true, chooseLang: lang, onboard: false, pre } : { seed: data, chooseLang: lang, pre }); await settle(page);
   if (full) await page.evaluate(() => { window.__full = true; });
+  if (junk !== null) {
+    // with damaged side data, open every tab and every page under More once (a random walk could miss one)
+    const seen = [];
+    for (let tab = 0; tab < 5; tab++) { await page.evaluate((i) => document.querySelectorAll(".tab-btn")[i]?.click(), tab); await wait(350); }
+    const ids = await page.evaluate(() => [...document.querySelectorAll(".more-page [data-more]")].map((b) => b.getAttribute("data-more")));
+    for (const id of ids) {
+      await page.evaluate(() => document.querySelectorAll(".tab-btn")[4].click()); await wait(300);
+      await page.evaluate((m) => document.querySelector(`.more-page [data-more="${m}"]`)?.click(), id); await wait(500);
+      await page.evaluate(() => document.querySelectorAll('[data-section="debts-page"] .seg-btn')[1]?.click()); await wait(200);
+      const c = await check(page); seen.push(id);
+      if (page.errors.length || c.crash || c.bad.length) { ok(false, `seed ${s}: page "${id}" opens with damaged side data`, { err: page.errors[0], crash: c.crash, bad: c.bad }); break; }
+      await page.keyboard.press("Escape"); await page.evaluate(() => history.back()); await wait(300);
+    }
+    for (const [name, go] of [["settings", openSettings], ["categories", openCategories]]) {
+      try { await go(page); await wait(400); } catch (e) { ok(false, `seed ${s}: ${name} opens with damaged side data`, String(e).slice(0, 120)); continue; }
+      const c = await check(page); seen.push(name);
+      if (page.errors.length || c.crash || c.bad.length) ok(false, `seed ${s}: ${name} opens with damaged side data`, { err: page.errors[0], crash: c.crash, bad: c.bad });
+      await page.keyboard.press("Escape"); await page.evaluate(() => history.back()); await wait(300);
+    }
+    console.log(`  (seed ${s}: damaged value ${junk.slice(0, 40)}; opened ${seen.length} pages under More: ${seen.join(", ")})`);
+  }
   // spare history entries, so Back never walks out of the test page (on a phone it would close the app, which is not under test here)
   await page.evaluate(() => { window.open = () => null; try { navigator.share = undefined; } catch {} for (let i = 0; i < 400; i++) history.pushState(history.state, ""); });
   const r = rng(s * 7919), log = []; let fail = null, slow = { ms: 0, what: "" };
