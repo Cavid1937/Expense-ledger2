@@ -13,7 +13,7 @@ const base = migrateAndLoad();
 const txns = [];
 for (let i = 0; i < 40; i++) txns.push(T({ id: 500 + i, type: i % 6 === 0 ? "income" : "expense", category: i % 6 === 0 ? "salary" : ["food", "transport", "housing"][i % 3], amount: Math.round((2 + i * 13.37) * 100) / 100, merchant: "Shop " + (i % 5), date: `2026-${String(1 + (i % 10)).padStart(2, "0")}-${String(1 + (i % 27)).padStart(2, "0")}`, ...(i % 9 === 0 ? { recurring: true, recurFreq: "monthly" } : {}) }));
 const state = { ...base, transactions: txns, budgets: { food: 300, transport: 80 }, goals: [{ id: "g1", name: "Trip", target: 500, saved: 50, monthlyTarget: 50, createdAt: "2026-09-01T00:00:00Z" }],
-  bills: [{ id: "b1", name: "Rent", amount: 400, category: "housing", dueDay: 5, frequency: "monthly", active: true }], subcategories: { food: ["Bread"] } };
+  bills: [{ id: "b1", name: "Rent", type: "expense", amount: 400, category: "housing", freq: "monthly", anchorDate: "2026-09-05", dueDay: 5, active: true }], subcategories: { food: ["Bread"] } };
 const good = buildBackup(state, "2026-11-18T08:00:00.000Z");
 const goodText = JSON.stringify(good);
 
