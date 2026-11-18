@@ -1,3 +1,27 @@
+## 0002i - 2026-11-18 17:55 Baku - CSP PREPARATION + APP-OPEN COUNT FIX LIVE (owner: "work until 20:00 autonomously"). Live main = eca09bf, rollback = 75fdc8d.
+- Correction to 0002g item 4/5: there were FOUR inline items, not two. They were the index.html launch <style>, the whole app stylesheet (`<style>{CSS}</style>` from styles.js), privacy.html's <style> and app-open.html's inline <script>.
+- eca09bf:
+  - public/privacy.css and public/app-open.js replace the inline code in those pages.
+  - vercel.json Report-Only style-src lists the 2 remaining styles by sha256, with no 'unsafe-inline'.
+  - New tests/pwa/csp-hashes.mjs (`--write` updates vercel.json). It is called by offline-check (pre-push) and csp-check. After ANY styles.js or launch-CSS edit the pre-push check fails until `node tests/pwa/csp-hashes.mjs <dist> --write` is run.
+- DEFECT fixed: release 107's site-wide X-Frame-Options DENY refused the APK's hidden app-open.html frame, so app starts were not counted from 17 Nov.
+  - Proof before the fix: a probe frame ended as chrome-error and the insights script was never requested.
+  - app-open.html now has its own header rule: no XFO, frame-ancestors https://localhost (Report-Only), default-src 'none'; script-src 'self'. Every other page keeps DENY.
+  - This restores the existing owner-approved counting (Run 40). It adds no tracking.
+- Tests: csp-check 21/21 (enforced; injected inline style blocked; privacy and app-open pages clean), offline-check 22/22, logic 157 files 2938/0.
+- Live (VERIFIED):
+  - Headers: / and /privacy.html have DENY and the new style-src hashes without unsafe-inline; /app-open.html has no XFO.
+  - The live frame probe now loads app-open.html, app-open.js and /_vercel/insights/script.js. The view beacon was not seen because Vercel skips automated browsers.
+  - Live CSP smoke (scratchpad live_csp_run108.mjs) 4/4: no reports on Home, tabs, Settings and Data, and a control injection IS reported.
+  - Live index.html inline hashes match vercel.json.
+- NOT verified:
+  - Google sign-in script styles (needs real sign-in).
+  - App-open counts in Vercel Analytics: the Vercel connector needs owner team authorisation.
+  - The APK path, by phone.
+- Dependencies:
+  - `npm audit fix` fixes nothing. tar comes via pdfjs 3 → canvas → node-pre-gyp.
+  - pdfjs-dist 4.10.38 was trialled in scratch: 2 import paths in pdfText.js. Statement e2e 37/37 + 9/9 and csp-check 21/21 pass. Audit goes from 5 findings (1 critical) to 2 dev-only.
+  - It is a major bump: awaits owner OK (docs/security/CSP_AND_DEPENDENCIES_2026-11-18.md B1/B3).
 ## 0002h - 2026-11-18 16:55 Baku - RELEASE 108 LIVE + APK 108 (owner: "APK too", after the push question). Live main = abb7aba, rollback = d955dfd.
 - Push: fast-forward d955dfd..abb7aba (49 commits). Gate: main was an ancestor; the tested App.jsx/i18n.js were committed. Final full suite at d99688d was 183 files 2974/0. After that, targeted runs plus logic 2938/0 and offline 21/21 (lighter-verification rule).
 - Live check: the bundle /assets/index-CW6brY2q.js contains release "108 (2026-11-18)" and the Unicode word edges; the CSP report-only header is present.

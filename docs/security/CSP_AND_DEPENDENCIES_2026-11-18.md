@@ -72,6 +72,23 @@ the Google sign-in path are not yet checked). Enforcement **DEFERRED WITH REASON
 | B2 | `vite` 5.4.21, `esbuild` (dev) | No: tools on this PC only | Dev-server path traversal, cross-origin reads, launch-editor issues (Windows) | Only while `npm run dev` is running on this PC; the published site is plain built files. | Fixed by Vite 7/8 (major). Planned upgrade, not urgent. Avoid running the dev server with untrusted sites open. |
 | B3 | `tar` + `@mapbox/node-pre-gyp` (dev, through an optional native build) | No | Path traversal and denial of service when extracting a hostile tar file | Install-time only, from npm's own registry | `npm audit fix` (no major change) in the next run, then the full test run. |
 
+**Correction to B3 and a tested proposal for B1 (18 Nov, 17:50).**
+- `npm audit fix` does **not** fix B3; it changes nothing. Checked on a copy of `package-lock.json`. The chain is:
+  `pdfjs-dist` 3.11.174 → optional `canvas` 2.11.2 → `@mapbox/node-pre-gyp` 1.0.11 → `tar` 6.2.1. `canvas` runs its install script on
+  every `npm install`, also on Vercel's build machine, and that script downloads and unpacks a prebuilt binary with this `tar`. Nothing
+  of it reaches the app in the browser. The risk is a hostile archive on the build machine, low likelihood. B3 goes away only with B1's upgrade.
+- **Trial: `pdfjs-dist` 4.10.38** (the last 4.x; its optional dependency is `@napi-rs/canvas`, so `canvas`, `node-pre-gyp` and `tar` drop out).
+  This was done in a throw-away copy of the code at `eca09bf`; nothing changed in the project.
+  - Code change needed: two import paths in `pdfText.js`, from `legacy/build/pdf.js` and `pdf.worker.js` to `.mjs`. The in-page reader
+    hook `globalThis.pdfjsWorker` still works.
+  - After the change, `npm audit` shows 2 findings, both dev-only (B2 esbuild/vite). Before, it showed 5, including 1 critical and 3 high.
+  - The production build is clean. The PDF reader chunk is about 409 KB plus a 1.38 MB worker part, still loaded only when a PDF is chosen.
+  - Tests on the pdfjs 4 build: `e2e_run52_statement` **37/37**, `e2e_run98_statement` **9/9**, and `csp-check` **21/21**. The CSP check
+    has the policy enforced, with no `'unsafe-eval'`, and reads a PDF in the page.
+  - Not yet tested: real bank statement PDFs (ABB, Birbank) on the APK's Android WebView, the full browser suite, and an APK build.
+  - It is a major-version change, so it waits for the owner's OK. With the OK, the next run would apply it, run the full suite, the
+    offline check and an APK build, and then push. It removes B1 at the root and B3 completely.
+
 **Dependabot pull requests (all three opened 18 Nov 02:39, before the Run 108 rule that skips major versions; that rule is not pushed yet):**
 
 | PR | Change | Recommendation |
