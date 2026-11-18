@@ -272,15 +272,18 @@ export function MonthlyView({ transactions, rawTransactions, currency, budgets, 
   const now=curMon();
   const months6=Array.from({length:6},(_,i)=>nMon(5-i));
   // Run 18g: each month shows what was spent AND what came in, so a month is read as a pair, not just a cost.
-  const monthlyData=months6.map(m=>({label:monthShort(m),exp:expenses.filter(happenedIn(m)).reduce(addAmt,0),inc:transactions.filter(t=>t.type==="income"&&happenedIn(m)(t)).reduce(addAmt,0),isCur:m===now,ym:m}));
+  // Run 108 (speed): the month filter is built once per month, not once per entry
+  const monthlyData=months6.map(m=>{ const inM=happenedIn(m); return {label:monthShort(m),exp:expenses.filter(inM).reduce(addAmt,0),inc:transactions.filter(t=>t.type==="income"&&inM(t)).reduce(addAmt,0),isCur:m===now,ym:m}; });
   const maxMonth=Math.max(...monthlyData.map(m=>Math.max(m.exp,m.inc)),1);
   const monthAvg=monthlyData.filter(m=>!m.isCur&&m.exp>0).reduce((s,m,_,a)=>s+m.exp/a.length,0);
   const DAY_LBLS=WEEKDAYS.map((_,i)=>wdName(i,"narrow"));
   // Run 17: month calendar for the selected month (replaces the 8-week heatmap): spending per day, Monday first.
   const [cy,cm]=selectedMon.split("-").map(Number);
   const calDim=new Date(cy,cm,0).getDate(), calLead=(new Date(cy,cm-1,1).getDay()+6)%7;
+  // Run 108 (speed): the month's entries are sorted into their days once (same entries, same order); before, each day re-read every entry
+  const dayItems=Object.create(null); expenses.forEach(x=>{ if (x.date.startsWith(selectedMon)&&done(x)) (dayItems[x.date]=dayItems[x.date]||[]).push(x); });
   const calDays=Array.from({length:calDim},(_,i)=>{ const ds=`${selectedMon}-${String(i+1).padStart(2,"0")}`;
-    const items=expenses.filter(x=>x.date===ds&&done(x));
+    const items=dayItems[ds]||[];
     return { date:ds, day:i+1, amt:items.reduce(addAmt,0), cats:items.map(x=>catName(x.category)).filter((v,j,arr)=>arr.indexOf(v)===j).join(", "), future:ds>today(), isToday:ds===today() }; });
   const maxDay=Math.max(...calDays.map(c=>c.amt),1);  const hasTrends = expenses.length>0;
 

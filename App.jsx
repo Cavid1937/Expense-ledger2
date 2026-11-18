@@ -2891,11 +2891,14 @@ function comparisonWindow(mon, prv, now=new Date()) {
 // Run 24: reducer that keeps a running total exact to the cent (0.1 + 0.2 stays 0.3), for the plain sums that used to add raw decimals.
 export const addAmt=(s,t)=>Math.round((s+(Number(t&&t.amount)||0))*100)/100;
 function sumCents(list) { return (list||[]).reduce((s,t)=>s+Math.round((Number(t.amount)||0)*100),0)/100; }
-export function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=new Date()) {
+export function calcMonthSummary(all, mon=curMon(), prv=prevMon(), now=new Date()) {
   // Run 35b: "Inc" figures are income (earnings); "In" figures are all money in, incl. refunds and withdrawals from savings. Net uses In.
   const isExp=t=>t.type==="expense", isIn=t=>t.type==="income", isInc=t=>isIn(t)&&isEarnedCat(t.category), inMon=t=>t.date.startsWith(mon);
   const cw=comparisonWindow(mon,prv,now);
-  const done=happenedIn(mon,now), donePrv=cw.inPrev, sum=sumCents;   // Run 22 audit: whole cents, so ten entries of 0.10 are exactly 1.00
+  const done=happenedIn(mon,now), donePrv=cw.inPrev, donePrvFull=happenedIn(prv,now), sum=sumCents;   // Run 22 audit: whole cents, so ten entries of 0.10 are exactly 1.00
+  // Run 108 (speed): every figure below needs an entry of this month or the month before, so the long list is narrowed to those two
+  // once; before, it was read twelve times over, and the previous-month filter was rebuilt for every single entry.
+  const transactions=all.filter(t=>t && typeof t.date==="string" && (t.date.startsWith(mon)||t.date.startsWith(prv)));
   const curExp =sum(transactions.filter(t=>isExp(t)&&done(t)));
   const curInc =sum(transactions.filter(t=>isInc(t)&&done(t)));
   const plannedExp=sum(transactions.filter(t=>isExp(t)&&inMon(t)&&!done(t)));
@@ -2903,7 +2906,7 @@ export function calcMonthSummary(transactions, mon=curMon(), prv=prevMon(), now=
   const totalExp=sum(transactions.filter(t=>isExp(t)&&inMon(t))), totalInc=sum(transactions.filter(t=>isInc(t)&&inMon(t)));
   const prevExp=sum(transactions.filter(t=>isExp(t)&&donePrv(t)));
   const prevInc=sum(transactions.filter(t=>isInc(t)&&donePrv(t)));
-  const prevFullExp=sum(transactions.filter(t=>isExp(t)&&happenedIn(prv,now)(t)));
+  const prevFullExp=sum(transactions.filter(t=>isExp(t)&&donePrvFull(t)));
   const momDiff=cw.kind&&prevExp>0?curExp-prevExp:null;
   const curIn=sum(transactions.filter(t=>isIn(t)&&done(t))), curOther=Math.round((curIn-curInc)*100)/100;
   // Run 65 (owner decision 13 Nov): the monthly surplus / deficit is EARNED income minus spending, by the app's own classification. A refund
@@ -4154,8 +4157,12 @@ export function calcPatterns(transactions, currency="₼", now=new Date()) {
   // ── Category trends over the last 6 COMPLETED months (the current part-month would distort a trend)
   const categoryTrends=[];
   const months6=[6,5,4,3,2,1].map(monBack);
+  // Run 108 (speed): the six months' entries are sorted by category and month in one pass (same entries, same order, so the same sums);
+  // before, every category re-read the whole history six times.
+  const byCatMon=new Map(), m6=new Set(months6);
+  expenses.forEach(t=>{ const m=t.date.slice(0,7); if (!m6.has(m)) return; const k=t.category+"|"+m; if (!byCatMon.has(k)) byCatMon.set(k,[]); byCatMon.get(k).push(t); });
   [...new Set(expenses.map(t=>t.category))].forEach(catId=>{
-    const data=months6.map((m,i)=>({ x:i, y:sumOf(expenses.filter(t=>t.category===catId&&t.date.startsWith(m))) }));
+    const data=months6.map((m,i)=>({ x:i, y:sumOf(byCatMon.get(catId+"|"+m)||[]) }));
     if (data.filter(d=>d.y>0).length<3) return;
     // Least-squares direction of a run of months: "increasing" / "decreasing" when the slope exceeds 5% of the average.
     const direction=(pts)=>{ const n=pts.length, sx=pts.reduce((a,d)=>a+d.x,0), sy=pts.reduce((a,d)=>a+d.y,0), sxy=pts.reduce((a,d)=>a+d.x*d.y,0), sx2=pts.reduce((a,d)=>a+d.x*d.x,0), den=n*sx2-sx*sx;
@@ -4175,9 +4182,10 @@ export function calcPatterns(transactions, currency="₼", now=new Date()) {
 
   // ── Unusually large transactions this month: above Q3 + 1.5×IQR of that category's history AND at least 1.5× its median
   const hist={}; expenses.forEach(t=>{ (hist[t.category]=hist[t.category]||[]).push(t.amount); });
-  const anomalies=[];
+  const anomalies=[], sortedHist={};
   monExp.forEach(tx=>{
-    const h=[...(hist[tx.category]||[])].sort((a,b)=>a-b);
+    // Run 108 (speed): each category's history is sorted once, not once for every entry of the month
+    const h=sortedHist[tx.category] || (sortedHist[tx.category]=[...(hist[tx.category]||[])].sort((a,b)=>a-b));
     if (h.length<8) return;
     const q1=quantile(h,0.25), q3=quantile(h,0.75), med=quantile(h,0.5);
     if (tx.amount>q3+1.5*(q3-q1) && med>0 && tx.amount>=1.5*med)
