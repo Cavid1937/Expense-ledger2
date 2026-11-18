@@ -50,6 +50,21 @@ section("R108-M1-2. A ride typed by hand, then its notice: held back as a look-a
   await page.close();
 }
 
+section("R108-M1-2b. One payment announced by the bank, then by a wallet two minutes later, in a later review: not counted twice");
+{
+  const T = now - 1200000, bank = { text: "Payment: -12.50 ₼\nBRAVO SUPERMARKET\nCard: **1111\nBalance: 80.00 ₼", time: T }, wallet = { text: "Payment: -12.50 ₼\nBravo Market\nCard: **1111", time: T + 120000 };
+  const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }), fresh: true, pre: SHELL([bank]) });
+  await waitBell(page); await openReview(page);
+  await page.evaluate(() => document.querySelector('[data-bq="add"]').click()); await wait(900);
+  await page.evaluate((r) => localStorage.setItem("expense_ledger_v5__bankq", JSON.stringify([r])), wallet);
+  await page.reload(); await wait(1500); await waitBell(page); await openReview(page);
+  ok(await has(page, '[data-bq="sim-only"]') && !(await has(page, '[data-bq="add"]')), "held back as a look-alike, with nothing to add by default");
+  const s = await state(page);
+  ok(s.transactions.length === 1 && spent(s) === 1250, "one payment, 12.50 spent", s.transactions.map((x) => [x.merchant, x.amount]));
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
+
 section("R108-M1-3. Azerbaijani and Russian wording of the look-alike line");
 for (const [lang, re] of [["az", /Heç nə əlavə olunmayacaq/], ["ru", /Ничего не добавится/]]) {
   const page = await openPage(browser, { seed: baseSeed({ language: lang, transactions: [tx({ note: "metro", amount: 0.9, category: "transport", date: TODAY })] }), fresh: true, pre: SHELL([R1]), chooseLang: lang });

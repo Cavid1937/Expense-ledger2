@@ -12,13 +12,14 @@ const base = { budgets: {}, templates: [], currency: "₼", goals: [], safeToSpe
 const cents = (l) => l.reduce((s, x) => s + Math.round(x.amount * 100) * (x.type === "income" ? 1 : -1), 0);
 const ride = (h, m, bal) => ({ text: `💳 Payment: -0.90 ₼\nBAKU METRO\nCard: **4321\nBalance: ${bal} ₼`, time: new Date(2026, 10, 18, h, m).getTime() });
 const notices = (items) => statementEntries("notification", readNoticeItems(items).rows);
-const plan = (txns, fromNotices = true) => ({ transactions: txns, settings: {}, ...(fromNotices ? { fromNotices: true } : {}) });
+const metaOf = (txns) => Object.fromEntries(txns.map((x) => [String(x.id), x._st]));
+const plan = (txns, fromNotices = true) => ({ transactions: txns, settings: {}, ...(fromNotices ? { fromNotices: true, stMeta: metaOf(txns) } : {}) });
 const skip = { skipDuplicates: true, skipSimilar: true };
-// The review as the app runs it: counts first (what the sheet shows), then the add, then the added ids are remembered.
+// The review as the app runs it: counts first (what the sheet shows), then the add, then only the ids really added are remembered.
 const review = (state, txns) => {
   const p = plan(txns), c = mergeCounts(state.transactions, p).mergeInfo;
-  const next = applyImport(state, p, "merge", skip);
-  rememberNoticeIds(txns.map((x) => x.id));
+  const next = applyImport(state, p, "merge", skip), had = new Set(state.transactions.map((x) => String(x.id)));
+  rememberNoticeIds(next.transactions.map((x) => String(x.id)).filter((id) => !had.has(id)), p.stMeta);
   return { c, next, shown: c.fresh, added: next.transactions.length - state.transactions.length };
 };
 
@@ -60,7 +61,7 @@ ok(r.added === 0 && r.c.similar + r.c.identical === 1, "without the remembered i
 
 section("R108-M1f. Backups and files are unchanged (only a notice review uses the remembered ids)");
 reset();
-rememberNoticeIds(morning.map((x) => x.id));
+rememberNoticeIds(morning.map((x) => x.id), metaOf(morning));
 st = { ...base, transactions: morning.slice() };
 const copy = { ...evening[0], id: "file1" };
 const mp = planMerge(st.transactions, [copy]);
@@ -72,17 +73,45 @@ reset();
 ok(readNoticeIds().size === 0, "empty when nothing is stored");
 globalThis.localStorage.setItem(NOTICE_IDS_KEY, "{bad");
 ok(readNoticeIds().size === 0, "damaged text reads as empty");
-globalThis.localStorage.setItem(NOTICE_IDS_KEY, JSON.stringify(["a", 5, null, "b"]));
-ok(readNoticeIds().size === 2, "only text ids are kept");
-rememberNoticeIds(["b", "c"]);
-ok(JSON.parse(globalThis.localStorage.getItem(NOTICE_IDS_KEY)).join(",") === "a,b,c", "added once each, in order");
+globalThis.localStorage.setItem(NOTICE_IDS_KEY, JSON.stringify({ a: "08:10", n: 5, z: null, b: "" }));
+ok(readNoticeIds().size === 2, "only text times are kept");
+rememberNoticeIds(["b", "c"], { b: { time: "09:00" }, c: { time: "09:01" } });
+ok(Object.keys(JSON.parse(globalThis.localStorage.getItem(NOTICE_IDS_KEY))).join(",") === "a,b,c" && readNoticeIds().get("b") === "" && readNoticeIds().get("c") === "09:01", "added once each, in order, with the notice time");
 rememberNoticeIds(Array.from({ length: 2100 }, (_, i) => "x" + i));
-const kept = JSON.parse(globalThis.localStorage.getItem(NOTICE_IDS_KEY));
+const kept = Object.keys(JSON.parse(globalThis.localStorage.getItem(NOTICE_IDS_KEY)));
 ok(kept.length === 2000 && kept[kept.length - 1] === "x2099", "capped at the newest 2000", kept.length);
 globalThis.__throwAll = true;
 let threw = false; try { rememberNoticeIds(["z"]); readNoticeIds(); } catch { threw = true; }
 globalThis.__throwAll = false;
 ok(!threw, "a blocked storage never throws");
 ok(planMerge([], [], { ownIds: "junk" }).fresh.length === 0, "a wrong option is ignored");
+
+section("R108-M1h. One payment announced by the bank and by a wallet, reviewed separately: never counted twice");
+reset();
+const at = (h, m) => new Date(2026, 10, 18, h, m).getTime();
+const pay = (h, m, shop) => ({ text: `Payment: -12.50 ₼\n${shop}\nCard: **4321`, time: at(h, m) });
+const first = notices([pay(8, 10, "BRAVO SUPERMARKET")]);
+st = review({ ...base, transactions: [] }, first).next;
+r = review(st, notices([pay(8, 12, "Bravo Market")]));
+ok(r.c.similar === 1 && r.c.fresh === 0 && r.added === 0, "2 minutes later, other wording: a look-alike, skipped by default", r.c);
+ok(applyImport(st, plan(notices([pay(8, 12, "Bravo Market")])), "merge", { skipDuplicates: true, skipSimilar: false }).transactions.length === 2, "unticking the box still adds it (the person's choice)");
+ok(review(st, notices([pay(8, 15, "Other Shop")])).c.similar === 1, "exactly 5 minutes apart: still a look-alike");
+ok(review(st, notices([pay(8, 5, "Earlier Shop")])).c.similar === 1, "also when the second notice is the earlier one");
+r = review(st, notices([pay(8, 16, "BRAVO SUPERMARKET")]));
+ok(r.c.fresh === 1 && r.added === 1, "6 minutes apart: a separate payment", r.c);
+reset();
+rememberNoticeIds(first.map((x) => x.id));
+ok(mergeCounts(first, plan(notices([pay(18, 0, "BRAVO SUPERMARKET")]))).mergeInfo.similar === 1, "time of the earlier notice unknown: held back, never counted twice");
+reset();
+rememberNoticeIds(first.map((x) => x.id), metaOf(first));
+const two = notices([pay(8, 11, "Shop A"), pay(8, 12, "Shop B")]);
+const c2 = mergeCounts(first, plan(two)).mergeInfo;
+ok(c2.similar === 1 && c2.fresh === 1, "one earlier entry can stand for only one later notice", c2);
+
+section("R108-M1i. Only entries really added are remembered");
+reset();
+st = { ...base, transactions: [typed] };
+r = review(st, morning);
+ok(r.added === 0 && readNoticeIds().size === 0, "a notice held back as a look-alike is not remembered", [...readNoticeIds().keys()]);
 
 finish("run108noticesim");

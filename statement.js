@@ -503,7 +503,7 @@ export function statementEntries(bank, rows, opts = {}) {
     }
     const note = [r.orig, r.city && r.city.toUpperCase() !== "BAKU" ? r.city : ""].filter(Boolean).join(", ").slice(0, 80);
     out.push({ id: "s" + hashKey(key) + (n ? "_" + n : ""), type: r.type, amount: r.cents / 100, category, subcategory, merchant: r.merchant, note, date: r.date, recurring: false, recurFreq: null, isActive: true,
-      ...(opts.account ? { account: opts.account } : {}), _st: { kind: r.pair ? "own" : (transfer ? "transfer" : r.kind), pending: !!r.pending } });
+      ...(opts.account ? { account: opts.account } : {}), _st: { kind: r.pair ? "own" : (transfer ? "transfer" : r.kind), pending: !!r.pending, time: r.time || "" } });
   });
   return out;
 }

@@ -2318,19 +2318,22 @@ function countSuspectedDuplicates(existing, incoming) { const fp=new Set(existin
 // Matching is one-to-one: an entry here can stand for only ONE entry of the file, so two real coffees at the same price on the same day
 // in the file, against one here, give one match and one new entry (nothing real is dropped, nothing is counted twice).
 function txnLooseKey(t) { return [t.date,t.type,Math.round(Number(t.amount)*100)].join("|"); }
-// Run 108 (M1, owner's phone): opts.ownIds = ids of entries made from earlier bank notices. In a notice review such an entry stands only
-// for its own notice (the same notice again keeps its id and lands in sameId), so a second metro ride of 0.90 that day is a new payment.
+// Run 108 (M1, owner's phone): opts.ownIds = entries made from earlier bank notices (id -> "HH:MM" of the notice), opts.stMeta = the times of
+// the notices under review. Such an entry is a look-alike only for a notice within 5 minutes (the bank's and the wallet's notice about one
+// payment, as in readNoticeItems), so a later metro ride of 0.90 is a new payment. An unknown time stays a look-alike: never counted twice.
 function planMerge(existing, incoming, opts={}) {
   const ex=Array.isArray(existing)?existing:[], inc=Array.isArray(incoming)?incoming:[];
-  const own=opts.ownIds instanceof Set ? opts.ownIds : null;
-  const byId=new Map(), byFp=new Map(), byLoose=new Map(), used=new Set();
+  const own=opts.ownIds instanceof Map ? opts.ownIds : null, meta=opts.stMeta||{};
+  const byId=new Map(), byFp=new Map(), byLoose=new Map(), byOwn=new Map(), used=new Set();
   const push=(m,k,i)=>{ const l=m.get(k); if (l) l.push(i); else m.set(k,[i]); };
-  ex.forEach((t,i)=>{ byId.set(String(t.id),i); if (own && own.has(String(t.id))) return; push(byFp,txnFingerprint(t),i); push(byLoose,txnLooseKey(t),i); });
+  ex.forEach((t,i)=>{ byId.set(String(t.id),i); if (own && own.has(String(t.id))) { push(byOwn,txnLooseKey(t),i); return; } push(byFp,txnFingerprint(t),i); push(byLoose,txnLooseKey(t),i); });
   const take=(m,k)=>{ const l=m.get(k); if (!l) return -1; for (const i of l) if (!used.has(i)) { used.add(i); return i; } return -1; };
+  const mins=(s)=>{ const m=/^(\d{1,2}):(\d{2})$/.exec(s||""); return m ? Number(m[1])*60+Number(m[2]) : null; };
+  const takeNear=(t)=>{ const a=mins((meta[String(t.id)]||{}).time); for (const i of byOwn.get(txnLooseKey(t))||[]) { if (used.has(i)) continue; const b=mins(own.get(String(ex[i].id))); if (a===null || b===null || Math.abs(a-b)<=5) { used.add(i); return i; } } return -1; };
   const sameId=[], identical=[], similar=[], fresh=[], rest1=[], rest2=[];
   inc.forEach(t=>{ const i=byId.get(String(t.id)); if (i!==undefined) { used.add(i); sameId.push(t); } else rest1.push(t); });
   rest1.forEach(t=>{ if (take(byFp,txnFingerprint(t))>=0) identical.push(t); else rest2.push(t); });
-  rest2.forEach(t=>{ const i=take(byLoose,txnLooseKey(t)); if (i>=0) similar.push({ file:t, here:ex[i] }); else fresh.push(t); });
+  rest2.forEach(t=>{ let i=take(byLoose,txnLooseKey(t)); if (i<0) i=takeNear(t); if (i>=0) similar.push({ file:t, here:ex[i] }); else fresh.push(t); });
   return { sameId, identical, similar, fresh };
 }
 // Run 51: entries ALREADY on this phone that may be one payment counted twice (after an earlier merge, or typed twice): groups of two or
@@ -4563,14 +4566,14 @@ export function defaultNoticeAccount() {
   let last=""; try { last=localStorage.getItem(BANKACC_KEY)||""; } catch { /* none remembered */ }
   return accs.some(a=>a.id===last) ? last : accs.length===1 ? accs[0].id : "";
 }
-// Run 108 (M1): ids of entries added from bank notices (see planMerge). Lost or empty (new phone, restore) = the older, stricter check:
-// a look-alike is skipped by default, which can only leave a payment out for the person to add, never count one twice.
+// Run 108 (M1): entries added from bank notices, id -> "HH:MM" of the notice (see planMerge). Lost or empty (new phone, restore) = the older,
+// stricter check: a look-alike is skipped by default, which can only leave a payment out for the person to add, never count one twice.
 export const NOTICE_IDS_KEY=KEY+"__noticeids";
-export function readNoticeIds() { try { const v=JSON.parse(localStorage.getItem(NOTICE_IDS_KEY)||"[]"); return new Set(Array.isArray(v) ? v.filter(x=>typeof x==="string") : []); } catch { return new Set(); } }
-export function rememberNoticeIds(ids) {
-  try { const have=[...readNoticeIds()], add=(ids||[]).map(String).filter(x=>x && !have.includes(x)); if (add.length) localStorage.setItem(NOTICE_IDS_KEY,JSON.stringify([...have,...add].slice(-2000))); } catch { /* falls back to the stricter check */ }
+export function readNoticeIds() { try { const v=JSON.parse(localStorage.getItem(NOTICE_IDS_KEY)||"{}"); return new Map(v && typeof v==="object" && !Array.isArray(v) ? Object.entries(v).filter(([,x])=>typeof x==="string") : []); } catch { return new Map(); } }
+export function rememberNoticeIds(ids, stMeta={}) {
+  try { const m=readNoticeIds(); let n=0; (ids||[]).map(String).forEach(id=>{ if (id && !m.has(id)) { m.set(id,String((stMeta[id]||{}).time||"")); n++; } }); if (n) localStorage.setItem(NOTICE_IDS_KEY,JSON.stringify(Object.fromEntries([...m].slice(-2000)))); } catch { /* falls back to the stricter check */ }
 }
-function noticeMergeOpts(plan) { return plan && plan.fromNotices ? { ownIds:readNoticeIds() } : {}; }
+function noticeMergeOpts(plan) { return plan && plan.fromNotices ? { ownIds:readNoticeIds(), stMeta:plan.stMeta } : {}; }
 export function rememberNoticeAccount(id) { try { if (id) localStorage.setItem(BANKACC_KEY,id); else localStorage.removeItem(BANKACC_KEY); } catch { /* offered again by the one-account rule */ } }
 // The bell and snackbar line: one payment by name and amount, several by count.
 export function bankQText(rows, currency) {
@@ -6258,7 +6261,7 @@ function AppInner() {
     setState(next);
     setImportPending(null);
     // Run 105: the reviewed bank notices leave the queue once added (Undo puts them back, so they can be reviewed again)
-    if (plan.fromNotices) { dropFromBankQ(plan.bqItems); rememberNoticeAccount(accId(plan.stOpts&&plan.stOpts.account)); rememberNoticeIds(planUse.transactions.map(x=>x.id)); }
+    if (plan.fromNotices) { dropFromBankQ(plan.bqItems); rememberNoticeAccount(accId(plan.stOpts&&plan.stOpts.account)); const had=new Set(before.transactions.map(x=>String(x.id))); rememberNoticeIds(next.transactions.map(x=>String(x.id)).filter(id=>!had.has(id)),plan.stMeta); }
     // Run 79: a backup restored from Google Drive on the first launch switches Drive backup on (the next backup then holds the restored data)
     if (plan.fromDrive) { const p={ ...readDrive(), on:true, fails:0, lastError:"" }; if (writeDrive(p)) setDrivePref(p); }
     // Run 81: the account's copy was confirmed; saving resumes on top of that version (the result, merged or replaced, is saved next)
