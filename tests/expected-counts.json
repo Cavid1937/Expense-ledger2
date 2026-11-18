@@ -137,6 +137,7 @@
     "run108undoprop.test.mjs": 1,
     "run108goalprop.test.mjs": 1,
     "run108notspent.test.mjs": 1,
+    "run108money.test.mjs": 5,
     "run53currency.test.mjs": 28,
     "run57paidfrom.test.mjs": 30,
     "run58cats.test.mjs": 30,
