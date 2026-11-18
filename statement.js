@@ -511,9 +511,21 @@ export function statementEntries(bank, rows, opts = {}) {
 // ── Excel (.xlsx) without a library ──────────────────────────────────────────
 // An .xlsx file is a zip. Only two small parts are read: the shared texts and the first sheet. Pictures and other parts are never opened,
 // so a file whose embedded image is damaged (seen in a real bank file) still reads. Needs the browser's own unzip (DecompressionStream).
-async function inflateRaw(bytes) {
-  const ds = new DecompressionStream("deflate-raw"), w = ds.writable.getWriter(); w.write(bytes); w.close();
-  return new Uint8Array(await new Response(ds.readable).arrayBuffer());
+// Run 108 (hardening): unpacking stops past 64 MB. A tiny crafted file can unpack to gigabytes and freeze the phone; a real bank
+// statement's sheet is a few MB. Past the limit the import shows the usual "could not read this Excel file" message.
+export const INFLATE_MAX = 64 * 1024 * 1024;
+async function inflateRaw(bytes, max = INFLATE_MAX) {
+  const ds = new DecompressionStream("deflate-raw"), w = ds.writable.getWriter();
+  w.write(bytes).catch(() => {}); w.close().catch(() => {});
+  const r = ds.readable.getReader(), parts = []; let total = 0;
+  for (;;) {
+    const { done, value } = await r.read(); if (done) break;
+    total += value.length;
+    if (total > max) { r.cancel().catch(() => {}); throw new Error("too big"); }
+    parts.push(value);
+  }
+  const out = new Uint8Array(total); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
 }
 export async function zipEntries(buf, want) {
   const u = new Uint8Array(buf), dv = new DataView(u.buffer, u.byteOffset, u.byteLength), out = {};

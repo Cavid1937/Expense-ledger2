@@ -172,4 +172,11 @@ let threw = ""; try { await xlsxGrid(enc("this is not a zip file at all, just so
 let threw2 = ""; try { await xlsxGrid(zip([{ name: "word/document.xml", text: "<w/>" }])); } catch (err) { threw2 = String(err.message); }
 ok(threw === "zip" && threw2 === "sheet", "not a zip, or a zip without a sheet (a Word file): a clear failure, no half result");
 ok(eq(sheetGrid("", ""), []) && eq(sheetGrid(null, null), []), "an empty sheet gives an empty grid");
+// Run 108: a "zip bomb" - about 80 KB on disk that unpacks to 80 MB - is refused instead of filling the phone's memory
+const bomb = zip([{ name: "xl/worksheets/sheet1.xml", text: "<worksheet>" + " ".repeat(80 * 1024 * 1024) + "</worksheet>", deflate: true }]);
+let threw3 = ""; try { await xlsxGrid(bomb); } catch (err) { threw3 = String(err.message); }
+ok(bomb.length < 200 * 1024 && threw3 === "too big", "a small file that would unpack past 64 MB is refused with a clear failure", { size: bomb.length, threw3 });
+const big = zip([{ name: "xl/worksheets/sheet1.xml", text: sheet.replace("</sheetData>", "<!--" + " ".repeat(8 * 1024 * 1024) + "--></sheetData>"), deflate: true }, { name: "xl/sharedStrings.xml", text: shared, deflate: true }]);
+grid = await xlsxGrid(big);
+ok(grid.length === 4 && grid[3][2] === "Salary", "a large but real-sized sheet (8 MB unpacked) still reads");
 finish("run52statement");
