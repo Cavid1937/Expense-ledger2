@@ -9,6 +9,12 @@ const LIVE = process.env.LIVE_URL || ""; const out = fs.mkdtempSync(path.join(os
 const vite = path.join(root, "node_modules", "vite", "bin", "vite.js");
 const b = LIVE ? { status: 0 } : spawnSync(process.execPath, [vite, "build", "--outDir", out, "--emptyOutDir"], { cwd: root, encoding: "utf8" });
 console.log(`build exit=${b.status} -> ${out}`); if (b.status !== 0) { console.log(b.stdout, b.stderr); process.exit(1); }
+if (!LIVE) {
+  // Run 108: this check runs before every push, so it also catches a security-policy hash that a styles.js or index.html edit made stale
+  section("PWA-CSP. Inline script and style hashes in vercel.json match this build");
+  const { checkHashes } = await import("./csp-hashes.mjs"); const { bad } = await checkHashes(out);
+  ok(bad.length === 0, "hashes current (fix: node tests/pwa/csp-hashes.mjs <dist> --write)", bad);
+}
 const server = LIVE ? null : spawn(process.execPath, [vite, "preview", "--outDir", out, "--port", String(PORT), "--strictPort"], { cwd: root });
 const stop = () => { try { server && server.kill(); } catch {} };
 for (let i = 0; i < 50; i++) { try { const r = await fetch(URL0); if (r.ok) break; } catch {} await wait(200); }

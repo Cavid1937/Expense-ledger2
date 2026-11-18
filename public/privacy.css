@@ -1,0 +1,15 @@
+/* Run 108: moved out of privacy.html so the site's security policy can forbid inline styles. */
+:root{--bg:#F3F1EB;--card:#F9F8F4;--ink:#252B2F;--ink3:#5C656A;--rule:#DCD9D0;--acc:#3F5F78;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#101419;--card:#171E24;--ink:#EDF1F3;--ink3:#A5B0B8;--rule:#2A353F;--acc:#8FA9BF}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+main{max-width:720px;margin:0 auto;padding:24px 16px 64px}
+h1{font-size:26px;line-height:1.25;margin:8px 0 4px}
+h2{font-size:20px;margin:0 0 4px}
+h3{font-size:16px;margin:20px 0 4px}
+p,li{color:var(--ink)} .sub{color:var(--ink3);font-size:14px}
+nav{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 24px}
+nav a{color:var(--acc);border:1px solid var(--rule);border-radius:999px;padding:6px 14px;text-decoration:none;font-weight:600}
+nav a:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+section{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:20px 18px;margin:0 0 20px}
+a{color:var(--acc)} ul{padding-left:20px}

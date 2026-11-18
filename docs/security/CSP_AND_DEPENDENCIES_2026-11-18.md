@@ -18,16 +18,35 @@ not approved. Real violations can only be seen in the browser console of someone
   is set through the DOM style API, which CSP does not block.
 - No `eval` / `new Function` in app code; PDF reading runs with `isEvalSupported: false` (see B1).
 
-**What blocks dropping `'unsafe-inline'` from `style-src`:** only the two `<style>` blocks above. The owner asked for no unsafe-inline, so the fix is:
-1. Move `LAUNCH_CSS` out of `launch.js` into the built stylesheet (or add its hash), and
-2. add the inline `<style>` hash from the build, recomputed by the build script, because **every change to that CSS changes the hash**.
-   A wrong hash under enforcement would leave the page unstyled. A check in `tests/pwa/offline-check.mjs` should compare the hashes in
-   `vercel.json` with the built page.
+**Correction (same day, 17:30).** The list above undercounted the inline items. There were four, not two:
+1. `index.html` `<style id="launch-css">` (above). `launch.js:50` adds its copy only when this element is missing, which it never is in a
+   build, so it is the same text and the same hash.
+2. **The whole app stylesheet**: `App.jsx` renders `<style>{CSS}</style>` from `styles.js` (about 133 KB, static text). Missed in the first pass.
+3. `public/privacy.html` had its own inline `<style>`.
+4. `public/app-open.html` had an inline `<script>` (the analytics queue stub) that was not in `script-src` either.
+
+**Done (Run 108 CSP preparation, still Report-Only, nothing enforced live):**
+- 3 and 4 moved to files: `public/privacy.css`, `public/app-open.js`. Same origin, no behaviour change.
+- 1 and 2 are listed by hash in `style-src`; `'unsafe-inline'` removed from the Report-Only `style-src`.
+- `tests/pwa/csp-hashes.mjs` recomputes the hashes from a build plus `styles.js` and fails on a missing or stale hash or on
+  `'unsafe-inline'`. `--write` updates `vercel.json`. It runs inside `offline-check.mjs`, which runs before every push, and in `csp-check.mjs`.
+  **Any edit to `styles.js` or the launch CSS changes a hash**; the pre-push check then fails until `--write` is run.
+- `csp-check.mjs` (policy enforced locally): an injected inline style is now blocked and reported while the app's own stylesheet applies;
+  the privacy and app-open pages load with nothing blocked. 21/21.
+- Not testable here: Google's sign-in script (`gsi/client`) may add inline styles or `style` attributes on the website. With the
+  Report-Only header, such a case shows in the browser console only. This must be checked during the real sign-in test before enforcement.
+
+**Defect found and fixed in the same pass: app starts from the Android app were not counted from 17 Nov (release 107).** The app loads
+`app-open.html` in a hidden frame from `https://localhost` (Run 40, owner-approved counting). Release 107 sent `X-Frame-Options: DENY`
+on every page, so that frame was refused (probe: the frame ended as `chrome-error://`, the analytics script was never requested).
+`vercel.json` now has a separate rule for `/app-open.html`: no `X-Frame-Options`, `frame-ancestors https://localhost` (Report-Only), and
+`default-src 'none'; script-src 'self'; connect-src 'self'`. Every other page keeps `DENY`. This restores the existing count. It does not add
+any new tracking.
 
 **Proposed enforced policy (draft; the hash values must come from the release build):**
 ```
 default-src 'self'; script-src 'self' 'sha256-<inline script>' https://accounts.google.com/gsi/client;
-style-src 'self' 'sha256-<inline style>' 'sha256-<launch css>' https://accounts.google.com/gsi/style; img-src 'self' data: blob:; font-src 'self';
+style-src 'self' 'sha256-<launch css>' 'sha256-<app stylesheet>' https://accounts.google.com/gsi/style; img-src 'self' data: blob:; font-src 'self';
 connect-src 'self' https://qkztocsrxhubsljtsjpd.supabase.co https://www.googleapis.com https://accounts.google.com/gsi/ https://api.frankfurter.dev;
 frame-src https://accounts.google.com/gsi/; worker-src 'self' blob:; manifest-src 'self' blob:; media-src 'self' blob:; object-src 'none';
 base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
@@ -40,7 +59,8 @@ statements, (4) offline/PWA reload, (5) a week of the report-only header with th
 screens. Then send the exact header for approval. Rollback: rename the header back to `-Report-Only` and push. Vercel serves it from the next
 deployment in about a minute.
 
-Status: **NEEDS WORK** (two inline styles to hash or move; build-time hash check missing), enforcement **DEFERRED WITH REASON** (owner order).
+Status: inline-item preparation **IMPLEMENTED BUT UNVERIFIED** on live (verified locally under enforcement; the live Report-Only console and
+the Google sign-in path are not yet checked). Enforcement **DEFERRED WITH REASON** (owner order).
 
 ## B. Dependencies
 
