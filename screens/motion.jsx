@@ -40,6 +40,7 @@ export function Collapse({ open, children, id, className="", ms=MOTION_MS }) {
   // Run 108: while it slides shut its content can no longer be tapped or focused (inert), so a quick second tap on a form's Save button
   // cannot act on a form that has already been saved and emptied (it showed "invalid" over the success message). It follows `open`, not
   // `shown`: `shown` turns off one render later, and opening must not be inert or the first box could not take focus.
+  // React 18 needs inert as the string ""; React 19 reads it as a boolean (inert={true}), so change this when upgrading React.
   return (
     <div id={id} className={"collapse"+(shown?" is-open":"")+(settled?" is-settled":"")+(className?" "+className:"")} aria-hidden={shown?undefined:true} inert={open?undefined:""}>
       <div className="collapse-in">{children}</div>

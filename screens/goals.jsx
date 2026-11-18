@@ -19,7 +19,7 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
   // "New budget" form opened by the title bar's "+" on the Budgets half: pick a category without a limit, type the limit.
   const [newBudget,setNewBudget]=useState(null), nbKeep=useRef(null); if (newBudget) nbKeep.current=newBudget;   // null = closed; otherwise { catId, val } (nbKeep: kept so the card keeps its text while it eases closed)
   const nb=newBudget||nbKeep.current;
-  const seenSignal=useRef(addSignal);
+  const seenSignal=useRef(addSignal), sinkAt=useRef(0);
   useEffect(()=>{
     if (addSignal===seenSignal.current) return; seenSignal.current=addSignal;
     if (seg==="goals") setShowNewGoal(true);
@@ -221,7 +221,8 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
                   <div className="list-title">{c.name}</div>
                   <div className="list-sub">{tn("sinking.line",c.months,{ amount:fmt(c.perMonth,currency), total:fmt(c.amount,currency), date:fmtDate(c.due) })}</div>
                 </div>
-                <button type="button" className="btn btn-sm" data-section="sinking-make" data-bill={c.billId} onClick={()=>{ onAddGoal({ name:c.name, target:c.amount, saved:0, monthlyTarget:c.perMonth, targetDate:c.due }); showToast(t("sinking.made",{ name:c.name })); }}>{t("sinking.make")}</button>
+                {/* Run 108: the made row leaves and the next bill's row moves under the finger; a second tap within 0.6 s is ignored */}
+                <button type="button" className="btn btn-sm" data-section="sinking-make" data-bill={c.billId} onClick={()=>{ const now=Date.now(); if (now-sinkAt.current<600) return; sinkAt.current=now; onAddGoal({ name:c.name, target:c.amount, saved:0, monthlyTarget:c.perMonth, targetDate:c.due }); showToast(t("sinking.made",{ name:c.name })); }}>{t("sinking.make")}</button>
               </div>
             ))}
           </div>);
