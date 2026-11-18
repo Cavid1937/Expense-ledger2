@@ -40,4 +40,12 @@ ok(readNotification("Ödəniş et, 20% endirim qazan: 30 AZN", NOW) === null, "a
 section("R108-N3. An amount with nothing else is not enough");
 ok(readNotification("70 000 AZN", NOW) === null, "a bare amount is not an entry");
 ok(readNotification("Sizin üçün 1 500 AZN", NOW) === null, "an amount with ordinary words is not an entry");
+
+section("R108-N4. az / ru words are seen (JavaScript's \\b knows only Latin letters; on the old reader all of these failed)");
+{ const r = readNotification("💸 Transfer: -4.00₼\nCard: **9999\nBalance: 4.46₼", NOW); ok(r && r.cents === 400 && r.type === "expense" && r.kind === "transfer" && r.balance === 446, "the owner's ABB transfer layout (invented digits): -4.00, a transfer, balance read", r); }
+{ const r = readNotification("💸 Перевод: -4.00₼\nКарта: **9999\nБаланс: 4.46₼", NOW); ok(r && r.balance === 446, "Russian Баланс: the balance is read", r); }
+{ const r = readNotification("Оплата 12.50 AZN\nKAFE TEST\nКарта **1111", NOW); ok(r && r.type === "expense", "Оплата with no sign: money out", r); }
+{ const r = readNotification("Зачисление 50.00 AZN\nКарта **1111", NOW); ok(r && r.type === "income", "Зачисление with no sign: money in", r); }
+{ const r = readNotification("Ödəniş 3.20 ₼\nMARKET X\nKart: **1111", NOW); ok(r && r.type === "expense", "Ödəniş with no sign: money out", r); }
+{ const r = readNotification("Доступный лимит: 500.00 AZN\nПокупка 7.00 AZN\nКарта **1111", NOW); ok(r && r.cents === 700 && r.type === "expense", "a Russian limit line is skipped: 7.00, not the 500 limit", r); }
 finish("run108notices");

@@ -7,11 +7,13 @@ import { stMoney } from "./statement.js";
 
 const MONEY = /([+\-−–]?)\s*(?:(₼|AZN|USD|EUR|\$|€)\s*)?(\d[\d\s,.]*\d|\d)(?:\s*(₼|AZN|USD|EUR|\$|€))?/;
 const CURTAG = /₼|AZN|USD|EUR|\$|€/;
-const BALANCE = /\b(balance|balans|qalıq|qaliq|остаток|баланс)\b/i;
-const LIMIT = /\b(limit|limiti|лимит)\b/i;
+// Run 108: word edges are written as "no letter before / after" (u flag). JavaScript's \b knows only Latin letters, so "\bбаланс\b",
+// "\bоплата\b" and "\bödəniş\b" never matched: Russian balances were lost and az/ru direction words were never seen.
+const BALANCE = /(?<![\p{L}\p{N}_])(balance|balans|qalıq|qaliq|остаток|баланс)(?![\p{L}\p{N}_])/iu;
+const LIMIT = /(?<![\p{L}\p{N}_])(limit|limiti|лимит)(?![\p{L}\p{N}_])/iu;
 const CARD = /(\*{2,}|\.{2})\s?\d{4}\b|\bPAN\b|\bcard\s*:|\bkart\s*:|карта\s*:/i;
-const IN_WORDS = /\b(transfer from|from|received|credit|daxil olub|mədaxil|medaxil|köçürmə alındı|зачисление|поступление|пополнение|refund|geri qaytarma|возврат)\b/i;
-const OUT_WORDS = /\b(payment|purchase|ödəniş|odenis|alış|alis|оплата|покупка|списание|transfer to|withdrawal|nağdlaşdırma|снятие)\b/i;
+const IN_WORDS = /(?<![\p{L}\p{N}_])(transfer from|from|received|credit|daxil olub|mədaxil|medaxil|köçürmə alındı|зачисление|поступление|пополнение|refund|geri qaytarma|возврат)(?![\p{L}\p{N}_])/iu;
+const OUT_WORDS = /(?<![\p{L}\p{N}_])(payment|purchase|ödəniş|odenis|alış|alis|оплата|покупка|списание|transfer to|withdrawal|nağdlaşdırma|снятие)(?![\p{L}\p{N}_])/iu;
 // Run 108: what proves a notice is a real payment, and what marks an advert ("70 000 AZN-dək", "up to", "до 50 000", "endirim", "акция")
 const CARD_MASK = /(\*{2,}|\.{2}|•{2,})\s?\d{4}\b/;
 const TX_WORDS = /payment|purchase|ödəniş|odenis|alış|alis|оплат|покупк|списан|transfer|withdrawal|nağdlaşdırma|снятие|mədaxil|medaxil|daxil olub|köçürmə|kocurme|зачислен|поступлен|пополнен|перевод|refund|geri qaytarma|возврат|received|card to card|kartdan karta/i;
