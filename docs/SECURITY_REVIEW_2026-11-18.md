@@ -56,7 +56,7 @@ phone; nothing is uploaded for reading. The Android app is the same web code ins
 | R10 | Import/export hardening: size limits, CSV formula injection, untrusted strings | VERIFIED | F2 (50 MB limit, new), CSV guard (existing, now tested), hostile strings tests |
 | R11 | Dependency audit, compatible fixes only | DEFERRED WITH REASON | §5 F7: remaining advisories need major upgrades; the PDF.js one is mitigated and now guarded by a test |
 | R12 | Secret scan | VERIFIED | §5 F8: 435 commits, dist/, Android worktree: no secrets |
-| R13 | Local CI config only | IMPLEMENTED BUT UNVERIFIED | `.github/workflows/check.yml`, `.github/dependabot.yml`; act only after a push. Each step was run on Windows on a clean copy; the workflow itself has not run on GitHub's Linux machines. |
+| R13 | Local CI config only | VERIFIED (updated in Run 108) | `.github/workflows/check.yml`, `.github/dependabot.yml`. After the release 107 push the workflow ran green on GitHub's Linux machines (Actions run 44224759210). Run 108 limits Dependabot to minor and patch updates (major versions need a planned upgrade). |
 | R14 | Privacy data-flow inventory, no new telemetry, logs redacted | VERIFIED | `docs/DATA_FLOWS.md`; nothing new added; crash and feedback text already redacted |
 | R15 | Incident playbook | VERIFIED (document) | `docs/INCIDENT_PLAYBOOK.md` |
 | R16 | Tests with exact commands and counts | VERIFIED | §6 |

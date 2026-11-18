@@ -42,6 +42,18 @@ strict rule set: whole-number arithmetic, at most 2 decimals, 3-digit thousands 
 Evidence: `tests/logic/run93money.test.mjs` passes 70 of 70 (33 of the 70 fail on the old code). On the owner's private Birbank
 statement, the rows are identical before and after (no values recorded). A4c (warn-only checks) is still open.
 
+**Update, Runs 98–108 (to 18 Nov):**
+
+| ID | Status now | Evidence |
+|---|---|---|
+| A1 | VERIFIED | `package-lock.json`, `.nvmrc`, `vercel.json` and `.github/workflows/check.yml` are in git (Run 107); the workflow ran green on GitHub after the release 107 push. |
+| A4c | VERIFIED | Run 98: a statement whose figures do not add up needs a second, explicit confirmation before it is imported; `tests/browser/e2e_run98_statement.mjs` passed in the full browser suite. |
+| B1 | VERIFIED (local) | Run 107: files over 50 MB are refused before reading. Run 108: the zip reader stops at 64 MB of unpacked data (`INFLATE_MAX`, `statement.js`); a zip bomb is refused and an 8 MB real sheet still opens (`tests/logic/run52statement.test.mjs`). |
+| B6 | IMPLEMENTED BUT UNVERIFIED (wording) | Run 108: the privacy page and the in-app privacy notice say receipt photos stay on the device and are not in backups or sync, in az/ru/en (`tests/logic/security.test.mjs` SEC-7). The az and ru sentences need a native speaker's read. |
+| B8 | VERIFIED (local) | Run 108: the service worker keeps only the files the current page uses and deletes older `/assets/` files; it also fixed a defect where the offline page was saved from an already-read response (`tests/pwa/offline-check.mjs` PWA-4). |
+| S1 | IMPLEMENTED BUT UNVERIFIED (live) | Run 107: a Content-Security-Policy in report-only mode via `vercel.json`; enforced locally in `tests/pwa/csp-check.mjs` 14/14. Switching to enforcing waits for a clean report period. |
+| B2 | DEFERRED WITH REASON | `syncMerge.js` is still test-only. The account sync saves the whole ledger as one copy with a version number and stops with "conflict" when another device saved a newer one (`account.js`); it never merges record by record, so nothing is silently combined. Record-level merging would be a sync redesign, not a hardening fix. |
+
 ### Unverified risks
 
 | ID | Risk | Evidence | Severity | Next check |
