@@ -2,6 +2,7 @@
 - VERIFIED: D3 cold start 482 ms, no crash. D4 background 30 s then HOT return 89 ms, same process, same figures. D6 Home layout plus figures re-computed. D9 fake payment kept and offered (bell 1->2, nothing auto-saved). D10 fake 70 000 AZN advert seen but NOT kept. D11 same payment twice is offered once (bell stays 2).
 - BLOCKED: D7 Back key. HyperOS refuses injected keys and taps (needs "USB debugging (Security settings)", an owner-only setting, unchanged).
 - Owner to do: D5 airplane mode; open the bell and tap Remove on "TEST ONLY 0.90" (it is in the real review list now); swipe away the two "TEST Bank" shell notices; D12 look at tomorrow's 21:30 reminder.
+- 21:48 owner screenshot of the review sheet: D11 confirmed (one TEST Bank -0.90 row). **Finding M1 (medium, CONFIRMED in code App.jsx:2315 planMerge):** a bank notice counts as "similar" on same day + kind + amount only; merchant is ignored. The skip box is pre-ticked, and the sheet says "All of these are already in your entries". TEST Bank 0.90 was matched to an existing 0.90 entry today. Risk: a second real 0.90 metro ride the same day is skipped by default, so spending is undercounted. Fix proposal: do not pre-tick when the merchant differs or the bank balance proves a separate payment, and soften the wording. NOT fixed (no code changes in this assignment).
 - New finding L1 (low): the floating + button covers the "idarə et" (manage) button in the Accounts header at the top of Home.
 - No install, no data cleared, no setting changed. Screenshots stay in the scratchpad only.
 
