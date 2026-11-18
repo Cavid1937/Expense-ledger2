@@ -1,3 +1,10 @@
+## 0002m - 2026-11-18 21:47 Baku - Poco F6 device checks with the owner's OK ("do both").
+- VERIFIED: D3 cold start 482 ms, no crash. D4 background 30 s then HOT return 89 ms, same process, same figures. D6 Home layout plus figures re-computed. D9 fake payment kept and offered (bell 1->2, nothing auto-saved). D10 fake 70 000 AZN advert seen but NOT kept. D11 same payment twice is offered once (bell stays 2).
+- BLOCKED: D7 Back key. HyperOS refuses injected keys and taps (needs "USB debugging (Security settings)", an owner-only setting, unchanged).
+- Owner to do: D5 airplane mode; open the bell and tap Remove on "TEST ONLY 0.90" (it is in the real review list now); swipe away the two "TEST Bank" shell notices; D12 look at tomorrow's 21:30 reminder.
+- New finding L1 (low): the floating + button covers the "idarə et" (manage) button in the Accounts header at the top of Home.
+- No install, no data cleared, no setting changed. Screenshots stay in the scratchpad only.
+
 ## 0002l - 2026-11-18 20:52 Baku - Poco F6 connected over USB debugging (adb REDACTED). Read-only only.
 - D0: POCO F6, HyperOS OS3.0.305.0, Android 16 / SDK 36.
 - D1: installed com.example.expenseledger.spike 108; the installed base.apk SHA-256 equals the handoff APK 108 exactly.
