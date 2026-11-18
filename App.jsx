@@ -4980,6 +4980,27 @@ function AppInner() {
   const [recoveryNotice, setRecoveryNotice] = useState(()=>LOAD_NOTICE);
   const stateRef = useRef(state);
   stateRef.current = state;   // always the latest committed state, for callbacks that must not close over a stale copy
+  // Run 108 (data safety): the app open twice (two tabs, or the installed app and a tab). Each copy used to keep its own list and write
+  // all of it back, so the copy that saved last wiped what the other had just added, and brought deleted entries back. When another
+  // window saves the ledger, this one now reloads it through the normal safe load; other saved parts (accounts, debts, categories)
+  // are read again by redrawing. A pending Undo stops working after such a reload (it checks stateRef), so it cannot restore the old copy.
+  const [, setOutsideTick]=useState(0);
+  const saveOkRef=useRef(true);
+  useEffect(()=>{
+    const onStorage=(e)=>{
+      if (e.storageArea && typeof localStorage!=="undefined" && e.storageArea!==localStorage) return;
+      if (e.key===KEY || e.key===null) {
+        // A window whose own last save failed still holds entries that are nowhere else: it keeps them (its red banner stays)
+        if (SAVE_BLOCKED || !saveOkRef.current) return;
+        const next=migrateAndLoad();
+        if (LOAD_NOTICE) setRecoveryNotice(LOAD_NOTICE);
+        setState(next);
+        showToast(t("sync.otherWindow"),2600);
+      } else if (typeof e.key==="string" && e.key.startsWith(KEY+"__")) setOutsideTick(n=>n+1);
+    };
+    window.addEventListener("storage",onStorage);
+    return ()=>window.removeEventListener("storage",onStorage);
+  },[]);
   useEffect(()=>{   // Run 29: tell the user once when Android has restored this data from a backup (see restoreCheck)
     let live=true;
     try {
@@ -5040,7 +5061,13 @@ function AppInner() {
   useEffect(()=>{
     // Never overwrite the original stored data if we could not keep a recovery copy of it.
     if (SAVE_BLOCKED) { setStorageFailed(true); return; }
-    const ok=writeRaw(KEY,state);
+    // Run 108: nothing is written when the stored ledger already matches, so a ledger just reloaded from another window is not
+    // written back (two open windows would otherwise keep answering each other)
+    const str=JSON.stringify(state); let same=false;
+    try { same=localStorage.getItem(KEY)===str; } catch { same=false; }
+    let ok=same;
+    if (!same) { try { localStorage.setItem(KEY,str); ok=true; } catch { ok=false; } }
+    saveOkRef.current=ok;
     setStorageFailed(!ok);
     if (ok && !restoreOpen) syncBillsMirror(state.bills, state.transactions);
   },[state, restoreOpen]);

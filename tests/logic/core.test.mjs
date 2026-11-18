@@ -92,6 +92,6 @@ reset(); globalThis.__failKeys = ["__corrupt_"]; localStorage.setItem(KEY, "{{{ 
 reset(); localStorage.setItem(KEY, JSON.stringify({ transactions: [good(1, "2026-09-01"), null] })); migrateAndLoad(); ok(getSaveBlocked() === false && /set aside/.test(getNotice() || ""), "normal case: copy saved, not blocked");
 reset(); globalThis.__throwAll = true; let boot; try { boot = migrateAndLoad(); } catch (e) { boot = "THREW " + e.message; } globalThis.__throwAll = false;
 ok(typeof boot === "object" && boot.transactions.length === 0, "localStorage unavailable → app still starts with an empty state", boot);
-ok(SRC.includes("if (SAVE_BLOCKED) { setStorageFailed(true); return; }") && SRC.indexOf("if (SAVE_BLOCKED) { setStorageFailed(true); return; }") < SRC.indexOf("const ok=writeRaw(KEY,state);"), "App never calls writeRaw(KEY) while blocked");
+ok(SRC.includes("if (SAVE_BLOCKED) { setStorageFailed(true); return; }") && SRC.indexOf("if (SAVE_BLOCKED) { setStorageFailed(true); return; }") < SRC.indexOf("localStorage.setItem(KEY,str)") && SRC.indexOf("localStorage.setItem(KEY,str)") > 0, "App never writes the ledger key while blocked");
 
 finish("core");
