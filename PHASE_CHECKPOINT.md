@@ -1,3 +1,26 @@
+## 0002g - 2026-11-18 - RUN 108 PART 3 (owner: ABB transfer not recognised; all app notices should look the same; OWNER DECISIONS & SECURITY HARDENING document). LOCAL ONLY, NOT PUSHED.
+- ABB "💸 Transfer: -4.00₼ / Card / Balance" layout:
+  - The current reader, the release-96 reader and the full app flow all read it correctly. So the miss is on the phone side and unconfirmed: the listener may have been off, or the transfer may have been filed under Transfers, which is not spending. No adb device was connected.
+  - Side defect found and fixed (dbbabff, notify.js): JavaScript's \b knows only Latin letters, so баланс/лимит/оплата/ödəniş word edges never matched. Russian balances were lost, a Russian limit line was read as the amount, and az/ru direction words were ignored. Now Unicode letter edges.
+  - Tests: run108notices 29 (R108-N4, 6 new); e2e_run108_transfer 4 (new).
+- Notices look the same (capacitor 50c814c): "Payment found" uses channel payments_found_2 with ledger_chime sound, teal colour and a private lock-screen view, like the reminders.
+  - javac exit 0. NO APK built: IMPLEMENTED BUT UNVERIFIED on a phone.
+- Owner document, per decision:
+  1. Supabase read-only audit: docs/security/SUPABASE_AUDIT_2026-11-18.md, plus supabase_default_privileges.UNAPPLIED.sql.
+     - RLS isolation re-tested in production inside rolled-back blocks (fake user sees 0 of 2 rows; anon refused).
+     - Findings: S1 default privileges give anon/authenticated ALL on future tables (SQL ready); S2 extra grants (Run 107 SQL); S3 report tables can be flooded (owner choice); S5 leaked-password protection BLOCKED (Pro plan cost); S6 screen_opens exists, opt-in (owner keep/remove).
+     - NOTHING applied.
+  2. Android identity: docs/ANDROID_IDENTITY_AND_REBRAND_INVENTORY.md. com.expenseledger.app is withdrawn and nothing was renamed. Biggest rebrand risk: a new id does not carry over local data. There is no release keystore yet.
+  3. Localization review sheet: docs/LOCALIZATION_REVIEW_SECURITY_STRINGS_2026-11-18.md, 13 keys with Q1-Q6.
+     - Q1 "this phone" is wrong on the website; Q4 the not-saved snack gives no next step. Both need owner OK.
+     - No wording changed. No native-speaker review done.
+  4/5. CSP and Dependabot: docs/security/CSP_AND_DEPENDENCIES_2026-11-18.md.
+     - Only 2 inline <style> blocks stop dropping 'unsafe-inline'. Draft directives written; not enforced.
+     - npm audit: pdfjs RCE already mitigated (isEvalSupported:false); vite/esbuild/tar are dev-only.
+     - Dependabot PRs #1-#3 are all majors. Do not merge; #3 would break the app (react-dom 19 with react 18).
+     - CONFIRMED: Dependabot ALERTS are OFF on the repo (owner setting). dependabot.yml comment corrected.
+- Tests this part: run-logic 157 files 2938/0; offline-check 21/21; e2e_run108_transfer 4, run68_paste 6, run75_notices 17, run105_review 30, e2e_import 53.
+- Not pushed: d42af30..HEAD here, plus capacitor f7196dc and 50c814c.
 ## 0002f - 2026-11-18 - RUN 108 PART 2 (owner message mid-run: a bank advert became a -70,000 expense; account sync not automatic; notice icon; 17 test types). LOCAL ONLY, NOT PUSHED.
 - CONFIRMED DEFECT fixed (notify.js): any text with an amount and a currency was read as a payment, so "İndi kredit UBank-da!" with a 70 000 AZN offer became a 70,000 expense in category Other.
   - A notice now needs proof: a card number (also "••1234"), the bank's balance, or a sign / payment word in a text with no offer words (-dək, up to, до, endirim, kampaniya, акция, %...).

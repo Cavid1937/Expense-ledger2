@@ -7,7 +7,8 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 3
     # Run 108: major versions (React 19, Vite 8, ...) change how the app is built and need a planned upgrade with the full test run,
-    # so Dependabot does not propose them; security fixes still arrive as their own alerts.
+    # so Dependabot does not propose them. Security fixes arrive as alerts only once "Dependabot alerts" is switched on in the
+    # repository settings (it was OFF on 18 Nov; see docs/security/CSP_AND_DEPENDENCIES_2026-11-18.md, B4). Until then npm audit runs each release.
     ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
