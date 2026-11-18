@@ -24,6 +24,9 @@ export async function checkHashes(distDir) {
   const cfg = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
   const csp = policyKey(mainRule(cfg).headers).value;
   const want = await expectedHashes(distDir), bad = [];
+  // launch.js inserts its own copy of the launch CSS when index.html lacks it; that copy must be the hashed text, or it would be blocked
+  const { LAUNCH_CSS } = await import(pathToFileURL(path.join(root, "screens", "launch.js")).href);
+  if (!want.style.includes(h(LAUNCH_CSS))) bad.push("screens/launch.js LAUNCH_CSS differs from the <style id=\"launch-css\"> in index.html");
   for (const kind of ["script", "style"]) {
     const have = directive(csp, kind + "-src");
     for (const x of want[kind]) if (!have.includes(x)) bad.push(`${kind}-src is missing ${x}`);
