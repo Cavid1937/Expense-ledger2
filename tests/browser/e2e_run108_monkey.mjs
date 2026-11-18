@@ -52,7 +52,15 @@ const check = (page) => page.evaluate((k, keys) => {
   let data = null, dataOk = true, why = "";
   try { data = JSON.parse(localStorage.getItem(k) || "null"); } catch { dataOk = false; why = "not JSON"; }
   if (data && Array.isArray(data.transactions)) for (const t of data.transactions) { if (!t || !Number.isFinite(t.amount) || t.amount <= 0 || Math.round(t.amount * 100) !== Math.round(t.amount * 100 * 1e6) / 1e6 || !/^\d{4}-\d\d-\d\d$/.test(t.date)) { dataOk = false; why = JSON.stringify(t).slice(0, 160); break; } }
-  return { crash: !!document.querySelector(".crash-screen"), bad: bad.slice(0, 3), dataOk, why, n: data && data.transactions ? data.transactions.length : -1 };
+  // the page must never scroll sideways (something wider than the screen)
+  let over = "";
+  if (document.documentElement.scrollWidth > innerWidth + 1) {
+    const x0 = scrollX; scrollTo(9999, scrollY); const can = scrollX; scrollTo(x0, scrollY);
+    const wide = [...document.querySelectorAll("body *")].filter((e) => { const r = e.getBoundingClientRect(); return r.right > innerWidth + 1 && r.width > 0; }).slice(-4).map((e) => (e.className || e.tagName).toString().slice(0, 40) + "@" + Math.round(e.getBoundingClientRect().right) + (getComputedStyle(e).transform !== "none" ? " T" : ""));
+    // a page sliding out during Back is briefly wider, but the screen cannot be moved sideways; only a real sideways scroll counts
+    if (can > 0) over = `page ${document.documentElement.scrollWidth}px wide on a ${innerWidth}px screen, sideways scroll ${can}px; ${wide.join(" | ")}`;
+  }
+  return { crash: !!document.querySelector(".crash-screen"), bad: bad.slice(0, 3), dataOk, why, over, n: data && data.transactions ? data.transactions.length : -1 };
 }, KEY, KEYS);
 
 for (const s of SEEDS) {
@@ -70,7 +78,9 @@ for (const s of SEEDS) {
   const big = Number(process.env.MONKEY_BIG || 0), cats = ["food", "transport", "housing", "gifts", "health", "shopping"];
   const data = seed(lang);
   for (let i = 0; i < big; i++) data.transactions.push(tx({ merchant: "Shop " + (i % 97), amount: ((i * 7919) % 20000 + 5) / 100, category: cats[i % cats.length], date: daysAgo(i % 1095), ...(i % 23 === 0 ? { type: "income", category: "salary", amount: 900 + (i % 5) * 10 } : {}) }));
-  const page = await openPage(browser, fresh ? { seed: null, fresh: true, chooseLang: lang, onboard: false, pre } : { seed: data, chooseLang: lang, pre }); await settle(page);
+  // MONKEY_SIZE=320x568: another screen size (default 390x844, a common phone)
+  const [width, height] = (process.env.MONKEY_SIZE || "390x844").split("x").map(Number);
+  const page = await openPage(browser, fresh ? { width, height, seed: null, fresh: true, chooseLang: lang, onboard: false, pre } : { width, height, seed: data, chooseLang: lang, pre }); await settle(page);
   if (full) await page.evaluate(() => { window.__full = true; });
   if (junk !== null) {
     // with damaged side data, open every tab and every page under More once (a random walk could miss one)
@@ -103,7 +113,7 @@ for (const s of SEEDS) {
     log.push(what); await wait(60 + Math.floor(r() * 240));
     let c; try { c = await check(page); } catch (e) { await wait(800); try { c = await check(page); } catch (e2) { fail = { i, why: "page unusable: " + String(e2).slice(0, 120) }; break; } }
     if (!page.url().includes("index.html")) { fail = { i, why: "left the app: " + page.url() }; break; }
-    if (page.errors.length || c.crash || c.bad.length || !c.dataOk) fail = { i, err: page.errors[0], crash: c.crash, bad: c.bad, data: c.why };
+    if (page.errors.length || c.crash || c.bad.length || !c.dataOk || c.over) fail = { i, err: page.errors[0], crash: c.crash, bad: c.bad, data: c.why, over: c.over };
   }
   if (process.env.MONKEY_LOG) console.log(log.join("\n"));
   if (full) console.log(`  (seed ${s}: ${await page.evaluate(() => window.__fails || 0)} saves failed on purpose)`);
