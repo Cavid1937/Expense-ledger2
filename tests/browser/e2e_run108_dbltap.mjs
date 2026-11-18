@@ -65,5 +65,24 @@ section("R108-T3. A real double tap on Save goal makes one goal and no false 'in
   ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
   await page.close();
 }
+section("R108-T4. Bank payments review: Add, then a quick tap on Remove while the sheet slides down, still adds (the first choice wins)");
+{
+  const now = Date.now();
+  const N1 = { text: "Payment: -0.90 ₼\nBus 594\nCard: **1111\nBalance: 9.06 ₼", time: now - 600000 };
+  const N2 = { text: "Payment: -3.50 ₼\nKAFE NOVA\nCard: **1111\nBalance: 5.56 ₼", time: now - 300000 };
+  const pre = `window.LedgerNative = { notices: { status: async () => true, take: async () => { const x = window.__items || []; window.__items = []; return x; }, onAdded: async () => ({ remove() {} }) } };
+  if (!sessionStorage.getItem("__took")) { sessionStorage.setItem("__took","1"); window.__items = ${JSON.stringify([N1, N2])}; } else window.__items = [];
+  localStorage.setItem("expense_ledger_v5__notices","1");`;
+  const page = await openPage(browser, { seed: baseSeed({ language: "en", transactions: [] }), fresh: true, pre });
+  await page.waitForFunction(() => /bank-pay/.test((document.querySelector("[data-inbox-bell]") || { getAttribute: () => "" }).getAttribute("data-notices") || ""), { timeout: 8000 });
+  await page.evaluate(() => document.querySelector("[data-inbox-bell]").click()); await wait(350);
+  await page.evaluate(() => document.querySelector('[data-notice="bank-pay"] [data-act="review"]').click()); await wait(500);
+  await page.evaluate(async () => { document.querySelector('[data-bq="add"]').click(); await new Promise((r) => setTimeout(r, 60)); document.querySelector('[data-bq="discard"]')?.click(); });
+  await wait(1000);
+  const list = await stored(page);
+  ok(list && list.length === 2 && Math.round(list.reduce((a, x) => a + x.amount, 0) * 100) === 440, "both payments added once (0.90 + 3.50 = 4.40)", list && list.map((x) => [x.merchant, x.amount]));
+  ok(page.errors.length === 0, "no JavaScript errors", page.errors[0]);
+  await page.close();
+}
 await browser.close();
 finish("e2e_run108_dbltap");

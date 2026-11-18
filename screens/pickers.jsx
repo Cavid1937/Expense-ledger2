@@ -34,7 +34,8 @@ export function PickSheet({ title, onClose, children, section }) {
   };
   useEffect(() => { const k = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } }; document.addEventListener("keydown", k, true); return () => document.removeEventListener("keydown", k, true); }, []);
   // A backdrop tap is first animated by the app's shared sheet handler, which then marks the overlay (data-out) and repeats the tap: close at once then.
-  const onBackdrop = (e) => { if (e.target !== e.currentTarget) return; if (e.currentTarget.dataset.out === "1") { state.current.going = true; doneRef.current(); } else close(); };
+  // Run 108: a sheet already sliding down ignores further backdrop taps (they could run its close action a second time)
+  const onBackdrop = (e) => { if (e.target !== e.currentTarget || state.current.going) return; if (e.currentTarget.dataset.out === "1") { state.current.going = true; doneRef.current(); } else close(); };
   return createPortal((
     <div className={`sheet-overlay pick-overlay${leaving ? " leaving" : ""}`} aria-hidden={leaving || undefined} onClick={onBackdrop}>
       <div className="sheet pick-sheet" role={leaving ? undefined : "dialog"} aria-modal={leaving ? undefined : "true"} tabIndex={-1} aria-label={leaving ? undefined : title} data-section={leaving ? undefined : section}>

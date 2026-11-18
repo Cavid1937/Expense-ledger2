@@ -12,7 +12,8 @@ export function BankNoticeSheet({ plan, currency, accounts, balances, skipSim, o
   const rows = plan.transactions;
   // Add and Remove act after the sheet has slid down (the same fall as every sheet), never by cutting it off mid-screen
   const after = useRef(null);
-  const end = (close, fn) => { after.current = fn; close(); };
+  // Run 108: the first choice wins; a second tap (Remove after Add) while the sheet slides down must not replace it
+  const end = (close, fn) => { if (after.current) return; after.current = fn; close(); };
   const mi = plan.mergeInfo || { identical: 0, sameId: 0, similar: 0, fresh: rows.length };
   const here = (mi.identical || 0) + (mi.sameId || 0);
   const adding = Math.max(0, (mi.fresh || 0) + (skipSim ? 0 : mi.similar || 0));
