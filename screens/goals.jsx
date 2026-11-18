@@ -5,6 +5,8 @@ import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
 import { pickerCats, planRebalance, readCatPrefs, sinkingCandidates, tidyPlan, applyTidy, undoTidy, TIDY_KEY, subName, readBudgetCarry, writeBudgetCarry, budgetCarried, readLeftoverGoal, writeLeftoverGoal, readRolloverSeen, goalAddMoney, goalSetTotal, goalHistory, daysBetween, parseLocalDate, today } from "../App.jsx";import { CATEGORIES, CatIcon, Icon, calcBudgetStatus, calcCategorySpend, calcGoalProgress, catName, cleanMoneyText, curMon, fmt, fmtDate, fmtPct, formMoney, goalRequiredMonthly, goalScenario, isValidDateStr, maskText, monthName, revealFocus } from "../App.jsx";
 import { CategoryOrder, MyCategories, SavingsFloorCard, TemplatesSection } from "./settings.jsx";
+// Run 108: the carry-over list follows changes made in another window of the app
+import { useOutsideChange, BUDGET_CARRY_KEY } from "../App.jsx";
 import { Collapse, EditSwap, MOTION_MS, motionOff, useBackStep, useLeave } from "./motion.jsx";
 
 // Budgets & Goals: budget limits and savings goals, edited here (they used to be inside Settings).
@@ -32,6 +34,7 @@ export function BudgetsGoalsPage({ state, rawState, onCatsChanged, showToast, se
   const catSpend=calcCategorySpend(transactions,now);
   // Run 59: optional per-budget carry of what was not used last month (off unless turned on for that budget)
   const [carry,setCarry]=useState(()=>readBudgetCarry());
+  useOutsideChange(BUDGET_CARRY_KEY,()=>setCarry(readBudgetCarry()));
   const carried=useMemo(()=>budgetCarried(transactions,budgets,carry,now),[transactions,budgets,carry,now]);
   const items=calcBudgetStatus(budgets,catSpend,now,new Date(),carried);
   const setCarryFor=(catId,on)=>{ const next={ ...carry }; if (on) next[catId]=now; else delete next[catId]; if (!writeBudgetCarry(next)) { showToast(t("carry.saveFailed")); return; } setCarry(readBudgetCarry()); showToast(t(on?"carry.on":"carry.off")); };

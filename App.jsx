@@ -1243,7 +1243,7 @@ export function accountInUse(data, id, transactions) { const d=cleanAccountData(
 // half-up to the qapik each month. Stored under their own key, so the main saved-data key is never touched by this feature. The
 // remaining balance of a debt is always derived from its payments, never stored. The schedule of a loan is an ESTIMATE from the terms
 // the person typed: the bank's contract (its effective rate, day count and fees) is what counts, so a typed bank payment overrides ours.
-const DEBTS_KEY="expense_ledger_v5__debts";
+export const DEBTS_KEY="expense_ledger_v5__debts";
 export const LOAN_RATE_TYPES=["annuity","equal","flat","none"], LOAN_KINDS=["cash","card","taksit","other"], MAX_DEBTS=200, MAX_LOANS=100, MAX_QAPIK=1e12;
 export const isQapik=(v)=>Number.isInteger(v) && v>0 && v<=MAX_QAPIK;
 function loanDate(first, i) {   // same day of the month, shortened to the month's last day when it is shorter (no drift)
@@ -1391,6 +1391,16 @@ export function cleanDebtData(raw) {
 // Run 103: for screens and the widget that pass the Debts data to a money figure; null when it cannot be read (the figure then has no loans)
 export function debtsOrNull() { try { return readDebts(); } catch { return null; } }
 export function readDebts() { try { const r=localStorage.getItem(DEBTS_KEY); return cleanDebtData(r ? JSON.parse(r) : null); } catch { return { debts:[], loans:[] }; } }
+// Run 108 (app open in two windows): a page that keeps its own copy of a saved part (loans and debts, accounts, own categories) reads it
+// again when the other window saves that part. Before, its next save wrote the older copy back: a loan payment marked in one window was
+// marked again in the other and the first record was lost, so the same instalment was counted twice.
+export function useOutsideChange(key, reload) {
+  const fn=useRef(reload); fn.current=reload;
+  useEffect(()=>{
+    const on=(e)=>{ if ((e.key===key || e.key===null) && (!e.storageArea || e.storageArea===localStorage)) fn.current(); };
+    window.addEventListener("storage",on); return ()=>window.removeEventListener("storage",on);
+  },[key]);
+}
 // Run 18: unreadable or corrupt debts data is NEVER treated as an empty list that a later save may overwrite.
 //  corrupt / unreadable: the stored value stays exactly as it is, one safe copy is kept, every write is refused (an empty write too).
 //  partial (some records cannot be read): a safe copy of the original text is kept BEFORE the first write that would drop them.
@@ -5016,7 +5026,11 @@ function AppInner() {
         if (LOAD_NOTICE) setRecoveryNotice(LOAD_NOTICE);
         setState(next);
         showToast(t("sync.otherWindow"),2600);
-      } else if (typeof e.key==="string" && e.key.startsWith(KEY+"__")) setOutsideTick(n=>n+1);
+      } else if (typeof e.key==="string" && e.key.startsWith(KEY+"__")) {
+        // Run 108: own categories made in the other window are known here too (before, its entries showed as "Other" until a restart)
+        if (e.key===CCAT_KEY) { try { applyCustomCats(readCustomCats()); } catch { /* the list stays as it was */ } }
+        setOutsideTick(n=>n+1);
+      }
     };
     window.addEventListener("storage",onStorage);
     return ()=>window.removeEventListener("storage",onStorage);

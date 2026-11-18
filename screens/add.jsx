@@ -7,7 +7,7 @@ import { parseQuickText, frequentFirst, hasManualOrder, pickerCats, readCatPrefs
 import { Collapse, Reveal, motionOff } from "./motion.jsx";
 import { TipHead } from "./tip.jsx";
 import { ReceiptPhoto, deletePhoto } from "./photo.jsx";
-import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, scheduleMonthly, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, lastAccountFor, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats } from "../App.jsx";
+import { CAT, CATEGORIES, CatIcon, Icon, SUBCAT_LEN, lc, WALLET_IDS, accId, addUserSubcat, buildSchedules, scheduleMonthly, calcMerchantProfile, catName, catTile, cleanMoneyText, fmt, fmtDate, fmtLongDate, formMoney, isValidDateStr, maskText, memKey, norm, parseLocalDate, readAccounts, lastAccountFor, readSubcats, removeUserSubcat, renameUserSubcat, revealFocus, subKey, subName, today, tripName, tripTotals, validateBill, walletId, walletName, writeSubcats, useOutsideChange, SUBCAT_KEY } from "../App.jsx";
 
 // Run 42: the amount box also takes simple arithmetic ("45 - 20", "12.5 x 3"); amountOf gives the number either way (null when not valid).
 const EXPR_TEXT=/[+*\/×÷]|[0-9.,)]\s*[-−]\s*[0-9.,(]/;
@@ -177,6 +177,8 @@ export function AddEditOverlay({ leaving, templates, currency, transactions, bil
   const knownTrips=useMemo(()=>tripTotals(transactions).map(x=>x.name),[transactions]);
   // Run 16: the user's own subcategory suggestions (separate storage key; entries keep the text itself).
   const [mySubs, setMySubs] = useState(()=>readSubcats());
+  // Run 108: another window of the app may change the list while this form is open
+  useOutsideChange(SUBCAT_KEY,()=>setMySubs(readSubcats()));
   const [newSub, setNewSub] = useState(null);   // null = closed; otherwise the text being typed
   const [subMsg, setSubMsg] = useState("");
   const saveMySubs=(m)=>{ setMySubs(m); if (!writeSubcats(m)) setSubMsg(t("subcat.saveFailed")); };

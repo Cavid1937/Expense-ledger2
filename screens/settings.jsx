@@ -16,6 +16,8 @@ import { readLearn, writeLearn, learnPreview, readCrashLog, readCountPref, write
 import { sendFeedback, readScreenCounts, SCREENS_KEY, readLayouts, LAYOUTS_KEY } from "../App.jsx";
 // Run 70: theme preview cards
 import { themePreview } from "../App.jsx";
+// Run 108: lists kept on these pages follow changes made in another window of the app
+import { useOutsideChange, ACC_KEY, CCAT_KEY } from "../App.jsx";
 // Run 71: the Gifts row is shown only when this preference key is "1" (off for everyone by default)
 const giftsShown=()=>{ try { return localStorage.getItem("expense_ledger_v5__show_gifts")==="1"; } catch { return false; } };
 // Run 69: the "Help improve the app" card above imports these
@@ -103,6 +105,8 @@ export function CategoryOrder({ onChanged, showToast }) {
 // Run 24: the user's own categories — add (name, expense or income, colour) and remove one that no entry or budget uses.
 export function MyCategories({ state, onChanged, showToast }) {
   const [list,setList]=useState(()=>readCustomCats());
+  // Run 108: the app open in two windows (see useOutsideChange)
+  useOutsideChange(CCAT_KEY,()=>setList(readCustomCats()));
   const [name,setName]=useState(""), [income,setIncome]=useState(false), [color,setColor]=useState(CCAT_COLORS[5]), [editing,setEditing]=useState(null);
   useBackStep(!!editing,()=>setEditing(null));   // Run 40: phone Back = Cancel
   const commit=(next)=>{ if (!writeCustomCats(next)) { showToast(t("mycat.saveFailed"),5000); return false; } applyCustomCats(next); setList(readCustomCats()); onChanged(); return true; };
@@ -167,6 +171,8 @@ export function MyCategories({ state, onChanged, showToast }) {
 // Run 24: accounts with derived balances, and transfers between them (a transfer is never income or spending).
 export function MyAccounts({ state, currency, showToast, accTools=null }) {
   const [data,setData]=useState(()=>readAccounts());
+  // Run 108: the app open in two windows (see useOutsideChange)
+  useOutsideChange(ACC_KEY,()=>setData(readAccounts()));
   const [name,setName]=useState(""), [kind,setKind]=useState("card"), [opening,setOpening]=useState("");
   const [from,setFrom]=useState(""), [to,setTo]=useState(""), [amt,setAmt]=useState(""), [editing,setEditing]=useState(null);
   useBackStep(!!editing,()=>setEditing(null));   // Run 40: phone Back = Cancel

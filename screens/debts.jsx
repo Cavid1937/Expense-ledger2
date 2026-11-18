@@ -3,7 +3,7 @@ import { useState, useMemo, useRef } from "react";
 // Run 75: the app's own date and option pickers
 import { PickSelect, PickDate } from "./pickers.jsx";
 import { locale, t, tn } from "../i18n.js";
-import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, saveTextFile, buildSchedules, loanBill } from "../App.jsx";
+import { Icon, LOAN_KINDS, LOAN_RATE_TYPES, askConfirm, cleanDebtData, cleanMoneyText, debtCanPay, debtRemaining, debtsHealth, fmt, fmtDate, fmtPct, formMoney, impliedNominalPct, isQapik, isValidDateStr, loanExtraEffect, loanSchedule, maskText, readDebts, today, txt, writeDebts, debtLeftAfter, loanLeftAfter, buildDebtsCsv, saveTextFile, buildSchedules, loanBill, useOutsideChange, DEBTS_KEY } from "../App.jsx";
 import { LedgerArt } from "./home.jsx";
 import { TipHead } from "./tip.jsx";
 import { Collapse, Reveal, Swap, useBackStep } from "./motion.jsx";   // Run 38: forms, edits and the Debts / Loans switch ease in and out
@@ -27,6 +27,7 @@ export function DebtsPage({ currency, onAddEntry, onRemoveEntry, onTakeEntries=n
   const q=(v)=>fmt(v/100,currency);
   const [health,setHealth]=useState(()=>debtsHealth());
   const blocked=health.status==="corrupt"||health.status==="unreadable";
+  useOutsideChange(DEBTS_KEY,()=>{ setData(readDebts()); setHealth(debtsHealth()); });
   // Nothing is shown as saved unless it was really written; a refused write leaves the screen and the stored data as they were.
   const save=(next)=>{ if (writeDebts(next)) { setData(next); setHealth(debtsHealth()); return true; } setHealth(debtsHealth()); showToast(t(blocked?"debt.blockedToast":"banner.saveFailed")); return false; };
   const [ask,setAsk]=useState(null);   // Run 18: { id, amt } while the "also record in transactions?" question is open
