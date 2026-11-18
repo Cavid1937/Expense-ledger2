@@ -4975,6 +4975,9 @@ function AppInner() {
   const [goalsAdd, setGoalsAdd] = useState(0);
   const [showAdd,  setShowAdd]  = useState(false);
   const [addLeaving, setAddLeaving] = useState(false), addTok=useRef(0);
+  // Run 108: the form stays on screen for its 0.2 s closing slide; a second tap on Record in that time (a quick double tap) saved the
+  // same entry twice. Each opening of the form hands over its entries once; later taps are ignored until the form is opened again.
+  const addSent=useRef(false);
   const [viewAcc, setViewAcc] = useState(null);   // Run 38: the account whose details sheet is open (tapped on Home)
   const [moreScroll, setMoreScroll] = useState("");   // Run 27b: section the Settings tab should glide to when opened from Home
   
@@ -5501,7 +5504,7 @@ function AppInner() {
 
   const openAdd=useCallback((prefillData=null,existingId=null)=>{
     if (existingId!==null && debtLinked(existingId)) { showToast(t("debt.linkedLocked"),5000); return; }
-    addTok.current++; setAddLeaving(false); setPrefill(prefillData); setEditId(existingId); setShowAdd(true);
+    addTok.current++; addSent.current=false; setAddLeaving(false); setPrefill(prefillData); setEditId(existingId); setShowAdd(true);
   },[showToast]);
   // Closing slides the form down for ~0.2 s, then removes it. A form opened again during that time is left alone (token check).
   const closeAdd=useCallback(()=>{
@@ -6397,7 +6400,7 @@ function AppInner() {
 
         {showAdd&&(
           <AddEditOverlay leaving={addLeaving} templates={templates} currency={currency} transactions={transactions} bills={bills} prefill={prefill} editId={editId} merchantMemory={merchantMemory}
-            onSave={txn=>{ editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onSaveMany={items=>{ addManyTransactions(items); closeAdd(); }} onClose={closeAdd}
+            onSave={txn=>{ if (addSent.current) return; addSent.current=true; editId?updateTransaction(editId,txn):addTransaction(txn); closeAdd(); }} onSaveMany={items=>{ if (addSent.current) return; addSent.current=true; addManyTransactions(items); closeAdd(); }} onClose={closeAdd}
             onRenameSub={(cid,from,to)=>{ setState(s=>({...s,transactions:renameSubcatInEntries(s.transactions,cid,from,to)})); showToast(t("subcat.renamed")); }}
             onOtherKind={k=>{ setDebtsStart(k); closeAdd(); switchTab("debts"); }}/>
         )}
