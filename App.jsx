@@ -6290,7 +6290,8 @@ function AppInner() {
         {snackbar&&(
           <div className="snackbar" role="status" key={snackbar.msg} ref={(el)=>{if(el)document.documentElement.style.setProperty("--snack-h",el.offsetHeight+"px");}} style={{"--snack-out":Math.max(0,(snackbar.ms||4000)-220)+"ms"}}>
             {snackbar.kind==="add"&&!storageFailed&&<svg className="snack-tick" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><circle cx="10" cy="10" r="8.5"/><path d="M6 10.4l2.7 2.6L14.2 7.5"/></svg>}
-            <span>{snackbar.msg}</span>
+            {/* Run 108: the latest save failed, so the change is only on screen: never claim it was recorded (the red notice says why) */}
+            <span>{storageFailed?t("snack.notSaved"):snackbar.msg}</span>
             {snackbar.onUndo&&<button className="snackbar-undo" onClick={()=>{snackbar.onUndo?.();closeSnack();}}>{snackbar.label||t("common.undo")}</button>}
           </div>
         )}

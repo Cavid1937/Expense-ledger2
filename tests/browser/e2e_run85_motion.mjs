@@ -50,6 +50,13 @@ section("R85-M4. A save that fails never shows the success tick");
   await openAdd(page); await setAmount(page, "7"); await clickText(page, ".add-overlay .btn-primary", /record expense/); await wait(400);
   const s = await page.evaluate(() => ({ tick: !!document.querySelector(".snackbar .snack-tick"), warn: /Could not save changes/.test(document.body.innerText) }));
   ok(s.warn && !s.tick, "the 'Could not save changes' warning shows and no tick is drawn", s);
+  // Run 108: the words must not claim it was recorded either; Undo stays, and once saving works again the next change saves
+  const sb = await page.evaluate(() => document.querySelector(".snackbar")?.innerText || "");
+  ok(/Not saved on this device/.test(sb) && !/recorded/i.test(sb) && /Undo/.test(sb), "the message says 'Not saved on this device', not 'Entry recorded', and keeps Undo", sb);
+  await page.evaluate(() => { window.__failSave = false; });
+  await openAdd(page); await setAmount(page, "8"); await clickText(page, ".add-overlay .btn-primary", /record expense/); await wait(400);
+  const s2 = await page.evaluate(() => ({ sb: document.querySelector(".snackbar")?.innerText || "", warn: /Could not save changes/.test(document.body.innerText), n: JSON.parse(localStorage.getItem("expense_ledger_v5")).transactions.length }));
+  ok(/recorded/i.test(s2.sb) && !s2.warn && s2.n === seed().transactions.length + 2, "saving works again: 'Entry recorded', the warning is gone, and both entries are stored", s2);
   await page.close();
 }
 await finish("e2e_run85_motion", browser);

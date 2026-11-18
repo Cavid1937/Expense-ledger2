@@ -1025,6 +1025,7 @@ export const MESSAGES = {
   "budget.crossOver": { en: "{cat} budget exceeded this month ({pct}%)", az: "{cat} büdcəsi bu ay aşıldı ({pct}%)", ru: "Бюджет «{cat}» в этом месяце превышен ({pct}%)" },
   "budget.crossNear": { en: "{cat} budget is {pct}% used", az: "{cat} büdcəsinin {pct}%-i istifadə olunub", ru: "Бюджет «{cat}» использован на {pct}%" },
   "toast.recorded": { en: "Entry recorded", az: "Əməliyyat qeydə alındı", ru: "Операция записана" },
+  "snack.notSaved": { en: "Not saved on this device", az: "Bu cihazda yadda saxlanmadı", ru: "Не сохранено на этом устройстве" },
   "toast.updated":  { en: "Entry updated", az: "Əməliyyat yeniləndi", ru: "Операция обновлена" },
   "toast.deleted":  { en: { one: "Entry deleted", other: "{n} entries deleted" }, az: { one: "Əməliyyat silindi", other: "{n} əməliyyat silindi" }, ru: { one: "{n} операция удалена", few: "{n} операции удалены", many: "{n} операций удалено", other: "{n} операции удалено" } },
   "toast.csvCreated": { en: { one: "CSV file created — {n} row", other: "CSV file created — {n} rows" }, az: "CSV faylı yaradıldı — {n} sətir", ru: { one: "CSV-файл создан — {n} строка", few: "CSV-файл создан — {n} строки", many: "CSV-файл создан — {n} строк", other: "CSV-файл создан — {n} строки" } },
